@@ -216,3 +216,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/raw/
+*.parquet
+.env
+.DS_Store
+*.egg-info/
+dist/
+build/
+.ipynb_checkpoints/
