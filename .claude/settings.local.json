@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(uv sync *)"
+      "Bash(uv sync *)",
+      "Bash(pip3 --version)",
+      "Read(//usr/local/bin/**)",
+      "Bash(pyenv versions *)",
+      "Bash(conda --version)",
+      "Bash(uv --version)"
     ]
   }
 }
