@@ -6,14 +6,49 @@ description: >
 
 axes:
   - id: satellite_product
-    description: Source dataset for forest cover and loss measurement.
+    description: The source dataset used to measure forest cover and loss.
     options:
+      # Forest-change products (most directly relevant to *loss*)
       - value: hansen_gfc
-        label: Hansen Global Forest Change
-        citation: "PLACEHOLDER - verify and replace"
+        label: Hansen Global Forest Change v1.12 (2000–2024, 30 m)
+        citation: "Hansen et al. 2013, Science 342:850-853 [VERIFY]"
       - value: jrc_tmf
-        label: JRC Tropical Moist Forest
-        citation: "PLACEHOLDER - verify and replace"
+        label: JRC Tropical Moist Forest (30 m, 1990–2025)
+        citation: "Vancutsem et al. 2021, Science Advances [VERIFY]"
+      - value: gfcc30tc
+        label: NASA MEaSUREs Global Forest Cover Change Tree Cover (30 m)
+        citation: "NASA LP DAAC, doi:10.5067/MEASURES/GFCC/GFCC30TC.003 [VERIFY]"
+
+      # Fractional tree-cover products (% canopy you threshold yourself)
+      - value: modis_vcf
+        label: MODIS Vegetation Continuous Fields (MOD44B, 250 m)
+        citation: "DiMiceli et al., NASA LP DAAC [VERIFY]"
+      - value: globmap_ftc
+        label: GLOBMAP Fractional Tree Cover (250 m, 2000–2021)
+        citation: "Scientific Data 2024 [VERIFY]"
+      - value: gfw_ttc
+        label: GFW Tropical Tree Cover (Sentinel-2, 10 m, tropics)
+        citation: "WRI / Global Forest Watch [VERIFY]"
+
+      # General land-cover products (forest as a class; mainly extent, not loss)
+      - value: esa_worldcover
+        label: ESA WorldCover (10 m, 2020 & 2021)
+        citation: "Zanaga et al. 2021/2022 [VERIFY]"
+      - value: esa_cci_lc
+        label: ESA CCI Land Cover (300 m, annual from 1992)
+        citation: "ESA Climate Change Initiative [VERIFY]"
+      - value: cgls_lc100
+        label: Copernicus Global Land Service Land Cover (100 m)
+        citation: "Buchhorn et al. 2020 [VERIFY]"
+      - value: modis_mcd12q1
+        label: MODIS Land Cover (MCD12Q1, 500 m, annual from 2001)
+        citation: "Friedl et al. 2010 [VERIFY]"
+      - value: dynamic_world
+        label: Dynamic World (Sentinel-2, 10 m, near-real-time)
+        citation: "Brown et al. 2022, Scientific Data [VERIFY]"
+      - value: esri_lulc
+        label: Esri Land Use Land Cover (Sentinel-2, 10 m, annual)
+        citation: "Karra et al. 2021 [VERIFY]"
 
   - id: canopy_cover_threshold_pct
     description: Minimum canopy cover for a pixel to count as forest.
@@ -22,3 +57,26 @@ axes:
         citation: "PLACEHOLDER - verify and replace"
       - value: 30
         citation: "PLACEHOLDER - verify and replace"
+  
+  - id: loss_definition
+    description: What land-cover or land-use change counts as "loss".
+    options:
+      - value: stand_replacement
+        label: Stand-replacement disturbance (biophysical, any cause)
+        citation: "Hansen et al. 2013, Science 342:850-853; Hansen, Stehman & Potapov 2010, PNAS [VERIFY]"
+      - value: land_use_conversion
+        label: IPCC/FAO deforestation — long-term forest→non-forest land use
+        citation: "IPCC; FAO FRA 2025 Terms and Definitions [VERIFY]"
+      - value: deforestation_plus_degradation
+        label: Inclusive — long-term conversion plus degradation (selective logging, fire, edges)
+        citation: "Vancutsem et al. 2021, Science Advances (JRC TMF approach) [VERIFY]"
+
+  - id: loss_accounting
+    description: How tree-cover gain or regrowth is treated in the loss measurement.
+    options:
+      - value: gross
+        label: Gross loss — total loss, regardless of any gain in the same period
+        citation: "WRI Global Forest Review; NYDF Goal 1 (2019) definition [VERIFY]"
+      - value: net
+        label: Net loss — gross loss minus regenerated/reforested area
+        citation: "FAO FRA net forest change; NYDF Goal 1 (2019) definition [VERIFY]"
