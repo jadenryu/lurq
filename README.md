@@ -2,7 +2,7 @@
 
 # lurq
 
-### Open-source simulation engine for high-stakes decisions.
+### Open-source claim verification
 
 </div>
 
@@ -10,31 +10,26 @@
 
 ## What is lurq?
 
-**lurq simulates what happens when you change a policy, tariff, regulation, or business decision.** 
+**lurq cross-validates environmental-based claims with pinpoint accuracy using a reverse-engineered methodology process** 
 
 
 ## Quickstart
 
 ```python
-import lurq
+from lurq.claim import Claim
 
-scenario = lurq.Scenario(
-    domain="labor_economics",
-    region="California",
-    policy=lurq.Policy(
-        variable="min_wage_fast_food",
-        from_value=16.0,
-        to_value=22.0,
-    ),
-    horizon_months=24,
+claim = Claim(
+    raw_text: str
+    claim_type: Literal["forest_cover_loss"]
+    value: float
+    unit: float
+    source: str | None = None
+    magnitude: float
 )
-
 result = scenario.simulate(n_agents=500)
 
-print(result.summary())                    # high-level outcomes
-result.distribution("employment_rate")     # outcome distribution
-result.explain_agent(247)                  # why a specific agent decided what they did
-result.causal_path("employment_rate")      # which graph edges drove the result
+print(result.summary())  
+
 ```
 
 
@@ -58,8 +53,7 @@ Requires Python 3.11+ and an Anthropic API key. Claude Haiku is recommended for 
 
 lurq is pre-alpha. 
 
-Open an issue or reach out on X.
-
+Open an issue or reach out on Gmail @ jadenryu@gmail.com!
 
 ## License
 
