@@ -6,7 +6,9 @@
       "Read(//usr/local/bin/**)",
       "Bash(pyenv versions *)",
       "Bash(conda --version)",
-      "Bash(uv --version)"
+      "Bash(uv --version)",
+      "Bash(pip show *)",
+      "Bash(python -c \"import lurq\")"
     ]
   }
 }
