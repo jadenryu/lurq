@@ -80,3 +80,55 @@ axes:
       - value: net
         label: Net loss — gross loss minus regenerated/reforested area
         citation: "FAO FRA net forest change; NYDF Goal 1 (2019) definition [VERIFY]"
+      
+  - id: minimum_mapping_unit_ha
+    description: Smallest contiguous patch counted as forest (or as forest loss).
+    options:
+      - value: 0.05
+        label: IPCC lower bound for forest land definition
+        citation: "IPCC 2006 Guidelines, Volume 4 Chapter 4 [VERIFY]"
+      - value: 0.1
+        label: Common lower threshold in national definitions
+        citation: "Carter et al. 2024, Communications Earth & Environment [VERIFY]"
+      - value: 0.4
+        label: US / IPCC US national inventory threshold (~1 acre)
+        citation: "US EPA GHG Inventory 2024, Chapter 6 (LULUCF) [VERIFY]"
+      - value: 0.5
+        label: FAO forest definition
+        citation: "FAO FRA 2025 Terms and Definitions [VERIFY]"
+      - value: 1.0
+        label: Common operational threshold (e.g. Brazil operational systems)
+        citation: "Carter et al. 2024, Communications Earth & Environment [VERIFY]"
+    
+
+  - id: spatial_boundary_convention
+    description: The convention used to define the region's polygon.
+    options:
+      - value: biogeographic
+        label: Biogeographic/biome boundary (e.g. RAISG for Amazon)
+        citation: "RAISG (Red Amazónica de Información Socioambiental Georreferenciada), 2020 [VERIFY]"
+      - value: watershed
+        label: Watershed / hydrological basin boundary
+        citation: "HydroSHEDS / Amazon River Basin definition [VERIFY]"
+      - value: administrative
+        label: Political/administrative boundary (e.g. country, state, Legal Amazon)
+        citation: "GADM database; Brazil Legal Amazon Decreto-Lei No. 5.173/1966 [VERIFY]"
+      - value: ecoregion
+        label: WWF Terrestrial Ecoregions of the World (TEOW)
+        citation: "Olson et al. 2001, BioScience [VERIFY]"
+      - value: hybrid
+        label: Combination designed for maximum inclusion (e.g. MAAP approach)
+        citation: "MAAP — Monitoring of the Andean Amazon Project [VERIFY]"
+  
+  - id: plantation_treatment
+    description: How planted/plantation forest is treated in the analysis.
+    options:
+      - value: include_all
+        label: FAO approach — plantations counted as forest
+        citation: "FAO FRA 2025 Terms and Definitions; SDG 15.1.1 metadata [VERIFY]"
+      - value: exclude_commercial_plantations
+        label: Natural-forest-only — excludes commercial monoculture plantations
+        citation: "UN-REDD natural forest definitions report (2016) [VERIFY]"
+      - value: primary_forest_only
+        label: Strictest — only undisturbed primary forest counts
+        citation: "Turubanova et al. 2018, Environmental Research Letters (UMD primary forest layer) [VERIFY]"
