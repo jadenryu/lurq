@@ -46,7 +46,7 @@ pip install -e ".[dev]"
 ```
 
 
-Requires Python 3.11+ and an Anthropic API key. Claude Haiku is recommended for cost (~$2-5 per simulation at 500 agents). 
+Requires Python 3.11+ 
 
 
 ## Contributing
