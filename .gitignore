@@ -1,3 +1,24 @@
+# ── Node / TypeScript (lurq) ──────────────────────────────────────────────
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.cache/
+.lurq-cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+
+# os junk
+.DS_Store
+Icon?
+
+# ── Python (template defaults below) ──────────────────────────────────────
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
