@@ -1,0 +1,24 @@
+# Local Postgres with pgvector for lurq development.
+#   docker compose up -d
+# Then: lurq db migrate && lurq sync
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: lurq-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lurq
+      POSTGRES_PASSWORD: lurq
+      POSTGRES_DB: lurq
+    ports:
+      - '5432:5432'
+    volumes:
+      - lurq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U lurq -d lurq']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  lurq-pgdata:
