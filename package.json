@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "mcp",
     "model-context-protocol",
