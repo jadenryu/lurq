@@ -1,8 +1,8 @@
 # lurq
 
-> A continuously-updated, evidence-scored index of JS/TS frameworks and libraries — exposed as an **MCP server**, a **CLI**, and an installable **agent skill** — so AI coding assistants (Claude Code, Cursor, Copilot) get **fresh, objective** dependency recommendations instead of relying on stale, marketing-biased training data.
+> dynamic index of sdk's, frameworks, and libraries exposed as an mcp server. cli-based installable agent skill, compatible with agentic code assistants and ides, including vscode, cursor, windsurf, claude code, and codex. focused specifically on objective dependency recommendations. 
 
-lurq is a **companion to your coding agent**: it recommends and explains packages; the agent writes the code. It never sees your codebase — it supplies knowledge the agent lacks (current versions, real adoption/maintenance/security signals, honest confidence labels) and returns it compactly for the agent to use.
+lurq is a **companion to your coding agent**: it recommends and explains packages, and your agent writes the code.
 
 **v1 scope:** the JavaScript/TypeScript web stack (npm) only.
 
@@ -49,7 +49,7 @@ GitHub/OpenAI keys enrich the data but lurq degrades gracefully without them.
 
 ## Outreach 
 
-For any inquiries, partnerships, or proposals, contact Jaden Ryu at [jadenryu@gmail.com](jadenryu@gmail.com). 
+For any inquiries, partnerships, or proposals, contact Jaden Ryu at jadenryu@gmail.com. 
 
 ## License
 
