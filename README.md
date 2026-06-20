@@ -46,6 +46,11 @@ npm run lint                # eslint
 See [`.env.example`](./.env.example). Only `DATABASE_URL` is strictly required;
 GitHub/OpenAI keys enrich the data but lurq degrades gracefully without them.
 
+
+## Outreach 
+
+For any inquiries, partnerships, or proposals, contact Jaden Ryu at [jadenryu@gmail.com](jadenryu@gmail.com). 
+
 ## License
 
-MIT
+Apache License 2.0 
