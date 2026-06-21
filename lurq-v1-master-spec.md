@@ -284,8 +284,9 @@ Confirm a package the agent is about to install is real and healthy — guards a
 
 #### 12.3.5 `diagram` (OPTIONAL — include only after 12.3.1–12.3.4 work)
 Emit a reference-architecture Mermaid diagram for a chosen stack. Lightweight; uses built-in reference patterns keyed by the packages/categories provided. Not an "architecture oracle."
-- **Input:** `{ stack: string[] }` (package names) or `{ description: string }`
-- **Output:** `{ mermaid: string, note: string }`.
+- **Input:** `{ stack: string[] }` (package names) — stack-only; the tool labels a stack you name and does not infer one from a freeform description (that would be the architecture-oracle non-goal in §4).
+- **Output:** `{ mermaid: string, note: string }`. Packages that can't be classified (not in the index and no category match) go to an explicit `Unclassified` bucket outside the flow and are named in `note` — partial, not authoritative; never faked into a default layer.
+- **Known limitation (deferred):** the taxonomy has a single `framework` category, so a `framework` package can't be told apart as frontend vs backend from its category alone — a hand-maintained backend-framework list re-routes the common cases and an unlisted backend framework will be drawn in Presentation; the real fix (a distinct backend-framework category or a target flag) is post-v1.
 
 ### 12.4 Response-size discipline (hard requirement)
 - Tool responses must be small. Target **< 1,500 tokens** per response; never dump full READMEs, full dependency trees, or raw API payloads.
@@ -375,6 +376,7 @@ These are the intended directions *after* v1 ships and earns adoption; do not im
 2. **More ecosystems** (PyPI, crates.io, etc.) once JS/TS is excellent.
 3. **Architecture recommendation** beyond reference-pattern diagrams, once outcome data can ground it.
 4. **Indexing agent-native infra / dev-tool "startups"** (InsForge-style CLI/MCP products) as first-class records alongside libraries.
+5. **Diagram instrumentation + taxonomy fix.** Log the `diagram` unclassified rate alongside the install-data instrumentation (§20.1) — a high rate is index-coverage signal showing what to ingest next — and resolve the front/back `framework` ambiguity (§12.3.5) with a real taxonomy change rather than the hand-maintained backend-framework list. Not instrumented in v1.
 
 ## 21. Notes on what makes lurq defensible (for the builder, not the build)
 

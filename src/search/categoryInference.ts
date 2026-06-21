@@ -37,13 +37,3 @@ export function inferCategory(need: string): Category | null {
   }
   return null;
 }
-
-/** Return every category whose keywords appear in the text (for the diagram tool). */
-export function inferCategories(text: string): Category[] {
-  const lower = text.toLowerCase();
-  const found: Category[] = [];
-  for (const rule of RULES) {
-    if (rule.patterns.test(lower) && !found.includes(rule.category)) found.push(rule.category);
-  }
-  return found;
-}
