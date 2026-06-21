@@ -58,28 +58,40 @@ export function buildProgram(): Command {
     .option('--category <category>', 'restrict to a taxonomy category')
     .option('--min-confidence <level>', 'proven | emerging | unproven')
     .option('--json', 'output JSON instead of a table')
-    .action(comingIn('M6'));
+    .action(async (need: string, opts: { category?: string; minConfidence?: string; json?: boolean }) => {
+      const { runRecommend } = await import('./commands');
+      await runRecommend(need, opts);
+    });
 
   program
     .command('evaluate')
     .argument('<package>', 'npm package name')
     .description('full evidence read for one package (scores, signals, usage guide)')
     .option('--json', 'output JSON instead of a table')
-    .action(comingIn('M6'));
+    .action(async (pkg: string, opts: { json?: boolean }) => {
+      const { runEvaluate } = await import('./commands');
+      await runEvaluate(pkg, opts);
+    });
 
   program
     .command('compare')
     .argument('<packages...>', '2–5 npm package names')
     .description('side-by-side comparison of packages, ranked by health')
     .option('--json', 'output JSON instead of a table')
-    .action(comingIn('M6'));
+    .action(async (pkgs: string[], opts: { json?: boolean }) => {
+      const { runCompare } = await import('./commands');
+      await runCompare(pkgs, opts);
+    });
 
   program
     .command('verify')
     .argument('<package>', 'npm package name')
     .description('safety check: is this package real, healthy, and not risky?')
     .option('--json', 'output JSON instead of a table')
-    .action(comingIn('M6'));
+    .action(async (pkg: string, opts: { json?: boolean }) => {
+      const { runVerify } = await import('./commands');
+      await runVerify(pkg, opts);
+    });
 
   program
     .command('install-skill')
