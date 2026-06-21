@@ -164,7 +164,22 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
         efficiency,
       };
       const healthScore = computeHealthScore(breakdown);
-      await upsertPackage(handle.db, buildRow(c, breakdown, healthScore, now, embeddings[i] ?? null));
+      await upsertPackage(
+        handle.db,
+        assemblePackageRow({
+          name: c.target.name,
+          category: c.target.category,
+          signals: c.signals,
+          input: c.input,
+          summary: c.summary,
+          usageGuide: c.usageGuide,
+          confidence: c.confidence,
+          breakdown,
+          healthScore,
+          embedding: embeddings[i] ?? null,
+          now,
+        }),
+      );
       updated++;
     }
 
@@ -221,43 +236,50 @@ function computeCategoryMedians(computed: Computed[]): Map<Category, number> {
   return medians;
 }
 
-function buildRow(
-  c: Computed,
-  breakdown: ScoreBreakdown,
-  healthScore: number,
-  now: Date,
-  embedding: number[] | null,
-): NewPackageRow {
-  const { signals, input, target } = c;
-  const r = signals.registry;
+/** Assemble a fully-scored package row. Shared by the bulk sync and the
+ *  on-demand single-package path (§12.5). */
+export function assemblePackageRow(p: {
+  name: string;
+  category: Category | null;
+  signals: RawPackageSignals;
+  input: ScoringInput;
+  summary: string | null;
+  usageGuide: NewPackageRow['usageGuide'];
+  confidence: NewPackageRow['confidence'];
+  breakdown: ScoreBreakdown;
+  healthScore: number;
+  embedding: number[] | null;
+  now: Date;
+}): NewPackageRow {
+  const r = p.signals.registry;
   return {
-    name: target.name,
+    name: p.name,
     ecosystem: 'npm',
-    category: target.category,
+    category: p.category,
     description: r?.description ?? null,
-    summary: c.summary,
+    summary: p.summary,
     repoUrl: r?.repoUrl ?? null,
     homepage: r?.homepage ?? null,
     latestVersion: r?.latestVersion ?? null,
     license: r?.license ?? null,
-    deprecated: input.deprecated,
-    archived: input.archived,
-    firstPublishedAt: input.firstPublishedAt,
-    lastReleaseAt: input.lastReleaseAt,
-    weeklyDownloads: input.weeklyDownloads,
-    downloadGrowth90d: input.downloadGrowth90d,
-    dependentsCount: input.dependentsCount,
-    stars: input.stars,
-    openIssues: input.openIssues,
-    closedIssues: input.closedIssues,
-    scorecard: input.scorecard,
-    bundleMinGzipKb: input.bundleMinGzipKb,
-    advisories: input.advisories,
-    healthScore,
-    confidence: c.confidence,
-    scoreBreakdown: breakdown,
-    usageGuide: c.usageGuide,
-    embedding,
-    dataAsOf: now,
+    deprecated: p.input.deprecated,
+    archived: p.input.archived,
+    firstPublishedAt: p.input.firstPublishedAt,
+    lastReleaseAt: p.input.lastReleaseAt,
+    weeklyDownloads: p.input.weeklyDownloads,
+    downloadGrowth90d: p.input.downloadGrowth90d,
+    dependentsCount: p.input.dependentsCount,
+    stars: p.input.stars,
+    openIssues: p.input.openIssues,
+    closedIssues: p.input.closedIssues,
+    scorecard: p.input.scorecard,
+    bundleMinGzipKb: p.input.bundleMinGzipKb,
+    advisories: p.input.advisories,
+    healthScore: p.healthScore,
+    confidence: p.confidence,
+    scoreBreakdown: p.breakdown,
+    usageGuide: p.usageGuide,
+    embedding: p.embedding,
+    dataAsOf: p.now,
   };
 }
