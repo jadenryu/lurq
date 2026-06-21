@@ -10,6 +10,7 @@ import { CATEGORIES, type Category } from '../core/types';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from './handlers';
+import { handleDiagram } from './diagram';
 
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
 const confidenceEnum = z.enum(['proven', 'emerging', 'unproven']);
@@ -82,6 +83,20 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
       },
     },
     async (args) => json(await handleVerify(db, args)),
+  );
+
+  server.registerTool(
+    'diagram',
+    {
+      title: 'Reference architecture diagram',
+      description:
+        'Emit a reference-architecture Mermaid diagram for a chosen stack (package names) or a description. A labeled starting point keyed by layer — not a validated architecture.',
+      inputSchema: {
+        stack: z.array(z.string()).optional().describe('Package names that make up the stack'),
+        description: z.string().optional().describe('Natural-language description of the stack'),
+      },
+    },
+    async (args) => json(await handleDiagram(db, args)),
   );
 
   return server;
