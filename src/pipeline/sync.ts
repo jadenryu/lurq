@@ -15,6 +15,7 @@ import type { Category, ScoreBreakdown } from '../core/types';
 import { collectSignals } from '../ingestion/collect';
 import { fetchBulkWeeklyDownloads } from '../ingestion/sources/npmDownloads';
 import { buildSummaryInput, createSummaryProvider } from '../ingestion/summarize';
+import { buildEmbeddingText, createEmbeddingProvider } from '../search/embeddings';
 import type { RawPackageSignals } from '../ingestion/types';
 import {
   computeAdoption,
@@ -133,9 +134,24 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
     // ── Category medians for efficiency (§10) ────────────────────────────────
     const medians = computeCategoryMedians(ok);
 
+    // ── Embeddings (§11): embed the normalized text blob for each package ─────
+    const embProvider = createEmbeddingProvider();
+    logger.info(`Embedding provider: ${embProvider.kind}`);
+    const embeddings = await embProvider.embed(
+      ok.map((c) =>
+        buildEmbeddingText({
+          name: c.target.name,
+          category: c.target.category,
+          summary: c.summary,
+          description: c.signals.registry?.description ?? null,
+        }),
+      ),
+    );
+
     // ── Pass 2: efficiency + composite + upsert ──────────────────────────────
     let updated = 0;
-    for (const c of ok) {
+    for (let i = 0; i < ok.length; i++) {
+      const c = ok[i]!;
       const efficiency = computeEfficiency(
         c.input.bundleMinGzipKb,
         c.target.category,
@@ -148,7 +164,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
         efficiency,
       };
       const healthScore = computeHealthScore(breakdown);
-      await upsertPackage(handle.db, buildRow(c, breakdown, healthScore, now));
+      await upsertPackage(handle.db, buildRow(c, breakdown, healthScore, now, embeddings[i] ?? null));
       updated++;
     }
 
@@ -210,6 +226,7 @@ function buildRow(
   breakdown: ScoreBreakdown,
   healthScore: number,
   now: Date,
+  embedding: number[] | null,
 ): NewPackageRow {
   const { signals, input, target } = c;
   const r = signals.registry;
@@ -240,6 +257,7 @@ function buildRow(
     confidence: c.confidence,
     scoreBreakdown: breakdown,
     usageGuide: c.usageGuide,
+    embedding,
     dataAsOf: now,
   };
 }
