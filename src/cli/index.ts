@@ -40,7 +40,13 @@ export function buildProgram(): Command {
     .description('run ingestion: refresh scores for the seed list (or one package)')
     .option('--full', 'force a full re-sync, ignoring cache TTLs')
     .option('--package <name>', 'sync a single package by name')
-    .action(comingIn('M3'));
+    .option('--json', 'output the run summary as JSON')
+    .action(async (opts: { full?: boolean; package?: string; json?: boolean }) => {
+      const { runSync } = await import('../pipeline/index');
+      const summary = await runSync({ full: opts.full, packageName: opts.package });
+      if (opts.json) console.log(JSON.stringify(summary, null, 2));
+      if (summary.status === 'failed') process.exitCode = 1;
+    });
 
   program
     .command('recommend')

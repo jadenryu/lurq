@@ -1,15 +1,19 @@
 /**
  * npm downloads client (§9.2). Weekly downloads + 90-day growth.
- * Growth = (last-30d avg) vs (prior-30d avg), as a signed fraction.
  *
- * Note: the downloads API historically does not serve per-package data for
- * scoped packages; those calls 404 and we degrade to null (handled upstream).
+ * Weekly downloads is fetched in BULK at the pipeline level — npm's point API
+ * accepts up to 128 comma-separated packages per call, which avoids the harsh
+ * rate-limiting that per-package bursts trigger. The range (growth) API has no
+ * bulk form, so growth is a per-package best-effort secondary signal.
+ *
+ * Bulk does not support scoped (@scope/name) packages; those are fetched singly.
  */
 import { CACHE_TTL } from '../../core/constants';
-import { httpGetJson } from '../../core/http';
+import { httpGetJson, HttpError } from '../../core/http';
 import type { NpmDownloadsData } from '../types';
 
 const HOST = 'api.npmjs.org';
+const BULK_CHUNK = 128;
 
 export function parseWeeklyDownloads(json: any): number | null {
   const value = json?.downloads;
@@ -25,8 +29,6 @@ interface RangePoint {
 export function parseDownloadGrowth(json: any): number | null {
   const points: RangePoint[] = Array.isArray(json?.downloads) ? json.downloads : [];
   if (points.length < 60) return null;
-
-  // Use the last 60 days: prior 30 vs most-recent 30.
   const tail = points.slice(-60);
   const prior = tail.slice(0, 30);
   const recent = tail.slice(30);
@@ -42,30 +44,108 @@ function ymd(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Build a `start:end` range string covering the last `days` days. */
+/** Build a `start:end` range string covering the last 90 days. */
 export function last90DayRange(now: Date = new Date()): string {
   const end = now;
   const start = new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
   return `${ymd(start)}:${ymd(end)}`;
 }
 
+/** Parse a bulk point response into a name→downloads map (handles single + multi forms). */
+export function parseBulkWeekly(json: any, requested: string[]): Map<string, number | null> {
+  const map = new Map<string, number | null>();
+  // A single-package request returns the object directly, not keyed by name.
+  if (json && typeof json.downloads === 'number' && typeof json.package === 'string') {
+    map.set(json.package, json.downloads);
+    return map;
+  }
+  for (const name of requested) {
+    const entry = json?.[name];
+    map.set(name, entry && typeof entry.downloads === 'number' ? entry.downloads : null);
+  }
+  return map;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Single-package weekly downloads. 404 → null (no per-package data). */
+export async function fetchWeeklyDownloads(
+  name: string,
+  fetchImpl?: typeof fetch,
+): Promise<number | null> {
+  try {
+    const { data } = await httpGetJson<any>(
+      `https://${HOST}/downloads/point/last-week/${name}`,
+      { host: HOST, ttlMs: CACHE_TTL.npmDownloads, retries: 5, fetchImpl },
+    );
+    return parseWeeklyDownloads(data);
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Per-package 90d growth (best-effort secondary signal). */
+export async function fetchDownloadGrowth(
+  name: string,
+  fetchImpl?: typeof fetch,
+): Promise<number | null> {
+  try {
+    const { data } = await httpGetJson<any>(
+      `https://${HOST}/downloads/range/${last90DayRange()}/${name}`,
+      { host: HOST, ttlMs: CACHE_TTL.npmDownloads, retries: 3, fetchImpl },
+    );
+    return parseDownloadGrowth(data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bulk-fetch weekly downloads for many packages. Unscoped packages go through
+ * the 128-at-a-time bulk endpoint; scoped packages are fetched individually.
+ */
+export async function fetchBulkWeeklyDownloads(
+  names: string[],
+  fetchImpl?: typeof fetch,
+): Promise<Map<string, number | null>> {
+  const result = new Map<string, number | null>();
+  const unscoped = names.filter((n) => !n.startsWith('@'));
+  const scoped = names.filter((n) => n.startsWith('@'));
+
+  for (const batch of chunk(unscoped, BULK_CHUNK)) {
+    try {
+      const { data } = await httpGetJson<any>(
+        `https://${HOST}/downloads/point/last-week/${batch.join(',')}`,
+        { host: HOST, ttlMs: CACHE_TTL.npmDownloads, retries: 5, fetchImpl },
+      );
+      for (const [k, v] of parseBulkWeekly(data, batch)) result.set(k, v);
+    } catch {
+      // Leave this batch absent; per-package fallback will retry it.
+    }
+  }
+
+  for (const name of scoped) {
+    try {
+      result.set(name, await fetchWeeklyDownloads(name, fetchImpl));
+    } catch {
+      /* leave absent → per-package fallback */
+    }
+  }
+
+  return result;
+}
+
+/** Combined per-package fetch (used when no bulk pre-fetch is available). */
 export async function fetchNpmDownloads(
   name: string,
   fetchImpl?: typeof fetch,
 ): Promise<NpmDownloadsData> {
-  const weekUrl = `https://${HOST}/downloads/point/last-week/${name}`;
-  // npm's range API needs an explicit date range, not a named "last-90-days".
-  const rangeUrl = `https://${HOST}/downloads/range/${last90DayRange()}/${name}`;
-
-  const [weekRes, rangeRes] = await Promise.allSettled([
-    httpGetJson<any>(weekUrl, { host: HOST, ttlMs: CACHE_TTL.npmDownloads, fetchImpl }),
-    httpGetJson<any>(rangeUrl, { host: HOST, ttlMs: CACHE_TTL.npmDownloads, fetchImpl }),
-  ]);
-
-  return {
-    weeklyDownloads:
-      weekRes.status === 'fulfilled' ? parseWeeklyDownloads(weekRes.value.data) : null,
-    downloadGrowth90d:
-      rangeRes.status === 'fulfilled' ? parseDownloadGrowth(rangeRes.value.data) : null,
-  };
+  const weeklyDownloads = await fetchWeeklyDownloads(name, fetchImpl);
+  const downloadGrowth90d = await fetchDownloadGrowth(name, fetchImpl);
+  return { weeklyDownloads, downloadGrowth90d };
 }
