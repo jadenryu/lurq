@@ -8,18 +8,6 @@
 import { Command } from 'commander';
 import { SERVER_NAME, VERSION } from '../core/constants';
 
-/** Placeholder used until a command's milestone lands. Keeps the CLI runnable
- *  and self-documenting while the build is in progress. */
-function comingIn(milestone: string): (...args: unknown[]) => void {
-  return () => {
-    console.error(
-      `\`${SERVER_NAME}\`: this command is implemented in milestone ${milestone}. ` +
-        `The scaffold and command surface are in place.`,
-    );
-    process.exitCode = 1;
-  };
-}
-
 export function buildProgram(): Command {
   const program = new Command();
 
@@ -98,10 +86,13 @@ export function buildProgram(): Command {
     .description('register lurq as an MCP server in supported AI assistants')
     .option(
       '--agent <agent>',
-      'claude-code | cursor | copilot | windsurf | all',
+      'claude-code | cursor | copilot | windsurf | codex | all',
       'claude-code',
     )
-    .action(comingIn('M7'));
+    .action(async (opts: { agent?: string }) => {
+      const { runInstallSkill } = await import('./installSkill');
+      await runInstallSkill(opts);
+    });
 
   const db = program.command('db').description('database management');
   db.command('migrate')
