@@ -90,10 +90,12 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
     {
       title: 'Reference architecture diagram',
       description:
-        'Emit a reference-architecture Mermaid diagram for a chosen stack (package names) or a description. A labeled starting point keyed by layer — not a validated architecture.',
+        'Emit a reference-architecture Mermaid diagram for a stack you have already chosen (package names). A labeled starting point keyed by layer — not a validated architecture, and not an architecture designer.',
       inputSchema: {
-        stack: z.array(z.string()).optional().describe('Package names that make up the stack'),
-        description: z.string().optional().describe('Natural-language description of the stack'),
+        stack: z
+          .array(z.string())
+          .optional()
+          .describe('Package names that make up the stack; omit or empty to get usage guidance'),
       },
     },
     async (args) => json(await handleDiagram(db, args)),
