@@ -105,7 +105,8 @@ Ranked by **necessity × scalability × defensibility × fit-to-identity.** Tier
 
 - ❌ **Full security / vuln scanning** → Snyk/Socket's job. Keep `verify` lightweight (slopsquat + real/healthy check) as the install wedge; do not expand into SCA.
 - ❌ **Full API documentation serving** → Context7/GitMCP. Integrate as optional enrichment; do not rebuild.
-- ❌ **Whole-architecture recommendation** → stays a non-goal; 4.1 is the safe boundary (slot-by-slot, sets-that-work-together, never a full assembler).
+- ❌ **System-structure design** (monolith vs microservices, topology, module boundaries) → stays a non-goal. lurq has no objective signal for system-design judgment; its evidence base is package health + compatibility, not architectural fitness. Deferred to Phase 3 (§6), and only if outcome data can ground it.
+- ✅ **Stack composition from intent** (intent-doc → role-decomposed, version-compatible *package set*) is **in scope** and is the refined boundary that replaces the old "slot-by-slot only" framing: lurq composes the *stack* (which packages, which versions, by role); the agent/human composes the *system*. This is Tier 4.1 extended by an intent-doc front end — sets-that-work-together, never a full system assembler. See §6.
 
 ---
 
@@ -114,3 +115,28 @@ Ranked by **necessity × scalability × defensibility × fit-to-identity.** Tier
 Tiers 1–3 are one coherent loop: **recommend the right library → show how to wire it → tell you when it's dead and what replaces it → know which libraries agents actually succeed with → quietly accumulate the proprietary outcome signal underneath.** That progression is what converts lurq from a copyable recommender into the necessary, compounding layer in the agent dependency-selection loop.
 
 **Sequencing logic:** ship 1.1 + `verify` first (cheap, drives install + call volume) → instrument 3.1 from day one (cheap to capture, compounds) → build 2.1 once there's call volume to justify the eval infra → layer 1.2/1.3 and 4.1 as the graph matures → 4.2 when there's a team buyer asking.
+
+---
+
+## 6. Build phasing — intent-doc → stack composition (decided)
+
+This captures the direction agreed in design discussion: lurq grows from a single-slot recommender into an **intent-driven stack composer**, without becoming an architecture oracle. The mechanism: read a *project brief* (a `README.md` / spec / `.md` / `.txt` describing what the user wants to build — **intent, not source code**), decompose it into capability roles, recommend a package per role from the existing engine, run the compatibility engine across the set, and render the result (the narrowed `diagram` tool becomes the visualizer).
+
+**Why this stays on-identity:** a project brief is just a richer `need`; reading intent docs is not reading source, so it preserves "lurq never sees the user's code" and does not duplicate the calling agent (which holds the *code* context, not the *requirements*). lurq composes the **stack**; the agent/human composes the **system**. That line is the whole discipline.
+
+**Honesty discipline (carried from the diagram work):** a composed stack is a **reference starter stack**, labeled partial/not-authoritative, with per-slot confidence — never presented as "your architecture, solved."
+
+### Phase 1 — JS/TS stack composition (now)
+- **Ecosystem:** npm only (stays inside the v1 hard scope; "make JS/TS excellent first").
+- **Domains:** frontend, backend, and **LLM-integration** (npm-native, fastest-churning, most startup-dense — the showcase for lurq's freshness wedge against training-cutoff bias).
+- **Flow:** intent-doc → role extraction → per-role `recommend` → compatibility check → rendered stack. Built on the **existing health substrate** (health scoring is v1's floor, not a future feature).
+- **Depends on:** Tier 4.1 (compatibility/version engine) — the next major build; defensible because "which versions ship together" is accumulated data, not a public-API wrapper.
+
+### Phase 2 — PyPI / Python data analysis (deliberate ecosystem expansion)
+- **What:** "analysis" = general **data analysis**, which is Python → PyPI. This is the first proof the engine generalizes beyond npm (promotes §20.2 of the master spec from "someday" to "next ecosystem").
+- **Why gated separately:** a second registry with different metadata and scoring shape (bundle-size/efficiency is meaningless for Python). Folding it into Phase 1 would contradict "JS/TS first," so it is its own phase.
+- **Foundation already present:** the `packages.ecosystem` column exists, the scoring model already redistributes weight when `efficiency` is `null`, and deps.dev already covers PyPI (Scorecard + advisories generalize). Work to add: a PyPI registry source + a Python download-stats source.
+
+### Phase 3 — depth: performance, wireability, technical architecture (later)
+- **Performance / agent-wireability** (Tier 2.1): runtime/efficiency signals and "can a model actually produce working code with this," kept separate from health.
+- **Technical architecture / system-structure design:** the oracle-adjacent layer — only attempted once outcome data (3.1) can ground it, and still subject to the §4 non-goal until then.
