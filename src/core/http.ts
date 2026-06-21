@@ -59,9 +59,12 @@ const DEFAULT_HOST_CONFIG: HostConfig = { maxConcurrent: 6, minIntervalMs: 0 };
 
 const HOST_CONFIG: Record<string, HostConfig> = {
   'api.github.com': { maxConcurrent: 4, minIntervalMs: 50 },
-  'registry.npmjs.org': { maxConcurrent: 8, minIntervalMs: 0 },
-  'api.npmjs.org': { maxConcurrent: 6, minIntervalMs: 0 },
-  'api.deps.dev': { maxConcurrent: 6, minIntervalMs: 0 },
+  'registry.npmjs.org': { maxConcurrent: 4, minIntervalMs: 50 },
+  // The downloads API rate-limits aggressively — serialize with a steady gap.
+  // Weekly downloads go through the bulk endpoint; only growth hits this often.
+  'api.npmjs.org': { maxConcurrent: 1, minIntervalMs: 250 },
+  'api.deps.dev': { maxConcurrent: 4, minIntervalMs: 40 },
+  'raw.githubusercontent.com': { maxConcurrent: 4, minIntervalMs: 30 },
   // Bundlephobia is slow/flaky — be gentle (§9.5).
   'bundlephobia.com': { maxConcurrent: 2, minIntervalMs: 200 },
 };
@@ -111,6 +114,14 @@ interface CacheEntry {
 }
 
 const memoryCache = new Map<string, CacheEntry>();
+
+/** When true, cache reads are skipped (writes still happen). Used by `sync --full`. */
+let bypassCacheRead = false;
+
+/** Force fresh fetches (ignore cache TTLs) while still refreshing the cache. */
+export function setCacheBypassRead(value: boolean): void {
+  bypassCacheRead = value;
+}
 
 function cacheDir(): string {
   return process.env.LURQ_CACHE_DIR ?? join(homedir(), '.cache', 'lurq', 'http');
@@ -172,7 +183,7 @@ export async function httpRequest<T = unknown>(
   } = opts;
   const key = opts.cacheKey ?? `${method} ${url} ${body ?? ''}`;
 
-  if (ttlMs > 0) {
+  if (ttlMs > 0 && !bypassCacheRead) {
     const cached = await readCache(key, ttlMs);
     if (cached) {
       return { status: cached.status, data: decode<T>(cached.body, accept), fromCache: true };

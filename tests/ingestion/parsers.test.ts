@@ -8,6 +8,7 @@ import {
   parseWeeklyDownloads,
   parseDownloadGrowth,
   last90DayRange,
+  parseBulkWeekly,
 } from '../../src/ingestion/sources/npmDownloads';
 import { parseGithub } from '../../src/ingestion/sources/github';
 import {
@@ -107,6 +108,18 @@ describe('npm downloads parsers', () => {
   it('builds a valid YYYY-MM-DD:YYYY-MM-DD 90-day range', () => {
     const range = last90DayRange(new Date('2026-06-20T00:00:00Z'));
     expect(range).toBe('2026-03-22:2026-06-20');
+  });
+
+  it('parses bulk weekly responses (multi and single forms)', () => {
+    const multi = parseBulkWeekly(
+      { lodash: { downloads: 100, package: 'lodash' }, missing: null },
+      ['lodash', 'missing'],
+    );
+    expect(multi.get('lodash')).toBe(100);
+    expect(multi.get('missing')).toBeNull();
+
+    const single = parseBulkWeekly({ downloads: 42, package: 'react' }, ['react']);
+    expect(single.get('react')).toBe(42);
   });
 });
 

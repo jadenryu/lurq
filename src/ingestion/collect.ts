@@ -8,13 +8,19 @@ import type { Category } from '../core/types';
 import { fetchBundlephobia } from './sources/bundlephobia';
 import { fetchDepsDev } from './sources/depsDev';
 import { fetchGithubRepo } from './sources/github';
-import { fetchNpmDownloads } from './sources/npmDownloads';
+import { fetchDownloadGrowth, fetchWeeklyDownloads } from './sources/npmDownloads';
 import { fetchNpmRegistry } from './sources/npmRegistry';
-import type { RawPackageSignals } from './types';
+import type { NpmDownloadsData, RawPackageSignals } from './types';
 
 export interface CollectDeps {
   githubToken?: string;
   fetchImpl?: typeof fetch;
+  /**
+   * Pre-fetched weekly downloads (from the bulk endpoint). When provided (even
+   * as null), the per-package weekly fetch is skipped — avoiding the downloads
+   * API's harsh rate limits during a full sync.
+   */
+  prefetchedWeekly?: number | null;
 }
 
 async function attempt<T>(
@@ -48,7 +54,14 @@ export async function collectSignals(
 
   // 2–5. The rest run concurrently.
   const [downloads, github, depsDev, bundle] = await Promise.all([
-    attempt('npm-downloads', errors, () => fetchNpmDownloads(name, fetchImpl)),
+    attempt('npm-downloads', errors, async (): Promise<NpmDownloadsData> => {
+      const weeklyDownloads =
+        deps.prefetchedWeekly !== undefined
+          ? deps.prefetchedWeekly
+          : await fetchWeeklyDownloads(name, fetchImpl);
+      const downloadGrowth90d = await fetchDownloadGrowth(name, fetchImpl);
+      return { weeklyDownloads, downloadGrowth90d };
+    }),
     repo && githubToken
       ? attempt('github', errors, () => fetchGithubRepo(repo.owner, repo.repo, githubToken, fetchImpl))
       : Promise.resolve(null),
