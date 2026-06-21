@@ -33,7 +33,10 @@ export function buildProgram(): Command {
   program
     .command('serve')
     .description('start the MCP server over stdio (for agent integration)')
-    .action(comingIn('M5'));
+    .action(async () => {
+      const { startMcpServer } = await import('../mcp/server');
+      await startMcpServer();
+    });
 
   program
     .command('sync')
