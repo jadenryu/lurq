@@ -240,3 +240,6 @@ __marimo__/
 
 # local-only docs (kept on disk, not tracked)
 docs/
+
+# local Claude Code settings (kept on disk, not tracked)
+.claude/
