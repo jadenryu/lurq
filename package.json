@@ -16,6 +16,9 @@
   "bin": {
     "lurq": "./dist/bin/lurq.js"
   },
+  "workspaces": [
+    "apps/*"
+  ],
   "files": [
     "dist",
     "src/data/seed.json",
