@@ -237,3 +237,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# local-only docs (kept on disk, not tracked)
+docs/
