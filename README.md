@@ -12,8 +12,8 @@ lurq is a **companion to your coding agent**: it recommends and explains package
 
 ```bash
 npm install
-cp .env.example .env        # fill in DATABASE_URL (and optionally tokens/keys)
-docker compose up -d        # local postgres + pgvector
+cp .env.example .env       
+docker compose up -d       
 npm run build
 npx lurq --help
 ```
@@ -21,10 +21,10 @@ npx lurq --help
 ## development
 
 ```bash
-npm run dev -- <command>    # run the cli from source (tsx)
-npm test                    # vitest
-npm run typecheck           # tsc --noEmit
-npm run lint                # eslint
+npm run dev -- <command>   
+npm test                    
+npm run typecheck         
+npm run lint               
 ```
 
 ## configuration
@@ -43,7 +43,7 @@ gitHub/openAI keys enrich the data but lurq degrades gracefully without them.
 
 ```bash
 npx lurq db migrate     # create schema (pgvector) + load the curated seed list
-npx lurq sync           # populate real scores from public APIs (cron-able; ~2 min)
+npx lurq sync           # scores from public APIs (~2 min)
 ```
 
 `sync` is idempotent and tolerant of single-source outages. run it on a schedule
@@ -52,11 +52,11 @@ npx lurq sync           # populate real scores from public APIs (cron-able; ~2 m
 ## cli usage
 
 ```bash
-npx lurq recommend "a form library for react"     # ranked candidates + confidence
-npx lurq recommend "debounce a function"          # don't rebuild what exists
-npx lurq evaluate zod                             # full evidence read + usage guide
-npx lurq compare drizzle-orm prisma typeorm       # side-by-side, ranked by health
-npx lurq verify lodahs                            # catch typosquats / risky names
+npx lurq recommend "a form library for react"    
+npx lurq recommend "debounce a function"         
+npx lurq evaluate zod                            
+npx lurq compare drizzle-orm prisma typeorm      
+npx lurq verify lodahs                            
 ```
 
 add `--json` to any command for machine output; `--category` and `--min-confidence`
