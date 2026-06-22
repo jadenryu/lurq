@@ -29,8 +29,8 @@ npm run lint
 
 ## configuration
 
-see [`.env.example`](./.env.example). only `DATABASE_URL` is strictly required;
-gitHub/openAI keys enrich the data but lurq degrades gracefully without them.
+see [`.env.example`](./.env.example). only `DATABASE_URL` is required;
+gitHub/openAI keys allow full access to lurq commands but are not strictly necessary.
 
 | var | required | purpose |
 |---|---|---|
@@ -47,7 +47,7 @@ npx lurq sync           # scores from public APIs (~2 min)
 ```
 
 `sync` is idempotent and tolerant of single-source outages. run it on a schedule
-(default cadence: daily) to keep the index fresh.
+(default frequency: daily) to keep the index fresh.
 
 ## cli usage
 
@@ -93,9 +93,8 @@ public APIs (npm, github, deps.dev, bundlephobia)
   → { mcp server, cli }
 ```
 
-scores are computed from real public signals — never hand-written. confidence
-labels (`proven` / `emerging` / `unproven`) reflect the strength of the evidence,
-not the score.
+scores are computed from public signals — never hand-written. confidence
+labels (`proven` / `emerging` / `unproven`) reflect the strength of discovered evidence
 
 ## outreach 
 
