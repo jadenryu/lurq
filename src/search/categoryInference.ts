@@ -21,8 +21,10 @@ const RULES: { category: Category; patterns: RegExp }[] = [
   { category: 'testing', patterns: /\b(test(ing|s)?|unit test|e2e|assertion|mocking|test runner)\b/ },
   { category: 'bundler', patterns: /\b(bundler|bundle (modules?|code)|webpack|rollup|esbuild|parcel)\b/ },
   { category: 'build-tool', patterns: /\b(build tool|dev server|monorepo|task runner|compile|transpile)\b/ },
-  { category: 'linting', patterns: /\b(lint(er|ing)?|formatter|formatting|code (quality|style|format)|prettier|eslint)\b/ },
+  // date-time precedes linting: "date formatting" must not be captured by linting's
+  // bare "formatting" token before the date rule is reached (first-match-wins).
   { category: 'date-time', patterns: /\b(dates?|date ?time|time(zone)?s?|calendar|parse dates?|format dates?)\b/ },
+  { category: 'linting', patterns: /\b(lint(er|ing)?|formatter|formatting|code (quality|style|format)|prettier|eslint)\b/ },
   { category: 'animation', patterns: /\b(animat(e|ion)|motion|transition|spring|gsap|3d)\b/ },
   { category: 'charts', patterns: /\b(charts?|graphs?|data ?vis(ualization)?|plots?|dashboards?)\b/ },
   { category: 'i18n', patterns: /\b(i18n|internationali[sz]ation|localization|translat(e|ion)|locale)\b/ },

@@ -1,9 +1,18 @@
 {
   "name": "lurq",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
   "type": "module",
   "license": "Apache-2.0",
+  "author": "jadenryu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jadenryu/lurq.git"
+  },
+  "homepage": "https://github.com/jadenryu/lurq#readme",
+  "bugs": {
+    "url": "https://github.com/jadenryu/lurq/issues"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -14,7 +23,7 @@
     "ai-coding"
   ],
   "bin": {
-    "lurq": "./dist/bin/lurq.js"
+    "lurq": "dist/bin/lurq.js"
   },
   "workspaces": [
     "apps/*"

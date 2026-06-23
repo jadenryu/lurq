@@ -57,6 +57,12 @@ describe('category inference', () => {
     expect(inferCategory('http client to call an API')).toBe('http-client');
   });
 
+  it('routes "date formatting" to date-time, not linting (first-match precedence)', () => {
+    expect(inferCategory('date formatting')).toBe('date-time');
+    // a bare formatting/linting need still resolves to linting
+    expect(inferCategory('a code formatting tool')).toBe('linting');
+  });
+
   it('returns null when uncertain', () => {
     expect(inferCategory('something completely unrelated to software xyz')).toBeNull();
   });
