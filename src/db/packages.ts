@@ -21,6 +21,23 @@ export async function getPackageByName(db: Database, name: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Promote a package into the curated seed list so future `sync` runs keep it
+ * fresh. Used by the on-demand path (§12.5) to make organically-discovered
+ * packages durable. No-op if already seeded — preserves the original category
+ * and `added_at` rather than overwriting a hand-curated entry.
+ */
+export async function ensureSeedEntry(
+  db: Database,
+  name: string,
+  category: Category | null,
+): Promise<void> {
+  await db
+    .insert(seedPackages)
+    .values({ name, category })
+    .onConflictDoNothing({ target: seedPackages.name });
+}
+
 /** Upsert a fully-computed package row, refreshing every field on conflict. */
 export async function upsertPackage(db: Database, row: NewPackageRow): Promise<void> {
   const { name: _name, createdAt: _createdAt, ...mutable } = row;
