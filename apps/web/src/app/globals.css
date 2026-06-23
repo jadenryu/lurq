@@ -329,3 +329,12 @@
     animation: none;
   }
 }
+
+/* Minimal grayish glow for content-wrapping surfaces (cards/panels). Soft,
+   unobtrusive halo plus a faint drop for depth. Tune here in one place. */
+.surface-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, white 5%, transparent),
+    0 0 30px 0 color-mix(in oklab, white 11%, transparent),
+    0 18px 40px -18px color-mix(in oklab, black 80%, transparent);
+}

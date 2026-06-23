@@ -18,7 +18,7 @@ export function SectionShowcase() {
 
           {/* right: oblong container */}
           <Reveal delay={0.1}>
-            <div className="rounded-[var(--radius-xl)] border border-border bg-card p-8 md:p-10">
+            <div className="surface-glow rounded-[var(--radius-xl)] border border-border bg-card p-8 md:p-10">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 How it works
               </span>

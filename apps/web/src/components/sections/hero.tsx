@@ -5,7 +5,6 @@ import { Reveal } from "@/components/common/reveal";
 import { InstallTabs } from "@/components/common/install-tabs";
 import { HeroParticles } from "@/components/visuals/hero-particles";
 import { TiltedImage } from "@/components/visuals/tilted-image";
-import heroPreview from "@/components/visuals/alessio-soggetti-PdGBci-4jR8-unsplash.jpg";
 
 export function Hero() {
   return (
@@ -50,8 +49,12 @@ export function Hero() {
         {/* right – tilted product preview (hidden on small screens) */}
         <Reveal delay={0.15} className="relative hidden lg:block">
           <TiltedImage
-            src={heroPreview.src}
+            src="/images/lobostudio-hamburg-RvQYmGfmsKo-unsplash.jpg"
             alt="lurq recommending packages inside a coding agent"
+            width={3744}
+            height={5616}
+            rotateX={15}
+            rotateY={15}
           />
         </Reveal>
       </Container>

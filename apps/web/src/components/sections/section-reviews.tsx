@@ -9,7 +9,7 @@ function ReviewCard({ review }: { review: Review }) {
   return (
     <figure
       className={cn(
-        "w-[320px] shrink-0 rounded-[var(--radius-lg)] border border-border bg-card p-6 md:w-[380px]",
+        "surface-glow w-[320px] shrink-0 rounded-[var(--radius-lg)] border border-border bg-card p-6 md:w-[380px]",
       )}
     >
       <blockquote className="text-sm leading-relaxed text-foreground">
