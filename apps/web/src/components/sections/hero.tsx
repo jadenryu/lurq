@@ -3,14 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Container } from "@/components/common/container";
 import { Reveal } from "@/components/common/reveal";
 import { InstallTabs } from "@/components/common/install-tabs";
-import { ConstellationBg } from "@/components/visuals/constellation-bg";
+import { HeroParticles } from "@/components/visuals/hero-particles";
 import { TiltedImage } from "@/components/visuals/tilted-image";
 import heroPreview from "@/components/visuals/alessio-soggetti-PdGBci-4jR8-unsplash.jpg";
 
 export function Hero() {
   return (
     <section className="relative flex min-h-[90vh] items-center overflow-hidden px-6 pb-24 pt-32">
-      <ConstellationBg />
+      <HeroParticles />
       <Container className="grid items-center gap-12 lg:grid-cols-2 lg:gap-8">
         {/* left – copy, install command, CTA */}
         <div className="flex flex-col items-start text-left">

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,6 +26,7 @@ export default function RootLayout({
       >
         <body className="flex min-h-full flex-col bg-background text-foreground">
           <TooltipProvider>{children}</TooltipProvider>
+          <Analytics />
         </body>
       </html>
     </ClerkProvider>

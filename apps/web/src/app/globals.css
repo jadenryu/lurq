@@ -211,3 +211,121 @@
     animation: none;
   }
 }
+
+/* ---- Hero atmosphere (neutral grey, spans the whole section, CSS-only) ---- */
+@keyframes nebula-drift-1 {
+  0%,
+  100% {
+    transform: translate(-5%, -3%) scale(1);
+  }
+  50% {
+    transform: translate(7%, 5%) scale(1.15);
+  }
+}
+@keyframes nebula-drift-2 {
+  0%,
+  100% {
+    transform: translate(5%, 3%) scale(1.08);
+  }
+  50% {
+    transform: translate(-7%, -3%) scale(0.94);
+  }
+}
+@keyframes godray-rotate {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.nebula-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(110px);
+  will-change: transform;
+}
+/* left half */
+.nebula-blob-1 {
+  top: -14%;
+  left: 2%;
+  width: 52rem;
+  height: 52rem;
+  opacity: 0.1;
+  background: radial-gradient(circle, #d4d4d8 0%, transparent 68%);
+  animation: nebula-drift-1 24s ease-in-out infinite;
+}
+/* right half */
+.nebula-blob-2 {
+  top: -8%;
+  right: 2%;
+  width: 48rem;
+  height: 48rem;
+  opacity: 0.08;
+  background: radial-gradient(circle, #a1a1aa 0%, transparent 70%);
+  animation: nebula-drift-2 30s ease-in-out infinite;
+}
+
+/* faint grey god-rays sweeping across the whole section from top-centre */
+.hero-godrays {
+  position: absolute;
+  top: -60%;
+  left: 50%;
+  width: 90rem;
+  height: 90rem;
+  margin-left: -45rem;
+  opacity: 0.05;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.9) 6deg,
+    transparent 12deg,
+    transparent 44deg,
+    rgba(228, 228, 231, 0.7) 50deg,
+    transparent 56deg,
+    transparent 96deg,
+    rgba(255, 255, 255, 0.6) 102deg,
+    transparent 110deg,
+    transparent 184deg,
+    rgba(228, 228, 231, 0.5) 192deg,
+    transparent 200deg,
+    transparent 360deg
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 60% 60% at 50% 50%,
+    #000 0%,
+    transparent 72%
+  );
+  mask-image: radial-gradient(
+    ellipse 60% 60% at 50% 50%,
+    #000 0%,
+    transparent 72%
+  );
+  will-change: transform;
+  animation: godray-rotate 120s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nebula-blob,
+  .hero-godrays {
+    animation: none;
+  }
+}
+
+/* gentle float for the hero centerpiece image */
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+.hero-float {
+  animation: hero-float 7s ease-in-out infinite;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-float {
+    animation: none;
+  }
+}
