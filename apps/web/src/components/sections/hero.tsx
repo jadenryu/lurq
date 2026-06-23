@@ -31,7 +31,7 @@ export function Hero() {
           <Reveal delay={0.15}>
             <p className="mt-6 max-w-md text-lg leading-relaxed text-muted-foreground">
               lurq is a continuously-updated, evidence-scored index of JS/TS
-              frameworks and libraries — so your coding agent recommends
+              frameworks and libraries - so your coding agent recommends
               dependencies that are real, healthy, and current, not frozen in
               training data.
             </p>
