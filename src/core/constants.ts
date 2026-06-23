@@ -1,5 +1,8 @@
 /** Static identifiers shared across the CLI and MCP server. */
 export const SERVER_NAME = 'lurq';
+/** Published npm package name (the CLI command and MCP nickname stay `lurq`).
+ *  Keep in sync with package.json "name". */
+export const PACKAGE_NAME = 'lurqrun';
 /** Keep in sync with package.json "version". */
 export const VERSION = '0.0.1';
 
