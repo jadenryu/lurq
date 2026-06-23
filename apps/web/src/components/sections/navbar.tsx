@@ -74,12 +74,12 @@ export function Navbar() {
               </>
             ) : (
               <>
-                <SignInButton mode="modal">
+                <SignInButton>
                   <Button variant="ghost" size="sm">
                     Sign in
                   </Button>
                 </SignInButton>
-                <SignUpButton mode="modal">
+                <SignUpButton>
                   <Button size="sm">Get started</Button>
                 </SignUpButton>
               </>
@@ -119,12 +119,12 @@ export function Navbar() {
                   </Link>
                 ) : (
                   <>
-                    <SignInButton mode="modal">
+                    <SignInButton>
                       <Button variant="outline" className="w-full">
                         Sign in
                       </Button>
                     </SignInButton>
-                    <SignUpButton mode="modal">
+                    <SignUpButton>
                       <Button className="w-full">Get started</Button>
                     </SignUpButton>
                   </>
