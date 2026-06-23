@@ -46,7 +46,7 @@ export function Footer() {
           <div>
             <Logo />
             <p className="mt-3 max-w-xs text-sm text-muted-foreground">
-              Objective package recommendations for AI coding agents — fresh,
+              Objective package recommendations for AI coding agents – fresh,
               scored, and verifiable.
             </p>
           </div>

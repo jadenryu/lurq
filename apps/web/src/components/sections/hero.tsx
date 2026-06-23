@@ -13,7 +13,7 @@ export function Hero() {
     <section className="relative flex min-h-[90vh] items-center overflow-hidden px-6 pb-24 pt-32">
       <ConstellationBg />
       <Container className="grid items-center gap-12 lg:grid-cols-2 lg:gap-8">
-        {/* left — copy, install command, CTA */}
+        {/* left – copy, install command, CTA */}
         <div className="flex flex-col items-start text-left">
           <Reveal>
             <h1
@@ -48,7 +48,7 @@ export function Hero() {
           </Reveal>
         </div>
 
-        {/* right — tilted product preview (hidden on small screens) */}
+        {/* right – tilted product preview (hidden on small screens) */}
         <Reveal delay={0.15} className="relative hidden lg:block">
           <TiltedImage
             src={heroPreview.src}

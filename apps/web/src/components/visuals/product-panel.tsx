@@ -24,7 +24,7 @@ export function ProductPanel({ className }: { className?: string }) {
         <span className="size-3 rounded-full bg-foreground/15" />
         <span className="size-3 rounded-full bg-foreground/15" />
         <span className="ml-2 font-mono text-xs text-muted-foreground">
-          lurq — recommend
+          lurq – recommend
         </span>
       </div>
 

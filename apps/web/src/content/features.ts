@@ -20,7 +20,7 @@ export const features: Feature[] = [
     icon: RefreshCw,
     label: "Always current",
     title: "Fresh, not frozen in training data",
-    body: "Scores are recomputed from live npm, GitHub, and deps.dev signals — so your agent sees packages and versions released long after the model's cutoff.",
+    body: "Scores are recomputed from live npm, GitHub, and deps.dev signals – so your agent sees packages and versions released long after the model's cutoff.",
     stat: "Daily sync",
   },
   {

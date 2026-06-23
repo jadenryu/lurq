@@ -19,7 +19,7 @@ export function CopyCommand({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard unavailable (e.g. insecure context) — no-op
+      // clipboard unavailable (e.g. insecure context) – no-op
     }
   }
 

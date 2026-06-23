@@ -5,7 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Same `lurq install-skill` command across the common JS package managers.
-// They all resolve from the npm registry — only the run syntax differs.
+// They all resolve from the npm registry – only the run syntax differs.
 const MANAGERS = [
   { id: "npx", command: "npx lurq install-skill" },
   { id: "pnpm", command: "pnpm dlx lurq install-skill" },
@@ -24,7 +24,7 @@ export function InstallTabs({ className }: { className?: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard unavailable (e.g. insecure context) — no-op
+      // clipboard unavailable (e.g. insecure context) – no-op
     }
   }
 
