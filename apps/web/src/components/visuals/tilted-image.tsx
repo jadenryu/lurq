@@ -1,8 +1,13 @@
 "use client";
 
+import Image from "next/image";
+
 interface TiltedImageProps {
   src: string;
   alt: string;
+  /** intrinsic pixel dimensions of the source image (for next/image) */
+  width: number;
+  height: number;
   /** tweak these to change the angle */
   rotateX?: number;
   rotateY?: number;
@@ -17,6 +22,8 @@ interface TiltedImageProps {
 export function TiltedImage({
   src,
   alt,
+  width,
+  height,
   rotateX = 12,
   rotateY = -20,
   rotateZ = 0,
@@ -37,14 +44,21 @@ export function TiltedImage({
         style={{
           transformOrigin: "center",
           backfaceVisibility: "hidden",
-          transform: `scale(${scale}) rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotateZ(${rotateZ}deg)`,
+          transform: `translateX(88px) scale(${scale}) rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotateZ(${rotateZ}deg)`,
           transformStyle: "preserve-3d",
         }}
-        className="mx-auto w-[760px] max-w-none overflow-hidden rounded-xl border border-zinc-800 shadow-2xl shadow-black/50"
+        className="mx-auto w-[500px] max-w-none overflow-hidden rounded-xl border border-zinc-800 shadow-2xl shadow-black/50"
       >
-        {/* 3. Swap this <img> for any image you want */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src || "/placeholder.svg"} alt={alt} className="block w-full" />
+        {/* 3. Swap this image for any image you want */}
+        <Image
+          src={src || "/placeholder.svg"}
+          alt={alt}
+          width={width}
+          height={height}
+          priority
+          sizes="(max-width: 1024px) 0px, 500px"
+          className="block h-auto w-full"
+        />
       </div>
     </div>
   );

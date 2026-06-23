@@ -26,7 +26,7 @@ export function SectionProwess() {
             const Icon = f.icon;
             return (
               <Reveal key={f.title} delay={i * 0.05}>
-                <div className="group flex flex-col gap-5 rounded-[var(--radius-lg)] border border-border bg-card p-6 transition-colors hover:border-foreground/20 hover:bg-secondary/40 md:flex-row md:items-center md:gap-8 md:p-8">
+                <div className="surface-glow group flex flex-col gap-5 rounded-[var(--radius-lg)] border border-border bg-card p-6 transition-colors hover:border-foreground/20 hover:bg-secondary/40 md:flex-row md:items-center md:gap-8 md:p-8">
                   <div className="flex items-center gap-4 md:w-48 md:shrink-0">
                     <div className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
                       <Icon className="size-5 text-foreground" />

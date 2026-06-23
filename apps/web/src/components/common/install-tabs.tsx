@@ -4,13 +4,15 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Same `lurq install-skill` command across the common JS package managers.
+// Same `install-skill` command across the common JS package managers.
 // They all resolve from the npm registry – only the run syntax differs.
+// The package ships as `lurqrun` (the bare `lurq` name is blocked on npm);
+// it still exposes the `lurq` binary once installed.
 const MANAGERS = [
-  { id: "npx", command: "npx lurq install-skill" },
-  { id: "pnpm", command: "pnpm dlx lurq install-skill" },
-  { id: "yarn", command: "yarn dlx lurq install-skill" },
-  { id: "bun", command: "bunx lurq install-skill" },
+  { id: "npx", command: "npx lurqrun install-skill" },
+  { id: "pnpm", command: "pnpm dlx lurqrun install-skill" },
+  { id: "yarn", command: "yarn dlx lurqrun install-skill" },
+  { id: "bun", command: "bunx lurqrun install-skill" },
 ] as const;
 
 export function InstallTabs({ className }: { className?: string }) {
