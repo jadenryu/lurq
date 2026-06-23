@@ -5,7 +5,6 @@ import { Reveal } from "@/components/common/reveal";
 import { InstallTabs } from "@/components/common/install-tabs";
 import { ConstellationBg } from "@/components/visuals/constellation-bg";
 import { TiltedImage } from "@/components/visuals/tilted-image";
-import { commitMono } from "@/lib/fonts";
 import heroPreview from "@/components/visuals/alessio-soggetti-PdGBci-4jR8-unsplash.jpg";
 
 export function Hero() {
@@ -17,7 +16,7 @@ export function Hero() {
         <div className="flex flex-col items-start text-left">
           <Reveal>
             <h1
-              className={`${commitMono.className} max-w-xl text-balance text-5xl font-bold leading-[1.05] tracking-tight md:text-6xl`}
+              className="max-w-xl text-balance font-heading text-5xl font-bold leading-[1.05] tracking-tight md:text-6xl"
             >
               Objective package recommendations, scored from real signals.
             </h1>

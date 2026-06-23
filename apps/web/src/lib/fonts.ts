@@ -44,3 +44,12 @@ export const supreme = localFont({
   display: "swap",
   variable: "--font-sans",
 });
+
+// Geist (Vercel, OFL) – grotesque display face for headings (a free Söhne-alike).
+// Exposed as --font-geist; mapped to Tailwind's `font-heading` token in globals.css.
+export const geist = localFont({
+  src: "../../fonts/geist/Geist-Variable.woff2",
+  weight: "100 900",
+  display: "swap",
+  variable: "--font-geist",
+});
