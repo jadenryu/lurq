@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { X } from "lucide-react";
 import { robotoMono } from "@/lib/fonts";
 
-const STORAGE_KEY = "lurq-prealpha-dismissed";
 const VERSION = "v0.1.0";
 const BANNER_H = "2.25rem"; // matches h-9
 
@@ -13,13 +12,10 @@ const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function AnnouncementBar() {
+  // In-memory only — dismissing hides it for this view; it returns on reload.
   const [dismissed, setDismissed] = useState(false);
 
   useIsoLayoutEffect(() => {
-    if (window.localStorage.getItem(STORAGE_KEY) === "1") {
-      setDismissed(true);
-      return;
-    }
     // Push the navbar (and anything reading --banner-h) down by the bar height.
     document.documentElement.style.setProperty("--banner-h", BANNER_H);
     return () => document.documentElement.style.setProperty("--banner-h", "0px");
@@ -28,11 +24,6 @@ export function AnnouncementBar() {
   function dismiss() {
     setDismissed(true);
     document.documentElement.style.setProperty("--banner-h", "0px");
-    try {
-      window.localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      // storage unavailable — dismissal just won't persist
-    }
   }
 
   if (dismissed) return null;
