@@ -1,6 +1,7 @@
 /** Static identifiers shared across the CLI and MCP server. */
 export const SERVER_NAME = 'lurq';
-export const VERSION = '0.1.0';
+/** Keep in sync with package.json "version". */
+export const VERSION = '0.0.1';
 
 /** Embedding vector dimensionality (OpenAI text-embedding-3-small). The local
  *  fallback embedder produces vectors of the same length so the DB column and
