@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { supreme } from "@/lib/fonts";
+import { supreme, geist } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export default function RootLayout({
     <ClerkProvider appearance={{ theme: dark }}>
       <html
         lang="en"
-        className={`${supreme.variable} dark h-full antialiased`}
+        className={`${supreme.variable} ${geist.variable} dark h-full antialiased`}
         suppressHydrationWarning
       >
         <body className="flex min-h-full flex-col bg-background text-foreground">
