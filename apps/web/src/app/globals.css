@@ -68,6 +68,8 @@
 
 /* Light tokens kept as a fallback; the site is forced dark (see layout.tsx). */
 :root {
+  /* Height of the announcement bar; set by AnnouncementBar, read by the navbar. */
+  --banner-h: 0px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

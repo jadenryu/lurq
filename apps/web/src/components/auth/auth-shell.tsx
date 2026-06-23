@@ -19,12 +19,12 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
       </div>
       <div className="relative hidden items-center justify-center bg-muted lg:flex">
         <Image
-          src="/logos/logo.png"
+          src="/logos/lq.png"
           alt="lurq"
-          width={320}
-          height={320}
+          width={640}
+          height={640}
           priority
-          className="h-44 w-44 object-contain opacity-90"
+          className="w-2/3 max-w-md object-contain opacity-90"
         />
       </div>
     </div>

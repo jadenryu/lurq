@@ -36,7 +36,7 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        "fixed inset-x-0 top-0 z-50 h-16 border-b transition-colors duration-300",
+        "fixed inset-x-0 top-[var(--banner-h,0px)] z-50 h-16 border-b transition-[top,background-color,border-color] duration-300",
         scrolled
           ? "border-border bg-background/80 backdrop-blur-md"
           : "border-transparent bg-transparent",
