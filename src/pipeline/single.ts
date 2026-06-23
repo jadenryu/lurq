@@ -20,7 +20,7 @@ import {
 } from '../scoring';
 import { buildEmbeddingText, createEmbeddingProvider } from '../search/embeddings';
 import type { Database } from '../db/client';
-import { getPackageByName, upsertPackage } from '../db/packages';
+import { ensureSeedEntry, getPackageByName, upsertPackage } from '../db/packages';
 import { packages, seedPackages, type PackageRow } from '../db/schema';
 import { assemblePackageRow } from './sync';
 
@@ -119,5 +119,7 @@ export async function getOrFetchPackage(db: Database, name: string): Promise<Get
   if (!exists) return { row: null, wasTracked: false, existsOnNpm: false };
 
   const row = await syncOnePackage(db, name);
+  // Persist the discovery into the seed list so future syncs keep it fresh.
+  await ensureSeedEntry(db, name, row.category);
   return { row, wasTracked: false, existsOnNpm: true };
 }
