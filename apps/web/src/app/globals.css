@@ -104,7 +104,7 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* lurq monochrome dark — strict greyscale, near-black surfaces. */
+/* lurq monochrome dark – strict greyscale, near-black surfaces. */
 .dark {
   --background: oklch(0.1 0 0); /* ~#0a0a0a page bg */
   --foreground: oklch(0.985 0 0); /* near-white text */

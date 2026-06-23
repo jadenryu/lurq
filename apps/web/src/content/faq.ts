@@ -7,7 +7,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "How is it different from just asking my model?",
-    a: "Your model's knowledge is frozen at its training cutoff and biased toward whatever was popular then. lurq scores packages from live public signals, so it surfaces newer, healthier dependencies your model may never have seen — and flags risky or abandoned ones.",
+    a: "Your model's knowledge is frozen at its training cutoff and biased toward whatever was popular then. lurq scores packages from live public signals, so it surfaces newer, healthier dependencies your model may never have seen – and flags risky or abandoned ones.",
   },
   {
     q: "Which agents and IDEs are supported?",

@@ -61,7 +61,7 @@ export function SectionFaq() {
                   </h3>
                   <p className="mt-3 text-muted-foreground">
                     Reach out about the project, partnerships, or anything else
-                    — we&apos;ll get back to you.
+                    – we&apos;ll get back to you.
                   </p>
                   <div className="mt-8">
                     <ContactForm />

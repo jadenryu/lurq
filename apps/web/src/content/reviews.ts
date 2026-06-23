@@ -1,5 +1,5 @@
 // NOTE: placeholder testimonials for v1 (pre-launch). Replace with real,
-// attributed quotes before publishing — do not present these as genuine.
+// attributed quotes before publishing – do not present these as genuine.
 export type Review = {
   quote: string;
   name: string;

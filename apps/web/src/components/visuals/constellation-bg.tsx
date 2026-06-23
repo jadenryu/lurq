@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 
 // Sparse, monochrome "dependency graph" field for the hero background.
 // Nodes drift slowly; nearby nodes connect with hairline edges; a node
-// occasionally pulses brighter — a fresh signal landing in the index.
+// occasionally pulses brighter – a fresh signal landing in the index.
 // Under `prefers-reduced-motion` a single static frame is drawn (no rAF).
 export function ConstellationBg() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -17,7 +17,7 @@ export function ContactForm() {
     e.preventDefault();
     const subject = encodeURIComponent(`lurq inquiry from ${name || "someone"}`);
     const body = encodeURIComponent(
-      `${message}\n\n— ${name}${email ? ` (${email})` : ""}`,
+      `${message}\n\n– ${name}${email ? ` (${email})` : ""}`,
     );
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
   }
@@ -61,7 +61,7 @@ export function ContactForm() {
         Send message
       </Button>
       <p className="text-center text-xs text-muted-foreground/70">
-        Opens your mail client — or email{" "}
+        Opens your mail client – or email{" "}
         <a
           href={`mailto:${CONTACT_EMAIL}`}
           className="underline underline-offset-2 transition-colors hover:text-foreground"

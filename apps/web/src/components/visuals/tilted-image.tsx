@@ -23,7 +23,7 @@ export function TiltedImage({
   scale = 1,
 }: TiltedImageProps) {
   return (
-    // 1. Perspective container — this is what makes it "3D" instead of flat skew
+    // 1. Perspective container – this is what makes it "3D" instead of flat skew
     <div
       style={{
         perspective: "1800px",

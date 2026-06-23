@@ -11,7 +11,7 @@ export function DiagramPlaceholder({ className }: { className?: string }) {
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:18px_18px]" />
       <span className="relative text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
-        stack diagram — coming soon
+        stack diagram – coming soon
       </span>
     </div>
   );
