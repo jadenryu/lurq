@@ -36,7 +36,7 @@ export function Hero() {
 
           <Reveal delay={0.2}>
             <div className="mt-8">
-              <SignUpButton mode="modal">
+              <SignUpButton>
                 <Button size="lg" className="px-7">
                   Get started
                 </Button>
