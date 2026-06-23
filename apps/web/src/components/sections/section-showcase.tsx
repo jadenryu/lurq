@@ -32,7 +32,7 @@ export function SectionShowcase() {
               </p>
               <p className="mt-3 text-muted-foreground">
                 Ask in plain language; get back a short, ranked, evidence-backed
-                list — each entry carrying a confidence label and a freshness
+                list - each entry carrying a confidence label and a freshness
                 timestamp.
               </p>
               <DiagramPlaceholder className="mt-8" />

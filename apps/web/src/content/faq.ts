@@ -11,11 +11,11 @@ export const faqs: Faq[] = [
   },
   {
     q: "Which agents and IDEs are supported?",
-    a: "Anything that speaks MCP or runs a CLI — including Claude Code, Cursor, Windsurf, Copilot, and Codex. One command installs lurq into your agent's config.",
+    a: "Anything that speaks MCP or runs a CLI - including Claude Code, Cursor, Windsurf, Copilot, and Codex. One command installs lurq into your agent's config.",
   },
   {
     q: "Where does the data come from?",
-    a: "Public APIs: npm, GitHub, deps.dev, and bundlephobia. Scores are computed from real signals like downloads, release cadence, maintenance, and security advisories — never hand-written.",
+    a: "Public APIs: npm, GitHub, deps.dev, and bundlephobia. Scores are computed from real signals like downloads, release cadence, maintenance, and security advisories - never hand-written.",
   },
   {
     q: "Is the CLI free?",

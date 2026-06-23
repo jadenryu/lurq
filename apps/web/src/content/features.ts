@@ -27,14 +27,14 @@ export const features: Feature[] = [
     icon: Gauge,
     label: "Evidence-based",
     title: "Objective scoring from real signals",
-    body: "Health and confidence are derived from downloads, release cadence, maintenance, and security data — never hand-written opinions or popularity alone.",
+    body: "Health and confidence are derived from downloads, release cadence, maintenance, and security data - never hand-written opinions or popularity alone.",
     stat: "0 hand edits",
   },
   {
     icon: ShieldCheck,
     label: "Verified",
     title: "An anti-hallucination guard",
-    body: "verify confirms a package is real, healthy, and not risky before your agent installs it — catching typosquats and abandoned dependencies.",
+    body: "verify catches abandoned dependencies before your agent ever installs a package",
     stat: "verify built in",
   },
   {
