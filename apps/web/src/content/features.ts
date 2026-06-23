@@ -34,8 +34,8 @@ export const features: Feature[] = [
     icon: ShieldCheck,
     label: "Verified",
     title: "An anti-hallucination guard",
-    body: "verify catches abandoned dependencies before your agent ever installs a package",
-    stat: "verify built in",
+    body: "Verify catches abandoned dependencies before your agent ever installs a package",
+    stat: "Verify built in",
   },
   {
     icon: Terminal,
@@ -48,7 +48,7 @@ export const features: Feature[] = [
     icon: Boxes,
     label: "Whole-stack",
     title: "Stack-aware recommendations",
-    body: "compare ranks alternatives head-to-head and diagram sketches a reference architecture for the stack you've chosen.",
-    stat: "compare + diagram",
+    body: "Compare ranks alternatives head-to-head and diagram sketches a reference architecture for the stack you've chosen.",
+    stat: "Compare + diagram",
   },
 ];

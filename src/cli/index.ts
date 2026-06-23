@@ -14,7 +14,7 @@ export function buildProgram(): Command {
   program
     .name(SERVER_NAME)
     .description(
-      'lurq — a fresh, objectively-scored index of JS/TS packages for AI coding agents.',
+      'lurq - a fresh, objectively-scored index of JS/TS packages for AI coding agents.',
     )
     .version(VERSION, '-v, --version', 'output the lurq version');
 
