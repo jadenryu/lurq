@@ -1,5 +1,5 @@
 {
-  "name": "lurq",
+  "name": "lurqrun",
   "version": "0.0.1",
   "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
   "type": "module",

@@ -5,7 +5,7 @@ describe('buildServerEntry', () => {
   it('builds the standard npx stdio entry with env', () => {
     expect(buildServerEntry({ DATABASE_URL: 'postgres://x' }, false)).toEqual({
       command: 'npx',
-      args: ['-y', 'lurq', 'serve'],
+      args: ['-y', 'lurqrun', 'serve'],
       env: { DATABASE_URL: 'postgres://x' },
     });
   });
@@ -22,7 +22,7 @@ describe('buildTomlBlock', () => {
     const toml = buildTomlBlock({ DATABASE_URL: 'postgres://x' });
     expect(toml).toContain('[mcp_servers.lurq]');
     expect(toml).toContain('command = "npx"');
-    expect(toml).toContain('args = ["-y", "lurq", "serve"]');
+    expect(toml).toContain('args = ["-y", "lurqrun", "serve"]');
     expect(toml).toContain('[mcp_servers.lurq.env]');
     expect(toml).toContain('DATABASE_URL = "postgres://x"');
   });

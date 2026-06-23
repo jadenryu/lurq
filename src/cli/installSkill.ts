@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { PACKAGE_NAME } from '../core/constants';
 import { logger } from '../core/logger';
 import { packageRoot } from '../core/paths';
 
@@ -113,7 +114,7 @@ function writeJson(path: string, obj: unknown): void {
 
 /** The lurq server entry for JSON configs. */
 export function buildServerEntry(env: Record<string, string>, withType: boolean): Record<string, any> {
-  const entry: Record<string, any> = { command: 'npx', args: ['-y', 'lurq', 'serve'] };
+  const entry: Record<string, any> = { command: 'npx', args: ['-y', PACKAGE_NAME, 'serve'] };
   if (withType) entry.type = 'stdio';
   if (Object.keys(env).length) entry.env = env;
   return entry;
@@ -130,7 +131,7 @@ function installJson(spec: AgentSpec, env: Record<string, string>): InstallResul
 
 /** Build a TOML block for the Codex config. */
 export function buildTomlBlock(env: Record<string, string>): string {
-  const lines = ['[mcp_servers.lurq]', 'command = "npx"', 'args = ["-y", "lurq", "serve"]'];
+  const lines = ['[mcp_servers.lurq]', 'command = "npx"', `args = ["-y", "${PACKAGE_NAME}", "serve"]`];
   if (Object.keys(env).length) {
     lines.push('', '[mcp_servers.lurq.env]');
     for (const [k, v] of Object.entries(env)) lines.push(`${k} = ${JSON.stringify(v)}`);

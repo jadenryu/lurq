@@ -15,7 +15,7 @@ npm install
 cp .env.example .env       
 docker compose up -d       
 npm run build
-npx lurq --help
+npx lurqrun --help
 ```
 
 ## development
@@ -42,8 +42,8 @@ gitHub/openAI keys allow full access to lurq commands but are not strictly neces
 ## setup the index
 
 ```bash
-npx lurq db migrate     # create schema (pgvector) + load the curated seed list
-npx lurq sync           # scores from public APIs (~2 min)
+npx lurqrun db migrate     # create schema (pgvector) + load the curated seed list
+npx lurqrun sync           # scores from public APIs (~2 min)
 ```
 
 `sync` is idempotent and tolerant of single-source outages. run it on a schedule
@@ -52,11 +52,11 @@ npx lurq sync           # scores from public APIs (~2 min)
 ## cli usage
 
 ```bash
-npx lurq recommend "a form library for react"    
-npx lurq recommend "debounce a function"         
-npx lurq evaluate zod                            
-npx lurq compare drizzle-orm prisma typeorm      
-npx lurq verify lodahs                            
+npx lurqrun recommend "a form library for react"    
+npx lurqrun recommend "debounce a function"         
+npx lurqrun evaluate zod                            
+npx lurqrun compare drizzle-orm prisma typeorm      
+npx lurqrun verify lodahs                            
 ```
 
 add `--json` to any command for machine output; `--category` and `--min-confidence`
@@ -64,7 +64,7 @@ filter `recommend`.
 
 ## mcp tools
 
-`npx lurq serve` starts the MCP server (stdio). it exposes:
+`npx lurqrun serve` starts the MCP server (stdio). it exposes:
 
 - **`recommend`** — best current packages for a described need (≤5, scored, with confidence)
 - **`evaluate`** — full evidence read for one package (scores, advisories, usage guide)
@@ -77,7 +77,7 @@ every response is compact and carries a `dataAsOf` timestamp.
 ## install into your agent
 
 ```bash
-npx lurq install-skill --agent claude-code   # or cursor | windsurf | copilot | codex | all
+npx lurqrun install-skill --agent claude-code   # or cursor | windsurf | copilot | codex | all
 ```
 
 merges a `lurq` MCP server entry into the agent's config (never overwriting other
