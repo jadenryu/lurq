@@ -6,7 +6,7 @@ import { supreme } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "lurq – objective package recommendations for AI coding agents",
+  title: "lurq | objective package recommendations for AI coding agents",
   description:
     "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries – fresh, objective dependency recommendations for your coding agent.",
 };

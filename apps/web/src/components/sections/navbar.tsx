@@ -80,7 +80,7 @@ export function Navbar() {
                   </Button>
                 </SignInButton>
                 <SignUpButton>
-                  <Button size="sm">Get started</Button>
+                  <Button size="sm">Request demo</Button>
                 </SignUpButton>
               </>
             )}
@@ -125,7 +125,7 @@ export function Navbar() {
                       </Button>
                     </SignInButton>
                     <SignUpButton>
-                      <Button className="w-full">Get started</Button>
+                      <Button className="w-full">Request demo</Button>
                     </SignUpButton>
                   </>
                 )}

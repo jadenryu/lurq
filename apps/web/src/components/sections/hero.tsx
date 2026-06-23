@@ -41,7 +41,7 @@ export function Hero() {
             <div className="mt-8">
               <SignUpButton>
                 <Button size="lg" className="px-7">
-                  Get started
+                  Request demo
                 </Button>
               </SignUpButton>
             </div>
