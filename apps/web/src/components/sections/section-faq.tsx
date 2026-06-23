@@ -15,12 +15,12 @@ export function SectionFaq() {
       <Container>
         <Reveal>
           {/* liquid-metal oblong: bright metallic ring around a dark glass panel */}
-          <div className="relative overflow-hidden rounded-[2.5rem] bg-[conic-gradient(from_140deg_at_50%_50%,#3f3f46,#d4d4d8,#52525b,#e4e4e7,#71717a,#27272a,#a1a1aa,#3f3f46)] p-0.5 shadow-2xl shadow-black/50">
+          <div className="relative overflow-hidden rounded-[2.5rem] bg-[conic-gradient(from_140deg_at_50%_50%,#27272a,#8b8b93,#3f3f46,#a1a1aa,#52525b,#18181b,#6b6b73,#27272a)] p-0.5 shadow-2xl shadow-black/50">
             <div className="relative overflow-hidden rounded-[calc(2.5rem-2px)] bg-card/70 p-8 backdrop-blur-xl md:p-12 lg:p-16">
               {/* faint metallic sheen across the surface */}
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 bg-[conic-gradient(from_220deg_at_30%_15%,#e4e4e7,#52525b,#d4d4d8,#3f3f46,#a1a1aa,#e4e4e7)] opacity-[0.07]"
+                className="pointer-events-none absolute inset-0 bg-[conic-gradient(from_220deg_at_30%_15%,#a1a1aa,#3f3f46,#71717a,#27272a,#52525b,#a1a1aa)] opacity-[0.06]"
               />
               {/* top highlight */}
               <div
