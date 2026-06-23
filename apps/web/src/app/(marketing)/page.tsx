@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/sections/navbar";
 import { Hero } from "@/components/sections/hero";
+import { SectionIdeMarquee } from "@/components/sections/section-ide-marquee";
 import { SectionShowcase } from "@/components/sections/section-showcase";
 import { SectionProwess } from "@/components/sections/section-prowess";
 import { SectionReviews } from "@/components/sections/section-reviews";
@@ -13,6 +14,7 @@ export default function Home() {
       <Navbar />
       <main className="flex-1">
         <Hero />
+        <SectionIdeMarquee />
         <SectionShowcase />
         <SectionProwess />
         <SectionReviews />
