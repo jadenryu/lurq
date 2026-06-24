@@ -12,9 +12,7 @@ lurq is a **companion to your coding agent**: it recommends and explains package
 
 ```bash
 npm install
-cp .env.example .env       
-docker compose up -d       
-npm run build
+npx lurqrun install
 npx lurqrun --help
 ```
 
