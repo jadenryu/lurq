@@ -1,8 +1,7 @@
-import { SignUpButton } from "@clerk/nextjs";
-import { Button } from "@/components/ui/button";
 import { Container } from "@/components/common/container";
 import { Reveal } from "@/components/common/reveal";
-import { InstallTabs } from "@/components/common/install-tabs";
+import { CrypticInstall } from "@/components/common/cryptic-install";
+import { WaitlistDialog } from "@/components/common/waitlist-dialog";
 import { HeroParticles } from "@/components/visuals/hero-particles";
 import { TiltedImage } from "@/components/visuals/tilted-image";
 
@@ -21,9 +20,11 @@ export function Hero() {
             </h1>
           </Reveal>
 
-          {/* install script (per package manager), directly under the heading */}
+          {/* install script (per package manager), directly under the heading.
+              Pre-launch: the command is perpetually scrambled so it can't be
+              read or copied in full until release. */}
           <Reveal delay={0.05}>
-            <InstallTabs className="mt-7" />
+            <CrypticInstall className="mt-7" />
           </Reveal>
 
           <Reveal delay={0.15}>
@@ -37,11 +38,7 @@ export function Hero() {
 
           <Reveal delay={0.2}>
             <div className="mt-8">
-              <SignUpButton>
-                <Button size="lg" className="px-7">
-                  Request demo
-                </Button>
-              </SignUpButton>
+              <WaitlistDialog />
             </div>
           </Reveal>
         </div>
