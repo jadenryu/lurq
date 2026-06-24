@@ -170,10 +170,11 @@ export function buildProgram(): Command {
     .description('manage API keys for the hosted service (operator; needs DATABASE_URL)');
   keys
     .command('create')
-    .description('create a new API key (the plaintext is shown only once)')
+    .description('create a new API key (shown once; erased from the terminal after you copy it)')
     .option('--label <label>', 'human label (owner / org / purpose)')
     .option('--tier <tier>', 'tier name', 'free')
-    .action(async (opts: { label?: string; tier?: string }) => {
+    .option('--json', 'print the key as JSON and skip the interactive erase (for scripts)')
+    .action(async (opts: { label?: string; tier?: string; json?: boolean }) => {
       const { runKeysCreate } = await import('./keys');
       await runKeysCreate(opts);
     });
