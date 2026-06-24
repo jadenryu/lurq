@@ -44,7 +44,7 @@ export function buildProgram(): Command {
     .argument('<need>', 'natural-language description of what you need')
     .description('recommend the best current packages for a described need')
     .option('--category <category>', 'restrict to a taxonomy category')
-    .option('--min-confidence <level>', 'proven | emerging | unproven')
+    .option('--min-confidence <level>', 'proven | emerging | promising | unproven')
     .option('--json', 'output JSON instead of a table')
     .action(async (need: string, opts: { category?: string; minConfidence?: string; json?: boolean }) => {
       const { runRecommend } = await import('./commands');
