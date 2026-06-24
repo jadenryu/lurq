@@ -338,3 +338,52 @@
     0 0 30px 0 color-mix(in oklab, white 11%, transparent),
     0 18px 40px -18px color-mix(in oklab, black 80%, transparent);
 }
+
+/* Faint greyscale grid texture for content pages; fades out toward the edges
+   via a radial mask so it reads as ambient depth, not a hard pattern. */
+.bg-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, white 4%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, white 4%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 75% 65% at 50% 0%,
+    #000 0%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    ellipse 75% 65% at 50% 0%,
+    #000 0%,
+    transparent 78%
+  );
+}
+
+/* Slow greyscale shimmer for gradient borders (see GradientBorder). */
+@keyframes border-shimmer {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Smooth in-page navigation for footer/navbar anchor links. Anchored sections
+   get a scroll offset so they clear the fixed navbar (h-16) + announcement
+   banner instead of hiding underneath it. */
+html {
+  scroll-behavior: smooth;
+}
+:where([id="product"], [id="reviews"], [id="faq"], [id="contact"]) {
+  scroll-margin-top: calc(var(--banner-h, 0px) + 6rem);
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
