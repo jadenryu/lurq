@@ -32,11 +32,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   const config = getConfig();
   const port = opts.port ?? config.PORT;
 
-  const [{ default: express }, { default: helmet }, { rateLimit }] = await Promise.all([
-    import('express'),
-    import('helmet'),
-    import('express-rate-limit'),
-  ]);
+  const [{ default: express }, { default: helmet }, { rateLimit, ipKeyGenerator }] =
+    await Promise.all([import('express'), import('helmet'), import('express-rate-limit')]);
 
   // The DB pool is the expensive resource — created once, shared by all requests.
   const { db } = createDb({ max: 20 });
@@ -88,7 +85,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     limit: config.LURQ_RATE_LIMIT_MAX,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    keyGenerator: (req: Request) => (req as AuthedRequest).lurqKey?.prefix ?? req.ip ?? 'anon',
+    // Key on the resolved API key (always present — auth runs first). The IP
+    // fallback uses express-rate-limit's ipKeyGenerator so IPv6 addresses are
+    // normalized correctly (v8 throws ERR_ERL_KEY_GEN_IPV6 on a raw req.ip).
+    keyGenerator: (req: Request) =>
+      (req as AuthedRequest).lurqKey?.prefix ?? ipKeyGenerator(req.ip ?? '0.0.0.0'),
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 
