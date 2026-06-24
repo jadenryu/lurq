@@ -152,6 +152,32 @@ export const discoveryQueue = pgTable(
   (table) => [index('discovery_queue_status_idx').on(table.status)],
 );
 
+/**
+ * API keys for the hosted HTTP service (docs/lurq-hosted-deployment.md §5). Each
+ * user/org gets a key; only its sha256 hash is persisted, so a DB leak never
+ * exposes a usable key — the plaintext is shown exactly once at creation.
+ * `ownerId` is reserved for future self-serve issuance via the Clerk dashboard.
+ */
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: serial('id').primaryKey(),
+    /** sha256 hex of the full key — the only form persisted. */
+    keyHash: text('key_hash').notNull().unique(),
+    /** Identifiable display prefix, e.g. `lurq_live_ab12cd` (safe to show/log). */
+    prefix: text('prefix').notNull(),
+    /** Free-text label (owner / org / purpose). */
+    label: text('label'),
+    /** Reserved for self-serve issuance: maps to a Clerk user id. */
+    ownerId: text('owner_id'),
+    tier: text('tier').notNull().default('free'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    lastUsedAt: ts('last_used_at'),
+    revokedAt: ts('revoked_at'),
+  },
+  (table) => [index('api_keys_owner_idx').on(table.ownerId)],
+);
+
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';
 
 export interface SyncError {
@@ -165,3 +191,5 @@ export type NewPackageRow = typeof packages.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;
 export type SyncRunRow = typeof syncRuns.$inferSelect;
 export type DiscoveryQueueRow = typeof discoveryQueue.$inferSelect;
+export type ApiKeyRow = typeof apiKeys.$inferSelect;
+export type NewApiKeyRow = typeof apiKeys.$inferInsert;
