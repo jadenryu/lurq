@@ -12,7 +12,18 @@ import { createDb, type DbHandle } from './client';
 import { loadSeedPackages } from './seed';
 
 async function ensureVectorExtension(handle: DbHandle): Promise<void> {
-  await handle.sql`CREATE EXTENSION IF NOT EXISTS vector`;
+  // Non-fatal: if the extension already exists (it must, once migration 0000's
+  // `vector` column is in place) this is a no-op, and a transient hiccup here
+  // must NOT abort the migrator and leave later migrations (0001+) unapplied.
+  try {
+    await handle.sql`CREATE EXTENSION IF NOT EXISTS vector`;
+  } catch (err) {
+    logger.warn(
+      `CREATE EXTENSION vector did not run cleanly (continuing to migrations): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 }
 
 export async function runMigrate(): Promise<void> {
