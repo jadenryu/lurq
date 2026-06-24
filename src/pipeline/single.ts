@@ -5,16 +5,18 @@
  */
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { getConfig } from '../core/config';
-import type { Category, ScoreBreakdown } from '../core/types';
+import type { Category, CategorySource, ScoreBreakdown } from '../core/types';
 import { collectSignals } from '../ingestion/collect';
 import { fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
 import { buildSummaryInput, createSummaryProvider } from '../ingestion/summarize';
+import { inferCategoryFromSignals } from '../search/categoryInference';
 import {
   computeAdoption,
   computeConfidence,
   computeEfficiency,
   computeHealthScore,
   computeMaintenance,
+  computeQuality,
   computeReliability,
   toScoringInput,
 } from '../scoring';
@@ -54,28 +56,48 @@ export async function syncOnePackage(
   const now = new Date();
 
   const existing = await getPackageByName(db, name);
-  const category =
-    opts.category ?? existing?.category ?? (await getSeedCategory(db, name)) ?? null;
+  // The curated category (from a manual arg or the seed list) wins. We resolve
+  // the final category *after* ingest so a discovered package can be classified
+  // from its own text rather than stored as a second-class `null` (§2A).
+  const curatedCategory = opts.category ?? (await getSeedCategory(db, name)) ?? null;
+  const initialCategory = curatedCategory ?? existing?.category ?? null;
 
   const prefetchedWeekly = await fetchWeeklyDownloads(name).catch(() => null);
-  const signals = await collectSignals(name, category, {
+  const signals = await collectSignals(name, initialCategory, {
     githubToken: config.GITHUB_TOKEN,
     prefetchedWeekly,
   });
 
+  const summaryInput = await buildSummaryInput(signals, initialCategory);
+  const { summary, usageGuide, inferredCategory } =
+    await createSummaryProvider().generate(summaryInput);
+
+  let category: Category | null;
+  let categorySource: CategorySource | null;
+  if (curatedCategory) {
+    category = curatedCategory;
+    categorySource = 'curated';
+  } else if (existing?.category) {
+    category = existing.category;
+    categorySource = existing.categorySource ?? 'inferred';
+  } else {
+    category = inferCategoryFromSignals(signals) ?? inferredCategory ?? null;
+    categorySource = category ? 'inferred' : null;
+  }
+
   const input = toScoringInput(signals, category);
-  const summaryInput = await buildSummaryInput(signals, category);
-  const { summary, usageGuide } = await createSummaryProvider().generate(summaryInput);
 
   const median = category ? await getCategoryMedianBundle(db, category) : null;
+  const quality = computeQuality(input);
   const breakdown: ScoreBreakdown = {
     maintenance: computeMaintenance(input, now),
     adoption: computeAdoption(input),
     reliability: computeReliability(input),
     efficiency: computeEfficiency(input.bundleMinGzipKb, category, median),
+    quality,
   };
   const healthScore = computeHealthScore(breakdown);
-  const confidence = computeConfidence(input, now);
+  const confidence = computeConfidence(input, now, quality);
 
   const [embedding] = await createEmbeddingProvider().embed([
     buildEmbeddingText({ name, category, summary, description: signals.registry?.description ?? null }),
@@ -86,6 +108,7 @@ export async function syncOnePackage(
     assemblePackageRow({
       name,
       category,
+      categorySource,
       signals,
       input,
       summary,
@@ -93,6 +116,7 @@ export async function syncOnePackage(
       confidence,
       breakdown,
       healthScore,
+      qualityScore: quality,
       embedding: embedding ?? null,
       now,
     }),

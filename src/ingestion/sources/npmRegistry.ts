@@ -72,9 +72,10 @@ export function parseNpmRegistry(json: any): NpmRegistryData {
 
   const deprecated = Boolean(latestManifest?.deprecated ?? json?.deprecated);
   const maintainers = Array.isArray(json?.maintainers) ? json.maintainers.length : null;
+  const name: string = json?.name ?? '';
 
   return {
-    name: json?.name ?? '',
+    name,
     description: json?.description ?? latestManifest?.description ?? null,
     latestVersion: latest,
     license: pickLicense(json?.license ?? latestManifest?.license),
@@ -86,7 +87,47 @@ export function parseNpmRegistry(json: any): NpmRegistryData {
     deprecated,
     maintainersCount: maintainers,
     readme: typeof json?.readme === 'string' ? json.readme : null,
+    keywords: parseKeywords(json?.keywords ?? latestManifest?.keywords),
+    hasTypes: detectTypes(name, latestManifest),
+    hasTestScript: detectTestScript(latestManifest),
+    directDependenciesCount: countDeps(latestManifest?.dependencies),
+    hasProvenance: detectProvenance(latestManifest),
   };
+}
+
+function parseKeywords(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((k): k is string => typeof k === 'string');
+}
+
+/** Ships types if the manifest declares `types`/`typings`, or it IS an @types pkg. */
+function detectTypes(name: string, manifest: any): boolean {
+  if (typeof manifest?.types === 'string' || typeof manifest?.typings === 'string') return true;
+  if (name.startsWith('@types/')) return true;
+  // `exports` map with a `types` condition (modern dual-package layout).
+  const exportsField = manifest?.exports;
+  if (exportsField && typeof exportsField === 'object') {
+    const serialized = JSON.stringify(exportsField);
+    if (serialized.includes('"types"')) return true;
+  }
+  return false;
+}
+
+/** A real test script — npm's `init` leaves a placeholder we must not count. */
+function detectTestScript(manifest: any): boolean {
+  const test = manifest?.scripts?.test;
+  if (typeof test !== 'string' || test.trim() === '') return false;
+  return !/no test specified/i.test(test);
+}
+
+function countDeps(deps: unknown): number | null {
+  if (!deps || typeof deps !== 'object') return 0;
+  return Object.keys(deps as Record<string, unknown>).length;
+}
+
+/** npm provenance leaves a signed attestation on the published dist. */
+function detectProvenance(manifest: any): boolean {
+  return Boolean(manifest?.dist?.attestations);
 }
 
 export async function fetchNpmRegistry(

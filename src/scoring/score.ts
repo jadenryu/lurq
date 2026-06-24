@@ -12,11 +12,14 @@ import { isFrontendCategory } from '../core/types';
 import type { RawPackageSignals } from '../ingestion/types';
 import {
   ADOPTION,
+  COMPOSITE,
   CONFIDENCE,
   EFFICIENCY,
   HEALTH_WEIGHTS,
   MAINTENANCE,
   MAINTENANCE_WEIGHTS,
+  QUALITY,
+  QUALITY_WEIGHTS,
   RELIABILITY,
 } from './weights';
 
@@ -36,6 +39,16 @@ export interface ScoringInput {
   archived: boolean;
   bundleMinGzipKb: number | null;
   category: Category | null;
+  // ── Intrinsic-quality signals (§1), adoption-independent ──
+  hasTypes: boolean | null;
+  hasTestScript: boolean | null;
+  readmeLength: number | null;
+  hasExamples: boolean | null;
+  hasHomepage: boolean | null;
+  hasReleaseNotes: boolean | null;
+  directDependenciesCount: number | null;
+  license: string | null;
+  hasProvenance: boolean | null;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -50,6 +63,7 @@ const monthsSince = (date: Date | null, now: Date): number | null =>
 /** Build a ScoringInput from collected raw signals. */
 export function toScoringInput(signals: RawPackageSignals, category: Category | null): ScoringInput {
   const { registry, downloads, github, depsDev, bundle } = signals;
+  const readme = registry?.readme ?? null;
   return {
     weeklyDownloads: downloads?.weeklyDownloads ?? null,
     downloadGrowth90d: downloads?.downloadGrowth90d ?? null,
@@ -66,6 +80,17 @@ export function toScoringInput(signals: RawPackageSignals, category: Category | 
     archived: github?.archived ?? false,
     bundleMinGzipKb: bundle?.bundleMinGzipKb ?? null,
     category,
+    // Quality signals — null (not false) when the manifest itself is missing, so
+    // weightedAverage drops the component rather than scoring it 0.
+    hasTypes: registry ? registry.hasTypes : null,
+    hasTestScript: registry ? registry.hasTestScript : null,
+    readmeLength: readme !== null ? readme.length : null,
+    hasExamples: readme !== null ? /```/.test(readme) : null,
+    hasHomepage: registry ? registry.homepage !== null : null,
+    hasReleaseNotes: github?.releasesLast12mo != null ? github.releasesLast12mo > 0 : null,
+    directDependenciesCount: registry?.directDependenciesCount ?? null,
+    license: registry?.license ?? null,
+    hasProvenance: registry ? registry.hasProvenance : null,
   };
 }
 
@@ -158,24 +183,113 @@ export function computeEfficiency(
   return clamp(100 - ratio * EFFICIENCY.medianScore);
 }
 
+// ── Quality (pass 1 — intrinsic, adoption-independent §1) ────────────────────
+
+/** A small set of OSI-recognized SPDX license IDs (prefix-matched, case-insensitive). */
+const RECOGNIZED_LICENSES = [
+  'mit',
+  'isc',
+  'apache-2.0',
+  'bsd-2-clause',
+  'bsd-3-clause',
+  'mpl-2.0',
+  'lgpl',
+  'gpl',
+  'agpl',
+  'unlicense',
+  '0bsd',
+  'cc0-1.0',
+];
+
+export function isRecognizedLicense(license: string | null): boolean {
+  if (!license) return false;
+  const id = license.trim().toLowerCase();
+  return RECOGNIZED_LICENSES.some((l) => id === l || id.startsWith(l));
+}
+
+/**
+ * Intrinsic-quality score (§1): how well-built a package is, independent of
+ * adoption. A weighted average over the *available* components, so a missing
+ * signal is dropped rather than penalized. Returns null only when no signal is
+ * available at all (e.g. the registry manifest itself failed to load).
+ */
+export function computeQuality(input: ScoringInput): number | null {
+  const components: { value: number; weight: number }[] = [];
+
+  if (input.hasTypes !== null) {
+    components.push({ value: input.hasTypes ? 100 : 0, weight: QUALITY_WEIGHTS.types });
+  }
+  if (input.hasTestScript !== null) {
+    components.push({ value: input.hasTestScript ? 100 : 0, weight: QUALITY_WEIGHTS.tests });
+  }
+  if (input.readmeLength !== null || input.hasHomepage !== null) {
+    const lenScore = Math.min((input.readmeLength ?? 0) / QUALITY.docsFullLengthChars, 1) * 60;
+    const examples = input.hasExamples ? 25 : 0;
+    const homepage = input.hasHomepage ? 15 : 0;
+    components.push({ value: clamp(lenScore + examples + homepage), weight: QUALITY_WEIGHTS.docs });
+  }
+  if (input.hasReleaseNotes !== null) {
+    components.push({ value: input.hasReleaseNotes ? 100 : 0, weight: QUALITY_WEIGHTS.changelog });
+  }
+  if (input.directDependenciesCount !== null) {
+    const deps = input.directDependenciesCount;
+    const depsScore = clamp(
+      100 - (Math.log10(deps + 1) / Math.log10(QUALITY.depsLogMax + 1)) * 100,
+    );
+    components.push({ value: depsScore, weight: QUALITY_WEIGHTS.deps });
+  }
+  if (input.license !== null) {
+    components.push({
+      value: isRecognizedLicense(input.license) ? 100 : QUALITY.licenseUnrecognizedScore,
+      weight: QUALITY_WEIGHTS.license,
+    });
+  }
+  // Provenance is a pure bonus — only counted when present, never penalizing.
+  if (input.hasProvenance) {
+    components.push({ value: 100, weight: QUALITY_WEIGHTS.provenance });
+  }
+
+  if (components.length === 0) return null;
+  return weightedAverage(components);
+}
+
 // ── Composite ───────────────────────────────────────────────────────────────
 
-/** Compose the health score, redistributing efficiency's weight when null. */
-export function computeHealthScore(breakdown: ScoreBreakdown): number {
+/** Compose the health score, redistributing efficiency's weight when null.
+ *  Weights default to HEALTH_WEIGHTS but can be overridden (§4 rescore). */
+export function computeHealthScore(
+  breakdown: ScoreBreakdown,
+  weights: typeof HEALTH_WEIGHTS | { maintenance: number; adoption: number; reliability: number; efficiency: number } = HEALTH_WEIGHTS,
+): number {
   const { maintenance, adoption, reliability, efficiency } = breakdown;
+  const w = weights;
   if (efficiency === null) {
-    const w = HEALTH_WEIGHTS;
     const denom = w.maintenance + w.adoption + w.reliability;
     return Math.round(
       (w.maintenance * maintenance + w.adoption * adoption + w.reliability * reliability) / denom,
     );
   }
   return Math.round(
-    HEALTH_WEIGHTS.maintenance * maintenance +
-      HEALTH_WEIGHTS.adoption * adoption +
-      HEALTH_WEIGHTS.reliability * reliability +
-      HEALTH_WEIGHTS.efficiency * efficiency,
+    w.maintenance * maintenance +
+      w.adoption * adoption +
+      w.reliability * reliability +
+      w.efficiency * efficiency,
   );
+}
+
+/**
+ * Default sort composite (§1): blend the popularity-tilted health score with the
+ * adoption-independent quality axis. `lambda` (default COMPOSITE.lambda) is the
+ * tunable knob `edit-weights` exposes. Falls back to pure health when quality is
+ * unavailable, so a missing manifest never drags a package down.
+ */
+export function computeComposite(
+  healthScore: number,
+  qualityScore: number | null,
+  lambda: number = COMPOSITE.lambda,
+): number {
+  if (qualityScore === null) return healthScore;
+  return Math.round((1 - lambda) * healthScore + lambda * qualityScore);
 }
 
 // ── Confidence ──────────────────────────────────────────────────────────────
@@ -184,7 +298,11 @@ export function hasCriticalOrHighAdvisory(advisories: Advisory[]): boolean {
   return advisories.some((a) => a.severity === 'critical' || a.severity === 'high');
 }
 
-export function computeConfidence(input: ScoringInput, now: Date): Confidence {
+export function computeConfidence(
+  input: ScoringInput,
+  now: Date,
+  qualityScore: number | null = null,
+): Confidence {
   const dl = input.weeklyDownloads ?? 0;
   const ageMonths = monthsSince(input.firstPublishedAt, now);
   const lastReleaseMonths = monthsSince(input.lastReleaseAt, now);
@@ -212,6 +330,22 @@ export function computeConfidence(input: ScoringInput, now: Date): Confidence {
 
   if (emergingAdoptionOk && emergingReleaseOk && !input.deprecated && !input.archived) {
     return 'emerging';
+  }
+
+  // `promising` (§1): adoption-independent — high intrinsic quality on a package
+  // that hasn't yet earned adoption traction. This is how new-but-good packages
+  // surface on merit instead of sinking to `unproven`.
+  const promisingReleaseOk =
+    lastReleaseMonths !== null && lastReleaseMonths <= CONFIDENCE.promising.maxLastReleaseMonths;
+  if (
+    qualityScore !== null &&
+    qualityScore >= CONFIDENCE.promising.minQuality &&
+    promisingReleaseOk &&
+    !hasCriticalOrHighAdvisory(input.advisories) &&
+    !input.deprecated &&
+    !input.archived
+  ) {
+    return 'promising';
   }
 
   return 'unproven';

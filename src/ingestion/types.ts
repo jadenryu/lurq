@@ -20,6 +20,17 @@ export interface NpmRegistryData {
   maintainersCount: number | null;
   /** Raw README text if available (for summary/usage-guide generation, §9.6). */
   readme: string | null;
+  /** package.json `keywords` (used for categorize-on-ingest, §2A). */
+  keywords: string[];
+  // ── Intrinsic-quality signals (§1), all from the latest version manifest ──
+  /** Ships TypeScript types (`types`/`typings` field present, or an `@types/*` name). */
+  hasTypes: boolean;
+  /** A real `scripts.test` (not the npm "no test specified" placeholder). */
+  hasTestScript: boolean;
+  /** Count of direct runtime dependencies (fewer → leaner → higher quality). */
+  directDependenciesCount: number | null;
+  /** npm provenance / signed publish attestation present on the latest dist. */
+  hasProvenance: boolean;
 }
 
 export interface NpmDownloadsData {

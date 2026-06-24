@@ -4,6 +4,7 @@
  * until a directory containing package.json is found.
  */
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,4 +37,16 @@ export function migrationsDir(): string {
 /** The curated seed list shipped with the package. */
 export function seedJsonPath(): string {
   return join(packageRoot(), 'src', 'data', 'seed.json');
+}
+
+/** User-level weight-override config (§4): `~/.config/lurq/weights.json`. */
+export function userWeightsPath(): string {
+  const base = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
+  return join(base, 'lurq', 'weights.json');
+}
+
+/** Project-local weight-override config (§4): `.lurq/weights.json` in the cwd.
+ *  Takes precedence over the user-level file when present. */
+export function projectWeightsPath(): string {
+  return join(process.cwd(), '.lurq', 'weights.json');
 }

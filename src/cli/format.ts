@@ -54,5 +54,7 @@ export function formatPercent(fraction: number | null | undefined): string {
 export function confidenceLabel(c: string): string {
   if (c === 'proven') return green(c);
   if (c === 'emerging') return yellow(c);
+  // `promising` (§1): high intrinsic quality, adoption-independent.
+  if (c === 'promising') return green(c);
   return red(c);
 }

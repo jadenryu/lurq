@@ -32,6 +32,7 @@ vi.mock('../src/scoring', () => ({
   computeAdoption: vi.fn(() => 0),
   computeReliability: vi.fn(() => 0),
   computeEfficiency: vi.fn(() => null),
+  computeQuality: vi.fn(() => null),
   computeHealthScore: vi.fn(() => 0),
   computeConfidence: vi.fn(() => 'emerging'),
 }));
