@@ -11,10 +11,11 @@ import { getConfig } from '../core/config';
 import { pMap } from '../core/concurrency';
 import { setCacheBypassRead } from '../core/http';
 import { logger } from '../core/logger';
-import type { Category, ScoreBreakdown } from '../core/types';
+import type { Category, CategorySource, ScoreBreakdown } from '../core/types';
 import { collectSignals } from '../ingestion/collect';
 import { fetchBulkWeeklyDownloads } from '../ingestion/sources/npmDownloads';
 import { buildSummaryInput, createSummaryProvider } from '../ingestion/summarize';
+import { inferCategoryFromSignals } from '../search/categoryInference';
 import { buildEmbeddingText, createEmbeddingProvider } from '../search/embeddings';
 import type { RawPackageSignals } from '../ingestion/types';
 import {
@@ -23,6 +24,7 @@ import {
   computeEfficiency,
   computeHealthScore,
   computeMaintenance,
+  computeQuality,
   computeReliability,
   median,
   toScoringInput,
@@ -58,11 +60,15 @@ interface Target {
 /** Per-package state carried from pass 1 to pass 2. */
 interface Computed {
   target: Target;
+  /** Final resolved category (curated or inferred at ingest, §2A). */
+  category: Category | null;
+  categorySource: CategorySource | null;
   signals: RawPackageSignals;
   input: ScoringInput;
   maintenance: number;
   adoption: number;
   reliability: number;
+  quality: number | null;
   confidence: ReturnType<typeof computeConfidence>;
   summary: string | null;
   usageGuide: NewPackageRow['usageGuide'];
@@ -101,19 +107,32 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
           });
           for (const e of signals.errors) allErrors.push({ package: target.name, ...e });
 
-          const input = toScoringInput(signals, target.category);
           const summaryInput = await buildSummaryInput(signals, target.category);
-          const { summary, usageGuide } = await provider.generate(summaryInput);
+          const { summary, usageGuide, inferredCategory } = await provider.generate(summaryInput);
 
+          // Categorize-on-ingest (§2A): curated category wins; otherwise infer
+          // from the package's own text, then fall back to the LLM classifier.
+          let category = target.category;
+          let categorySource: CategorySource | null = target.category ? 'curated' : null;
+          if (!category) {
+            category = inferCategoryFromSignals(signals) ?? inferredCategory ?? null;
+            categorySource = category ? 'inferred' : null;
+          }
+
+          const input = toScoringInput(signals, category);
+          const quality = computeQuality(input);
           if (++done % 25 === 0) logger.info(`  …${done}/${targets.length}`);
           return {
             target,
+            category,
+            categorySource,
             signals,
             input,
             maintenance: computeMaintenance(input, now),
             adoption: computeAdoption(input),
             reliability: computeReliability(input),
-            confidence: computeConfidence(input, now),
+            quality,
+            confidence: computeConfidence(input, now, quality),
             summary,
             usageGuide,
           };
@@ -141,7 +160,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
       ok.map((c) =>
         buildEmbeddingText({
           name: c.target.name,
-          category: c.target.category,
+          category: c.category,
           summary: c.summary,
           description: c.signals.registry?.description ?? null,
         }),
@@ -154,21 +173,23 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
       const c = ok[i]!;
       const efficiency = computeEfficiency(
         c.input.bundleMinGzipKb,
-        c.target.category,
-        c.target.category ? (medians.get(c.target.category) ?? null) : null,
+        c.category,
+        c.category ? (medians.get(c.category) ?? null) : null,
       );
       const breakdown: ScoreBreakdown = {
         maintenance: c.maintenance,
         adoption: c.adoption,
         reliability: c.reliability,
         efficiency,
+        quality: c.quality,
       };
       const healthScore = computeHealthScore(breakdown);
       await upsertPackage(
         handle.db,
         assemblePackageRow({
           name: c.target.name,
-          category: c.target.category,
+          category: c.category,
+          categorySource: c.categorySource,
           signals: c.signals,
           input: c.input,
           summary: c.summary,
@@ -176,6 +197,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
           confidence: c.confidence,
           breakdown,
           healthScore,
+          qualityScore: c.quality,
           embedding: embeddings[i] ?? null,
           now,
         }),
@@ -220,7 +242,7 @@ async function resolveTargets(db: Database, opts: SyncOptions): Promise<Target[]
 function computeCategoryMedians(computed: Computed[]): Map<Category, number> {
   const byCategory = new Map<Category, number[]>();
   for (const c of computed) {
-    const cat = c.target.category;
+    const cat = c.category;
     const kb = c.input.bundleMinGzipKb;
     if (cat && isFrontendCategory(cat) && kb !== null) {
       const list = byCategory.get(cat) ?? [];
@@ -241,6 +263,7 @@ function computeCategoryMedians(computed: Computed[]): Map<Category, number> {
 export function assemblePackageRow(p: {
   name: string;
   category: Category | null;
+  categorySource: CategorySource | null;
   signals: RawPackageSignals;
   input: ScoringInput;
   summary: string | null;
@@ -248,6 +271,7 @@ export function assemblePackageRow(p: {
   confidence: NewPackageRow['confidence'];
   breakdown: ScoreBreakdown;
   healthScore: number;
+  qualityScore: number | null;
   embedding: number[] | null;
   now: Date;
 }): NewPackageRow {
@@ -256,6 +280,7 @@ export function assemblePackageRow(p: {
     name: p.name,
     ecosystem: 'npm',
     category: p.category,
+    categorySource: p.categorySource,
     description: r?.description ?? null,
     summary: p.summary,
     repoUrl: r?.repoUrl ?? null,
@@ -276,6 +301,7 @@ export function assemblePackageRow(p: {
     bundleMinGzipKb: p.input.bundleMinGzipKb,
     advisories: p.input.advisories,
     healthScore: p.healthScore,
+    qualityScore: p.qualityScore,
     confidence: p.confidence,
     scoreBreakdown: p.breakdown,
     usageGuide: p.usageGuide,

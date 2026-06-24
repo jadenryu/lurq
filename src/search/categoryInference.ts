@@ -4,6 +4,7 @@
  * caller searches across all categories rather than over-filtering.
  */
 import type { Category } from '../core/types';
+import type { RawPackageSignals } from '../ingestion/types';
 
 const RULES: { category: Category; patterns: RegExp }[] = [
   { category: 'meta-framework', patterns: /\b(meta-?framework|next\.?js|nuxt|remix|astro|gatsby|sveltekit|full-?stack framework)\b/ },
@@ -38,4 +39,26 @@ export function inferCategory(need: string): Category | null {
     if (rule.patterns.test(text)) return rule.category;
   }
   return null;
+}
+
+/**
+ * Categorize-on-ingest (§2A): infer a category from a package's *own* text —
+ * name, keywords, description, and the README head — instead of a user query.
+ * Keywords are repeated to give them extra weight (they're the most reliable
+ * categorical signal). Returns null when no rule matches; the caller then falls
+ * back to the LLM classifier or leaves the category null.
+ */
+export function inferCategoryFromSignals(signals: RawPackageSignals): Category | null {
+  const r = signals.registry;
+  const keywords = (r?.keywords ?? []).join(' ');
+  const text = [
+    signals.name,
+    keywords,
+    keywords, // weight keywords higher via repetition
+    r?.description ?? '',
+    (r?.readme ?? '').slice(0, 600),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return inferCategory(text);
 }

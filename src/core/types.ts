@@ -36,6 +36,19 @@ export function isCategory(value: string): value is Category {
   return (CATEGORIES as readonly string[]).includes(value);
 }
 
+/** Provenance of a package's stored category (§2A). `curated` comes from the
+ *  seed file or a manual arg; `inferred` was assigned automatically at ingest
+ *  and is safe for a later curation pass to override. */
+export type CategorySource = 'curated' | 'inferred';
+
+/** How a candidate entered the discovery queue (§2B). `dependency-graph` and
+ *  `recent` are the long-tail channels; `category-search` is keyword-seeded;
+ *  `reactive` is an on-demand query that wasn't tracked yet. */
+export type DiscoverySource = 'dependency-graph' | 'category-search' | 'recent' | 'reactive';
+
+/** Lifecycle of a discovery-queue candidate (§2B). */
+export type DiscoveryStatus = 'pending' | 'ingested' | 'rejected';
+
 /**
  * Categories for which bundle size is meaningful and Bundlephobia is consulted
  * (§9.5). Backend-only categories get a null bundle size, and their efficiency
@@ -58,8 +71,12 @@ export function isFrontendCategory(category: Category | null | undefined): boole
   return category != null && (FRONTEND_CATEGORIES as readonly string[]).includes(category);
 }
 
-/** Evidence-trustworthiness label, independent of the numeric score (§10). */
-export type Confidence = 'proven' | 'emerging' | 'unproven';
+/**
+ * Evidence-trustworthiness label, independent of the numeric score (§10, §1).
+ * Two-dimensional: `proven`/`emerging` are adoption ladders; `promising` is
+ * adoption-independent (high intrinsic quality, new package).
+ */
+export type Confidence = 'proven' | 'emerging' | 'promising' | 'unproven';
 
 export type Runtime = 'browser' | 'node' | 'both';
 
@@ -72,12 +89,16 @@ export interface Advisory {
 }
 
 /** Sub-scores composing the health score (§10). `efficiency` is null when not
- *  size-based (backend categories) — its weight is redistributed. */
+ *  size-based (backend categories) — its weight is redistributed.
+ *  `quality` (§1) is a standalone, adoption-independent axis — it does NOT feed
+ *  the health composite; it blends with health only at ranking time. Null when
+ *  no manifest signals were available. */
 export interface ScoreBreakdown {
   maintenance: number;
   adoption: number;
   reliability: number;
   efficiency: number | null;
+  quality: number | null;
 }
 
 /**
@@ -99,6 +120,7 @@ export interface Candidate {
   name: string;
   category: Category | null;
   healthScore: number;
+  qualityScore: number | null;
   confidence: Confidence;
   why: string;
   latestVersion: string | null;
@@ -114,6 +136,7 @@ export interface EvaluateOutput {
   name: string;
   category: Category | null;
   healthScore: number;
+  qualityScore: number | null;
   confidence: Confidence;
   scoreBreakdown: ScoreBreakdown;
   latestVersion: string | null;

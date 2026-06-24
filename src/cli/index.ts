@@ -82,6 +82,53 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('weights')
+    .description('show and explain the scoring weight model (health, quality, composite λ)')
+    .option('--json', 'output the weight model as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { runWeights } = await import('./commands');
+      runWeights(opts);
+    });
+
+  program
+    .command('edit-weights')
+    .description('override, reset, or explain the scoring weights (layered over defaults)')
+    .option('--set <pair>', 'override key=value, e.g. composite.lambda=0.5 (repeatable)', (v: string, acc: string[]) => acc.concat(v), [])
+    .option('--reset', 'remove all overrides and restore defaults')
+    .option('--explain <component>', 'explain a component (e.g. adoption, quality, lambda)')
+    .option('--project', 'write to project-local .lurq/weights.json instead of the user config')
+    .action(async (opts: { set?: string[]; reset?: boolean; explain?: string; project?: boolean }) => {
+      const { runEditWeights } = await import('./commands');
+      runEditWeights(opts);
+    });
+
+  program
+    .command('discover')
+    .description('operator-side: proactively crawl for new packages and queue/gate them (§2B)')
+    .option('--cap <n>', 'max candidates to fully ingest this run', (v) => parseInt(v, 10))
+    .option('--dry-run', 'discover, queue, and gate, but do not ingest survivors')
+    .option('--json', 'output the discovery summary as JSON')
+    .action(async (opts: { cap?: number; dryRun?: boolean; json?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { runDiscovery } = await import('../pipeline/index');
+      const summary = await runDiscovery({ perRunCap: opts.cap, dryRun: opts.dryRun });
+      if (opts.json) console.log(JSON.stringify(summary, null, 2));
+    });
+
+  program
+    .command('rescore')
+    .description('re-derive health scores from cached breakdowns using current weights (no re-ingest)')
+    .option('--json', 'output the rescore summary as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { runRescore } = await import('../pipeline/index');
+      const summary = await runRescore();
+      if (opts.json) console.log(JSON.stringify(summary, null, 2));
+    });
+
+  program
     .command('install-skill')
     .description('register lurq as an MCP server in supported AI assistants')
     .option(

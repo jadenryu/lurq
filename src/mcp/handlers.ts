@@ -54,6 +54,7 @@ export function rowToEvaluate(row: PackageRow): EvaluateOutput {
     adoption: 0,
     reliability: 0,
     efficiency: null,
+    quality: null,
   };
   return {
     dataAsOf: (row.dataAsOf ?? new Date()).toISOString(),
@@ -61,6 +62,7 @@ export function rowToEvaluate(row: PackageRow): EvaluateOutput {
     name: row.name,
     category: row.category,
     healthScore: row.healthScore ?? 0,
+    qualityScore: row.qualityScore ?? null,
     confidence: (row.confidence as Confidence) ?? 'unproven',
     scoreBreakdown: breakdown,
     latestVersion: row.latestVersion,

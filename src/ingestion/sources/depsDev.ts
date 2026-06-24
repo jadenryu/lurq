@@ -100,6 +100,34 @@ export async function fetchAdvisories(
     .map((d) => parseAdvisoryDetail(d.value.data));
 }
 
+/**
+ * Direct dependency names from the deps.dev graph (§2B). These are the packages
+ * a seed is *built on* — the adjacent foundations. Best-effort: returns [] on any
+ * failure. We deliberately do NOT rank by dependent count (that re-introduces the
+ * popularity bias §2B exists to avoid); the caller gates on quality instead.
+ */
+export async function fetchDependencyNames(
+  name: string,
+  version: string,
+  fetchImpl?: typeof fetch,
+): Promise<string[]> {
+  const url = `https://${HOST}/v3/systems/npm/packages/${encodeName(name)}/versions/${encodeURIComponent(version)}:dependencies`;
+  try {
+    const { data } = await httpGetJson<any>(url, {
+      host: HOST,
+      ttlMs: CACHE_TTL.depsDev,
+      fetchImpl,
+    });
+    const nodes: any[] = Array.isArray(data?.nodes) ? data.nodes : [];
+    const names = nodes
+      .map((n) => n?.versionKey?.name)
+      .filter((n: unknown): n is string => typeof n === 'string' && n !== name);
+    return [...new Set(names)];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchDepsDev(
   name: string,
   version: string | null,

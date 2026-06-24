@@ -6,7 +6,7 @@
  * otherwise we fall back to the npm description + a category-derived guide,
  * fabricating nothing. The exact current API is deferred to Context7 via a hint.
  */
-import type { Category, UsageGuide } from '../core/types';
+import { CATEGORIES, isCategory, type Category, type UsageGuide } from '../core/types';
 import { getConfig } from '../core/config';
 import { httpRequest } from '../core/http';
 import { logger } from '../core/logger';
@@ -24,6 +24,9 @@ export interface SummaryInput {
 export interface SummaryResult {
   summary: string | null;
   usageGuide: UsageGuide;
+  /** Taxonomy category the LLM classified the package into (§2A), or null
+   *  (always null for the fallback provider — it does no classification). */
+  inferredCategory: Category | null;
 }
 
 export interface SummaryProvider {
@@ -91,7 +94,7 @@ export class FallbackSummaryProvider implements SummaryProvider {
       whereItFits: `Sits at ${role}.`,
       context7Hint: context7Hint(input.name),
     };
-    return { summary, usageGuide: guide };
+    return { summary, usageGuide: guide, inferredCategory: null };
   }
 }
 
@@ -104,6 +107,9 @@ const SYSTEM_PROMPT =
 
 function buildUserPrompt(input: SummaryInput): string {
   const readme = (input.readme ?? '').slice(0, 4000);
+  // Ask the model to classify only when we don't already have a curated category
+  // (§2A) — otherwise the curated value wins and we save the model the choice.
+  const needsCategory = input.category == null;
   return [
     `Package: ${input.name}`,
     `Category: ${input.category ?? 'unknown'}`,
@@ -117,6 +123,9 @@ function buildUserPrompt(input: SummaryInput): string {
     '- "whenNotToUse": one sentence on when to pick something else (or "").',
     '- "whereItFits": one sentence on its architectural role.',
     '- "howToWireIn": one short sentence on the minimal setup (install + entry point), or "".',
+    ...(needsCategory
+      ? [`- "category": the single best fit from this list: ${CATEGORIES.join(', ')}.`]
+      : []),
   ].join('\n');
 }
 
@@ -162,7 +171,13 @@ export class OpenAISummaryProvider implements SummaryProvider {
         howToWireIn: str(parsed.howToWireIn) || undefined,
         context7Hint: context7Hint(input.name),
       };
-      return { summary: str(parsed.summary) ? truncateSentences(parsed.summary, 3) : null, usageGuide: guide };
+      const rawCategory = str(parsed.category);
+      const inferredCategory = rawCategory && isCategory(rawCategory) ? rawCategory : null;
+      return {
+        summary: str(parsed.summary) ? truncateSentences(parsed.summary, 3) : null,
+        usageGuide: guide,
+        inferredCategory,
+      };
     } catch (err) {
       logger.warn(`summary LLM failed for ${input.name}, using fallback: ${(err as Error).message}`);
       return new FallbackSummaryProvider().generate(input);
