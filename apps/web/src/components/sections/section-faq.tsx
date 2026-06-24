@@ -52,7 +52,7 @@ export function SectionFaq() {
                 </div>
 
                 {/* right: contact */}
-                <div className="lg:border-l lg:border-border/60 lg:pl-16">
+                <div id="contact" className="lg:border-l lg:border-border/60 lg:pl-16">
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     Contact
                   </span>

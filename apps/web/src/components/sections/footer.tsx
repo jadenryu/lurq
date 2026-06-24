@@ -6,9 +6,9 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Product",
     links: [
-      { label: "Features", href: "#product" },
-      { label: "Reviews", href: "#reviews" },
-      { label: "Changelog", href: "#" },
+      { label: "Features", href: "/#product" },
+      { label: "Reviews", href: "/#reviews" },
+      { label: "Changelog", href: "/changelog" },
     ],
   },
   {
@@ -23,17 +23,17 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Company",
     links: [
-      { label: "About", href: "#" },
-      { label: "Contact", href: "mailto:jadenryu@gmail.com" },
-      { label: "Partnerships", href: "mailto:jadenryu@gmail.com" },
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/#contact" },
+      { label: "Partnerships", href: "/partnerships" },
     ],
   },
   {
     title: "Legal",
     links: [
-      { label: "License (Apache-2.0)", href: "#" },
-      { label: "Privacy", href: "#" },
-      { label: "Terms", href: "#" },
+      { label: "License (Apache-2.0)", href: "/license" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
     ],
   },
 ];
