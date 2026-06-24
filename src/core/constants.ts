@@ -6,6 +6,14 @@ export const PACKAGE_NAME = 'lurqrun';
 /** Keep in sync with package.json "version". */
 export const VERSION = '0.0.1';
 
+/** Default hosted endpoint the install wizard writes into agent configs. The
+ *  marketing site is `lurq.run`; the MCP service lives on the `api.` subdomain.
+ *  Overridable per-invocation with `lurq install --url …` or `LURQ_ENDPOINT`. */
+export const DEFAULT_ENDPOINT = 'https://api.lurq.run/mcp';
+
+/** Prefix for issued API keys (the rest is high-entropy random). */
+export const API_KEY_PREFIX = 'lurq_live_';
+
 /** Embedding vector dimensionality (OpenAI text-embedding-3-small). The local
  *  fallback embedder produces vectors of the same length so the DB column and
  *  pgvector index never need to change. */

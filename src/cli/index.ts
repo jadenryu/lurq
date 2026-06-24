@@ -27,6 +27,15 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('serve-http')
+    .description('start the hosted MCP server over HTTP with API-key auth')
+    .option('--port <n>', 'port to listen on (default: $PORT or 8080)', (v) => parseInt(v, 10))
+    .action(async (opts: { port?: number }) => {
+      const { startHttpServer } = await import('../mcp/http');
+      await startHttpServer({ port: opts.port });
+    });
+
+  program
     .command('sync')
     .description('run ingestion: refresh scores for the seed list (or one package)')
     .option('--full', 'force a full re-sync, ignoring cache TTLs')
@@ -129,16 +138,60 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('install')
+    .description('guided setup: connect lurq to your AI assistant(s)')
+    .option('--api-key <key>', 'hosted API key (skips the prompt)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--agent <agent>', 'claude-code | cursor | copilot | windsurf | codex | all')
+    .option('--yes', 'non-interactive: use flags/env and detected agents without prompting')
+    .action(async (opts: { apiKey?: string; url?: string; agent?: string; yes?: boolean }) => {
+      const { runInstallWizard } = await import('./install');
+      await runInstallWizard(opts);
+    });
+
+  program
     .command('install-skill')
-    .description('register lurq as an MCP server in supported AI assistants')
+    .description('register lurq as an MCP server in supported AI assistants (scriptable)')
     .option(
       '--agent <agent>',
       'claude-code | cursor | copilot | windsurf | codex | all',
       'claude-code',
     )
-    .action(async (opts: { agent?: string }) => {
+    .option('--api-key <key>', 'hosted API key (remote install; default mode)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--local', 'self-host: write a local stdio entry using your own DATABASE_URL')
+    .action(async (opts: { agent?: string; apiKey?: string; url?: string; local?: boolean }) => {
       const { runInstallSkill } = await import('./installSkill');
       await runInstallSkill(opts);
+    });
+
+  const keys = program
+    .command('keys')
+    .description('manage API keys for the hosted service (operator; needs DATABASE_URL)');
+  keys
+    .command('create')
+    .description('create a new API key (the plaintext is shown only once)')
+    .option('--label <label>', 'human label (owner / org / purpose)')
+    .option('--tier <tier>', 'tier name', 'free')
+    .action(async (opts: { label?: string; tier?: string }) => {
+      const { runKeysCreate } = await import('./keys');
+      await runKeysCreate(opts);
+    });
+  keys
+    .command('list')
+    .description('list issued API keys (hashes are never shown)')
+    .option('--json', 'output as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { runKeysList } = await import('./keys');
+      await runKeysList(opts);
+    });
+  keys
+    .command('revoke')
+    .argument('<prefixOrId>', 'key prefix (e.g. lurq_live_ab12cd) or numeric id')
+    .description('revoke an API key')
+    .action(async (prefixOrId: string) => {
+      const { runKeysRevoke } = await import('./keys');
+      await runKeysRevoke(prefixOrId);
     });
 
   const db = program.command('db').description('database management');

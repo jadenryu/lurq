@@ -30,6 +30,19 @@ const EnvSchema = z.object({
 
   LURQ_SYNC_CONCURRENCY: z.coerce.number().int().positive().max(50).default(5),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+
+  // Hosted HTTP service (`serve-http`). Server-side only.
+  PORT: z.coerce.number().int().positive().default(8080),
+  /** Per-API-key rate limit: max requests per window. */
+  LURQ_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  /** Coarser per-IP rate limit (blunts unauthenticated floods before auth). */
+  LURQ_IP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(240),
+  /** Rate-limit window, milliseconds (applies to both limiters). */
+  LURQ_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+
+  // Client-side (install wizard / CLI talking to a remote endpoint).
+  LURQ_ENDPOINT: z.string().url().optional(),
+  LURQ_API_KEY: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

@@ -76,13 +76,39 @@ every response is compact and carries a `dataAsOf` timestamp.
 
 ## install into your agent
 
+lurq is a **hosted service** — you don't run a database. Get an API key, then:
+
 ```bash
-npx lurqrun install-skill --agent claude-code   # or cursor | windsurf | copilot | codex | all
+npx lurqrun install            # guided: paste your key, pick your assistants
 ```
 
-merges a `lurq` MCP server entry into the agent's config (never overwriting other
-config) and drops a short instructions file telling the agent when to call lurq.
-restart the agent afterward.
+the wizard validates the key, detects your installed assistants (Claude Code,
+Cursor, Windsurf, VS Code/Copilot, Codex), and writes a keyed remote MCP entry —
+`{ "type": "http", "url": "https://api.lurq.run/mcp", "headers": { "Authorization": "Bearer …" } }`.
+**no database credentials ever touch your machine.** restart the agent afterward.
+
+non-interactive / scriptable:
+
+```bash
+npx lurqrun install-skill --agent claude-code --api-key <key>   # or --agent all
+```
+
+**self-hosting?** run your own stdio server against your own DB with
+`install-skill --local` (writes a local `npx lurqrun serve` entry using your
+`DATABASE_URL`).
+
+### running the service (operator)
+
+```bash
+lurq serve-http                       # HTTP MCP server with API-key auth (uses $PORT)
+lurq keys create --label "acme"       # issue a key (shown once; stored hashed)
+lurq keys list                        # prefix, tier, last-used, status
+lurq keys revoke lurq_live_ab12cd     # revoke by prefix or id
+```
+
+`serve-http` fronts the central DB with helmet, per-key + per-IP rate limiting,
+and Bearer auth. `DATABASE_URL` lives only on the service host. Deployment:
+see [`docs/lurq-hosted-deployment.md`](./docs/lurq-hosted-deployment.md).
 
 ## how it works
 
