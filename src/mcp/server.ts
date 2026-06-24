@@ -13,7 +13,7 @@ import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from './
 import { handleDiagram } from './diagram';
 
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
-const confidenceEnum = z.enum(['proven', 'emerging', 'unproven']);
+const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
 const constraintsSchema = z
   .object({
