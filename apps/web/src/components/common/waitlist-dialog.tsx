@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 import { Dialog } from "@base-ui/react/dialog";
 import { ArrowRight, Check, Mail, XIcon } from "lucide-react";
@@ -14,9 +14,21 @@ const TURNSTILE_SITE_KEY =
 
 type Status = "idle" | "submitting" | "success" | "error";
 
+type TurnstileOptions = {
+  sitekey: string;
+  theme?: "light" | "dark" | "auto";
+  callback?: (token: string) => void;
+  "error-callback"?: () => void;
+  "expired-callback"?: () => void;
+};
+
 declare global {
   interface Window {
-    turnstile?: { reset: (id?: string) => void };
+    turnstile?: {
+      render: (el: HTMLElement, opts: TurnstileOptions) => string;
+      reset: (id?: string) => void;
+      remove: (id?: string) => void;
+    };
   }
 }
 
@@ -33,12 +45,58 @@ export function WaitlistDialog({
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [token, setToken] = useState("");
+
+  // Turnstile renders its widget into this container. We render *explicitly*
+  // (not via the auto-scanned `.cf-turnstile` class): the widget lives inside a
+  // dialog that mounts after the Turnstile script has already loaded, and
+  // implicit rendering only scans the DOM once at load — so a late-mounted
+  // widget would never appear, leaving users unable to pass verification.
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout>;
+
+    function renderWidget() {
+      if (cancelled) return;
+      const el = widgetRef.current;
+      if (!window.turnstile || !el) {
+        retry = setTimeout(renderWidget, 150); // script not ready yet
+        return;
+      }
+      if (widgetIdRef.current) return; // already rendered
+      setToken("");
+      widgetIdRef.current = window.turnstile.render(el, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: "dark",
+        callback: (t) => setToken(t),
+        "error-callback": () => setToken(""),
+        "expired-callback": () => setToken(""),
+      });
+    }
+
+    renderWidget();
+    return () => {
+      cancelled = true;
+      clearTimeout(retry);
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch {
+          // widget DOM may already be gone — ignore
+        }
+      }
+      widgetIdRef.current = null;
+    };
+  }, [open]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
-    const token = String(data.get("cf-turnstile-response") ?? "");
     const company = String(data.get("company") ?? "");
 
     if (!token) {
@@ -61,10 +119,12 @@ export function WaitlistDialog({
       }
       setStatus("success");
       setEmail("");
-      window.turnstile?.reset();
     } catch (err) {
       setStatus("error");
       setErrorMsg((err as Error).message);
+      // Turnstile tokens are single-use — get a fresh one for the retry.
+      if (widgetIdRef.current) window.turnstile?.reset(widgetIdRef.current);
+      setToken("");
     }
   }
 
@@ -134,7 +194,7 @@ export function WaitlistDialog({
           ) : (
             <div className="relative">
               <Script
-                src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+                src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
                 async
                 defer
               />
@@ -182,12 +242,10 @@ export function WaitlistDialog({
                   />
                 </div>
 
-                {/* Cloudflare Turnstile (injects a hidden cf-turnstile-response field) */}
-                <div
-                  className="cf-turnstile [color-scheme:dark]"
-                  data-sitekey={TURNSTILE_SITE_KEY}
-                  data-theme="dark"
-                />
+                {/* Cloudflare Turnstile — rendered explicitly into this node
+                    (see the effect above). min-height avoids layout shift while
+                    the widget iframe loads. */}
+                <div ref={widgetRef} className="min-h-[65px] [color-scheme:dark]" />
 
                 <button
                   type="submit"
