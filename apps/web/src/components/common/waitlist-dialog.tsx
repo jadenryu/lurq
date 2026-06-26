@@ -14,24 +14,6 @@ const TURNSTILE_SITE_KEY =
 
 type Status = "idle" | "submitting" | "success" | "error";
 
-type TurnstileOptions = {
-  sitekey: string;
-  theme?: "light" | "dark" | "auto";
-  callback?: (token: string) => void;
-  "error-callback"?: () => void;
-  "expired-callback"?: () => void;
-};
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (el: HTMLElement, opts: TurnstileOptions) => string;
-      reset: (id?: string) => void;
-      remove: (id?: string) => void;
-    };
-  }
-}
-
 export function WaitlistDialog({
   triggerLabel = "Join the waitlist",
   triggerClassName,
