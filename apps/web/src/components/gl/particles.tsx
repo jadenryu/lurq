@@ -29,12 +29,17 @@ export function Particles({ introspect = false }: { introspect?: boolean }) {
     [SIZE],
   );
 
-  // float + nearest: we store raw positions, no interpolation
+  // half-float + nearest: we store raw positions, no interpolation.
+  // HalfFloatType (RGBA16F), not FloatType (RGBA32F): rendering into a 32-bit
+  // float color buffer needs EXT_color_buffer_float, which is commonly missing
+  // under Windows' ANGLE/D3D11 backend — there the FBO is incomplete and the
+  // whole field renders black. RGBA16F is widely color-renderable and its
+  // precision is ample for particle positions in the ±planeScale range.
   const target = useFBO(SIZE, SIZE, {
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
     format: THREE.RGBAFormat,
-    type: THREE.FloatType,
+    type: THREE.HalfFloatType,
   });
 
   const dofPointsMaterial = useMemo(() => {
