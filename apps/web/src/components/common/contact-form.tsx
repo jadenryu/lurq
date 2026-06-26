@@ -15,12 +15,6 @@ const TURNSTILE_SITE_KEY =
 
 type Status = "idle" | "submitting" | "success" | "error";
 
-declare global {
-  interface Window {
-    turnstile?: { reset: (id?: string) => void };
-  }
-}
-
 export function ContactForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
