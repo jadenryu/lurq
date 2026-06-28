@@ -238,8 +238,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# local-only docs (kept on disk, not tracked)
-docs/
+# local-only docs (kept on disk, not tracked) — root planning folder only,
+# not the published Fumadocs site in apps/docs
+/docs/
 
 # local Claude Code settings (kept on disk, not tracked)
 .claude/

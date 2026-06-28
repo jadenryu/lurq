@@ -1,0 +1,58 @@
+---
+title: How it works
+description: How lurq turns public signals into scores, confidence, and search.
+---
+
+lurq's scores are computed from public signals — **never hand-written**. This
+page sketches the pipeline from raw data to the answer your agent receives.
+
+## The pipeline
+
+```text
+public APIs (npm, github, deps.dev, bundlephobia)
+  → ingestion
+  → scoring (health + quality + confidence)
+  → summaries / usage guides
+  → embeddings
+  → postgres + pgvector  (hybrid lexical + semantic search)
+  → { stdio MCP server, HTTP MCP service, CLI }
+```
+
+Each stage is idempotent and tolerant of a single source being down, so a flaky
+upstream API degrades one signal rather than failing the whole index.
+
+## Scoring axes
+
+A package's composite score blends two axes:
+
+- **Health** — signals like maintenance cadence, adoption, reliability, and
+  efficiency, drawn from release history, issue activity, dependents, and bundle
+  size.
+- **Quality** — a complementary axis so a brand-new but well-built package
+  isn't penalized purely for being young.
+
+The two are combined with a tunable weight (`composite.lambda`). Operators can
+inspect the model with `lurqrun weights` and adjust it with
+`lurqrun edit-weights` — see the [CLI reference](/docs/cli#scoring-controls).
+
+## Confidence
+
+Confidence labels (`proven`, `emerging`, `promising`, `unproven`) reflect the
+**strength of the discovered evidence**, not popularity alone. This matters for
+newer dependencies: a package can be young and lightly used yet still be a sound
+recommendation, and lurq surfaces it with an honest confidence label rather than
+hiding it.
+
+## Search
+
+Retrieval is **hybrid**: lexical matching for exact names and keywords, combined
+with semantic (vector) search via pgvector for fuzzy, intent-based queries like
+"debounce a function." This catches both "I know the name" and "I know what I
+want it to do" cases.
+
+## Freshness
+
+The index is refreshed on a schedule (`lurqrun sync`), and operators can
+proactively pull in new candidates with `lurqrun discover`. Every response
+includes a `dataAsOf` timestamp so your agent can reason about how current the
+evidence is.

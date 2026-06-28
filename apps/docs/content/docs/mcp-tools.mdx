@@ -1,0 +1,75 @@
+---
+title: MCP tools
+description: The five tools your agent can call over MCP, and what each returns.
+---
+
+Once lurq is installed, your agent can call these tools over MCP. Every response
+is compact (to stay cheap in tokens) and carries a `dataAsOf` timestamp so the
+agent knows how fresh the underlying evidence is.
+
+## `recommend`
+
+Best current packages for a described need.
+
+- **Input:** a natural-language description of what you need.
+- **Output:** up to 5 packages, each scored, with a confidence label.
+- **Filters:** `category` and `min-confidence`.
+
+> "a form library for react" → `react-hook-form`, `@tanstack/react-form`, …
+
+Use this when the agent knows *what it needs* but not *which package* to reach
+for.
+
+## `evaluate`
+
+A full evidence read for a single package.
+
+- **Input:** one package name.
+- **Output:** the complete score breakdown, advisories, and a usage guide.
+
+Use this when the agent has a candidate and wants the detail before committing.
+
+## `compare`
+
+Rank 2–5 packages head-to-head by health.
+
+- **Input:** a list of 2–5 package names.
+- **Output:** a ranked comparison across the scoring axes.
+
+> `compare drizzle-orm prisma typeorm`
+
+Use this when the choice is already narrowed to a shortlist.
+
+## `verify`
+
+The anti-hallucination guard: is this package real, healthy, and not risky?
+
+- **Input:** one package name (possibly a misspelling or invention).
+- **Output:** whether it exists, plus a health/risk read.
+
+> `verify lodahs` → not a real package (did you mean `lodash`?)
+
+Use this **before** the agent writes an import for a package it "remembers."
+
+## `diagram`
+
+A reference-architecture Mermaid diagram for a chosen stack.
+
+- **Input:** a description of the stack.
+- **Output:** a Mermaid diagram you can drop into docs or a README.
+
+This one is optional — it's about communicating a stack, not picking packages.
+
+## Confidence labels
+
+Every recommendation carries one of four confidence labels, reflecting the
+strength of the **discovered** evidence — not anyone's opinion:
+
+| Label | Meaning |
+| --- | --- |
+| `proven` | Strong, broad, sustained evidence of health. |
+| `emerging` | Real traction, shorter track record. |
+| `promising` | Early signals look good, limited history. |
+| `unproven` | Too little evidence to stand behind yet. |
+
+See [How it works](/docs/how-it-works) for how these are derived.

@@ -1,0 +1,46 @@
+---
+title: Introduction
+description: What lurq is, and why your coding agent needs it.
+---
+
+**lurq** is a continuously-updated, evidence-scored index of JS/TS frameworks
+and libraries, exposed to AI coding assistants as an MCP server, a CLI, and an
+installable agent skill. It gives your agent **fresh, objective dependency
+recommendations** — including packages published after the model's training
+cutoff.
+
+Think of lurq as a **companion to your coding agent**: lurq recommends and
+explains packages; your agent writes the code. It's tuned for token cost,
+speed, and retrieval quality.
+
+## Why it exists
+
+Coding agents are good at writing code but bad at picking dependencies. They:
+
+- recommend packages frozen at their **training cutoff**, missing anything newer;
+- **hallucinate** package names that were never published;
+- lean on whatever was popular when the model was trained, not what's healthy now.
+
+lurq fixes this by maintaining a live index built **only from public signals**
+(npm, GitHub, deps.dev, bundlephobia). Scores are computed, never hand-written,
+and every response carries a `dataAsOf` timestamp so the agent knows how fresh
+the evidence is.
+
+## What you get
+
+Once connected, your agent can call five MCP tools:
+
+- [`recommend`](/docs/mcp-tools#recommend) — best current packages for a need
+- [`evaluate`](/docs/mcp-tools#evaluate) — full evidence read for one package
+- [`compare`](/docs/mcp-tools#compare) — rank 2–5 packages by health
+- [`verify`](/docs/mcp-tools#verify) — is a package real, healthy, and safe?
+- [`diagram`](/docs/mcp-tools#diagram) — a reference-architecture diagram for a stack
+
+## Scope
+
+<Callout type="info">
+  v1 covers the **JavaScript / TypeScript web stack (npm) only**. More
+  ecosystems are on the roadmap.
+</Callout>
+
+Ready to connect your agent? Head to the [Quick start](/docs/quickstart).
