@@ -244,4 +244,7 @@ docs/
 # local Claude Code settings (kept on disk, not tracked)
 .claude/
 
+# agent loop kill switch (local-only; create this file to halt the loop)
+.agent-loop-stop
+
 DEPLOY.md

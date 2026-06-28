@@ -51,6 +51,7 @@
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/bin/lurq.ts db migrate",
+    "agent:loop": "node scripts/agent-loop/run.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
