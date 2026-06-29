@@ -11,6 +11,7 @@ import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from './handlers';
 import { handleDiagram } from './diagram';
+import { handlePlan } from './plan';
 
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
@@ -99,6 +100,35 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
       },
     },
     async (args) => json(await handleDiagram(db, args)),
+  );
+
+  server.registerTool(
+    'plan',
+    {
+      title: 'Plan a stack from a program description',
+      description:
+        'Turn a detailed program description (spec/README) or a list of component needs into an evidence-scored build plan: a real, lurq-scored package recommended per component, plus a Mermaid roadmap other agents can parse. Recommends building blocks slot-by-slot from the index — it does not invent an architecture from a bare prompt.',
+      inputSchema: {
+        document: z
+          .string()
+          .optional()
+          .describe('Detailed description of the program (spec/README); lurq decomposes it into components'),
+        needs: z
+          .array(
+            z.object({
+              need: z.string().min(1).describe('A component that needs a library'),
+              category: categoryEnum.optional(),
+            }),
+          )
+          .optional()
+          .describe('Pre-decomposed components (skip if you pass a document)'),
+        optimize: z
+          .enum(['speed', 'balanced'])
+          .optional()
+          .describe("'speed' prefers the lightest-bundle option per slot; default 'balanced'"),
+      },
+    },
+    async (args) => json(await handlePlan(db, args)),
   );
 
   return server;

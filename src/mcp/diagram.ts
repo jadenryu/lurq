@@ -73,13 +73,13 @@ const BACKEND_FRAMEWORKS = new Set([
   '@hapi/hapi',
 ]);
 
-interface Item {
+export interface Item {
   label: string;
   /** null = could not be classified (not in index, no category match). */
   category: Category | null;
 }
 
-function layerFor(item: Item): string {
+export function layerFor(item: Item): string {
   if (!item.category) return UNCLASSIFIED;
   if (item.category === 'framework' && BACKEND_FRAMEWORKS.has(item.label)) return 'Backend';
   return LAYER_OF[item.category] ?? UNCLASSIFIED;
