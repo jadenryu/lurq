@@ -4,7 +4,9 @@
  * (§12.4): summaries truncated, advisories capped, no raw payloads, always a
  * `dataAsOf` and a `stale` hint when data is old (§17).
  */
+import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { cached } from '../core/cache';
 import { STALENESS_DAYS } from '../core/constants';
 import type {
   Advisory,
@@ -33,6 +35,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function isStale(dataAsOf: Date | null): boolean {
   if (!dataAsOf) return true;
   return Date.now() - dataAsOf.getTime() > STALENESS_DAYS * DAY_MS;
+}
+
+/** Re-derive the wall-clock `stale` hint (§17) on a (possibly cached) evaluate
+ *  row, so a cached response doesn't keep claiming fresh data after it ages past
+ *  the threshold between syncs. */
+function refreshStale(out: EvaluateOutput): EvaluateOutput {
+  out.stale = isStale(out.dataAsOf ? new Date(out.dataAsOf) : null) || undefined;
+  return out;
 }
 
 function withinDays(date: Date | null, days: number): boolean {
@@ -81,7 +91,7 @@ export function rowToEvaluate(row: PackageRow): EvaluateOutput {
   };
 }
 
-async function latestDataAsOf(db: Database): Promise<string> {
+export async function latestDataAsOf(db: Database): Promise<string> {
   const [row] = await db
     .select({ m: sql<string | null>`max(${packages.dataAsOf})` })
     .from(packages);
@@ -96,14 +106,27 @@ export interface RecommendInput {
   constraints?: RecommendOptions['constraints'];
 }
 
+/** Short, stable cache key from arbitrary input. */
+function cacheKey(parts: unknown): string {
+  return createHash('sha1').update(JSON.stringify(parts)).digest('hex').slice(0, 24);
+}
+
 export async function handleRecommend(db: Database, input: RecommendInput) {
-  const candidates = await recommend(db, {
-    need: input.need,
-    category: input.category,
-    constraints: input.constraints,
-    limit: 5,
-  });
-  return { dataAsOf: await latestDataAsOf(db), candidates };
+  return cached(
+    'rec',
+    cacheKey([input.need, input.category ?? null, input.constraints ?? null]),
+    async () => {
+      const candidates = await recommend(db, {
+        need: input.need,
+        category: input.category,
+        constraints: input.constraints,
+        limit: 5,
+      });
+      return { dataAsOf: await latestDataAsOf(db), candidates };
+    },
+    // Don't cache empty results — the index may still be populating.
+    { skipCache: (r) => r.candidates.length === 0 },
+  );
 }
 
 // ── evaluate ────────────────────────────────────────────────────────────────
@@ -112,31 +135,51 @@ export async function handleEvaluate(
   db: Database,
   input: { package: string },
 ): Promise<EvaluateOutput | { tracked: false; suggestion: string }> {
-  const { row, existsOnNpm } = await getOrFetchPackage(db, input.package);
-  if (!row) {
-    return {
-      tracked: false,
-      suggestion: existsOnNpm
-        ? `"${input.package}" exists on npm but could not be scored right now; try again.`
-        : `"${input.package}" was not found on the npm registry. Check the package name.`,
-    };
-  }
-  return rowToEvaluate(row);
+  const out = await cached(
+    'eval',
+    cacheKey([input.package]),
+    async () => {
+      const { row, existsOnNpm } = await getOrFetchPackage(db, input.package);
+      if (!row) {
+        return {
+          tracked: false as const,
+          suggestion: existsOnNpm
+            ? `"${input.package}" exists on npm but could not be scored right now; try again.`
+            : `"${input.package}" was not found on the npm registry. Check the package name.`,
+        };
+      }
+      return rowToEvaluate(row);
+    },
+    // Don't cache "not found / not scored yet" — it may resolve on a later fetch.
+    { skipCache: (r) => 'tracked' in r },
+  );
+  // Re-derive the time-based stale hint, which a cached row would otherwise freeze.
+  return 'tracked' in out ? out : refreshStale(out);
 }
 
 // ── compare ─────────────────────────────────────────────────────────────────
 
 export async function handleCompare(db: Database, input: { packages: string[] }) {
-  const results = await Promise.all(input.packages.map((name) => getOrFetchPackage(db, name)));
-  const rows = results
-    .map((r) => r.row)
-    .filter((row): row is PackageRow => row !== null)
-    .map(rowToEvaluate)
-    .sort((a, b) => b.healthScore - a.healthScore);
-  const missing = input.packages.filter(
-    (name) => !rows.some((r) => r.name === name),
+  // Key on the exact input — the response echoes the caller's own names/order in
+  // `missing`, so a normalized key would serve another caller's casing.
+  const out = await cached(
+    'cmp',
+    cacheKey(input.packages),
+    async () => {
+      const results = await Promise.all(input.packages.map((name) => getOrFetchPackage(db, name)));
+      const rows = results
+        .map((r) => r.row)
+        .filter((row): row is PackageRow => row !== null)
+        .map(rowToEvaluate)
+        .sort((a, b) => b.healthScore - a.healthScore);
+      const missing = input.packages.filter((name) => !rows.some((r) => r.name === name));
+      return { dataAsOf: await latestDataAsOf(db), rows, ...(missing.length ? { missing } : {}) };
+    },
+    // Don't cache a transient miss (a package that momentarily failed to fetch).
+    { skipCache: (r) => Boolean((r as { missing?: string[] }).missing?.length) },
   );
-  return { dataAsOf: await latestDataAsOf(db), rows, ...(missing.length ? { missing } : {}) };
+  out.rows = out.rows.map(refreshStale);
+  return out;
 }
 
 // ── verify ──────────────────────────────────────────────────────────────────
