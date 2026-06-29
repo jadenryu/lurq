@@ -11,11 +11,11 @@ import {
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 
-// Neutral palette — the crystal reads as a grey/black gradient gem.
-const STEEL = "#9aa0a6"; // mid grey — emissive lines / point light
+// Neutral palette: the crystal reads as a grey/black gradient gem.
+const STEEL = "#9aa0a6"; // mid grey: emissive lines / point light
 const SLATE = "#6b7280"; // grey fill light
-const PALE = "#d4d4d8"; // pale grey — core / ring / highlights
-const ONYX = "#3a3a3d"; // dark grey — glass interior attenuation (black gradient)
+const PALE = "#d4d4d8"; // pale grey: core / ring / highlights
+const ONYX = "#3a3a3d"; // dark grey: glass interior attenuation (black gradient)
 
 // A faceted glass crystal shard with energy threading through its core.
 // Outer shell: physically-based transmission (real refraction / Linear-style
@@ -29,7 +29,7 @@ function Crystal() {
   useFrame((state) => {
     const t = state.clock.elapsedTime;
 
-    // extremely slow self-rotation only — no cursor interaction
+    // extremely slow self-rotation only; no cursor interaction
     if (group.current) {
       group.current.rotation.y += 0.0006;
     }
@@ -76,7 +76,7 @@ function Crystal() {
           />
         </mesh>
 
-        {/* emissive wireframe twin — the energy lattice inside */}
+        {/* emissive wireframe twin: the energy lattice inside */}
         <mesh scale={shardScale.map((s) => s * 0.92) as [number, number, number]}>
           <octahedronGeometry args={[1, 0]} />
           <meshBasicMaterial

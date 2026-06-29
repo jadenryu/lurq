@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 // Themed stand-in for an image or diagram we haven't produced yet. A dashed
-// card on the dark surface with a centered label — obviously a placeholder,
+// card on the dark surface with a centered label: obviously a placeholder,
 // never mistaken for finished art.
 export function Placeholder({
   label = "Placeholder",

@@ -29,15 +29,15 @@ export default function PrivacyPage() {
         <h2>Information we collect</h2>
         <ul>
           <li>
-            <strong>Account information</strong> — name and email when you sign
+            <strong>Account information</strong>: name and email when you sign
             up or request a demo.
           </li>
           <li>
-            <strong>Usage data</strong> — basic, privacy-preserving analytics
+            <strong>Usage data</strong>: basic, privacy-preserving analytics
             about how the site and product are used.
           </li>
           <li>
-            <strong>Queries</strong> — package-recommendation requests sent to
+            <strong>Queries</strong>: package-recommendation requests sent to
             the lurq service, used to return results and improve scoring.
           </li>
         </ul>

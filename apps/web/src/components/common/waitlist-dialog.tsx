@@ -32,7 +32,7 @@ export function WaitlistDialog({
   // Turnstile renders its widget into this container. We render *explicitly*
   // (not via the auto-scanned `.cf-turnstile` class): the widget lives inside a
   // dialog that mounts after the Turnstile script has already loaded, and
-  // implicit rendering only scans the DOM once at load — so a late-mounted
+  // implicit rendering only scans the DOM once at load, so a late-mounted
   // widget would never appear, leaving users unable to pass verification.
   const widgetRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
@@ -68,7 +68,7 @@ export function WaitlistDialog({
         try {
           window.turnstile.remove(widgetIdRef.current);
         } catch {
-          // widget DOM may already be gone — ignore
+          // widget DOM may already be gone, ignore
         }
       }
       widgetIdRef.current = null;
@@ -104,7 +104,7 @@ export function WaitlistDialog({
     } catch (err) {
       setStatus("error");
       setErrorMsg((err as Error).message);
-      // Turnstile tokens are single-use — get a fresh one for the retry.
+      // Turnstile tokens are single-use; get a fresh one for the retry.
       if (widgetIdRef.current) window.turnstile?.reset(widgetIdRef.current);
       setToken("");
     }
@@ -130,7 +130,7 @@ export function WaitlistDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-md" />
         <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-[25rem] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 bg-card/90 p-7 shadow-2xl shadow-black/60 ring-1 ring-white/[0.04] backdrop-blur-xl transition duration-200 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
-          {/* hairline top-light + soft glow — the Linear "lit panel" cue */}
+          {/* hairline top-light + soft glow: the Linear "lit panel" cue */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent"
@@ -211,7 +211,7 @@ export function WaitlistDialog({
                   />
                 </div>
 
-                {/* Honeypot — hidden from users, bots tend to fill it. */}
+                {/* Honeypot: hidden from users; bots tend to fill it. */}
                 <div aria-hidden className="hidden">
                   <label htmlFor="waitlist-company">Company</label>
                   <input
@@ -223,7 +223,7 @@ export function WaitlistDialog({
                   />
                 </div>
 
-                {/* Cloudflare Turnstile — rendered explicitly into this node
+                {/* Cloudflare Turnstile, rendered explicitly into this node
                     (see the effect above). min-height avoids layout shift while
                     the widget iframe loads. */}
                 <div ref={widgetRef} className="min-h-[65px] [color-scheme:dark]" />

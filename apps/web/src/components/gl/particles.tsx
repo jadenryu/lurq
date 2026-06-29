@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { SimulationMaterial } from "./shaders/simulationMaterial";
 import { DofPointsMaterial } from "./shaders/pointMaterial";
 
-// Production defaults (the spec's Leva panel, hardcoded — no dev UI in prod).
+// Production defaults (the spec's Leva panel, hardcoded; no dev UI in prod).
 const PARAMS = {
   speed: 1.0,
   noiseScale: 0.6,
@@ -32,7 +32,7 @@ export function Particles({ introspect = false }: { introspect?: boolean }) {
   // half-float + nearest: we store raw positions, no interpolation.
   // HalfFloatType (RGBA16F), not FloatType (RGBA32F): rendering into a 32-bit
   // float color buffer needs EXT_color_buffer_float, which is commonly missing
-  // under Windows' ANGLE/D3D11 backend — there the FBO is incomplete and the
+  // under Windows' ANGLE/D3D11 backend; there the FBO is incomplete and the
   // whole field renders black. RGBA16F is widely color-renderable and its
   // precision is ample for particle positions in the ±planeScale range.
   const target = useFBO(SIZE, SIZE, {

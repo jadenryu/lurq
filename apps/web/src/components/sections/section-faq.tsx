@@ -34,7 +34,7 @@ export function SectionFaq() {
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     FAQ
                   </span>
-                  <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+                  <h2 className="mt-4 text-4xl font-semibold leading-[1.04] tracking-tight md:text-6xl">
                     Frequently asked questions
                   </h2>
                   <Accordion className="mt-8 w-full">
@@ -56,12 +56,12 @@ export function SectionFaq() {
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     Contact
                   </span>
-                  <h3 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+                  <h3 className="mt-4 text-4xl font-semibold leading-[1.04] tracking-tight md:text-6xl">
                     Still have questions?
                   </h3>
-                  <p className="mt-3 text-muted-foreground">
-                    Reach out about the project, partnerships, or anything else
-                    - we&apos;ll get back to you.
+                  <p className="mt-4 text-lg leading-relaxed text-muted-foreground md:text-xl">
+                    Partnerships, edge cases, or just curious how the scoring
+                    works? Send it over. A real person reads every message.
                   </p>
                   <div className="mt-8">
                     <ContactForm />

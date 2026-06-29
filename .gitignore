@@ -245,4 +245,7 @@ __marimo__/
 # local Claude Code settings (kept on disk, not tracked)
 .claude/
 
+# local agent-loop / Obsidian task vault (kept on disk, not tracked)
+/vault/
+
 DEPLOY.md

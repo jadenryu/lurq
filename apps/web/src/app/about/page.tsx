@@ -15,7 +15,7 @@ const principles = [
   {
     icon: ScanSearch,
     title: "Evidence over popularity",
-    body: "Stars and download counts measure attention, not health. lurq scores real signals — maintenance cadence, advisories, deprecations, bundle cost.",
+    body: "Stars and download counts measure attention, not health. lurq scores real signals: maintenance cadence, advisories, deprecations, bundle cost.",
   },
   {
     icon: RefreshCw,
@@ -41,14 +41,14 @@ export default function AboutPage() {
     <PageShell
       eyebrow="Company"
       title="About lurq"
-      lead="lurq is a continuously-updated, evidence-scored index of JS/TS frameworks and libraries — a companion to your coding agent that recommends dependencies that are real, healthy, and current."
+      lead="lurq is a continuously-updated, evidence-scored index of JS/TS frameworks and libraries: a companion to your coding agent that recommends dependencies that are real, healthy, and current."
     >
       <Prose>
         <h2>The problem</h2>
         <p>
           AI coding agents are excellent at writing code and surprisingly poor at
           choosing what to build on. They suggest libraries that are abandoned,
-          deprecated, or simply hallucinated — because their knowledge is a
+          deprecated, or simply hallucinated, because their knowledge is a
           snapshot frozen at training time, ranked by how often a name appeared,
           not by whether the package is healthy now.
         </p>

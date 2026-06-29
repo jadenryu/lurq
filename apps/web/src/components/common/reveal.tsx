@@ -15,7 +15,7 @@ export function Reveal({
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   // Default visible. We only hide (then fade in) sections that are BELOW the
-  // fold when they mount — those are off-screen, so hiding causes no flash.
+  // fold when they mount; those are off-screen, so hiding causes no flash.
   // Anything already on screen (the hero) stays visible no matter what, so the
   // server never ships invisible content and nothing can get stuck at opacity 0.
   const [hidden, setHidden] = useState(false);
@@ -25,7 +25,7 @@ export function Reveal({
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const onScreen = rect.top < window.innerHeight && rect.bottom > 0;
-    if (onScreen) return; // already visible — leave it shown
+    if (onScreen) return; // already visible, leave it shown
 
     setHidden(true);
     const obs = new IntersectionObserver(

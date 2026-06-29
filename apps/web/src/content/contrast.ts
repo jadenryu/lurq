@@ -40,7 +40,7 @@ export const contrastCases: ContrastCase[] = [
     without: {
       pkg: "moment",
       reply: [
-        "Use Moment.js — it's the standard for dates in JS.",
+        "Use Moment.js. It's the standard for dates in JS.",
         "npm install moment",
       ],
       flag: "Moment has been in maintenance mode since 2020 and ships a ~4.2MB, non-tree-shakeable bundle.",
@@ -50,7 +50,7 @@ export const contrastCases: ContrastCase[] = [
       pkg: "date-fns",
       score: "Health 94 · High confidence",
       reply: [
-        "date-fns is the current best pick — modular, immutable,",
+        "date-fns is the current best pick: modular, immutable,",
         "and fully tree-shakeable. (Temporal is the runtime-native",
         "successor once your target supports it.)",
         "npm install date-fns",
@@ -70,7 +70,7 @@ export const contrastCases: ContrastCase[] = [
     without: {
       pkg: "jsonwebtoken@8",
       reply: [
-        "Add jsonwebtoken — pin it to v8 for stability.",
+        "Add jsonwebtoken. Pin it to v8 for stability.",
         "npm install jsonwebtoken@8",
       ],
       flag: "v8 is affected by known advisories (algorithm confusion / weak key handling). The agent has no way to see them.",
@@ -80,7 +80,7 @@ export const contrastCases: ContrastCase[] = [
       pkg: "jose",
       score: "0 known advisories · High confidence",
       reply: [
-        "jsonwebtoken@8 has open security advisories — avoid it.",
+        "jsonwebtoken@8 has open security advisories. Avoid it.",
         "Use jose: modern, audited, and standards-compliant",
         "(JWS/JWE/JWT) with no outstanding CVEs.",
         "npm install jose",
@@ -104,14 +104,14 @@ export const contrastCases: ContrastCase[] = [
         "then wire up postcss with the tailwindcss plugin.",
         "npx tailwindcss init -p",
       ],
-      flag: "These are v3 instructions. Tailwind v4 dropped the JS config file and changed the PostCSS plugin — the steps no longer apply.",
+      flag: "These are v3 instructions. Tailwind v4 dropped the JS config file and changed the PostCSS plugin, so the steps no longer apply.",
     },
     with: {
       toolCall: 'lurq recommend "tailwind css setup"',
       pkg: "tailwindcss@4",
       score: "Latest major · High confidence",
       reply: [
-        "Tailwind v4 is current — no config file needed.",
+        "Tailwind v4 is current. No config file needed.",
         "Install the v4 PostCSS plugin and import it in CSS:",
         'npm install tailwindcss @tailwindcss/postcss',
         '/* globals.css */ @import "tailwindcss";',
