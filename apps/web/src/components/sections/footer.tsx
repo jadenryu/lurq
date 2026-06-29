@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Logo } from "@/components/common/logo";
 import { Container } from "@/components/common/container";
 
-const columns: { title: string; links: { label: string; href: string }[] }[] = [
+type FooterLink = { label: string; href: string; external?: boolean };
+
+const columns: { title: string; links: FooterLink[] }[] = [
   {
     title: "Product",
     links: [
@@ -14,10 +16,10 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Docs",
     links: [
-      { label: "Quickstart", href: "#" },
-      { label: "CLI usage", href: "#" },
-      { label: "MCP tools", href: "#" },
-      { label: "Install into your agent", href: "#" },
+      { label: "Quickstart", href: "/docs/quickstart", external: true },
+      { label: "CLI usage", href: "/docs/cli", external: true },
+      { label: "MCP tools", href: "/docs/mcp-tools", external: true },
+      { label: "How it works", href: "/docs/how-it-works", external: true },
     ],
   },
   {
@@ -59,12 +61,21 @@ export function Footer() {
               <ul className="mt-4 space-y-3">
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {link.label}
-                    </Link>
+                    {link.external ? (
+                      <a
+                        href={link.href}
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>
