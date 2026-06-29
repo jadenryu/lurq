@@ -23,7 +23,7 @@ const GLYPHS = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789!<>-_/[]{}=+*^?#$&%@~".split("
 const HIDDEN_RATIO = 0.7;
 // How often the hidden region drifts to new positions (ms).
 const DRIFT_MS = 360;
-// How often hidden characters re-roll their glyph (ms) — the slow shimmer.
+// How often hidden characters re-roll their glyph (ms): the slow shimmer.
 const CHURN_MS = 130;
 
 function randInt(max: number) {
@@ -126,7 +126,7 @@ export function CrypticInstall({ className }: { className?: string }) {
         className="mt-2 flex w-full items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-2.5 font-mono text-sm"
         // The real command never reaches the DOM in legible order; announce a
         // friendly placeholder to assistive tech instead.
-        aria-label="Install command — unlocks at launch"
+        aria-label="Install command, unlocks at launch"
       >
         <span className="text-foreground/40">$</span>
         <span aria-hidden className="flex-1 text-left tracking-tight">
@@ -151,7 +151,7 @@ export function CrypticInstall({ className }: { className?: string }) {
       </div>
 
       <p className="mt-2 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground/60">
-        Install unlocks at launch – join the waitlist
+        Install unlocks at launch. Join the waitlist
       </p>
     </div>
   );

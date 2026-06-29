@@ -12,7 +12,7 @@ const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function AnnouncementBar() {
-  // In-memory only – dismissing hides it for this view; it returns on reload.
+  // In-memory only: dismissing hides it for this view; it returns on reload.
   const [dismissed, setDismissed] = useState(false);
 
   useIsoLayoutEffect(() => {
@@ -35,7 +35,7 @@ export function AnnouncementBar() {
         <span className={`${robotoMono.className} text-muted-foreground`}>
           {VERSION}
         </span>{" "}
-        – questions or feedback?{" "}
+        · questions or feedback?{" "}
         <a
           href="mailto:jadenryu@gmail.com"
           className="font-medium underline underline-offset-2 transition-colors hover:text-foreground"

@@ -71,7 +71,7 @@ export default function LicensePage() {
       <Prose className="mt-12">
         <h2>Summary</h2>
         <p>
-          You may use, modify, and distribute lurq — including commercially —
+          You may use, modify, and distribute lurq, including commercially,
           provided you retain the copyright and license notices and state any
           significant changes. The software is provided <strong>as is</strong>,
           without warranty of any kind. This summary is for convenience only; the

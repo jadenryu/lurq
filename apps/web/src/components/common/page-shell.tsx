@@ -40,7 +40,7 @@ export function PageShell({
       </header>
 
       <main className="relative flex-1 overflow-hidden">
-        {/* ambient backdrop — faint grid + a soft overhead glow */}
+        {/* ambient backdrop: faint grid + a soft overhead glow */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-[460px]"

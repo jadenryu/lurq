@@ -6,7 +6,7 @@ import { GradientBorder } from "@/components/common/gradient-border";
 export const metadata: Metadata = {
   title: "Partnerships | lurq",
   description:
-    "Partner with lurq — integrations, registries, and tooling for AI coding agents.",
+    "Partner with lurq: integrations, registries, and tooling for AI coding agents.",
 };
 
 const PARTNER_EMAIL = "jadenryu@gmail.com";

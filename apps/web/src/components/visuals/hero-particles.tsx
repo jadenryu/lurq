@@ -16,7 +16,7 @@ const GL = dynamic(() => import("@/components/gl"), {
 
 // The field is a GPGPU sim that renders into a half-float FBO and does vertex
 // texture fetch. Some GPUs/drivers (older Windows/ANGLE configs, locked-down
-// browsers) can't do that — detect up front so we show the static black
+// browsers) can't do that; detect up front so we show the static black
 // background instead of an empty/broken canvas.
 function supportsGpgpuParticles(): boolean {
   try {

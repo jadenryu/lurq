@@ -90,7 +90,7 @@ export async function POST(req: Request) {
   });
 
   if (error) {
-    // Resend treats a re-added email as a conflict — that's a success for us
+    // Resend treats a re-added email as a conflict; that's a success for us
     // (they're already on the list), so only surface genuine failures.
     const name = (error as { name?: string }).name;
     if (name && name !== "validation_error") {
