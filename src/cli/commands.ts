@@ -197,11 +197,15 @@ export interface EditWeightsOpts {
   json?: boolean;
 }
 
-/** `lurq edit-weights` — override / reset / explain the model (no DB needed). */
-export function runEditWeights(opts: EditWeightsOpts): void {
+/** `lurq edit-weights` — override / reset / explain the model (no DB needed).
+ *  A weight change alters ranking at read time, so invalidate the response cache
+ *  (no-op without REDIS_URL) when run where the index is served. */
+export async function runEditWeights(opts: EditWeightsOpts): Promise<void> {
+  const { invalidateCache } = await import('../core/cache');
   if (opts.reset) {
     const removed = resetWeights();
     console.log(removed.length ? `Removed overrides:\n  ${removed.join('\n  ')}` : 'No overrides to remove; already on defaults.');
+    if (removed.length) await invalidateCache();
     return;
   }
 
@@ -219,6 +223,7 @@ export function runEditWeights(opts: EditWeightsOpts): void {
     const next = applyOverrides(loadWeights(), opts.set);
     const { weights, normalized } = validateWeights(next);
     const path = saveWeights(weights, opts.project ? 'project' : 'user');
+    await invalidateCache();
     console.log(`Saved overrides to ${path}`);
     if (normalized) {
       console.log(
@@ -233,6 +238,83 @@ export function runEditWeights(opts: EditWeightsOpts): void {
   // No action flags → behave like `lurq weights`.
   console.log(dim(`No changes. Settable keys: ${settableKeys().join(', ')}.\n`));
   runWeights(opts);
+}
+
+export interface PlanCliOpts {
+  optimize?: string;
+  json?: boolean;
+  html?: string;
+  open?: boolean;
+}
+
+/** Open a file/URL in the OS default app, cross-platform, best-effort. No shell
+ *  (avoids metacharacter injection); on Windows `cmd /c start "" <target>` keeps
+ *  spaced paths intact because Node passes each arg separately. */
+async function openInBrowser(target: string): Promise<void> {
+  const { spawn } = await import('node:child_process');
+  const [cmd, args]: [string, string[]] =
+    process.platform === 'darwin'
+      ? ['open', [target]]
+      : process.platform === 'win32'
+        ? ['cmd', ['/c', 'start', '', target]]
+        : ['xdg-open', [target]];
+  spawn(cmd, args, { stdio: 'ignore', detached: true }).unref();
+}
+
+export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
+  const { readFileSync } = await import('node:fs');
+  let document: string;
+  try {
+    document = readFileSync(file, 'utf8');
+  } catch {
+    throw new Error(`Could not read "${file}".`);
+  }
+  if (opts.optimize && opts.optimize !== 'speed' && opts.optimize !== 'balanced') {
+    throw new Error("--optimize must be 'speed' or 'balanced'.");
+  }
+  await withDb(async (db) => {
+    const { handlePlan } = await import('../mcp/plan');
+    const res = await handlePlan(db, {
+      document,
+      optimize: opts.optimize as 'speed' | 'balanced' | undefined,
+    });
+    if (opts.json) return console.log(JSON.stringify(res, null, 2));
+    if (!('slots' in res)) {
+      console.log(res.note);
+      return;
+    }
+
+    // Visualization: render the roadmap to a portable HTML file and optionally open it.
+    if (opts.html || opts.open) {
+      const { writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      const { renderPlanHtml } = await import('./planView');
+      const out = opts.html ?? join(tmpdir(), `lurq-plan-${Date.now()}.html`);
+      writeFileSync(out, renderPlanHtml(res), 'utf8');
+      console.log(`Roadmap written to ${out}`);
+      if (opts.open) await openInBrowser(out);
+    }
+
+    console.log(
+      table(
+        ['Component', 'Layer', 'Recommended', 'Health', 'Confidence', 'Alternatives'],
+        res.slots.map((s) => [
+          s.need.length > 32 ? s.need.slice(0, 31) + '…' : s.need,
+          s.layer,
+          s.recommended?.name ?? dim('—'),
+          s.recommended ? String(s.recommended.healthScore) : '—',
+          s.recommended ? confidenceLabel(s.recommended.confidence) : '—',
+          s.alternatives.map((a) => a.name).join(', ') || '—',
+        ]),
+      ),
+    );
+    if (res.unmatched.length) console.log(yellow(`\nNo match for: ${res.unmatched.join(', ')}`));
+    console.log('\n' + bold('Roadmap (Mermaid):'));
+    console.log(res.mermaid);
+    console.log(dim(`\n${res.note}`));
+    console.log(dim(`data as of ${formatDate(res.dataAsOf)}`));
+  });
 }
 
 export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<void> {

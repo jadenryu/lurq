@@ -50,7 +50,7 @@ export async function runInstallWizard(opts: WizardOptions): Promise<void> {
   let apiKey = (opts.apiKey ?? process.env.LURQ_API_KEY)?.trim();
 
   if (interactive) {
-    const { input, checkbox, confirm } = await import('@inquirer/prompts');
+    const { input, checkbox, confirm, select } = await import('@inquirer/prompts');
 
     console.log('\n  lurq — connect your coding agent to the hosted package index.\n');
 
@@ -79,22 +79,56 @@ export async function runInstallWizard(opts: WizardOptions): Promise<void> {
       }
     }
 
-    let selected: AgentSpec[];
     if (opts.agent) {
-      selected = resolveAgents(opts.agent);
-    } else {
-      const specs = agentSpecs();
-      const ids = await checkbox({
-        message: 'Which assistant(s) should I configure?',
-        choices: specs.map((s) => ({
-          name: `${s.label}${s.detected ? ' (detected)' : ''}`,
-          value: s.id,
-          checked: s.detected,
-        })),
-      });
-      selected = specs.filter((s) => ids.includes(s.id));
+      await finish(resolveAgents(opts.agent), { url, apiKey });
+      return;
     }
-    await finish(selected, { url, apiKey });
+
+    const specs = agentSpecs();
+    // Natural-language quick path: if we spot likely agents, offer a one-tap
+    // connect before falling back to the full multi-select. Mirrors the simplified
+    // "connect to Claude Code? (y/n/other)" flow in docs/lurq-demo.md. "Yes" wires
+    // up EVERY detected agent (the prior multi-select pre-checked them all), so a
+    // user with two editors doesn't silently leave one unconnected.
+    const detected = specs.filter((s) => s.detected);
+    const primary = detected.find((s) => s.id === 'claude-code') ?? detected[0];
+    if (primary) {
+      const others = detected.length - 1;
+      const choice = await select({
+        message:
+          others > 0
+            ? `Looks like you have ${detected.map((s) => s.label).join(', ')}. Connect lurq to them?`
+            : `Looks like you have ${primary.label}. Connect lurq to it?`,
+        default: 'yes',
+        choices: [
+          {
+            name: others > 0 ? `Yes — set up all ${detected.length} detected agents` : `Yes — set up ${primary.label} for me`,
+            value: 'yes',
+          },
+          { name: 'No — let me choose which agent(s)', value: 'other' },
+          { name: 'Cancel — change nothing', value: 'cancel' },
+        ],
+      });
+      if (choice === 'cancel') {
+        console.log('No problem — nothing was changed. Run `lurq install` again anytime.');
+        return;
+      }
+      if (choice === 'yes') {
+        await finish(detected, { url, apiKey });
+        return;
+      }
+      // 'other' falls through to the full multi-select below.
+    }
+
+    const ids = await checkbox({
+      message: 'Which assistant(s) should I configure?',
+      choices: specs.map((s) => ({
+        name: `${s.label}${s.detected ? ' (detected)' : ''}`,
+        value: s.id,
+        checked: s.detected,
+      })),
+    });
+    await finish(specs.filter((s) => ids.includes(s.id)), { url, apiKey });
     return;
   }
 

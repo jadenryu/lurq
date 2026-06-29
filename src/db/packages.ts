@@ -2,7 +2,7 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { Category } from '../core/types';
 import type { Database } from './client';
 import { packages, seedPackages, syncRuns, type NewPackageRow, type SyncError } from './schema';
@@ -80,10 +80,4 @@ export async function finishSyncRun(
       status: data.status,
     })
     .where(eq(syncRuns.id, id));
-}
-
-/** Count tracked packages — handy for CLI/diagnostics. */
-export async function countPackages(db: Database): Promise<number> {
-  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(packages);
-  return row?.n ?? 0;
 }

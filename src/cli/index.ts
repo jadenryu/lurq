@@ -91,6 +91,19 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('plan')
+    .argument('<file>', 'path to a markdown file describing your program')
+    .description('turn a program description into an evidence-scored package plan + roadmap')
+    .option('--optimize <mode>', "ranking bias: 'speed' (lightest bundle) or 'balanced'")
+    .option('--html <path>', 'write the roadmap as a self-contained HTML visualization')
+    .option('--open', 'render the roadmap to HTML and open it in your browser')
+    .option('--json', 'output the full plan as JSON')
+    .action(async (file: string, opts: { optimize?: string; json?: boolean; html?: string; open?: boolean }) => {
+      const { runPlan } = await import('./commands');
+      await runPlan(file, opts);
+    });
+
+  program
     .command('weights')
     .description('show and explain the scoring weight model (health, quality, composite λ)')
     .option('--json', 'output the weight model as JSON')
@@ -108,7 +121,7 @@ export function buildProgram(): Command {
     .option('--project', 'write to project-local .lurq/weights.json instead of the user config')
     .action(async (opts: { set?: string[]; reset?: boolean; explain?: string; project?: boolean }) => {
       const { runEditWeights } = await import('./commands');
-      runEditWeights(opts);
+      await runEditWeights(opts);
     });
 
   program
@@ -185,6 +198,15 @@ export function buildProgram(): Command {
     .action(async (opts: { json?: boolean }) => {
       const { runKeysList } = await import('./keys');
       await runKeysList(opts);
+    });
+  keys
+    .command('rotate')
+    .argument('<prefixOrId>', 'key prefix (e.g. lurq_live_ab12cd) or numeric id to replace')
+    .description('issue a replacement key (same label/tier) and revoke the old one')
+    .option('--json', 'print the new key as JSON and skip the interactive erase (for scripts)')
+    .action(async (prefixOrId: string, opts: { json?: boolean }) => {
+      const { runKeysRotate } = await import('./keys');
+      await runKeysRotate(prefixOrId, opts);
     });
   keys
     .command('revoke')

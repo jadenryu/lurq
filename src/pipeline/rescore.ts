@@ -9,6 +9,7 @@
  * a λ-only edit needs no rescore — but running it is harmless and idempotent.
  */
 import { isNotNull } from 'drizzle-orm';
+import { invalidateCache } from '../core/cache';
 import { logger } from '../core/logger';
 import { createDb } from '../db/client';
 import { packages } from '../db/schema';
@@ -44,6 +45,7 @@ export async function runRescore(): Promise<RescoreSummary> {
     }
 
     logger.info(`Rescored ${rows.length} package(s); ${updated} health score(s) changed.`);
+    if (updated > 0) await invalidateCache();
     return { seen: rows.length, updated };
   } finally {
     await handle.close();
