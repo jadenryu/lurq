@@ -91,6 +91,17 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('versions')
+    .argument('<package>', 'npm package name')
+    .description('show the stored version timeline for a package')
+    .option('--json', 'output JSON instead of a table')
+    .option('-n, --limit <n>', 'how many versions to show (default 30)')
+    .action(async (pkg: string, opts: { json?: boolean; limit?: string }) => {
+      const { runVersions } = await import('./commands');
+      await runVersions(pkg, opts);
+    });
+
+  program
     .command('plan')
     .argument('<file>', 'path to a markdown file describing your program')
     .description('turn a program description into an evidence-scored package plan + roadmap')
@@ -148,6 +159,16 @@ export function buildProgram(): Command {
       const { runRescore } = await import('../pipeline/index');
       const summary = await runRescore();
       if (opts.json) console.log(JSON.stringify(summary, null, 2));
+    });
+
+  program
+    .command('watch')
+    .description(
+      'operator-side: follow the npm changes feed, re-syncing tracked packages on new releases',
+    )
+    .action(async () => {
+      const { runWatch } = await import('./commands');
+      await runWatch();
     });
 
   program

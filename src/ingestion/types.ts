@@ -5,6 +5,12 @@
  */
 import type { Advisory } from '../core/types';
 
+/** One published version of a package and when it shipped (from the packument). */
+export interface VersionInfo {
+  version: string;
+  publishedAt: Date | null;
+}
+
 export interface NpmRegistryData {
   name: string;
   description: string | null;
@@ -34,6 +40,8 @@ export interface NpmRegistryData {
   /** Declares preinstall/install/postinstall hooks — code that runs at install
    *  time, the primary supply-chain execution vector. */
   hasInstallScripts: boolean;
+  /** Full published-version timeline (version + publish date), newest first. */
+  versionTimeline: VersionInfo[];
 }
 
 export interface NpmDownloadsData {
