@@ -155,6 +155,9 @@ export interface EvaluateOutput {
 }
 
 /** `verify` output (§12.3.4). */
+/** Supply-chain risk gate: high = review before installing (see security/risk). */
+export type RiskLevel = 'low' | 'medium' | 'high';
+
 export interface VerifyOutput {
   exists: boolean;
   tracked: boolean;
@@ -163,6 +166,10 @@ export interface VerifyOutput {
   latestVersion: string | null;
   weeklyDownloads: number | null;
   riskFlags: string[];
+  /** Overall supply-chain risk, rolled up from riskFlags. */
+  risk: RiskLevel;
+  /** Suspected typosquat target — a popular package this name closely mimics. */
+  typosquatOf: string | null;
   confidence: Confidence | null;
   advisoryCount: number;
 }
