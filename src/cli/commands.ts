@@ -6,6 +6,7 @@
 import { requireConfig } from '../core/config';
 import { isCategory, type Category, type Confidence } from '../core/types';
 import { createDb } from '../db/client';
+import { getPackageVersions } from '../db/packages';
 import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from '../mcp/handlers';
 import { CONFIDENCE, QUALITY_WEIGHTS } from '../scoring/weights';
 import {
@@ -336,5 +337,48 @@ export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<
         ['risk flags', res.riskFlags.length ? yellow(res.riskFlags.join(', ')) : 'none'],
       ]),
     );
+  });
+}
+
+export async function runVersions(
+  pkg: string,
+  opts: { json?: boolean; limit?: string },
+): Promise<void> {
+  const limit = opts.limit ? Math.max(1, parseInt(opts.limit, 10) || 30) : 30;
+  await withDb(async (db) => {
+    const versions = await getPackageVersions(db, pkg, limit);
+    if (opts.json) return console.log(JSON.stringify(versions, null, 2));
+    if (versions.length === 0) {
+      console.log(`No stored versions for ${bold(pkg)}. Run \`lurq sync --package ${pkg}\` first.`);
+      return;
+    }
+    console.log(bold(pkg));
+    console.log(
+      table(
+        ['Version', 'Published'],
+        versions.map((v) => [
+          v.version,
+          v.publishedAt ? v.publishedAt.toISOString().slice(0, 10) : '—',
+        ]),
+      ),
+    );
+  });
+}
+
+/** Long-running: follow the npm changes feed until interrupted (Ctrl-C). */
+export async function runWatch(): Promise<void> {
+  const { watchNpmChanges } = await import('../pipeline/watch');
+  await withDb(async (db) => {
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+    console.log(dim('watching npm for releases of tracked packages — Ctrl-C to stop'));
+    try {
+      await watchNpmChanges(db, { signal: controller.signal });
+    } finally {
+      process.off('SIGINT', stop);
+      process.off('SIGTERM', stop);
+    }
   });
 }

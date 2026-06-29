@@ -15,6 +15,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   serial,
   text,
@@ -178,6 +179,32 @@ export const apiKeys = pgTable(
   (table) => [index('api_keys_owner_idx').on(table.ownerId)],
 );
 
+/**
+ * Per-package version timeline (versions + publish dates), ingested from the npm
+ * packument on every sync. Foundation for upgrade/migration intelligence and the
+ * compatibility matrix; refreshed reactively by the `_changes` follower.
+ */
+export const packageVersions = pgTable(
+  'package_versions',
+  {
+    packageName: text('package_name').notNull(),
+    version: text('version').notNull(),
+    publishedAt: ts('published_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.packageName, table.version] }),
+    index('package_versions_name_published_idx').on(table.packageName, table.publishedAt),
+  ],
+);
+
+/** One row per replication feed: the cursor the npm `_changes` follower resumes
+ *  from, so a restart doesn't replay the whole registry history. */
+export const watchState = pgTable('watch_state', {
+  id: text('id').primaryKey(),
+  seq: text('seq').notNull(),
+  updatedAt: ts('updated_at'),
+});
+
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';
 
 export interface SyncError {
@@ -193,3 +220,5 @@ export type SyncRunRow = typeof syncRuns.$inferSelect;
 export type DiscoveryQueueRow = typeof discoveryQueue.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type NewApiKeyRow = typeof apiKeys.$inferInsert;
+export type PackageVersionRow = typeof packageVersions.$inferSelect;
+export type NewPackageVersionRow = typeof packageVersions.$inferInsert;

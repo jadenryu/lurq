@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../src/db/packages', () => ({
   getPackageByName: vi.fn(),
   upsertPackage: vi.fn().mockResolvedValue(undefined),
+  upsertPackageVersions: vi.fn().mockResolvedValue(undefined),
   ensureSeedEntry: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../src/ingestion/sources', () => ({

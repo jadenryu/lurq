@@ -5,6 +5,12 @@
  */
 import type { Advisory } from '../core/types';
 
+/** One published version of a package and when it shipped (from the packument). */
+export interface VersionInfo {
+  version: string;
+  publishedAt: Date | null;
+}
+
 export interface NpmRegistryData {
   name: string;
   description: string | null;
@@ -31,6 +37,8 @@ export interface NpmRegistryData {
   directDependenciesCount: number | null;
   /** npm provenance / signed publish attestation present on the latest dist. */
   hasProvenance: boolean;
+  /** Full published-version timeline (version + publish date), newest first. */
+  versionTimeline: VersionInfo[];
 }
 
 export interface NpmDownloadsData {
