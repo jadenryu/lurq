@@ -2,7 +2,7 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, isNotNull } from 'drizzle-orm';
 import type { Category } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
@@ -71,6 +71,21 @@ export async function getPackageVersions(
     .orderBy(desc(packageVersions.publishedAt))
     .limit(limit);
   return rows.map((r) => ({ version: r.version, publishedAt: r.publishedAt }));
+}
+
+/**
+ * The most-downloaded tracked packages — the reference set typosquat detection
+ * compares a queried name against. Capped (default 1000) so the per-verify
+ * distance scan stays cheap.
+ */
+export async function getTopPackageNames(db: Database, limit = 1000): Promise<string[]> {
+  const rows = await db
+    .select({ name: packages.name })
+    .from(packages)
+    .where(isNotNull(packages.weeklyDownloads))
+    .orderBy(desc(packages.weeklyDownloads))
+    .limit(limit);
+  return rows.map((r) => r.name);
 }
 
 /**
