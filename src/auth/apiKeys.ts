@@ -83,20 +83,51 @@ export async function listKeys(db: Database): Promise<ApiKeyRow[]> {
   return db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
 }
 
+/** Resolve a "prefix or numeric id" argument to a Drizzle equality filter. */
+function matchByPrefixOrId(prefixOrId: string) {
+  const asId = Number(prefixOrId);
+  return Number.isInteger(asId) && String(asId) === prefixOrId.trim()
+    ? eq(apiKeys.id, asId)
+    : eq(apiKeys.prefix, prefixOrId);
+}
+
 /**
  * Revoke a key by display prefix or numeric id. Returns how many active keys were
  * revoked (0 if none matched or it was already revoked).
  */
 export async function revokeKey(db: Database, prefixOrId: string): Promise<number> {
-  const asId = Number(prefixOrId);
-  const match =
-    Number.isInteger(asId) && String(asId) === prefixOrId.trim()
-      ? eq(apiKeys.id, asId)
-      : eq(apiKeys.prefix, prefixOrId);
   const rows = await db
     .update(apiKeys)
     .set({ revokedAt: new Date() })
-    .where(and(match, isNull(apiKeys.revokedAt)))
+    .where(and(matchByPrefixOrId(prefixOrId), isNull(apiKeys.revokedAt)))
     .returning({ id: apiKeys.id });
   return rows.length;
+}
+
+/**
+ * Rotate ("swap") a key: issue a replacement carrying the old key's label, tier,
+ * and owner, then revoke the original. Returns the new plaintext (once), the new
+ * row, and the revoked row — or null if no active key matched.
+ *
+ * The new key is created BEFORE the old one is revoked, so a failure mid-rotation
+ * leaves the caller with a working key (at worst two active keys, never zero).
+ */
+export async function rotateKey(
+  db: Database,
+  prefixOrId: string,
+): Promise<{ key: string; row: ApiKeyRow; previous: ApiKeyRow } | null> {
+  const [previous] = await db
+    .select()
+    .from(apiKeys)
+    .where(and(matchByPrefixOrId(prefixOrId), isNull(apiKeys.revokedAt)))
+    .limit(1);
+  if (!previous) return null;
+
+  const { key, row } = await createKey(db, {
+    label: previous.label ?? undefined,
+    tier: previous.tier,
+    ownerId: previous.ownerId ?? undefined,
+  });
+  await db.update(apiKeys).set({ revokedAt: new Date() }).where(eq(apiKeys.id, previous.id));
+  return { key, row, previous };
 }

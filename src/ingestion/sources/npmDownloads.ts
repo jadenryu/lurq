@@ -10,7 +10,6 @@
  */
 import { CACHE_TTL } from '../../core/constants';
 import { httpGetJson, HttpError } from '../../core/http';
-import type { NpmDownloadsData } from '../types';
 
 const HOST = 'api.npmjs.org';
 const BULK_CHUNK = 128;
@@ -138,14 +137,4 @@ export async function fetchBulkWeeklyDownloads(
   }
 
   return result;
-}
-
-/** Combined per-package fetch (used when no bulk pre-fetch is available). */
-export async function fetchNpmDownloads(
-  name: string,
-  fetchImpl?: typeof fetch,
-): Promise<NpmDownloadsData> {
-  const weeklyDownloads = await fetchWeeklyDownloads(name, fetchImpl);
-  const downloadGrowth90d = await fetchDownloadGrowth(name, fetchImpl);
-  return { weeklyDownloads, downloadGrowth90d };
 }

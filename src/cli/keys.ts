@@ -6,7 +6,8 @@
  */
 import { requireConfig } from '../core/config';
 import { logger } from '../core/logger';
-import { createKey, listKeys, revokeKey } from '../auth/apiKeys';
+import { createKey, listKeys, revokeKey, rotateKey } from '../auth/apiKeys';
+import type { ApiKeyRow } from '../db/schema';
 import { createDb } from '../db/client';
 import { bold, dim, green, table } from './format';
 
@@ -24,6 +25,48 @@ function waitForEnter(prompt: string): Promise<void> {
   });
 }
 
+/**
+ * Present a freshly-issued plaintext key exactly once. In JSON mode it prints a
+ * single line (plus any `extraJson`) for scripts. Interactively it shows the key,
+ * waits for the operator to copy it, then wipes it from the terminal (screen +
+ * scroll-back). Shared by `keys create` and `keys rotate`.
+ */
+async function presentNewKey(
+  key: string,
+  row: ApiKeyRow,
+  opts: { json?: boolean; header?: string; extraJson?: Record<string, unknown> },
+): Promise<void> {
+  if (opts.json) {
+    console.log(
+      JSON.stringify({ key, prefix: row.prefix, tier: row.tier, label: row.label, ...opts.extraJson }),
+    );
+    return;
+  }
+
+  const meta = `prefix=${row.prefix}  tier=${row.tier}${row.label ? `  label=${row.label}` : ''}`;
+  const block = [bold(opts.header ?? 'API key created.'), '', `  ${green(key)}`, '', dim(meta)];
+
+  console.log(block.join('\n'));
+
+  if (process.stdout.isTTY && process.stdin.isTTY) {
+    // Show the key, then wipe it from the terminal (screen + scrollback) once
+    // the operator confirms they've copied it — so it doesn't linger on screen
+    // or in scroll-back history.
+    await waitForEnter(dim('Copy it now, then press Enter to erase it from the terminal… '));
+    // Move to the top of the printed block (block lines + the prompt line the
+    // Enter advanced past), clear to end of screen, and clear scroll-back.
+    process.stdout.write(`\x1b[${block.length + 1}F\x1b[0J\x1b[3J`);
+    console.log(
+      dim(`New key (prefix ${row.prefix}) erased from the terminal. ` +
+        `It is stored only as a hash and cannot be recovered, so make sure you saved it.`),
+    );
+  } else {
+    // Non-TTY (piped, or over a non-interactive SSH exec): can't erase, so just
+    // warn. Operator is responsible for clearing their buffer.
+    console.log(dim('Store it now — shown only once, stored hashed, cannot be recovered.'));
+  }
+}
+
 export async function runKeysCreate(opts: {
   label?: string;
   tier?: string;
@@ -33,36 +76,30 @@ export async function runKeysCreate(opts: {
   const { db, close } = createDb({ max: 1 });
   try {
     const { key, row } = await createKey(db, { label: opts.label, tier: opts.tier });
+    await presentNewKey(key, row, opts);
+  } finally {
+    await close();
+  }
+}
 
-    // Machine-readable path: print once, no interactivity (scripts/CI).
-    if (opts.json) {
-      console.log(JSON.stringify({ key, prefix: row.prefix, tier: row.tier, label: row.label }));
+export async function runKeysRotate(
+  prefixOrId: string,
+  opts: { json?: boolean },
+): Promise<void> {
+  requireConfig(['DATABASE_URL']);
+  const { db, close } = createDb({ max: 1 });
+  try {
+    const result = await rotateKey(db, prefixOrId);
+    if (!result) {
+      logger.warn(`No active key matched "${prefixOrId}".`);
+      process.exitCode = 1;
       return;
     }
-
-    const meta = `prefix=${row.prefix}  tier=${row.tier}${row.label ? `  label=${row.label}` : ''}`;
-    const block = [bold('API key created.'), '', `  ${green(key)}`, '', dim(meta)];
-    const interactive = Boolean(process.stdout.isTTY && process.stdin.isTTY);
-
-    console.log(block.join('\n'));
-
-    if (interactive) {
-      // Show the key, then wipe it from the terminal (screen + scrollback) once
-      // the operator confirms they've copied it — so it doesn't linger on screen
-      // or in scroll-back history.
-      await waitForEnter(dim('Copy it now, then press Enter to erase it from the terminal… '));
-      // Move to the top of the printed block (block lines + the prompt line the
-      // Enter advanced past), clear to end of screen, and clear scroll-back.
-      process.stdout.write(`\x1b[${block.length + 1}F\x1b[0J\x1b[3J`);
-      console.log(
-        dim(`API key created (prefix ${row.prefix}) — value erased from the terminal. ` +
-          `It is stored only as a hash and cannot be recovered, so make sure you saved it.`),
-      );
-    } else {
-      // Non-TTY (piped, or over a non-interactive SSH exec): can't erase, so just
-      // warn. Operator is responsible for clearing their buffer.
-      console.log(dim('Store it now — shown only once, stored hashed, cannot be recovered.'));
-    }
+    await presentNewKey(result.key, result.row, {
+      json: opts.json,
+      header: `API key rotated — replaces ${result.previous.prefix} (now revoked).`,
+      extraJson: { replaced: result.previous.prefix },
+    });
   } finally {
     await close();
   }
