@@ -1,6 +1,6 @@
 // Hero atmosphere: a neutral grey ambient glow spanning the whole section,
 // with a slowly drifting nebula and faint god-rays. Pure CSS (see globals.css)
-// so it renders identically on the server — no hydration gap, no blank first
+// so it renders identically on the server: no hydration gap, no blank first
 // paint. Animations stop under reduced-motion.
 export function HeroAtmosphere() {
   return (

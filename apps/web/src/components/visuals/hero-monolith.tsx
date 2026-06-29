@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 // Static stand-in shown during SSR, while the 3D bundle loads, and for
 // anyone with `prefers-reduced-motion`. A faceted crystal silhouette with a
-// violet core glow — intentional, not a blank box.
+// violet core glow: intentional, not a blank box.
 function Poster() {
   return (
     <div className="absolute inset-0 grid place-items-center">

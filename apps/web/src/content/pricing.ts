@@ -1,5 +1,5 @@
 // Prices are final ($0 / $5 / $100 per month). Call-limit numbers below are
-// placeholders – confirm real quotas before publishing.
+// placeholders; confirm real quotas before publishing.
 export type Plan = {
   name: string;
   price: string;

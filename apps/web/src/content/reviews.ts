@@ -1,5 +1,6 @@
-// NOTE: placeholder testimonials for v1 (pre-launch). Replace with real,
-// attributed quotes before publishing – do not present these as genuine.
+// NOTE: placeholder testimonials for v1 (pre-launch). These are intentionally
+// generic stand-ins; swap in real, attributed quotes before publishing and do
+// not present these as genuine.
 export type Review = {
   quote: string;
   name: string;
@@ -10,58 +11,55 @@ export type Review = {
 export const reviews: Review[] = [
   {
     quote:
-      "My agent stopped suggesting packages that were deprecated a year ago. That alone paid for itself.",
-    name: "Dana Whitfield",
-    role: "Staff Engineer",
-    initials: "DW",
+      "Placeholder review. A short, genuine testimonial from an early user will go here before launch.",
+    name: "Reviewer One",
+    role: "Role, Company",
+    initials: "R1",
   },
   {
     quote:
-      "The verify tool caught a typosquatted dependency before it ever hit our lockfile.",
-    name: "Marco Reyes",
-    role: "Platform Lead",
-    initials: "MR",
+      "Placeholder review. This card holds a longer quote so the layout can be checked against varied testimonial lengths.",
+    name: "Reviewer Two",
+    role: "Role, Company",
+    initials: "R2",
+  },
+  {
+    quote: "Placeholder review. A brief, punchy line lands here.",
+    name: "Reviewer Three",
+    role: "Role, Company",
+    initials: "R3",
   },
   {
     quote:
-      "Finally, recommendations backed by signals instead of vibes. The confidence labels are clutch.",
-    name: "Priya Nair",
-    role: "Frontend Architect",
-    initials: "PN",
+      "Placeholder review. Replace with a real attributed quote that speaks to a concrete outcome.",
+    name: "Reviewer Four",
+    role: "Role, Company",
+    initials: "R4",
   },
   {
     quote:
-      "compare turned a two-hour evaluation into a thirty-second answer I could trust.",
-    name: "Sam Okafor",
-    role: "Indie Dev",
-    initials: "SO",
+      "Placeholder review. Another medium-length stand-in to balance the two marquee rows.",
+    name: "Reviewer Five",
+    role: "Role, Company",
+    initials: "R5",
+  },
+  {
+    quote: "Placeholder review. Keep these clearly fake until real ones exist.",
+    name: "Reviewer Six",
+    role: "Role, Company",
+    initials: "R6",
   },
   {
     quote:
-      "Dropping it into Cursor took one command. It just shows up where I already work.",
-    name: "Lena Hoffmann",
-    role: "Full-stack Engineer",
-    initials: "LH",
+      "Placeholder review. A final longer example so every card width is represented in the preview.",
+    name: "Reviewer Seven",
+    role: "Role, Company",
+    initials: "R7",
   },
   {
-    quote:
-      "The freshness is the whole point. New libraries my model had never heard of, scored and ready.",
-    name: "Theo Vasquez",
-    role: "DX Engineer",
-    initials: "TV",
-  },
-  {
-    quote:
-      "Token-aware responses mean I'm not burning context on giant package dumps. Clean.",
-    name: "Aisha Karim",
-    role: "ML Infra",
-    initials: "AK",
-  },
-  {
-    quote:
-      "The diagram tool sketched a sane reference stack I could hand straight to my team.",
-    name: "Niko Petrov",
-    role: "Tech Lead",
-    initials: "NP",
+    quote: "Placeholder review. Short and neutral.",
+    name: "Reviewer Eight",
+    role: "Role, Company",
+    initials: "R8",
   },
 ];

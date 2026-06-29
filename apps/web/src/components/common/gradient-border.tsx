@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 // Greyscale conic-gradient border, matching the FAQ card treatment. A 1px
-// gradient rim around a solid card — premium feel without leaving the
+// gradient rim around a solid card: premium feel without leaving the
 // monochrome palette.
 export function GradientBorder({
   children,

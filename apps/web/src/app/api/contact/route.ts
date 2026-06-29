@@ -13,7 +13,7 @@ const LOGO_URL =
   (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.lurq.run") +
   "/logos/logo.png";
 
-// User input lands in the email HTML — escape it to prevent injection.
+// User input lands in the email HTML; escape it to prevent injection.
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

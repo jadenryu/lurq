@@ -8,7 +8,7 @@ import { contrastCases, type ContrastCase } from "@/content/contrast";
 
 const ROTATE_MS = 5500;
 
-// Claude Code TUI palette — kept theme-independent so the terminal always
+// Claude Code TUI palette: kept theme-independent so the terminal always
 // renders dark, exactly like the real CLI.
 const cc = {
   bg: "#1f2030",
@@ -231,11 +231,8 @@ export function SectionComparison() {
     >
       <Container>
         <Reveal>
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Without vs. with lurq
-            </span>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+          <div className="mx-auto max-w-4xl text-center">
+            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-6xl">
               Same prompt. One agent guesses, the other knows.
             </h2>
           </div>
@@ -243,7 +240,7 @@ export function SectionComparison() {
 
         <Reveal delay={0.1}>
           <div
-            className="mx-auto mt-12 grid max-w-5xl gap-5 lg:grid-cols-2"
+            className="mx-auto mt-12 grid max-w-6xl gap-6 lg:max-w-none lg:grid-cols-2 lg:gap-8"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
           >
