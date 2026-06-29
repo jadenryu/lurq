@@ -162,8 +162,7 @@ export function WaitlistDialog({
                 You&apos;re on the list
               </Dialog.Title>
               <Dialog.Description className="mt-1.5 max-w-[17rem] text-sm leading-relaxed text-muted-foreground">
-                We&apos;ll email you the moment lurq is ready to install — no
-                spam, just the launch.
+                We&apos;ll email you the moment lurq is ready to install
               </Dialog.Description>
               <button
                 type="button"
