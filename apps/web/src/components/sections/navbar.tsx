@@ -49,15 +49,19 @@ export function Navbar() {
 
         {/* centered nav links */}
         <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 md:flex">
-          {navLinks.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {l.label}
-            </Link>
-          ))}
+          {navLinks.map((l) => {
+            const cls =
+              "text-sm text-muted-foreground transition-colors hover:text-foreground";
+            return l.external ? (
+              <a key={l.href} href={l.href} className={cls}>
+                {l.label}
+              </a>
+            ) : (
+              <Link key={l.href} href={l.href} className={cls}>
+                {l.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="relative z-10 flex items-center gap-2">
@@ -103,7 +107,7 @@ export function Navbar() {
                   <SheetClose
                     key={l.href}
                     className="rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    render={<Link href={l.href} />}
+                    render={l.external ? <a href={l.href} /> : <Link href={l.href} />}
                   >
                     {l.label}
                   </SheetClose>
