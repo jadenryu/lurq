@@ -42,7 +42,7 @@ const GROUPS: { label: string; items: Pillar[] }[] = [
         command: "claude mcp add lurq",
         blurb: "A remote server your coding agent connects to as a tool.",
         detail:
-          "Claude Code, Cursor, Windsurf and others call lurq over MCP to fetch fresh, scored recommendations mid-task — compact, token-aware responses built for agents.",
+          "Claude Code, Cursor, Windsurf and others call lurq over MCP to fetch fresh, scored recommendations mid-task. The responses are compact and token-aware, built for agents.",
         chips: ["recommend", "evaluate", "compare", "verify", "diagram"],
       },
       {
@@ -53,7 +53,7 @@ const GROUPS: { label: string; items: Pillar[] }[] = [
         command: 'lurq recommend "form library for react"',
         blurb: "The same index, scriptable from your terminal.",
         detail:
-          "Every capability is a subcommand — recommend, evaluate, compare, verify, sync — so you can pull scored data into scripts, CI, or your own tooling.",
+          "Every capability is a subcommand (recommend, evaluate, compare, verify, sync), so you can pull scored data into scripts, CI, or your own tooling.",
         chips: ["recommend", "evaluate", "compare", "verify", "sync"],
       },
       {
@@ -64,7 +64,7 @@ const GROUPS: { label: string; items: Pillar[] }[] = [
         command: "lurq serve-http",
         blurb: "Self-host the index behind a rate-limited endpoint.",
         detail:
-          "Run lurq as a service with API-key auth, helmet, and rate limiting — no database credentials ever touch a client machine.",
+          "Run lurq as a service with API-key auth, helmet, and rate limiting. No database credentials ever touch a client machine.",
         chips: ["/recommend", "/evaluate", "/compare", "/verify"],
       },
       {
@@ -135,7 +135,7 @@ export function SectionShowcase() {
     >
       <Container>
         <div className="grid gap-12 lg:grid-cols-[240px_1fr] lg:gap-16">
-          {/* LEFT — surface nav */}
+          {/* LEFT: surface nav */}
           <Reveal>
             <nav className="font-mono">
               {GROUPS.map((g) => (
@@ -188,7 +188,7 @@ export function SectionShowcase() {
             </nav>
           </Reveal>
 
-          {/* RIGHT — active surface */}
+          {/* RIGHT: active surface */}
           <Reveal delay={0.1}>
             <div>
               <div className="flex items-start justify-between gap-6">
@@ -233,7 +233,7 @@ export function SectionShowcase() {
                 <span aria-hidden className="absolute bottom-0 left-0 size-3 border-b border-l border-foreground/40" />
                 <span aria-hidden className="absolute bottom-0 right-0 size-3 border-b border-r border-foreground/40" />
 
-                {/* placeholder — swap for the real per-surface diagram */}
+                {/* placeholder: swap for the real per-surface diagram */}
                 <div className="relative flex aspect-[16/9] w-full items-center justify-center md:pr-14">
                   <div
                     aria-hidden

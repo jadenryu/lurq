@@ -37,7 +37,7 @@ export const commitMono = localFont({
 });
 
 // Geist (Vercel, OFL): the single grotesque family. Powers both headings
-// (font-heading) and body (font-sans) — both tokens map to --font-geist in
+// (font-heading) and body (font-sans); both tokens map to --font-geist in
 // globals.css, so hierarchy comes from weight/size, not a second family.
 export const geist = localFont({
   src: "../../fonts/geist/Geist-Variable.woff2",
