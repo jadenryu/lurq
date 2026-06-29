@@ -3,10 +3,17 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
-// Plain black stand-in for SSR, while the GL bundle loads, and for
-// prefers-reduced-motion (the particle field is purely motion).
+// Static stand-in for SSR, while the GL bundle loads, for prefers-reduced-motion,
+// and for GPUs that can't run the sim. The particle field is pure motion, so its
+// absence shouldn't read as "broken" — give the hero a designed, motionless
+// backdrop (soft top glow + a faint masked dot field) instead of a black void.
 function Fallback() {
-  return <div className="absolute inset-0 bg-black" />;
+  return (
+    <div className="absolute inset-0 bg-black">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_50%_0%,rgba(255,255,255,0.07),transparent_70%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:22px_22px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_38%,#000,transparent_75%)]" />
+    </div>
+  );
 }
 
 const GL = dynamic(() => import("@/components/gl"), {
@@ -43,6 +50,9 @@ export function HeroParticles() {
     const reduce = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
+    // Intentional: one-time, post-mount feature/preference detection (window is
+    // unavailable during SSR), so a single setState here is the correct pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnabled(!reduce && supportsGpgpuParticles());
   }, []);
 

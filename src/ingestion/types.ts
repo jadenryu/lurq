@@ -37,6 +37,9 @@ export interface NpmRegistryData {
   directDependenciesCount: number | null;
   /** npm provenance / signed publish attestation present on the latest dist. */
   hasProvenance: boolean;
+  /** Declares preinstall/install/postinstall hooks — code that runs at install
+   *  time, the primary supply-chain execution vector. */
+  hasInstallScripts: boolean;
   /** Full published-version timeline (version + publish date), newest first. */
   versionTimeline: VersionInfo[];
 }

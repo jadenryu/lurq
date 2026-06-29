@@ -92,8 +92,19 @@ export function parseNpmRegistry(json: any): NpmRegistryData {
     hasTestScript: detectTestScript(latestManifest),
     directDependenciesCount: countDeps(latestManifest?.dependencies),
     hasProvenance: detectProvenance(latestManifest),
+    hasInstallScripts: detectInstallScripts(latestManifest),
     versionTimeline: parseVersionTimeline(json),
   };
+}
+
+/** Lifecycle install hooks run arbitrary code at install time. We surface their
+ *  presence; deeper analysis belongs in the sandbox tier. */
+function detectInstallScripts(manifest: any): boolean {
+  const scripts = manifest?.scripts;
+  if (!scripts || typeof scripts !== 'object') return false;
+  return ['preinstall', 'install', 'postinstall'].some(
+    (hook) => typeof scripts[hook] === 'string' && scripts[hook].trim() !== '',
+  );
 }
 
 /**
