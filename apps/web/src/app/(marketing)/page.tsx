@@ -3,6 +3,7 @@ import { Navbar } from "@/components/sections/navbar";
 import { Hero } from "@/components/sections/hero";
 import { SectionIdeMarquee } from "@/components/sections/section-ide-marquee";
 import { SectionShowcase } from "@/components/sections/section-showcase";
+import { SectionComparison } from "@/components/sections/section-comparison";
 import { SectionProwess } from "@/components/sections/section-prowess";
 import { SectionReviews } from "@/components/sections/section-reviews";
 import { SectionFaq } from "@/components/sections/section-faq";
@@ -17,6 +18,7 @@ export default function Home() {
         <Hero />
         <SectionIdeMarquee />
         <SectionShowcase />
+        <SectionComparison />
         <SectionProwess />
         <SectionReviews />
         <SectionFaq />
