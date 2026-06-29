@@ -6,9 +6,14 @@ import { readFileSync } from 'node:fs';
 import updateNotifier from 'update-notifier';
 import { buildProgram } from '../cli/index';
 import { loadEnv } from '../core/config';
+import { enforceGate } from '../core/gate';
 import { logger } from '../core/logger';
 
 loadEnv();
+
+// Private-preview gate: non-owners get a placeholder, the owner runs as usual.
+// Runs after loadEnv so LURQ_OWNER_KEY from a .env file is honored too.
+enforceGate(process.argv.slice(2));
 
 notifyOnUpdate();
 
