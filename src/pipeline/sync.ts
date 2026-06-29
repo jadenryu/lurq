@@ -7,6 +7,7 @@
  * per-package; then category medians are computed; pass 2 finalizes efficiency
  * and the composite health score. Embeddings are added in M4.
  */
+import { invalidateCache } from '../core/cache';
 import { getConfig } from '../core/config';
 import { pMap } from '../core/concurrency';
 import { setCacheBypassRead } from '../core/http';
@@ -215,6 +216,8 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
     });
 
     logger.info(`Sync ${status}: ${updated}/${targets.length} updated, ${allErrors.length} source errors.`);
+    // The index changed — drop cached reads so the next query sees fresh scores.
+    if (updated > 0) await invalidateCache();
     return { seen: targets.length, updated, errors: allErrors.length, status };
   } catch (err) {
     await finishSyncRun(handle.db, runId, {
