@@ -1,0 +1,58 @@
+---
+title: Self-hosting
+description: Run lurq against your own Postgres index.
+---
+
+Everything here runs against your **own lurq Postgres index** and needs a
+`DATABASE_URL`. It's for operators running the hosted service and for
+self-hosters — **not** for end users, who only run `npx lurqrun install`
+([Quick start](/docs/quickstart)).
+
+## Configuration
+
+Only `DATABASE_URL` is required; everything else degrades gracefully.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | Postgres connection (pgvector-enabled) |
+| `GITHUB_TOKEN` | recommended | GitHub signals (stars, cadence, issues, archived) |
+| `EMBEDDING_PROVIDER` / `EMBEDDING_API_KEY` | no | OpenAI embeddings; falls back to a local embedder |
+| `SUMMARY_PROVIDER` / `SUMMARY_API_KEY` | no | LLM usage guides; falls back to the npm description |
+| `PORT` | no | Port for `serve-http` (defaults to 8080) |
+| `LURQ_RATE_LIMIT_MAX` / `LURQ_IP_RATE_LIMIT_MAX` / `LURQ_RATE_LIMIT_WINDOW_MS` | no | Per-key / per-IP rate limits for `serve-http` |
+
+## Set up the index
+
+```bash
+lurqrun db migrate   # create schema (pgvector) + load the curated seed list
+lurqrun sync         # compute scores from public APIs (~2 min)
+```
+
+`sync` is idempotent and tolerant of single-source outages. Run it daily to keep
+the index fresh.
+
+## Serve
+
+```bash
+lurqrun serve-http   # hosted: HTTP MCP server + API-key auth (helmet, rate limits)
+lurqrun serve        # self-host: stdio MCP server against your own DB
+```
+
+`serve-http` fronts the central DB, so `DATABASE_URL` lives only on the service
+host. Self-hosters can instead wire an agent to a local stdio server with
+`lurqrun install-skill --local`.
+
+## API keys
+
+For operators issuing keys to end users:
+
+```bash
+lurqrun keys create --label "acme"      # issue a key (shown once; stored hashed)
+lurqrun keys list                       # prefix, tier, last-used, status
+lurqrun keys revoke lurq_live_ab12cd    # revoke by prefix or id
+```
+
+<Callout type="warn">
+  Keys are shown **once** at creation and stored only as hashes. Capture the key
+  when it's printed — it can't be recovered, only revoked and reissued.
+</Callout>

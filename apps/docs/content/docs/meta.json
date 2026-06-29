@@ -1,0 +1,12 @@
+{
+  "title": "lurq",
+  "root": true,
+  "pages": [
+    "index",
+    "quickstart",
+    "mcp-tools",
+    "cli",
+    "how-it-works",
+    "self-hosting"
+  ]
+}
