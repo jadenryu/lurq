@@ -21,13 +21,17 @@ import type {
 } from '../core/types';
 import { getCompatEdges } from '../db/compat';
 import type { Database } from '../db/client';
+import { getTopPackageNames } from '../db/packages';
 import { getLatestVerificationByName } from '../db/verification';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import { fetchNpmRegistry, npmPackageExists } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { getOrFetchPackage } from '../pipeline/single';
+import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
+import { assessRisk } from '../security/risk';
+import { detectTyposquat } from '../security/typosquat';
 
 const SEVERITY_RANK: Record<AdvisorySeverity, number> = {
   critical: 4,
@@ -243,6 +247,9 @@ export async function handleVerify(
   const name = input.package;
   const exists = await npmPackageExists(name);
   if (!exists) {
+    // A name that doesn't exist but closely mimics a popular one is a squat the
+    // agent was about to fall for — surface the suspected target.
+    const typo = detectTyposquat(name, await getTopPackageNames(db).catch(() => []));
     return {
       exists: false,
       tracked: false,
@@ -250,28 +257,52 @@ export async function handleVerify(
       archived: false,
       latestVersion: null,
       weeklyDownloads: null,
-      riskFlags: ['not-found-on-registry'],
+      riskFlags: typo
+        ? ['not-found-on-registry', `possible-typosquat-of:${typo.target}`]
+        : ['not-found-on-registry'],
+      risk: 'high',
+      typosquatOf: typo?.target ?? null,
       confidence: null,
       advisoryCount: 0,
     };
   }
 
-  const registry = await fetchNpmRegistry(name).catch(() => null);
-  const { row, wasTracked } = await getOrFetchPackage(db, name);
+  const [registry, { row, wasTracked }, popular] = await Promise.all([
+    fetchNpmRegistry(name).catch(() => null),
+    getOrFetchPackage(db, name),
+    getTopPackageNames(db).catch(() => [] as string[]),
+  ]);
 
   const weeklyDownloads = row?.weeklyDownloads ?? null;
-  const advisoryCount = row?.advisories?.length ?? 0;
+  const advisories = row?.advisories ?? [];
+  const advisoryCount = advisories.length;
   const deprecated = Boolean(row?.deprecated || registry?.deprecated);
   const archived = Boolean(row?.archived);
+  const brandNew = withinDays(registry?.firstPublishedAt ?? null, 7);
+  const lowTrust = weeklyDownloads === null || weeklyDownloads < 1000;
+  const installScripts = registry?.hasInstallScripts ?? false;
+  const typo = detectTyposquat(name, popular);
 
   const riskFlags: string[] = [];
+  if (typo) riskFlags.push(`possible-typosquat-of:${typo.target}`);
   if (weeklyDownloads === null || weeklyDownloads === 0) riskFlags.push('zero-downloads');
   else if (weeklyDownloads < 1000) riskFlags.push('low-downloads');
-  if (withinDays(registry?.firstPublishedAt ?? null, 7)) riskFlags.push('published-within-7-days');
+  if (brandNew) riskFlags.push('published-within-7-days');
   if (registry?.maintainersCount === 1) riskFlags.push('single-maintainer');
+  if (installScripts) riskFlags.push('runs-install-scripts');
   if (advisoryCount > 0) riskFlags.push('has-known-advisory');
   if (deprecated) riskFlags.push('deprecated');
   if (archived) riskFlags.push('archived');
+
+  const risk = assessRisk({
+    flags: riskFlags,
+    hasCriticalOrHighAdvisory: hasCriticalOrHighAdvisory(advisories),
+    typosquat: Boolean(typo),
+    installScripts,
+    brandNew,
+    lowTrust,
+    deprecatedOrArchived: deprecated || archived,
+  });
 
   return {
     exists: true,
@@ -281,6 +312,8 @@ export async function handleVerify(
     latestVersion: registry?.latestVersion ?? row?.latestVersion ?? null,
     weeklyDownloads,
     riskFlags,
+    risk,
+    typosquatOf: typo?.target ?? null,
     confidence: (row?.confidence as Confidence) ?? null,
     advisoryCount,
   };
