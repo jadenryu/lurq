@@ -1,14 +1,14 @@
 import localFont from "next/font/local";
 import { Roboto_Mono } from "next/font/google";
 
-// Roboto Mono (Google) – monospaced accents such as the version string.
+// Roboto Mono (Google): monospaced accents such as the version string.
 export const robotoMono = Roboto_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-roboto-mono",
 });
 
-// Commit Mono – used for the hero display heading (bold = 700).
+// Commit Mono: used for the hero display heading (bold = 700).
 export const commitMono = localFont({
   src: [
     {
@@ -36,17 +36,9 @@ export const commitMono = localFont({
   variable: "--font-commit-mono",
 });
 
-// Supreme (Fontshare) – variable font, weights 100–800.
-// Exposed as --font-sans so shadcn / Tailwind's `font-sans` resolves to Supreme app-wide.
-export const supreme = localFont({
-  src: "../../fonts/supreme/Supreme-Variable.woff2",
-  weight: "100 800",
-  display: "swap",
-  variable: "--font-sans",
-});
-
-// Geist (Vercel, OFL) – grotesque display face for headings (a free Söhne-alike).
-// Exposed as --font-geist; mapped to Tailwind's `font-heading` token in globals.css.
+// Geist (Vercel, OFL): the single grotesque family. Powers both headings
+// (font-heading) and body (font-sans) — both tokens map to --font-geist in
+// globals.css, so hierarchy comes from weight/size, not a second family.
 export const geist = localFont({
   src: "../../fonts/geist/Geist-Variable.woff2",
   weight: "100 900",

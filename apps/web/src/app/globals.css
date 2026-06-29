@@ -7,9 +7,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* Geist is the single family — powers both body (font-sans) and headings. */
+  --font-sans: var(--font-geist);
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-  --font-heading: var(--font-geist), var(--font-sans);
+  --font-heading: var(--font-geist);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -104,7 +105,7 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* lurq monochrome dark – strict greyscale, near-black surfaces. */
+/* lurq monochrome dark: strict greyscale, near-black surfaces. */
 .dark {
   --background: oklch(0.1 0 0); /* ~#0a0a0a page bg */
   --foreground: oklch(0.985 0 0); /* near-white text */
@@ -150,7 +151,7 @@
     @apply font-sans;
     color-scheme: dark;
   }
-  /* All headings use Geist (--font-heading); body stays Supreme. */
+  /* All headings use Geist (--font-heading); body uses Pliant (--font-sans). */
   h1,
   h2,
   h3,
