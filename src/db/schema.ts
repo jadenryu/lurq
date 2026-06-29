@@ -205,6 +205,28 @@ export const watchState = pgTable('watch_state', {
   updatedAt: ts('updated_at'),
 });
 
+/**
+ * Sandbox verification results: did this package version actually install and
+ * load? Evidence beyond static signals. The query path reads the latest run.
+ */
+export const verificationRuns = pgTable(
+  'verification_runs',
+  {
+    id: serial('id').primaryKey(),
+    packageName: text('package_name').notNull(),
+    version: text('version').notNull(),
+    driver: text('driver').notNull(),
+    moduleSystem: text('module_system').notNull(),
+    installed: boolean('installed').notNull(),
+    imported: boolean('imported'),
+    ranScripts: boolean('ran_scripts').notNull().default(false),
+    durationMs: integer('duration_ms'),
+    error: text('error'),
+    ranAt: ts('ran_at'),
+  },
+  (table) => [index('verification_runs_pkg_idx').on(table.packageName, table.version)],
+);
+
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';
 
 export interface SyncError {
@@ -222,3 +244,5 @@ export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type NewApiKeyRow = typeof apiKeys.$inferInsert;
 export type PackageVersionRow = typeof packageVersions.$inferSelect;
 export type NewPackageVersionRow = typeof packageVersions.$inferInsert;
+export type VerificationRunRow = typeof verificationRuns.$inferSelect;
+export type NewVerificationRunRow = typeof verificationRuns.$inferInsert;

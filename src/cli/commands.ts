@@ -382,3 +382,37 @@ export async function runWatch(): Promise<void> {
     }
   });
 }
+
+/** Operator-side: install + smoke-load a package in the sandbox to verify it works. */
+export async function runSandbox(
+  pkg: string,
+  version: string | undefined,
+  opts: { esm?: boolean; allowScripts?: boolean; json?: boolean },
+): Promise<void> {
+  if (opts.allowScripts) {
+    console.error(
+      yellow('warning: running install scripts and loading the package locally without isolation'),
+    );
+  }
+  const { verifyPackageInSandbox } = await import('../pipeline/sandbox');
+  await withDb(async (db) => {
+    const result = await verifyPackageInSandbox(db, pkg, version ?? null, {
+      target: { node: '20', moduleSystem: opts.esm ? 'esm' : 'cjs' },
+      allowScripts: opts.allowScripts,
+    });
+    if (opts.json) return console.log(JSON.stringify(result, null, 2));
+    const ok = result.installed && result.imported !== false;
+    const label = version ? `${pkg}@${version}` : pkg;
+    const verdict = ok ? green('✓ installs and loads') : red('✗ failed');
+    console.log(`${bold(label)}  ${verdict}  ${dim(`(${result.durationMs}ms · ${result.driver})`)}`);
+    console.log(
+      detail([
+        ['installed', result.installed ? 'yes' : 'no'],
+        ['loaded', result.imported === null ? '—' : result.imported ? 'yes' : 'no'],
+        ['module', result.moduleSystem],
+        ['scripts', result.ranScripts ? 'ran' : 'skipped'],
+        ['error', result.error ?? 'none'],
+      ]),
+    );
+  });
+}
