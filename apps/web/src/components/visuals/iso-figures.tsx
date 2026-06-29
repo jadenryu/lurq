@@ -3,16 +3,23 @@ import { cn } from "@/lib/utils";
 // ─────────────────────────────────────────────────────────────────────────
 // Isometric line-art primitive.
 //
-// Describe shapes as lists of 3D points; `iso()` projects them onto the screen
-// using a true 30° isometric: +x runs down-right, +y down-left, +z straight up.
-// Edges are drawn as hairline strokes in `currentColor`, so the figures inherit
-// the page's text color and stay monochrome + themeable. Strokes use
-// `non-scaling-stroke`, so they're a crisp ~1px at any rendered size.
+// Describe shapes as lists of 3D points; `iso()` projects them with a true 30°
+// isometric (+x down-right, +y down-left, +z up). The look comes from two
+// things working together:
+//
+//   1. Hidden-line removal: every face is filled with the surface color behind
+//      it and drawn back-to-front (painter's algorithm), so nearer geometry
+//      occludes farther edges. Without this it reads as transparent wireframe.
+//   2. Rounded corners: each polygon vertex becomes a short quadratic curve.
+//
+// Strokes are `currentColor` at varying opacity, so figures stay monochrome and
+// inherit the page's text color. `non-scaling-stroke` keeps them a crisp ~1px.
 // ─────────────────────────────────────────────────────────────────────────
 
 const A = Math.PI / 6;
 const COS = Math.cos(A);
 const SIN = Math.sin(A);
+const CORNER = 0.22;
 
 type P3 = [number, number, number];
 type P2 = [number, number];
@@ -24,13 +31,17 @@ function iso([x, y, z]: P3): P2 {
 
 const TONE: Record<Tone, string> = {
   bright: "text-white/70",
-  mid: "text-white/[0.38]",
+  mid: "text-white/40",
   dim: "text-white/[0.18]",
 };
 
-type Stroke = { pts: P3[]; tone: Tone; close?: boolean; dash?: boolean };
+type Face = { pts: P3[]; tone: Tone };
+type Deco = { pts: P3[]; tone: Tone; close?: boolean; dash?: boolean };
 type Dot = { p: P3; tone: Tone };
-type Figure = { strokes: Stroke[]; dots?: Dot[] };
+type Figure = { faces: Face[]; decos?: Deco[]; dots?: Dot[] };
+
+const depth = (pts: P3[]) =>
+  pts.reduce((a, p) => a + p[0] + p[1] + p[2], 0) / pts.length;
 
 // ── geometry builders ──────────────────────────────────────────────────────
 
@@ -43,7 +54,7 @@ function box(
     left: "mid",
     right: "dim",
   },
-): Stroke[] {
+): Face[] {
   const [x, y, z] = o;
   const [w, d, h] = s;
   return [
@@ -78,7 +89,7 @@ function box(
 }
 
 /** A closed loop sampled on a plane, from a center and two basis vectors. */
-function loop(c: P3, r: number, u: P3, v: P3, n = 56): P3[] {
+function loop(c: P3, r: number, u: P3, v: P3, n = 60): P3[] {
   const pts: P3[] = [];
   for (let i = 0; i < n; i++) {
     const t = (i / n) * Math.PI * 2;
@@ -93,65 +104,58 @@ function loop(c: P3, r: number, u: P3, v: P3, n = 56): P3[] {
   return pts;
 }
 
-/** A small grid of dots on a top face — reads as a vent / port. */
+/** A small grid of dots on a top face: reads as a vent / port. */
 function vent(x: number, y: number, z: number, tone: Tone): Dot[] {
   const dots: Dot[] = [];
   for (let i = 0; i < 3; i++)
     for (let j = 0; j < 3; j++)
-      dots.push({ p: [x + i * 0.28, y + j * 0.28, z], tone });
+      dots.push({ p: [x + i * 0.26, y + j * 0.26, z], tone });
   return dots;
 }
 
 // ── the three figures ───────────────────────────────────────────────────────
 
-// FIG 0.2 — a layered base with a floating lid and a disc motif: "the index".
+// FIG 0.2: layered base with a floating lid and a disc motif ("the index").
 function figLayers(): Figure {
-  const strokes: Stroke[] = [];
-  const lh = 0.5;
-  const gap = 0.34;
-  const layers = 5;
-  for (let i = 0; i < layers; i++) {
-    const z = i * (lh + gap);
-    strokes.push(...box([0, 0, z], [4, 4, lh]));
-  }
+  const faces: Face[] = [];
+  const decos: Deco[] = [];
+  const lh = 0.42;
+  const gap = 0.16;
+  const layers = 6;
+  for (let i = 0; i < layers; i++)
+    faces.push(...box([0, 0, i * (lh + gap)], [4, 4, lh]));
+
   const baseTop = (layers - 1) * (lh + gap) + lh;
-  const lidZ = baseTop + 1.1;
-  strokes.push(
-    ...box([-0.3, -0.3, lidZ], [4.6, 4.6, 0.5], {
+  const lidZ = baseTop + 0.95;
+  faces.push(
+    ...box([-0.3, -0.3, lidZ], [4.6, 4.6, 0.42], {
       top: "bright",
       left: "mid",
       right: "mid",
     }),
   );
 
-  // disc + horizon lines on the lid's top face
-  const lidTop = lidZ + 0.5;
-  const cx = 2;
-  const cy = 2;
-  strokes.push({
-    tone: "bright",
-    pts: loop([cx, cy, lidTop], 1.25, [1, 0, 0], [0, 1, 0]),
-  });
-  for (const dy of [-0.4, 0.15, 0.7]) {
-    const half = Math.sqrt(Math.max(0, 1.25 * 1.25 - dy * dy));
-    strokes.push({
+  const lidTop = lidZ + 0.42;
+  const r = 1.25;
+  decos.push({ tone: "bright", pts: loop([2, 2, lidTop], r, [1, 0, 0], [0, 1, 0]) });
+  for (const dy of [-0.5, 0, 0.5]) {
+    const half = Math.sqrt(Math.max(0, r * r - dy * dy));
+    decos.push({
       tone: "mid",
       close: false,
       pts: [
-        [cx - half, cy + dy, lidTop],
-        [cx + half, cy + dy, lidTop],
+        [2 - half, 2 + dy, lidTop],
+        [2 + half, 2 + dy, lidTop],
       ],
     });
   }
-
-  // dotted leaders tying the lid back to the stack
   for (const [x, y] of [
     [0, 0],
     [4, 0],
     [0, 4],
     [4, 4],
-  ] as const) {
-    strokes.push({
+  ] as const)
+    decos.push({
       tone: "dim",
       close: false,
       dash: true,
@@ -160,36 +164,36 @@ function figLayers(): Figure {
         [x, y, lidZ],
       ],
     });
-  }
-  return { strokes };
+  return { faces, decos };
 }
 
-// FIG 0.3 — a cluster of modules of varying height: "scored packages".
+// FIG 0.3: 2×2 cluster of modules of varying height ("scored packages").
 function figModules(): Figure {
-  const strokes: Stroke[] = [];
+  const faces: Face[] = [];
   const dots: Dot[] = [];
-  // back-to-front so nearer boxes paint over farther ones
-  strokes.push(...box([0.2, 0.2, 0], [2.3, 2.3, 2.7]));
-  dots.push(...vent(0.85, 0.85, 2.7, "mid"));
-  strokes.push(...box([3.1, 0.2, 0], [2.3, 2.3, 1.7]));
-  strokes.push(...box([0.2, 3.1, 0], [2.3, 2.3, 1.5]));
-  strokes.push(...box([3.0, 3.0, 0], [2.4, 2.4, 2.0]));
-  dots.push(...vent(3.65, 3.65, 2.0, "mid"));
-  return { strokes, dots };
+  const c = 2.4;
+  const g = 0.12; // small seam between modules
+  faces.push(...box([0, 0, 0], [c, c, 2.7])); // back (tall)
+  dots.push(...vent(0.75, 0.75, 2.7, "mid"));
+  faces.push(...box([c + g, 0, 0], [c, c, 1.7])); // right
+  faces.push(...box([0, c + g, 0], [c, c, 1.9])); // left
+  faces.push(...box([c + g, c + g, 0], [c, c, 2.0])); // front
+  dots.push(...vent(c + g + 0.75, c + g + 0.75, 2.0, "mid"));
+  return { faces, dots };
 }
 
-// FIG 0.4 — a fanned sheaf of sheets: "ranked results".
+// FIG 0.4: fanned sheaf of sheets, tallest at the back ("ranked results").
 function figSheaf(): Figure {
-  const strokes: Stroke[] = [];
+  const faces: Face[] = [];
   const n = 12;
-  const g = 0.46; // spacing along y (down-left)
-  const w = 3.4;
+  const g = 0.42; // spacing along y (toward the front)
+  const w = 3.2;
   for (let i = 0; i < n; i++) {
     const y = i * g;
-    const x = i * 0.16; // slight horizontal splay
-    const h = 0.7 + i * 0.42; // grows toward the back
-    const tone: Tone = i === n - 1 ? "bright" : i > n - 4 ? "mid" : "dim";
-    strokes.push({
+    const x = i * 0.14; // slight horizontal splay
+    const h = 0.8 + (n - 1 - i) * 0.4; // grows toward the back
+    const tone: Tone = i === 0 ? "bright" : i < 3 ? "mid" : "dim";
+    faces.push({
       tone,
       pts: [
         [x, y, 0],
@@ -199,23 +203,67 @@ function figSheaf(): Figure {
       ],
     });
   }
-  return { strokes };
+  return { faces };
+}
+
+// ── path helpers ────────────────────────────────────────────────────────────
+
+const fmt = (n: number) => n.toFixed(2);
+
+/** Closed path through `pts` with each corner softened to radius `r`. */
+function roundedPath(pts: P2[], r: number): string {
+  const n = pts.length;
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const cur = pts[i];
+    const prev = pts[(i - 1 + n) % n];
+    const next = pts[(i + 1) % n];
+    const d1 = Math.hypot(prev[0] - cur[0], prev[1] - cur[1]) || 1;
+    const d2 = Math.hypot(next[0] - cur[0], next[1] - cur[1]) || 1;
+    const rr = Math.min(r, d1 / 2, d2 / 2);
+    const p1: P2 = [
+      cur[0] + ((prev[0] - cur[0]) / d1) * rr,
+      cur[1] + ((prev[1] - cur[1]) / d1) * rr,
+    ];
+    const p2: P2 = [
+      cur[0] + ((next[0] - cur[0]) / d2) * rr,
+      cur[1] + ((next[1] - cur[1]) / d2) * rr,
+    ];
+    d += `${i === 0 ? "M" : "L"}${fmt(p1[0])} ${fmt(p1[1])} Q${fmt(cur[0])} ${fmt(
+      cur[1],
+    )} ${fmt(p2[0])} ${fmt(p2[1])} `;
+  }
+  return d + "Z";
+}
+
+function openPath(pts: P2[], close: boolean): string {
+  return (
+    pts.map((p, i) => `${i === 0 ? "M" : "L"}${fmt(p[0])} ${fmt(p[1])}`).join(" ") +
+    (close ? " Z" : "")
+  );
 }
 
 // ── renderer ────────────────────────────────────────────────────────────────
 
-function FigureSvg({ figure }: { figure: Figure }) {
-  const projected = figure.strokes.map((s) => ({
-    ...s,
-    p2: s.pts.map(iso),
-  }));
-  const dots = (figure.dots ?? []).map((d) => ({ ...d, p2: iso(d.p) }));
+function FigureSvg({
+  figure,
+  fill = "background",
+}: {
+  figure: Figure;
+  fill?: "background" | "card";
+}) {
+  const decos = figure.decos ?? [];
+  const dots = figure.dots ?? [];
+
+  // back-to-front so near faces occlude far edges
+  const faces = [...figure.faces].sort((a, b) => depth(a.pts) - depth(b.pts));
 
   // auto-fit viewBox from every projected point
   const all: P2[] = [
-    ...projected.flatMap((s) => s.p2),
-    ...dots.map((d) => d.p2),
-  ];
+    ...figure.faces.flatMap((f) => f.pts),
+    ...decos.flatMap((d) => d.pts),
+    ...dots.map((d) => d.p),
+  ].map(iso);
   const xs = all.map((p) => p[0]);
   const ys = all.map((p) => p[1]);
   const pad = 0.6;
@@ -223,43 +271,51 @@ function FigureSvg({ figure }: { figure: Figure }) {
   const minY = Math.min(...ys) - pad;
   const vw = Math.max(...xs) - minX + pad;
   const vh = Math.max(...ys) - minY + pad;
+  const fillClass = fill === "card" ? "fill-card" : "fill-background";
 
   return (
     <svg
-      viewBox={`${minX} ${minY} ${vw} ${vh}`}
+      viewBox={`${fmt(minX)} ${fmt(minY)} ${fmt(vw)} ${fmt(vh)}`}
       className="h-auto w-full"
       fill="none"
       aria-hidden
     >
-      {projected.map((s, i) => {
-        const d =
-          s.p2
-            .map(([x, y], j) => `${j === 0 ? "M" : "L"}${x} ${y}`)
-            .join(" ") + (s.close === false ? "" : " Z");
+      {faces.map((f, i) => (
+        <path
+          key={`f${i}`}
+          d={roundedPath(f.pts.map(iso), CORNER)}
+          stroke="currentColor"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+          className={cn(fillClass, TONE[f.tone])}
+        />
+      ))}
+      {decos.map((s, i) => (
+        <path
+          key={`s${i}`}
+          d={openPath(s.pts.map(iso), s.close !== false)}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+          strokeDasharray={s.dash ? "2 3" : undefined}
+          className={TONE[s.tone]}
+        />
+      ))}
+      {dots.map((d, i) => {
+        const [x, y] = iso(d.p);
         return (
-          <path
-            key={i}
-            d={d}
-            stroke="currentColor"
-            strokeWidth={1}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            strokeDasharray={s.dash ? "2 3" : undefined}
-            className={TONE[s.tone]}
+          <circle
+            key={`d${i}`}
+            cx={x}
+            cy={y}
+            r={0.07}
+            fill="currentColor"
+            className={TONE[d.tone]}
           />
         );
       })}
-      {dots.map((d, i) => (
-        <circle
-          key={`d${i}`}
-          cx={d.p2[0]}
-          cy={d.p2[1]}
-          r={0.08}
-          fill="currentColor"
-          className={TONE[d.tone]}
-        />
-      ))}
     </svg>
   );
 }
@@ -273,21 +329,29 @@ const FIGURES: { id: string; label: string; figure: Figure }[] = [
 /** A single figure, e.g. <IsoFigure name="modules" />. */
 export function IsoFigure({
   name,
+  fill,
   className,
 }: {
   name: "layers" | "modules" | "sheaf";
+  fill?: "background" | "card";
   className?: string;
 }) {
   const item = FIGURES.find((f) => f.id === name) ?? FIGURES[0];
   return (
     <figure className={cn("text-foreground", className)}>
-      <FigureSvg figure={item.figure} />
+      <FigureSvg figure={item.figure} fill={fill} />
     </figure>
   );
 }
 
 /** The three figures in a labelled, divided row (matches the reference). */
-export function IsoFigures({ className }: { className?: string }) {
+export function IsoFigures({
+  fill,
+  className,
+}: {
+  fill?: "background" | "card";
+  className?: string;
+}) {
   return (
     <div className={cn("grid gap-px sm:grid-cols-3", className)}>
       {FIGURES.map(({ id, label, figure }) => (
@@ -296,7 +360,7 @@ export function IsoFigures({ className }: { className?: string }) {
             {label}
           </span>
           <div className="mx-auto mt-6 max-w-[15rem] text-foreground">
-            <FigureSvg figure={figure} />
+            <FigureSvg figure={figure} fill={fill} />
           </div>
         </div>
       ))}
