@@ -1,8 +1,8 @@
 /**
  * Local child-process sandbox driver.
  *
- * Installs a package into a throwaway temp dir and smoke-loads it, reporting
- * whether it installs and loads. Fast and dependency-free (just npm + node).
+ * Installs package(s) into a throwaway temp dir and smoke-loads them, reporting
+ * whether they install and load. Fast and dependency-free (just npm + node).
  *
  * NOT an isolation boundary: loading a package executes its top-level code on
  * the host, so use this only for packages you already trust (operator/dev).
@@ -19,7 +19,9 @@ import {
   DEFAULT_TARGET,
   type ModuleSystem,
   type Sandbox,
+  type SandboxPackage,
   type SandboxResult,
+  type SandboxSetResult,
   type SandboxVerifyOptions,
 } from './types';
 
@@ -28,9 +30,9 @@ const INSTALL_TIMEOUT_MS = 120_000;
 const SMOKE_TIMEOUT_MS = 30_000;
 const ERROR_MAX = 500;
 
-/** npm args for a throwaway install into the sandbox dir. */
-export function npmInstallArgs(spec: string, opts: { allowScripts: boolean }): string[] {
-  const args = ['install', spec, '--no-audit', '--no-fund', '--no-package-lock', '--no-save'];
+/** npm args for a throwaway install of one or more specs into the sandbox dir. */
+export function npmInstallArgs(specs: string[], opts: { allowScripts: boolean }): string[] {
+  const args = ['install', ...specs, '--no-audit', '--no-fund', '--no-package-lock', '--no-save'];
   if (!opts.allowScripts) args.push('--ignore-scripts');
   return args;
 }
@@ -55,6 +57,8 @@ function stderrOf(err: unknown): string {
   return String(err);
 }
 
+const toSpec = (p: SandboxPackage): string => (p.version ? `${p.name}@${p.version}` : p.name);
+
 export class LocalSandbox implements Sandbox {
   readonly name = 'local';
 
@@ -63,13 +67,29 @@ export class LocalSandbox implements Sandbox {
     version: string | null,
     opts: SandboxVerifyOptions = {},
   ): Promise<SandboxResult> {
+    const set = await this.verifySet([{ name: pkg, version }], opts);
+    return {
+      driver: this.name,
+      moduleSystem: set.moduleSystem,
+      installed: set.installed,
+      imported: set.loaded[0]?.loaded ?? null,
+      ranScripts: opts.allowScripts ?? false,
+      durationMs: set.durationMs,
+      error: set.error,
+    };
+  }
+
+  async verifySet(
+    packages: SandboxPackage[],
+    opts: SandboxVerifyOptions = {},
+  ): Promise<SandboxSetResult> {
     const target = opts.target ?? DEFAULT_TARGET;
     const allowScripts = opts.allowScripts ?? false;
-    const spec = version ? `${pkg}@${version}` : pkg;
+    const specs = packages.map(toSpec);
     const dir = await mkdtemp(join(tmpdir(), 'lurq-sandbox-'));
     const started = Date.now();
+    const loaded = packages.map((p) => ({ name: p.name, loaded: null as boolean | null }));
     let installed = false;
-    let imported: boolean | null = null;
     let error: string | null = null;
 
     try {
@@ -77,23 +97,25 @@ export class LocalSandbox implements Sandbox {
         join(dir, 'package.json'),
         JSON.stringify({ name: 'lurq-sandbox', version: '0.0.0', private: true }),
       );
-      await execFileAsync('npm', npmInstallArgs(spec, { allowScripts }), {
+      await execFileAsync('npm', npmInstallArgs(specs, { allowScripts }), {
         cwd: dir,
         timeout: opts.timeoutMs ?? INSTALL_TIMEOUT_MS,
         signal: opts.signal,
       });
       installed = true;
 
-      try {
-        await execFileAsync('node', smokeScript(pkg, target.moduleSystem), {
-          cwd: dir,
-          timeout: SMOKE_TIMEOUT_MS,
-          signal: opts.signal,
-        });
-        imported = true;
-      } catch (err) {
-        imported = false;
-        error = condense(stderrOf(err));
+      for (let i = 0; i < packages.length; i++) {
+        try {
+          await execFileAsync('node', smokeScript(packages[i]!.name, target.moduleSystem), {
+            cwd: dir,
+            timeout: SMOKE_TIMEOUT_MS,
+            signal: opts.signal,
+          });
+          loaded[i]!.loaded = true;
+        } catch (err) {
+          loaded[i]!.loaded = false;
+          if (!error) error = condense(stderrOf(err));
+        }
       }
     } catch (err) {
       error = condense(stderrOf(err));
@@ -105,8 +127,7 @@ export class LocalSandbox implements Sandbox {
       driver: this.name,
       moduleSystem: target.moduleSystem,
       installed,
-      imported,
-      ranScripts: allowScripts,
+      loaded,
       durationMs: Date.now() - started,
       error,
     };

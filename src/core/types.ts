@@ -80,6 +80,32 @@ export type Confidence = 'proven' | 'emerging' | 'promising' | 'unproven';
 
 export type Runtime = 'browser' | 'node' | 'both';
 
+/** Result of co-installing two package versions in the sandbox (compat matrix). */
+export type CompatStatus = 'compatible' | 'conflict';
+
+/** Sandbox verdict surfaced to agents: did this version actually install + load? */
+export interface BuildVerified {
+  version: string;
+  installed: boolean;
+  loaded: boolean | null;
+  driver: string;
+  ranAt: string;
+}
+
+export interface CompatPair {
+  a: string;
+  b: string;
+  status: CompatStatus | 'unknown';
+  versions: string | null;
+}
+
+/** `compat` output: pairwise compatibility for a set of packages, from the matrix. */
+export interface CompatOutput {
+  packages: string[];
+  pairs: CompatPair[];
+  overall: 'compatible' | 'conflict' | 'unknown';
+}
+
 export type AdvisorySeverity = 'critical' | 'high' | 'moderate' | 'low' | 'info';
 
 export interface Advisory {
@@ -152,6 +178,8 @@ export interface EvaluateOutput {
   summary: string | null;
   usageGuide: UsageGuide | null;
   repoUrl: string | null;
+  /** Latest sandbox verdict for this package, if one has been run. */
+  buildVerified?: BuildVerified | null;
 }
 
 /** `verify` output (§12.3.4). */

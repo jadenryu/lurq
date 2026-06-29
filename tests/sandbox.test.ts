@@ -3,17 +3,22 @@ import { npmInstallArgs, smokeScript } from '../src/sandbox/local';
 
 describe('npmInstallArgs', () => {
   it('ignores install scripts by default', () => {
-    const args = npmInstallArgs('left-pad@1.3.0', { allowScripts: false });
+    const args = npmInstallArgs(['left-pad@1.3.0'], { allowScripts: false });
     expect(args).toContain('--ignore-scripts');
     expect(args).toContain('left-pad@1.3.0');
   });
 
+  it('installs multiple specs together (for compatibility checks)', () => {
+    const args = npmInstallArgs(['react@19', 'react-dom@19'], { allowScripts: false });
+    expect(args).toEqual(expect.arrayContaining(['react@19', 'react-dom@19']));
+  });
+
   it('runs install scripts only when explicitly allowed', () => {
-    expect(npmInstallArgs('x', { allowScripts: true })).not.toContain('--ignore-scripts');
+    expect(npmInstallArgs(['x'], { allowScripts: true })).not.toContain('--ignore-scripts');
   });
 
   it('suppresses audit/fund/lockfile noise', () => {
-    expect(npmInstallArgs('x', { allowScripts: false })).toEqual(
+    expect(npmInstallArgs(['x'], { allowScripts: false })).toEqual(
       expect.arrayContaining(['--no-audit', '--no-fund', '--no-package-lock', '--no-save']),
     );
   });

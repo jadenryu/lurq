@@ -193,6 +193,17 @@ export function buildProgram(): Command {
     );
 
   program
+    .command('compat')
+    .argument('<packages...>', 'npm package names to check together')
+    .description('check pairwise compatibility of packages from the sandbox matrix')
+    .option('--run', 'operator-side: co-install them in the sandbox first (UNSAFE without VM isolation)')
+    .option('--json', 'output JSON')
+    .action(async (pkgs: string[], opts: { run?: boolean; json?: boolean }) => {
+      const { runCompat } = await import('./commands');
+      await runCompat(pkgs, opts);
+    });
+
+  program
     .command('install')
     .description('guided setup: connect lurq to your AI assistant(s)')
     .option('--api-key <key>', 'hosted API key (skips the prompt)')
