@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -123,10 +124,27 @@ const GROUPS: { label: string; items: Pillar[] }[] = [
 const FLAT = GROUPS.flatMap((g) => g.items);
 
 export function SectionShowcase() {
+  const reduce = useReducedMotion();
   const [active, setActive] = useState(0);
+  const [dir, setDir] = useState(1);
   const pillar = FLAT[active];
-  const go = (d: number) =>
+
+  const select = (idx: number) => {
+    setDir(idx >= active ? 1 : -1);
+    setActive(idx);
+  };
+  const go = (d: number) => {
+    setDir(d);
     setActive((i) => (i + d + FLAT.length) % FLAT.length);
+  };
+
+  // shared enter/exit for the active surface; x offset flips with direction
+  const off = reduce ? 0 : 18;
+  const variants = {
+    enter: (d: number) => ({ opacity: 0, x: d >= 0 ? off : -off }),
+    center: { opacity: 1, x: 0 },
+    exit: (d: number) => ({ opacity: 0, x: d >= 0 ? -off : off }),
+  };
 
   return (
     <section
@@ -152,15 +170,23 @@ export function SectionShowcase() {
                         <li key={t.id}>
                           <button
                             type="button"
-                            onClick={() => setActive(idx)}
+                            onClick={() => select(idx)}
                             aria-current={on ? "true" : undefined}
                             className={cn(
                               "relative flex w-full items-center gap-3 rounded-sm py-2 pl-4 pr-3 text-left text-sm transition-colors",
                               on
-                                ? "bg-foreground/[0.05] text-foreground before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full before:bg-foreground"
+                                ? "bg-foreground/[0.05] text-foreground"
                                 : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground",
                             )}
                           >
+                            {on && (
+                              <motion.span
+                                layoutId="surfaceBar"
+                                aria-hidden
+                                className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-foreground"
+                                transition={{ duration: 0.3, ease: "easeOut" }}
+                              />
+                            )}
                             <Icon className="size-4 shrink-0" />
                             <span>{t.label}</span>
                             {on && <ChevronRight className="ml-auto size-3.5" />}
@@ -190,21 +216,33 @@ export function SectionShowcase() {
 
           {/* RIGHT: active surface */}
           <Reveal delay={0.1}>
-            <div>
+            <div className="overflow-hidden">
               <div className="flex items-start justify-between gap-6">
                 <div>
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     How it works
                   </span>
-                  <h2 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
-                    {pillar.name}
-                  </h2>
-                  <p className="mt-3 max-w-xl text-muted-foreground">
-                    {pillar.blurb}
-                  </p>
-                  <code className="mt-4 inline-flex rounded-sm border border-border bg-background/40 px-3 py-1.5 font-mono text-xs text-foreground/80">
-                    {pillar.command}
-                  </code>
+                  <AnimatePresence mode="wait" custom={dir} initial={false}>
+                    <motion.div
+                      key={active}
+                      custom={dir}
+                      variants={variants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ duration: reduce ? 0 : 0.24, ease: "easeOut" }}
+                    >
+                      <h2 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
+                        {pillar.name}
+                      </h2>
+                      <p className="mt-3 max-w-xl text-muted-foreground">
+                        {pillar.blurb}
+                      </p>
+                      <code className="mt-4 inline-flex rounded-sm border border-border bg-background/40 px-3 py-1.5 font-mono text-xs text-foreground/80">
+                        {pillar.command}
+                      </code>
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button
@@ -226,8 +264,18 @@ export function SectionShowcase() {
                 </div>
               </div>
 
-              {/* framed technical panel */}
-              <div className="relative mt-8 overflow-hidden rounded-sm border border-border/70 bg-card/20">
+              <AnimatePresence mode="wait" custom={dir} initial={false}>
+                <motion.div
+                  key={active}
+                  custom={dir}
+                  variants={variants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: reduce ? 0 : 0.24, ease: "easeOut" }}
+                >
+                  {/* framed technical panel */}
+                  <div className="relative mt-8 overflow-hidden rounded-sm border border-border/70 bg-card/20">
                 <span aria-hidden className="absolute left-0 top-0 size-3 border-l border-t border-foreground/40" />
                 <span aria-hidden className="absolute right-0 top-0 size-3 border-r border-t border-foreground/40" />
                 <span aria-hidden className="absolute bottom-0 left-0 size-3 border-b border-l border-foreground/40" />
@@ -257,9 +305,11 @@ export function SectionShowcase() {
                 </div>
               </div>
 
-              <p className="mt-8 max-w-2xl leading-relaxed text-muted-foreground">
-                {pillar.detail}
-              </p>
+                  <p className="mt-8 max-w-2xl leading-relaxed text-muted-foreground">
+                    {pillar.detail}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
             </div>
           </Reveal>
         </div>
