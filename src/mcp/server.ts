@@ -9,7 +9,13 @@ import { SERVER_NAME, VERSION } from '../core/constants';
 import { CATEGORIES, type Category } from '../core/types';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
-import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from './handlers';
+import {
+  handleCompare,
+  handleCompat,
+  handleEvaluate,
+  handleRecommend,
+  handleVerify,
+} from './handlers';
 import { handleDiagram } from './diagram';
 import { handlePlan } from './plan';
 
@@ -71,6 +77,23 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
       },
     },
     async (args) => json(await handleCompare(db, args)),
+  );
+
+  server.registerTool(
+    'compat',
+    {
+      title: 'Check package compatibility',
+      description:
+        'Report pairwise compatibility for a set of packages from the sandbox-verified matrix: which pairs are known to co-install, which conflict, and which are unverified. Read-only — does not run installs.',
+      inputSchema: {
+        packages: z
+          .array(z.string().min(1))
+          .min(2)
+          .max(8)
+          .describe('2–8 npm package names to check together'),
+      },
+    },
+    async (args) => json(await handleCompat(db, args)),
   );
 
   server.registerTool(

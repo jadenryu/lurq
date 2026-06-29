@@ -172,6 +172,38 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('sandbox')
+    .argument('<package>', 'npm package name')
+    .argument('[version]', 'specific version (default: latest)')
+    .description(
+      'operator-side: install + smoke-load a package in a sandbox to verify it actually works',
+    )
+    .option('--esm', 'load via ESM import instead of CJS require')
+    .option('--allow-scripts', 'run install scripts (UNSAFE without VM isolation)')
+    .option('--json', 'output JSON')
+    .action(
+      async (
+        pkg: string,
+        version: string | undefined,
+        opts: { esm?: boolean; allowScripts?: boolean; json?: boolean },
+      ) => {
+        const { runSandbox } = await import('./commands');
+        await runSandbox(pkg, version, opts);
+      },
+    );
+
+  program
+    .command('compat')
+    .argument('<packages...>', 'npm package names to check together')
+    .description('check pairwise compatibility of packages from the sandbox matrix')
+    .option('--run', 'operator-side: co-install them in the sandbox first (UNSAFE without VM isolation)')
+    .option('--json', 'output JSON')
+    .action(async (pkgs: string[], opts: { run?: boolean; json?: boolean }) => {
+      const { runCompat } = await import('./commands');
+      await runCompat(pkgs, opts);
+    });
+
+  program
     .command('install')
     .description('guided setup: connect lurq to your AI assistant(s)')
     .option('--api-key <key>', 'hosted API key (skips the prompt)')
