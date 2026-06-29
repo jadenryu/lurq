@@ -1,0 +1,64 @@
+---
+title: CLI reference
+description: Use the same lurq engine straight from your terminal.
+---
+
+The lurq engine is usable standalone from the terminal — the same scoring and
+retrieval the MCP tools expose. Add `--json` to any command for machine-readable
+output.
+
+<Callout type="info">
+  These query commands talk to a lurq index. End users on the hosted service get
+  recommendations through their agent over MCP; the CLI query commands below are
+  primarily for operators and self-hosters running against their own database.
+  See [Self-hosting](/docs/self-hosting).
+</Callout>
+
+## Querying the index
+
+```bash
+lurqrun recommend "a form library for react"
+lurqrun recommend "debounce a function"
+lurqrun evaluate zod
+lurqrun compare drizzle-orm prisma typeorm
+lurqrun verify lodahs
+```
+
+`recommend` accepts `--category` and `--min-confidence` to narrow results.
+
+## Scoring controls
+
+```bash
+lurqrun weights                                  # show & explain the weight model
+lurqrun edit-weights --set composite.lambda=0.5  # override a weight (or --reset)
+lurqrun rescore                                  # re-derive scores from cached data
+lurqrun discover                                 # crawl & gate new candidate packages
+```
+
+`rescore` recomputes scores from already-ingested breakdowns without re-fetching
+from public APIs — fast, and useful after changing weights.
+
+## Installing the agent skill
+
+```bash
+# interactive: detect assistants and write keyed MCP entries
+lurqrun install
+
+# scriptable: configure one assistant (or all)
+lurqrun install-skill --agent claude-code --api-key <key>
+lurqrun install-skill --agent all --api-key <key>
+
+# self-host: wire your agent to a local stdio server instead of the hosted API
+lurqrun install-skill --local
+```
+
+## Output format
+
+Every command supports `--json`:
+
+```bash
+lurqrun recommend "state management for react" --json
+```
+
+This emits structured output suitable for piping into other tools — the same
+shape the MCP layer serializes.

@@ -1,0 +1,64 @@
+---
+title: Quick start
+description: Connect lurq to your coding agent in under a minute.
+---
+
+lurq is a **hosted service** — you don't run a database or a sync to use it. You
+get an API key, then point your agent at the hosted MCP endpoint.
+
+## 1. Run the guided installer
+
+<Callout type="info">
+  The package ships on npm as **`lurqrun`** (the bare name `lurq` is taken). The
+  command you invoke is still `lurq` once installed.
+</Callout>
+
+```bash
+npx lurqrun install
+```
+
+The installer:
+
+1. prompts for your API key and validates it,
+2. detects your installed assistants (Claude Code, Cursor, Windsurf,
+   VS Code / Copilot, Codex),
+3. writes a keyed remote MCP entry for each one.
+
+The entry it writes looks like this:
+
+```json
+{
+  "type": "http",
+  "url": "https://api.lurq.run/mcp",
+  "headers": { "Authorization": "Bearer <your-key>" }
+}
+```
+
+**No database credentials ever touch your machine.** Restart your agent
+afterward so it picks up the new MCP server.
+
+## 2. Non-interactive install
+
+For scripted setups (CI, dotfiles, provisioning), skip the prompts:
+
+```bash
+npx lurqrun install-skill --agent claude-code --api-key <key>
+```
+
+Use `--agent all` to configure every detected assistant at once.
+
+## 3. Verify it's connected
+
+Ask your agent something dependency-shaped, for example:
+
+> "What's the best current form library for React? Use lurq."
+
+You should see it call the `recommend` tool and return a short, scored list with
+a `dataAsOf` timestamp. If nothing happens, confirm the agent was restarted and
+that the MCP server shows up in its tool list.
+
+## Next steps
+
+- Learn what each tool does in the [MCP tools reference](/docs/mcp-tools).
+- Prefer the terminal? See the [CLI reference](/docs/cli).
+- Curious how scores are derived? Read [How it works](/docs/how-it-works).
