@@ -2,10 +2,21 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { Category } from '../core/types';
+import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
-import { packages, seedPackages, syncRuns, type NewPackageRow, type SyncError } from './schema';
+import {
+  packageVersions,
+  packages,
+  seedPackages,
+  syncRuns,
+  type NewPackageRow,
+  type SyncError,
+} from './schema';
+
+/** How many rows to insert per statement (stays well under Postgres' param cap). */
+const VERSION_CHUNK = 500;
 
 export async function getSeedTargets(
   db: Database,
@@ -19,6 +30,47 @@ export async function getSeedTargets(
 export async function getPackageByName(db: Database, name: string) {
   const rows = await db.select().from(packages).where(eq(packages.name, name)).limit(1);
   return rows[0] ?? null;
+}
+
+/** Every tracked package name — the set the `_changes` follower filters against. */
+export async function getAllPackageNames(db: Database): Promise<string[]> {
+  const rows = await db.select({ name: packages.name }).from(packages);
+  return rows.map((r) => r.name);
+}
+
+/**
+ * Store a package's version timeline. Idempotent — versions are immutable on
+ * npm, so existing rows are left untouched. Chunked to respect the param cap.
+ */
+export async function upsertPackageVersions(
+  db: Database,
+  name: string,
+  versions: VersionInfo[],
+): Promise<void> {
+  if (versions.length === 0) return;
+  for (let i = 0; i < versions.length; i += VERSION_CHUNK) {
+    const rows = versions.slice(i, i + VERSION_CHUNK).map((v) => ({
+      packageName: name,
+      version: v.version,
+      publishedAt: v.publishedAt,
+    }));
+    await db.insert(packageVersions).values(rows).onConflictDoNothing();
+  }
+}
+
+/** A package's stored version timeline, newest first. */
+export async function getPackageVersions(
+  db: Database,
+  name: string,
+  limit = 50,
+): Promise<VersionInfo[]> {
+  const rows = await db
+    .select({ version: packageVersions.version, publishedAt: packageVersions.publishedAt })
+    .from(packageVersions)
+    .where(eq(packageVersions.packageName, name))
+    .orderBy(desc(packageVersions.publishedAt))
+    .limit(limit);
+  return rows.map((r) => ({ version: r.version, publishedAt: r.publishedAt }));
 }
 
 /**

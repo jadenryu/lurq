@@ -92,7 +92,22 @@ export function parseNpmRegistry(json: any): NpmRegistryData {
     hasTestScript: detectTestScript(latestManifest),
     directDependenciesCount: countDeps(latestManifest?.dependencies),
     hasProvenance: detectProvenance(latestManifest),
+    versionTimeline: parseVersionTimeline(json),
   };
+}
+
+/**
+ * The published-version timeline from the packument: every key in `versions`
+ * paired with its publish date from `time`, newest first. The `time` map also
+ * holds `created`/`modified` sentinels, which we skip.
+ */
+export function parseVersionTimeline(json: any): { version: string; publishedAt: Date | null }[] {
+  const versions = json?.versions;
+  if (!versions || typeof versions !== 'object') return [];
+  const time = json?.time ?? {};
+  return Object.keys(versions)
+    .map((version) => ({ version, publishedAt: toDate(time?.[version]) }))
+    .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0));
 }
 
 function parseKeywords(value: unknown): string[] {

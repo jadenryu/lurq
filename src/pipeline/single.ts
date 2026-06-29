@@ -22,7 +22,12 @@ import {
 } from '../scoring';
 import { buildEmbeddingText, createEmbeddingProvider } from '../search/embeddings';
 import type { Database } from '../db/client';
-import { ensureSeedEntry, getPackageByName, upsertPackage } from '../db/packages';
+import {
+  ensureSeedEntry,
+  getPackageByName,
+  upsertPackage,
+  upsertPackageVersions,
+} from '../db/packages';
 import { packages, seedPackages, type PackageRow } from '../db/schema';
 import { assemblePackageRow } from './sync';
 
@@ -120,6 +125,11 @@ export async function syncOnePackage(
       embedding: embedding ?? null,
       now,
     }),
+  );
+  // Record the version timeline (idempotent). Non-fatal: never block a
+  // successful package upsert on the version-history write.
+  await upsertPackageVersions(db, name, signals.registry?.versionTimeline ?? []).catch(
+    () => {},
   );
   return (await getPackageByName(db, name))!;
 }
