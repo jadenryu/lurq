@@ -14,6 +14,20 @@ export async function storeVerificationRun(
   await db.insert(verificationRuns).values(run);
 }
 
+/** Most recent run for a package (any version), if any — for the evaluate verdict. */
+export async function getLatestVerificationByName(
+  db: Database,
+  packageName: string,
+): Promise<VerificationRunRow | null> {
+  const rows = await db
+    .select()
+    .from(verificationRuns)
+    .where(eq(verificationRuns.packageName, packageName))
+    .orderBy(desc(verificationRuns.ranAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** Most recent run for a package version (any module system), if any. */
 export async function getLatestVerification(
   db: Database,

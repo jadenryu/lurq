@@ -45,6 +45,22 @@ export interface SandboxResult {
   error: string | null;
 }
 
+export interface SandboxPackage {
+  name: string;
+  version: string | null;
+}
+
+export interface SandboxSetResult {
+  driver: string;
+  moduleSystem: ModuleSystem;
+  /** Co-install of the whole set succeeded. */
+  installed: boolean;
+  /** Per-package smoke-load (null = not attempted because the install failed). */
+  loaded: { name: string; loaded: boolean | null }[];
+  durationMs: number;
+  error: string | null;
+}
+
 export interface Sandbox {
   /** Provenance tag stored with each result. */
   readonly name: string;
@@ -53,6 +69,12 @@ export interface Sandbox {
     version: string | null,
     opts?: SandboxVerifyOptions,
   ): Promise<SandboxResult>;
+  /** Co-install a set of packages and smoke-load each — the basis of the
+   *  compatibility matrix. A successful co-install proves the set coexists. */
+  verifySet(
+    packages: SandboxPackage[],
+    opts?: SandboxVerifyOptions,
+  ): Promise<SandboxSetResult>;
 }
 
 export const DEFAULT_TARGET: SandboxTarget = {

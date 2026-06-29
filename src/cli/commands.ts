@@ -112,6 +112,15 @@ export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promis
         ['repo', res.repoUrl ?? '—'],
       ]),
     );
+    if (res.buildVerified) {
+      const bv = res.buildVerified;
+      const state = !bv.installed
+        ? red('install failed')
+        : bv.loaded === false
+          ? yellow('installs, load failed')
+          : green('installs and loads');
+      console.log(`\nsandbox: ${state}  ${dim(`${bv.version} · ${bv.driver}`)}`);
+    }
     if (res.summary) console.log('\n' + res.summary);
     if (res.usageGuide) {
       const g = res.usageGuide;
@@ -414,5 +423,35 @@ export async function runSandbox(
         ['error', result.error ?? 'none'],
       ]),
     );
+  });
+}
+
+/** Read (or, with --run, sandbox-verify then read) pairwise package compatibility. */
+export async function runCompat(
+  pkgs: string[],
+  opts: { run?: boolean; json?: boolean },
+): Promise<void> {
+  await withDb(async (db) => {
+    if (opts.run) {
+      console.error(
+        yellow('co-installing in the sandbox (loads package code locally without isolation)'),
+      );
+      const { verifyCompatibility } = await import('../pipeline/compat');
+      await verifyCompatibility(db, pkgs);
+    }
+    const { handleCompat } = await import('../mcp/handlers');
+    const res = await handleCompat(db, { packages: pkgs });
+    if (opts.json) return console.log(JSON.stringify(res, null, 2));
+    const color = res.overall === 'compatible' ? green : res.overall === 'conflict' ? red : dim;
+    console.log(`compatibility: ${color(res.overall)}`);
+    console.log(
+      table(
+        ['A', 'B', 'Status', 'Versions'],
+        res.pairs.map((p) => [p.a, p.b, p.status, p.versions ?? '—']),
+      ),
+    );
+    if (res.overall === 'unknown') {
+      console.log(dim('\nrun with --run (operator) to verify untested pairs in the sandbox'));
+    }
   });
 }
