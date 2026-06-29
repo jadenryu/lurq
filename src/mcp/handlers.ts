@@ -11,13 +11,19 @@ import { STALENESS_DAYS } from '../core/constants';
 import type {
   Advisory,
   AdvisorySeverity,
+  BuildVerified,
   Category,
+  CompatOutput,
+  CompatPair,
   Confidence,
   EvaluateOutput,
   VerifyOutput,
 } from '../core/types';
+import { getCompatEdges } from '../db/compat';
 import type { Database } from '../db/client';
 import { getTopPackageNames } from '../db/packages';
+import { getLatestVerificationByName } from '../db/verification';
+import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import { fetchNpmRegistry, npmPackageExists } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
@@ -152,7 +158,11 @@ export async function handleEvaluate(
             : `"${input.package}" was not found on the npm registry. Check the package name.`,
         };
       }
-      return rowToEvaluate(row);
+      const evaluated = rowToEvaluate(row);
+      const verification = await getLatestVerificationByName(db, row.name);
+      return verification
+        ? { ...evaluated, buildVerified: toBuildVerified(verification) }
+        : evaluated;
     },
     // Don't cache "not found / not scored yet" — it may resolve on a later fetch.
     { skipCache: (r) => 'tracked' in r },
@@ -184,6 +194,48 @@ export async function handleCompare(db: Database, input: { packages: string[] })
   );
   out.rows = out.rows.map(refreshStale);
   return out;
+}
+
+// ── compat ──────────────────────────────────────────────────────────────────
+
+function toBuildVerified(v: VerificationRunRow): BuildVerified {
+  return {
+    version: v.version,
+    installed: v.installed,
+    loaded: v.imported,
+    driver: v.driver,
+    ranAt: v.ranAt ? v.ranAt.toISOString() : '',
+  };
+}
+
+/**
+ * Read pairwise compatibility for a set of packages from the matrix. Pure read:
+ * 'unknown' where no co-install has been recorded (an operator runs the
+ * verification via `lurq compat --run`).
+ */
+export async function handleCompat(
+  db: Database,
+  input: { packages: string[] },
+): Promise<CompatOutput> {
+  const names = [...new Set(input.packages)];
+  const edges = await getCompatEdges(db, names);
+  const byPair = new Map(edges.map((e) => [`${e.packageA}|${e.packageB}`, e]));
+
+  const pairs: CompatPair[] = [];
+  let anyConflict = false;
+  let anyUnknown = false;
+  for (let i = 0; i < names.length; i++) {
+    for (let j = i + 1; j < names.length; j++) {
+      const [a, b] = names[i]! <= names[j]! ? [names[i]!, names[j]!] : [names[j]!, names[i]!];
+      const edge = byPair.get(`${a}|${b}`);
+      const status = edge ? edge.status : 'unknown';
+      if (status === 'conflict') anyConflict = true;
+      if (status === 'unknown') anyUnknown = true;
+      pairs.push({ a, b, status, versions: edge ? `${edge.versionA} + ${edge.versionB}` : null });
+    }
+  }
+  const overall = anyConflict ? 'conflict' : anyUnknown ? 'unknown' : 'compatible';
+  return { packages: names, pairs, overall };
 }
 
 // ── verify ──────────────────────────────────────────────────────────────────
