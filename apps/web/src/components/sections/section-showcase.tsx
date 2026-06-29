@@ -72,7 +72,7 @@ const GROUPS: { label: string; items: Pillar[] }[] = [
         label: "Skill",
         icon: Blocks,
         name: "Agent skill",
-        command: "lurq install-skill --agent claude-code",
+        command: "npx lurqrun install-skill --agent claude-code",
         blurb: "Drop lurq in as an installable skill, no config.",
         detail:
           "The guided installer detects your agent and writes the connection for you, so the index is available the next time it runs.",
