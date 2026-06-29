@@ -22,6 +22,13 @@
       "when": 1782267534496,
       "tag": "0002_lyrical_lila_cheney",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782767767288,
+      "tag": "0003_violet_giant_girl",
+      "breakpoints": true
     }
   ]
 }
