@@ -43,7 +43,7 @@ const NODES: Node[] = [
   { id: "datefns", pkg: "date-fns", slot: "Dates", score: 94, x: 81, y: 78 },
 ];
 
-// cross-slot coherence checks — picks that must agree with each other
+// cross-slot coherence checks: picks that must agree with each other
 const COHERENCE: [string, string][] = [
   ["zod", "jose"],
   ["zod", "drizzle"],
@@ -312,7 +312,7 @@ export function BuildPlanRoadmap({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* ambient glow — gives the composition presence instead of sitting flat */}
+      {/* ambient glow: gives the composition presence instead of sitting flat */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -322,7 +322,7 @@ export function BuildPlanRoadmap({ className }: { className?: string }) {
         }}
       />
 
-      {/* back layer — architecture graph, masked so its right/bottom edges
+      {/* back layer: architecture graph, masked so its right/bottom edges
           bleed into the page background instead of ending in a hard line */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.7]"
@@ -338,8 +338,8 @@ export function BuildPlanRoadmap({ className }: { className?: string }) {
         <BackArchitecture />
       </div>
 
-      {/* front layer — focal scorecard, aligned to the site content gutter */}
-      <div className="absolute inset-0 mx-auto flex max-w-[1320px] items-center px-6 md:px-10">
+      {/* front layer: focal scorecard, aligned to the site content gutter */}
+      <div className="absolute inset-0 mx-auto flex max-w-[1440px] items-center px-6 md:px-10">
         <ScorecardPanel />
       </div>
     </div>

@@ -44,11 +44,8 @@ export function SectionReviews() {
     >
       <Container>
         <Reveal>
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Reviews
-            </span>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+          <div className="mx-auto max-w-none text-center">
+            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-5xl lg:whitespace-nowrap">
               Loved by builders and their agents.
             </h2>
           </div>

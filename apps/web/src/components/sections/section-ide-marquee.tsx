@@ -1,7 +1,7 @@
 import { Marquee } from "@/components/ui/marquee";
 
 // Each editor's logo lives in /public/logos as an SVG. The files committed now
-// are simple monochrome placeholders – replace any of them in-place with the
+// are simple monochrome placeholders; replace any of them in-place with the
 // official brand SVG (keep the same filename) and it shows up here automatically.
 // For the dark theme, prefer white/monochrome SVG variants.
 const IDES = [

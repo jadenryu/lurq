@@ -61,7 +61,7 @@ export function ContactForm() {
   if (status === "success") {
     return (
       <div className="rounded-lg border border-border bg-card/60 p-6 text-center">
-        <p className="font-medium text-foreground">Thanks – message sent.</p>
+        <p className="font-medium text-foreground">Thanks, message sent.</p>
         <p className="mt-1 text-sm text-muted-foreground">
           We&apos;ll reply to your email shortly.
         </p>
@@ -118,7 +118,7 @@ export function ContactForm() {
           />
         </div>
 
-        {/* Honeypot — hidden from users, bots tend to fill it. */}
+        {/* Honeypot: hidden from users; bots tend to fill it. */}
         <div aria-hidden className="hidden">
           <label htmlFor="company">Company</label>
           <input

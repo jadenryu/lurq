@@ -27,7 +27,7 @@ const entries: Entry[] = [
       { tag: "Added", text: "First public release, published to npm as lurqrun (the CLI command stays lurq)." },
       { tag: "Added", text: "MCP server (serve) exposing recommend, evaluate, compare, verify, and diagram." },
       { tag: "Added", text: "CLI mirroring the MCP tools, runnable via npx with no global install." },
-      { tag: "Added", text: "install-skill — registers lurq as an MCP server in Claude Code, Cursor, Windsurf, Copilot, and Codex." },
+      { tag: "Added", text: "install-skill: registers lurq as an MCP server in Claude Code, Cursor, Windsurf, Copilot, and Codex." },
       { tag: "Added", text: "Scoring engine over npm, GitHub, and deps.dev signals with a daily sync." },
       { tag: "Fixed", text: "recommend category inference (date/time queries no longer match the linting rule first)." },
     ],
@@ -53,7 +53,7 @@ export default function ChangelogPage() {
     <PageShell
       eyebrow="Product"
       title="Changelog"
-      lead="A running log of what's new in lurq. lurq is in pre-alpha — expect frequent, fast-moving updates."
+      lead="A running log of what's new in lurq. lurq is in pre-alpha; expect frequent, fast-moving updates."
     >
       <div className="relative space-y-14">
         {/* gradient connector line running down the timeline */}
