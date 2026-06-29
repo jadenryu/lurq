@@ -2,7 +2,7 @@
  * Read/write helpers for the `discovery_queue` table (§2B). The crawler enqueues
  * candidates here; the merit gate pre-scores and graduates them.
  */
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { DiscoverySource, DiscoveryStatus } from '../core/types';
 import type { Database } from './client';
 import { discoveryQueue, packages, type DiscoveryQueueRow } from './schema';
@@ -56,23 +56,4 @@ export async function setDiscoveryStatus(
     .update(discoveryQueue)
     .set({ status: data.status, ...(data.preScore !== undefined ? { preScore: data.preScore } : {}) })
     .where(eq(discoveryQueue.name, name));
-}
-
-/** Bulk-mark a set of names rejected (used when the per-run cap drops the tail). */
-export async function rejectNames(db: Database, names: string[]): Promise<void> {
-  if (names.length === 0) return;
-  await db
-    .update(discoveryQueue)
-    .set({ status: 'rejected' })
-    .where(inArray(discoveryQueue.name, names));
-}
-
-export async function countByStatus(db: Database): Promise<Record<DiscoveryStatus, number>> {
-  const rows = await db
-    .select({ status: discoveryQueue.status, n: sql<number>`count(*)::int` })
-    .from(discoveryQueue)
-    .groupBy(discoveryQueue.status);
-  const out: Record<DiscoveryStatus, number> = { pending: 0, ingested: 0, rejected: 0 };
-  for (const r of rows) out[r.status] = r.n;
-  return out;
 }
