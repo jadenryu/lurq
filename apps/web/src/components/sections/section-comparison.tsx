@@ -232,7 +232,7 @@ export function SectionComparison() {
       <Container>
         <Reveal>
           <div className="mx-auto max-w-4xl text-center">
-            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-6xl">
+            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-5xl">
               Same prompt. One agent guesses, the other knows.
             </h2>
           </div>
