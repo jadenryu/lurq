@@ -120,6 +120,7 @@ describe('inferCategoryFromSignals (categorize-on-ingest §2A)', () => {
         hasTestScript: false,
         directDependenciesCount: 0,
         hasProvenance: false,
+        hasInstallScripts: false,
         versionTimeline: [],
         ...reg,
       },
