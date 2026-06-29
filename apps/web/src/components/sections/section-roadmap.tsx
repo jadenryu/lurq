@@ -12,7 +12,7 @@ export function SectionRoadmap() {
         <Reveal>
           <div className="grid gap-8 lg:grid-cols-2 lg:gap-16">
             {/* left: oversized title */}
-            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-6xl">
+            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-5xl">
               Plan the whole
               <br />
               stack at once
