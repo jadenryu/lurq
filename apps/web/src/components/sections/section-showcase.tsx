@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Blocks,
-  BookOpen,
   CalendarCheck,
   ChevronRight,
   Database,
@@ -183,15 +182,6 @@ export function SectionShowcase() {
                   >
                     <CalendarCheck className="size-4 shrink-0" />
                     Book a demo →
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/docs"
-                    className="flex items-center gap-3 px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <BookOpen className="size-4 shrink-0" />
-                    Read the docs →
                   </a>
                 </li>
               </ul>

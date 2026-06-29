@@ -14,15 +14,6 @@ const columns: { title: string; links: FooterLink[] }[] = [
     ],
   },
   {
-    title: "Docs",
-    links: [
-      { label: "Quickstart", href: "/docs/quickstart", external: true },
-      { label: "CLI usage", href: "/docs/cli", external: true },
-      { label: "MCP tools", href: "/docs/mcp-tools", external: true },
-      { label: "How it works", href: "/docs/how-it-works", external: true },
-    ],
-  },
-  {
     title: "Company",
     links: [
       { label: "About", href: "/about" },
@@ -44,7 +35,7 @@ export function Footer() {
   return (
     <footer className="border-t border-border py-16">
       <Container>
-        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
+        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div>
             <Logo />
             <p className="mt-3 max-w-xs text-sm text-muted-foreground">
