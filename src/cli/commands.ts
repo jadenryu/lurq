@@ -321,11 +321,14 @@ export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<
   await withDb(async (db) => {
     const res = await handleVerify(db, { package: pkg });
     if (opts.json) return console.log(JSON.stringify(res, null, 2));
+    const riskColor = res.risk === 'high' ? red : res.risk === 'medium' ? yellow : green;
     const verdict = !res.exists
       ? red('✗ NOT FOUND on npm')
-      : res.deprecated || res.archived || res.advisoryCount > 0
-        ? yellow('⚠ exists, but risky')
-        : green('✓ looks safe');
+      : res.risk === 'high'
+        ? red('✗ high supply-chain risk')
+        : res.risk === 'medium'
+          ? yellow('⚠ exists, but risky')
+          : green('✓ looks safe');
     console.log(`${bold(pkg)}  ${verdict}`);
     console.log(
       detail([
@@ -333,6 +336,7 @@ export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<
         ['weekly dl', formatNumber(res.weeklyDownloads)],
         ['confidence', res.confidence ? confidenceLabel(res.confidence) : '—'],
         ['advisories', String(res.advisoryCount)],
+        ['risk', riskColor(res.risk)],
         ['risk flags', res.riskFlags.length ? yellow(res.riskFlags.join(', ')) : 'none'],
       ]),
     );
