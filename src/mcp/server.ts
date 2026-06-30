@@ -84,7 +84,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
     {
       title: 'Check package compatibility',
       description:
-        'Report pairwise compatibility for a set of packages from the sandbox-verified matrix: which pairs are known to co-install, which conflict, and which are unverified. Read-only — does not run installs.',
+        'Check whether a set of packages forms a coherent stack: peer-dependency and engine-range compatibility across the whole set (instant, from declared metadata), plus any recorded sandbox-verified conflicts. Returns the exact clashing constraints. Read-only — does not run installs. Call before committing to a multi-package stack.',
       inputSchema: {
         packages: z
           .array(z.string().min(1))

@@ -13,12 +13,14 @@ import type {
   AdvisorySeverity,
   BuildVerified,
   Category,
+  CompatConflict,
   CompatOutput,
-  CompatPair,
   Confidence,
   EvaluateOutput,
   VerifyOutput,
 } from '../core/types';
+import { assembleMembers } from '../compat/members';
+import { resolveArchitectureCompat } from '../compat/peerCompat';
 import { getCompatEdges } from '../db/compat';
 import type { Database } from '../db/client';
 import { getTopPackageNames } from '../db/packages';
@@ -209,33 +211,39 @@ function toBuildVerified(v: VerificationRunRow): BuildVerified {
 }
 
 /**
- * Read pairwise compatibility for a set of packages from the matrix. Pure read:
- * 'unknown' where no co-install has been recorded (an operator runs the
- * verification via `lurq compat --run`).
+ * Whole-architecture compatibility for a set of packages.
+ *
+ * Tier 1 (instant, deterministic): peer-dependency + engine range analysis from
+ * stored metadata. Tier 2 (empirical): any recorded sandbox co-install conflicts
+ * are folded in. `overall` is `conflict` if anything clashes, `unknown` if a
+ * member couldn't be resolved at all, else `compatible`.
  */
 export async function handleCompat(
   db: Database,
   input: { packages: string[] },
 ): Promise<CompatOutput> {
   const names = [...new Set(input.packages)];
-  const edges = await getCompatEdges(db, names);
-  const byPair = new Map(edges.map((e) => [`${e.packageA}|${e.packageB}`, e]));
+  const { members, unverified } = await assembleMembers(db, names);
 
-  const pairs: CompatPair[] = [];
-  let anyConflict = false;
-  let anyUnknown = false;
-  for (let i = 0; i < names.length; i++) {
-    for (let j = i + 1; j < names.length; j++) {
-      const [a, b] = names[i]! <= names[j]! ? [names[i]!, names[j]!] : [names[j]!, names[i]!];
-      const edge = byPair.get(`${a}|${b}`);
-      const status = edge ? edge.status : 'unknown';
-      if (status === 'conflict') anyConflict = true;
-      if (status === 'unknown') anyUnknown = true;
-      pairs.push({ a, b, status, versions: edge ? `${edge.versionA} + ${edge.versionB}` : null });
+  const conflicts: CompatConflict[] = resolveArchitectureCompat(members);
+
+  // Fold in empirical sandbox conflicts (Tier 2), if any were recorded.
+  for (const edge of await getCompatEdges(db, names)) {
+    if (edge.status === 'conflict') {
+      conflicts.push({
+        source: 'sandbox',
+        packages: [edge.packageA, edge.packageB],
+        detail: `${edge.packageA}@${edge.versionA} and ${edge.packageB}@${edge.versionB} failed to co-install in the sandbox`,
+      });
     }
   }
-  const overall = anyConflict ? 'conflict' : anyUnknown ? 'unknown' : 'compatible';
-  return { packages: names, pairs, overall };
+
+  const overall = conflicts.length
+    ? 'conflict'
+    : unverified.length
+      ? 'unknown'
+      : 'compatible';
+  return { packages: names, overall, conflicts, unverified };
 }
 
 // ── verify ──────────────────────────────────────────────────────────────────

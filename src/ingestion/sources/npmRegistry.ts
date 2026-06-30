@@ -93,8 +93,33 @@ export function parseNpmRegistry(json: any): NpmRegistryData {
     directDependenciesCount: countDeps(latestManifest?.dependencies),
     hasProvenance: detectProvenance(latestManifest),
     hasInstallScripts: detectInstallScripts(latestManifest),
+    peerDependencies: parseDepMap(latestManifest?.peerDependencies),
+    peerDependenciesMeta: parsePeerMeta(latestManifest?.peerDependenciesMeta),
+    engines: parseDepMap(latestManifest?.engines),
     versionTimeline: parseVersionTimeline(json),
   };
+}
+
+/** A manifest dependency/engines map → a clean { name: range } record, or null. */
+function parseDepMap(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== 'object') return null;
+  const out: Record<string, string> = {};
+  for (const [name, range] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof range === 'string' && range.trim() !== '') out[name] = range;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** `peerDependenciesMeta` → { name: { optional } }, or null. */
+function parsePeerMeta(value: unknown): Record<string, { optional?: boolean }> | null {
+  if (!value || typeof value !== 'object') return null;
+  const out: Record<string, { optional?: boolean }> = {};
+  for (const [name, meta] of Object.entries(value as Record<string, unknown>)) {
+    if (meta && typeof meta === 'object' && 'optional' in meta) {
+      out[name] = { optional: Boolean((meta as { optional?: unknown }).optional) };
+    }
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** Lifecycle install hooks run arbitrary code at install time. We surface their
