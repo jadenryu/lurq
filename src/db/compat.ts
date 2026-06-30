@@ -1,7 +1,39 @@
 /** Read/write helpers for the compatibility matrix (`compat_edges`). */
 import { and, inArray } from 'drizzle-orm';
+import type { DependencyRanges, PeerMeta } from '../core/types';
 import type { Database } from './client';
-import { compatEdges, type CompatEdgeRow, type NewCompatEdgeRow } from './schema';
+import {
+  compatEdges,
+  packages,
+  type CompatEdgeRow,
+  type NewCompatEdgeRow,
+} from './schema';
+
+export interface CompatMetadataRow {
+  name: string;
+  latestVersion: string | null;
+  peerDependencies: DependencyRanges | null;
+  peerDependenciesMeta: PeerMeta | null;
+  engines: DependencyRanges | null;
+}
+
+/** Tier-1 compatibility metadata for a set of packages — one indexed query. */
+export async function getCompatMetadata(
+  db: Database,
+  names: string[],
+): Promise<CompatMetadataRow[]> {
+  if (names.length === 0) return [];
+  return db
+    .select({
+      name: packages.name,
+      latestVersion: packages.latestVersion,
+      peerDependencies: packages.peerDependencies,
+      peerDependenciesMeta: packages.peerDependenciesMeta,
+      engines: packages.engines,
+    })
+    .from(packages)
+    .where(inArray(packages.name, names));
+}
 
 /** Order a pair canonically by package name so (A,B) and (B,A) dedupe to one row. */
 export function canonicalPair(

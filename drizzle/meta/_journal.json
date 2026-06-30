@@ -43,6 +43,13 @@
       "when": 1782769343156,
       "tag": "0005_petite_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782852148129,
+      "tag": "0006_calm_nighthawk",
+      "breakpoints": true
     }
   ]
 }

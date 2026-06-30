@@ -92,18 +92,31 @@ export interface BuildVerified {
   ranAt: string;
 }
 
-export interface CompatPair {
-  a: string;
-  b: string;
-  status: CompatStatus | 'unknown';
-  versions: string | null;
+/** A map of dependency/peer/engine name → semver range (from a manifest). */
+export type DependencyRanges = Record<string, string>;
+/** `peerDependenciesMeta`: per-peer flags, notably `{ optional: true }`. */
+export type PeerMeta = Record<string, { optional?: boolean }>;
+
+/** One incompatibility found across a set of packages. */
+export interface CompatConflict {
+  /** Where the conflict came from. `peer-deps`/`engines` are Tier-1 (metadata,
+   *  instant, deterministic); `sandbox` is Tier-2 (empirical co-install). */
+  source: 'peer-deps' | 'engines' | 'sandbox';
+  /** The packages involved in the conflict. */
+  packages: string[];
+  detail: string;
 }
 
-/** `compat` output: pairwise compatibility for a set of packages, from the matrix. */
+/**
+ * `compat` output: whole-architecture compatibility for a set of packages.
+ * Tier-1 peer-dependency/engine analysis + any Tier-2 sandbox conflicts.
+ */
 export interface CompatOutput {
   packages: string[];
-  pairs: CompatPair[];
   overall: 'compatible' | 'conflict' | 'unknown';
+  conflicts: CompatConflict[];
+  /** Packages lurq has no compatibility metadata for (counted toward `unknown`). */
+  unverified: string[];
 }
 
 export type AdvisorySeverity = 'critical' | 'high' | 'moderate' | 'low' | 'info';

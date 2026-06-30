@@ -3,7 +3,7 @@
  * these into a `packages` row. Every field is nullable: any source can fail or
  * omit a signal, and that must degrade gracefully (§17), never crash ingestion.
  */
-import type { Advisory } from '../core/types';
+import type { Advisory, DependencyRanges, PeerMeta } from '../core/types';
 
 /** One published version of a package and when it shipped (from the packument). */
 export interface VersionInfo {
@@ -40,6 +40,12 @@ export interface NpmRegistryData {
   /** Declares preinstall/install/postinstall hooks — code that runs at install
    *  time, the primary supply-chain execution vector. */
   hasInstallScripts: boolean;
+  /** Declared `peerDependencies` (name → semver range) of the latest version. */
+  peerDependencies: DependencyRanges | null;
+  /** `peerDependenciesMeta` — notably which peers are `optional`. */
+  peerDependenciesMeta: PeerMeta | null;
+  /** Declared `engines` (e.g. `{ node: ">=18" }`) of the latest version. */
+  engines: DependencyRanges | null;
   /** Full published-version timeline (version + publish date), newest first. */
   versionTimeline: VersionInfo[];
 }
