@@ -18,7 +18,7 @@ export const entries: Entry[] = [
     date: "June 23, 2026",
     badge: "First release",
     summary:
-      "The CLI, MCP server, scoring engine, and one-command IDE install all landed at once — the whole product, day one.",
+      "The CLI, MCP server, scoring engine, and one-command IDE install all landed at once: the whole product, day one.",
     changes: [
       { tag: "Added", text: "First public release, published to npm as lurqrun (the CLI command stays lurq)." },
       { tag: "Added", text: "MCP server (serve) exposing recommend, evaluate, compare, verify, and diagram." },
