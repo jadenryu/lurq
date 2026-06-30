@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { Container } from "@/components/common/container";
 import { Reveal } from "@/components/common/reveal";
 import { entries, type Tag } from "@/content/changelog";
 
-// Monochrome diff signs — the reference is strictly grayscale, so tone comes
+// Monochrome diff signs. The reference is strictly grayscale, so tone comes
 // from weight, not color.
 const sign: Record<Tag, string> = { Added: "+", Changed: "~", Fixed: "✓" };
 
@@ -24,14 +25,14 @@ export function SectionChangelog() {
               Shipping in the open.
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Every release, in plain text. No screenshots, no spin — just the
+              Every release, in plain text. No screenshots, no spin, just the
               log.
             </p>
           </div>
         </Reveal>
 
         <Reveal delay={0.1}>
-          <div className="mx-auto mt-14 grid max-w-6xl gap-6 md:grid-cols-2 lg:gap-8">
+          <div className="mx-auto mt-14 grid max-w-6xl items-start gap-6 md:grid-cols-2 lg:gap-8">
             {recent.map((entry, i) => (
               <article
                 key={entry.version}
@@ -59,26 +60,27 @@ export function SectionChangelog() {
                   </p>
                 ) : null}
 
-                {/* divider */}
-                <div className="mt-8 h-px w-full bg-border" />
+                {/* changes: collapsed by default; the card resizes as it opens */}
+                <details className="group mt-8 border-t border-border pt-6">
+                  <summary className="flex cursor-pointer list-none items-center justify-between font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground/50 transition-colors hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
+                    <span>Changes ({entry.changes.length})</span>
+                    <ChevronDown className="size-3.5 transition-transform duration-300 group-open:rotate-180" />
+                  </summary>
 
-                <p className="mt-6 font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground/50">
-                  Changes
-                </p>
-
-                <ul className="mt-4 space-y-3">
-                  {entry.changes.map((c, j) => (
-                    <li
-                      key={j}
-                      className="flex gap-3 border-l border-border pl-4 text-sm leading-relaxed text-muted-foreground"
-                    >
-                      <span className="select-none font-mono text-foreground/50">
-                        {sign[c.tag]}
-                      </span>
-                      <span>{c.text}</span>
-                    </li>
-                  ))}
-                </ul>
+                  <ul className="mt-5 space-y-3">
+                    {entry.changes.map((c, j) => (
+                      <li
+                        key={j}
+                        className="flex gap-3 border-l border-border pl-4 text-sm leading-relaxed text-muted-foreground"
+                      >
+                        <span className="select-none font-mono text-foreground/50">
+                          {sign[c.tag]}
+                        </span>
+                        <span>{c.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               </article>
             ))}
           </div>
