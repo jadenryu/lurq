@@ -1,12 +1,8 @@
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
 import { Container } from "@/components/common/container";
 import { Reveal } from "@/components/common/reveal";
-import { entries, type Tag } from "@/content/changelog";
-
-// Monochrome diff signs. The reference is strictly grayscale, so tone comes
-// from weight, not color.
-const sign: Record<Tag, string> = { Added: "+", Changed: "~", Fixed: "✓" };
+import { ChangelogChanges } from "@/components/sections/changelog-changes";
+import { entries } from "@/content/changelog";
 
 // Homepage teaser: the two most recent releases as editorial cards. Full
 // history lives at /changelog.
@@ -61,26 +57,7 @@ export function SectionChangelog() {
                 ) : null}
 
                 {/* changes: collapsed by default; the card resizes as it opens */}
-                <details className="group mt-8 border-t border-border pt-6">
-                  <summary className="flex cursor-pointer list-none items-center justify-between font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground/50 transition-colors hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
-                    <span>Changes ({entry.changes.length})</span>
-                    <ChevronDown className="size-3.5 transition-transform duration-300 group-open:rotate-180" />
-                  </summary>
-
-                  <ul className="mt-5 space-y-3">
-                    {entry.changes.map((c, j) => (
-                      <li
-                        key={j}
-                        className="flex gap-3 border-l border-border pl-4 text-sm leading-relaxed text-muted-foreground"
-                      >
-                        <span className="select-none font-mono text-foreground/50">
-                          {sign[c.tag]}
-                        </span>
-                        <span>{c.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
+                <ChangelogChanges changes={entry.changes} />
               </article>
             ))}
           </div>
