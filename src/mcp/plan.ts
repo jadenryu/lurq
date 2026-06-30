@@ -61,10 +61,12 @@ export interface PlanSlot {
   recommended: Candidate | null;
   alternatives: Candidate[];
   note?: string;
-  /** Other picked packages this slot's pick is incompatible with (Tier-1/sandbox). */
+  /** Picked packages this slot's pick still conflicts with, if it couldn't be
+   *  auto-resolved with the available alternatives (residual conflict). */
   conflictsWith?: string[];
-  /** An alternative for this slot that resolves its conflict, if one was found. */
-  compatAlternative?: string;
+  /** If plan swapped this slot's pick to keep the stack compatible, the name of
+   *  the original (higher-ranked) pick it replaced. */
+  swappedFrom?: string;
 }
 
 export interface PlanOutput {
@@ -173,17 +175,17 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
     };
   });
 
+  // Auto-resolve compatibility: actually make the picked stack coherent by
+  // swapping a conflicting slot's pick for an alternative that resolves it.
+  // Runs before the diagram/output so everything below reflects the final stack.
+  const compatibility = await resolveCompat(db, slots);
+
   const unmatched = slots.filter((s) => !s.recommended).map((s) => s.need);
   const mermaid = buildMermaid(
     slots
       .filter((s) => s.recommended)
       .map((s) => ({ label: s.recommended!.name, category: s.category })),
   );
-
-  // Evidence-backed coherence: do the picked packages actually form a compatible
-  // stack? Annotates each slot with conflicts + a resolving alternative. The
-  // existing category re-rank stays; this is the empirical layer on top.
-  const compatibility = await annotateCompat(db, slots);
 
   return {
     dataAsOf,
@@ -215,43 +217,61 @@ export function flagSlotConflicts(
   return out;
 }
 
-/**
- * Run the whole-stack compat check, annotate each slot with its conflicts and a
- * resolving alternative where one exists. Mutates `slots`; returns the result
- * (null if it couldn't run). Best-effort: never fails the plan.
- */
-async function annotateCompat(db: Database, slots: PlanSlot[]): Promise<CompatOutput | null> {
-  const picked = slots.map((s) => s.recommended?.name).filter((n): n is string => Boolean(n));
-  if (picked.length < 2) return null;
+const MAX_COMPAT_ROUNDS = 5;
+const MAX_ALTS_TRIED = 3;
 
-  const compat = await checkCompat(db, picked).catch((err) => {
+/**
+ * Make the picked stack compatible *in place*. While conflicts remain, find a
+ * conflicting slot whose pick can be swapped for one of its alternatives that
+ * lowers the conflict count, apply that swap (recording the original via
+ * `swappedFrom`, demoting it into `alternatives`), and re-check. Greedy and
+ * bounded. Whatever can't be resolved is flagged per slot via `conflictsWith`.
+ * Returns the final compatibility result. Best-effort: never throws.
+ */
+async function resolveCompat(db: Database, slots: PlanSlot[]): Promise<CompatOutput | null> {
+  if (slots.filter((s) => s.recommended).length < 2) return null;
+
+  const pickedNames = () =>
+    slots.map((s) => s.recommended?.name).filter((n): n is string => Boolean(n));
+
+  let compat = await checkCompat(db, pickedNames()).catch((err) => {
     logger.warn(`plan: compat check failed: ${String(err)}`);
     return null;
   });
-  if (!compat || compat.conflicts.length === 0) return compat;
+  if (!compat) return null;
 
+  for (let round = 0; compat.conflicts.length && round < MAX_COMPAT_ROUNDS; round++) {
+    let applied = false;
+    for (const slot of slots) {
+      const pick = slot.recommended;
+      if (!pick || !compat.conflicts.some((c) => c.packages.includes(pick.name))) continue;
+      for (const alt of slot.alternatives.slice(0, MAX_ALTS_TRIED)) {
+        const trial = await checkCompat(
+          db,
+          pickedNames().map((n) => (n === pick.name ? alt.name : n)),
+        ).catch(() => null);
+        if (trial && trial.conflicts.length < compat.conflicts.length) {
+          slot.alternatives = [pick, ...slot.alternatives.filter((a) => a.name !== alt.name)];
+          slot.recommended = alt;
+          slot.swappedFrom = pick.name;
+          compat = trial;
+          applied = true;
+          break;
+        }
+      }
+      if (applied) break;
+    }
+    if (!applied) break; // no improving swap available — stop
+  }
+
+  // Flag conflicts that survived (no compatible alternative was available).
   const flags = flagSlotConflicts(
     slots.map((s) => ({ need: s.need, name: s.recommended?.name ?? null })),
     compat.conflicts,
   );
   for (const s of slots) {
-    const conflictsWith = flags.get(s.need);
-    if (conflictsWith?.length) s.conflictsWith = conflictsWith;
-  }
-
-  // For each conflicting slot, try its alternatives to find one that lowers the
-  // conflict count. Bounded (≤2 alts per conflicting slot) to cap latency.
-  const base = compat.conflicts.length;
-  for (const s of slots) {
-    if (!s.conflictsWith?.length || !s.recommended) continue;
-    for (const alt of s.alternatives.slice(0, 2)) {
-      const swapped = picked.map((n) => (n === s.recommended!.name ? alt.name : n));
-      const res = await checkCompat(db, swapped).catch(() => null);
-      if (res && res.conflicts.length < base) {
-        s.compatAlternative = alt.name;
-        break;
-      }
-    }
+    const cw = flags.get(s.need);
+    s.conflictsWith = cw?.length ? cw : undefined;
   }
   return compat;
 }
