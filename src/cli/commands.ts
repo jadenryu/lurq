@@ -327,12 +327,12 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
       const c = res.compatibility;
       const col = c.overall === 'compatible' ? green : c.overall === 'conflict' ? red : dim;
       console.log('\n' + bold('Compatibility: ') + col(c.overall));
-      for (const cf of c.conflicts) console.log(red(`  ✗ ${cf.detail}`));
       for (const s of res.slots) {
-        if (s.compatAlternative) {
-          console.log(yellow(`  → for "${s.need}", try ${s.compatAlternative} instead`));
+        if (s.swappedFrom && s.recommended) {
+          console.log(green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`));
         }
       }
+      for (const cf of c.conflicts) console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
       if (c.unverified.length) console.log(dim(`  unverified: ${c.unverified.join(', ')}`));
     }
 
