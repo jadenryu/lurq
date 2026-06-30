@@ -312,7 +312,9 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
         res.slots.map((s) => [
           s.need.length > 32 ? s.need.slice(0, 31) + '…' : s.need,
           s.layer,
-          s.recommended?.name ?? dim('—'),
+          s.recommended
+            ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}`
+            : dim('—'),
           s.recommended ? String(s.recommended.healthScore) : '—',
           s.recommended ? confidenceLabel(s.recommended.confidence) : '—',
           s.alternatives.map((a) => a.name).join(', ') || '—',
@@ -320,6 +322,20 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
       ),
     );
     if (res.unmatched.length) console.log(yellow(`\nNo match for: ${res.unmatched.join(', ')}`));
+
+    if (res.compatibility) {
+      const c = res.compatibility;
+      const col = c.overall === 'compatible' ? green : c.overall === 'conflict' ? red : dim;
+      console.log('\n' + bold('Compatibility: ') + col(c.overall));
+      for (const s of res.slots) {
+        if (s.swappedFrom && s.recommended) {
+          console.log(green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`));
+        }
+      }
+      for (const cf of c.conflicts) console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
+      if (c.unverified.length) console.log(dim(`  unverified: ${c.unverified.join(', ')}`));
+    }
+
     console.log('\n' + bold('Roadmap (Mermaid):'));
     console.log(res.mermaid);
     console.log(dim(`\n${res.note}`));
