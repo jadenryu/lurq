@@ -84,7 +84,7 @@ export function Navbar() {
                   </Button>
                 </SignInButton>
                 <SignUpButton>
-                  <Button size="sm">Request demo</Button>
+                  <Button size="sm">Book a demo</Button>
                 </SignUpButton>
               </>
             )}
@@ -129,7 +129,7 @@ export function Navbar() {
                       </Button>
                     </SignInButton>
                     <SignUpButton>
-                      <Button className="w-full">Request demo</Button>
+                      <Button className="w-full">Book a demo</Button>
                     </SignUpButton>
                   </>
                 )}
