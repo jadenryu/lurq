@@ -23,6 +23,10 @@ import { inArray } from 'drizzle-orm';
 import { getConfig } from '../core/config';
 import { httpRequest } from '../core/http';
 import { checkCompat } from '../compat/check';
+import { assembleMembers } from '../compat/members';
+import { optimizeStack } from '../compat/optimize';
+import type { CompatMember } from '../compat/peerCompat';
+import { getCompatEdges } from '../db/compat';
 import { logger } from '../core/logger';
 import {
   isCategory,
@@ -217,61 +221,75 @@ export function flagSlotConflicts(
   return out;
 }
 
-const MAX_COMPAT_ROUNDS = 5;
-const MAX_ALTS_TRIED = 3;
+const NO_META = (c: Candidate): CompatMember => ({
+  name: c.name,
+  version: c.latestVersion,
+  peerDependencies: null,
+  peerDependenciesMeta: null,
+  engines: null,
+});
 
 /**
- * Make the picked stack compatible *in place*. While conflicts remain, find a
- * conflicting slot whose pick can be swapped for one of its alternatives that
- * lowers the conflict count, apply that swap (recording the original via
- * `swappedFrom`, demoting it into `alternatives`), and re-check. Greedy and
- * bounded. Whatever can't be resolved is flagged per slot via `conflictsWith`.
- * Returns the final compatibility result. Best-effort: never throws.
+ * Make the picked stack compatible by *globally optimising* the slot choices:
+ * pre-load every candidate's metadata + cached sandbox edges once, then run a
+ * branch-and-bound that picks the highest-quality (lowest rank-regret) compatible
+ * combination. The chosen alternative is promoted to `recommended` (original
+ * demoted, recorded via `swappedFrom`); residual conflicts are flagged per slot.
+ * The search is pure/in-memory; only the final report re-reads the DB.
+ * Best-effort — never throws.
  */
 async function resolveCompat(db: Database, slots: PlanSlot[]): Promise<CompatOutput | null> {
-  if (slots.filter((s) => s.recommended).length < 2) return null;
+  const eligible = slots.filter((s) => s.recommended);
+  if (eligible.length < 2) return null;
 
-  const pickedNames = () =>
-    slots.map((s) => s.recommended?.name).filter((n): n is string => Boolean(n));
+  try {
+    // One pass: metadata for every candidate across all slots → pure search.
+    const allNames = [
+      ...new Set(eligible.flatMap((s) => [s.recommended!, ...s.alternatives].map((c) => c.name))),
+    ];
+    const [{ members }, edges] = await Promise.all([
+      assembleMembers(db, allNames),
+      getCompatEdges(db, allNames),
+    ]);
+    const metaByName = new Map(members.map((m) => [m.name, m]));
+    const sandboxConflicts = new Set(
+      edges.filter((e) => e.status === 'conflict').map((e) => `${e.packageA}|${e.packageB}`),
+    );
+    const slotCandidates = eligible.map((s) =>
+      [s.recommended!, ...s.alternatives].map((c) => metaByName.get(c.name) ?? NO_META(c)),
+    );
 
-  let compat = await checkCompat(db, pickedNames()).catch((err) => {
-    logger.warn(`plan: compat check failed: ${String(err)}`);
-    return null;
-  });
-  if (!compat) return null;
+    const { selection } = optimizeStack(slotCandidates, sandboxConflicts);
 
-  for (let round = 0; compat.conflicts.length && round < MAX_COMPAT_ROUNDS; round++) {
-    let applied = false;
-    for (const slot of slots) {
-      const pick = slot.recommended;
-      if (!pick || !compat.conflicts.some((c) => c.packages.includes(pick.name))) continue;
-      for (const alt of slot.alternatives.slice(0, MAX_ALTS_TRIED)) {
-        const trial = await checkCompat(
-          db,
-          pickedNames().map((n) => (n === pick.name ? alt.name : n)),
-        ).catch(() => null);
-        if (trial && trial.conflicts.length < compat.conflicts.length) {
-          slot.alternatives = [pick, ...slot.alternatives.filter((a) => a.name !== alt.name)];
-          slot.recommended = alt;
-          slot.swappedFrom = pick.name;
-          compat = trial;
-          applied = true;
-          break;
-        }
-      }
-      if (applied) break;
-    }
-    if (!applied) break; // no improving swap available — stop
+    // Apply the optimal selection: promote the chosen candidate per slot.
+    eligible.forEach((s, i) => {
+      const idx = selection[i] ?? 0;
+      if (idx <= 0) return;
+      const all = [s.recommended!, ...s.alternatives];
+      const chosen = all[idx];
+      if (!chosen) return;
+      s.recommended = chosen;
+      s.alternatives = all.filter((c) => c.name !== chosen.name);
+      s.swappedFrom = all[0]!.name;
+    });
+  } catch (err) {
+    logger.warn(`plan: compat optimization failed: ${String(err)}`);
   }
 
-  // Flag conflicts that survived (no compatible alternative was available).
-  const flags = flagSlotConflicts(
-    slots.map((s) => ({ need: s.need, name: s.recommended?.name ?? null })),
-    compat.conflicts,
-  );
-  for (const s of slots) {
-    const cw = flags.get(s.need);
-    s.conflictsWith = cw?.length ? cw : undefined;
+  // Authoritative report on the final picks, and flag any residual conflicts.
+  const compat = await checkCompat(
+    db,
+    eligible.map((s) => s.recommended!.name),
+  ).catch(() => null);
+  if (compat) {
+    const flags = flagSlotConflicts(
+      slots.map((s) => ({ need: s.need, name: s.recommended?.name ?? null })),
+      compat.conflicts,
+    );
+    for (const s of slots) {
+      const cw = flags.get(s.need);
+      s.conflictsWith = cw?.length ? cw : undefined;
+    }
   }
   return compat;
 }
