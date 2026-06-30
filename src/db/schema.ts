@@ -37,8 +37,10 @@ import type {
   CategorySource,
   CompatStatus,
   Confidence,
+  DependencyRanges,
   DiscoverySource,
   DiscoveryStatus,
+  PeerMeta,
   ScoreBreakdown,
   UsageGuide,
 } from '../core/types';
@@ -84,6 +86,12 @@ export const packages = pgTable(
     scorecard: real('scorecard'),
     bundleMinGzipKb: real('bundle_min_gzip_kb'),
     advisories: jsonb('advisories').$type<Advisory[]>(),
+
+    // Compatibility metadata (Tier-1): declared peer-deps + engines of the
+    // latest version, so a whole-stack peer-range check is one indexed query.
+    peerDependencies: jsonb('peer_dependencies').$type<DependencyRanges>(),
+    peerDependenciesMeta: jsonb('peer_dependencies_meta').$type<PeerMeta>(),
+    engines: jsonb('engines').$type<DependencyRanges>(),
 
     // Computed outputs
     healthScore: integer('health_score'),

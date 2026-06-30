@@ -447,15 +447,19 @@ export async function runCompat(
     const res = await handleCompat(db, { packages: pkgs });
     if (opts.json) return console.log(JSON.stringify(res, null, 2));
     const color = res.overall === 'compatible' ? green : res.overall === 'conflict' ? red : dim;
-    console.log(`compatibility: ${color(res.overall)}`);
-    console.log(
-      table(
-        ['A', 'B', 'Status', 'Versions'],
-        res.pairs.map((p) => [p.a, p.b, p.status, p.versions ?? '—']),
-      ),
-    );
-    if (res.overall === 'unknown') {
-      console.log(dim('\nrun with --run (operator) to verify untested pairs in the sandbox'));
+    console.log(`${bold(res.packages.join(' + '))}  ${color(res.overall)}`);
+    if (res.conflicts.length) {
+      console.log(
+        table(
+          ['Source', 'Detail'],
+          res.conflicts.map((c) => [c.source, c.detail]),
+        ),
+      );
+    } else if (res.overall === 'compatible') {
+      console.log(dim('no peer-dependency or engine conflicts across the set'));
+    }
+    if (res.unverified.length) {
+      console.log(dim(`\nunverified (no metadata): ${res.unverified.join(', ')}`));
     }
   });
 }
