@@ -2,45 +2,12 @@ import type { Metadata } from "next";
 import { Plus, PenLine, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PageShell } from "@/components/common/page-shell";
+import { entries, type Tag } from "@/content/changelog";
 
 export const metadata: Metadata = {
   title: "Changelog | lurq",
   description: "What's new in lurq.",
 };
-
-type Tag = "Added" | "Changed" | "Fixed";
-
-interface Entry {
-  version: string;
-  date: string;
-  badge?: string;
-  changes: { tag: Tag; text: string }[];
-}
-
-// Newest first. Seeded with the real 0.0.1 release; extend as we ship.
-const entries: Entry[] = [
-  {
-    version: "0.0.1",
-    date: "June 23, 2026",
-    badge: "First release",
-    changes: [
-      { tag: "Added", text: "First public release, published to npm as lurqrun (the CLI command stays lurq)." },
-      { tag: "Added", text: "MCP server (serve) exposing recommend, evaluate, compare, verify, and diagram." },
-      { tag: "Added", text: "CLI mirroring the MCP tools, runnable via npx with no global install." },
-      { tag: "Added", text: "install-skill: registers lurq as an MCP server in Claude Code, Cursor, Windsurf, Copilot, and Codex." },
-      { tag: "Added", text: "Scoring engine over npm, GitHub, and deps.dev signals with a daily sync." },
-      { tag: "Fixed", text: "recommend category inference (date/time queries no longer match the linting rule first)." },
-    ],
-  },
-  {
-    version: "Pre-release",
-    date: "June 2026",
-    changes: [
-      { tag: "Added", text: "Marketing site: hero, IDE marquee, showcase, reviews, and FAQ." },
-      { tag: "Added", text: "Curated seed index and pgvector-backed semantic search with a local embedding fallback." },
-    ],
-  },
-];
 
 const tagMeta: Record<Tag, { icon: LucideIcon; className: string }> = {
   Added: { icon: Plus, className: "border-border bg-secondary text-foreground" },
