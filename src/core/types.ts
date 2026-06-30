@@ -117,6 +117,9 @@ export interface CompatOutput {
   conflicts: CompatConflict[];
   /** Packages lurq has no compatibility metadata for (counted toward `unknown`). */
   unverified: string[];
+  /** The exact members the check ran over, name + resolved version. Versions are
+   *  always surfaced here, and the structure is stable for later scraping. */
+  checked: { name: string; version: string | null }[];
 }
 
 export type AdvisorySeverity = 'critical' | 'high' | 'moderate' | 'low' | 'info';
