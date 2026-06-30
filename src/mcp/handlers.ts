@@ -13,15 +13,12 @@ import type {
   AdvisorySeverity,
   BuildVerified,
   Category,
-  CompatConflict,
   CompatOutput,
   Confidence,
   EvaluateOutput,
   VerifyOutput,
 } from '../core/types';
-import { assembleMembers } from '../compat/members';
-import { resolveArchitectureCompat } from '../compat/peerCompat';
-import { getCompatEdges } from '../db/compat';
+import { checkCompat } from '../compat/check';
 import type { Database } from '../db/client';
 import { getTopPackageNames } from '../db/packages';
 import { getLatestVerificationByName } from '../db/verification';
@@ -211,39 +208,14 @@ function toBuildVerified(v: VerificationRunRow): BuildVerified {
 }
 
 /**
- * Whole-architecture compatibility for a set of packages.
- *
- * Tier 1 (instant, deterministic): peer-dependency + engine range analysis from
- * stored metadata. Tier 2 (empirical): any recorded sandbox co-install conflicts
- * are folded in. `overall` is `conflict` if anything clashes, `unknown` if a
- * member couldn't be resolved at all, else `compatible`.
+ * Whole-architecture compatibility for a set of packages: Tier-1 peer/engine
+ * analysis + recorded Tier-2 sandbox conflicts (see compat/check).
  */
 export async function handleCompat(
   db: Database,
   input: { packages: string[] },
 ): Promise<CompatOutput> {
-  const names = [...new Set(input.packages)];
-  const { members, unverified } = await assembleMembers(db, names);
-
-  const conflicts: CompatConflict[] = resolveArchitectureCompat(members);
-
-  // Fold in empirical sandbox conflicts (Tier 2), if any were recorded.
-  for (const edge of await getCompatEdges(db, names)) {
-    if (edge.status === 'conflict') {
-      conflicts.push({
-        source: 'sandbox',
-        packages: [edge.packageA, edge.packageB],
-        detail: `${edge.packageA}@${edge.versionA} and ${edge.packageB}@${edge.versionB} failed to co-install in the sandbox`,
-      });
-    }
-  }
-
-  const overall = conflicts.length
-    ? 'conflict'
-    : unverified.length
-      ? 'unknown'
-      : 'compatible';
-  return { packages: names, overall, conflicts, unverified };
+  return checkCompat(db, input.packages);
 }
 
 // ── verify ──────────────────────────────────────────────────────────────────

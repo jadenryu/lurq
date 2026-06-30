@@ -1,6 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { decomposeHeuristic, familyOf, orderCandidates } from '../src/mcp/plan';
-import type { Candidate } from '../src/core/types';
+import { decomposeHeuristic, familyOf, flagSlotConflicts, orderCandidates } from '../src/mcp/plan';
+import type { Candidate, CompatConflict } from '../src/core/types';
+
+describe('flagSlotConflicts', () => {
+  const picks = [
+    { need: 'ui', name: 'react' },
+    { need: 'render', name: 'react-dom' },
+    { need: 'state', name: 'zustand' },
+  ];
+
+  it('maps each involved slot to the packages it conflicts with', () => {
+    const conflicts: CompatConflict[] = [
+      { source: 'peer-deps', packages: ['react-dom', 'react'], detail: 'x' },
+    ];
+    const flags = flagSlotConflicts(picks, conflicts);
+    expect(flags.get('render')).toEqual(['react']);
+    expect(flags.get('ui')).toEqual(['react-dom']);
+    expect(flags.get('state')).toBeUndefined();
+  });
+
+  it('returns an empty map when there are no conflicts', () => {
+    expect(flagSlotConflicts(picks, []).size).toBe(0);
+  });
+});
 
 const cand = (name: string): Candidate => ({
   name,

@@ -22,8 +22,15 @@ import { createHash } from 'node:crypto';
 import { inArray } from 'drizzle-orm';
 import { getConfig } from '../core/config';
 import { httpRequest } from '../core/http';
+import { checkCompat } from '../compat/check';
 import { logger } from '../core/logger';
-import { isCategory, type Candidate, type Category } from '../core/types';
+import {
+  isCategory,
+  type Candidate,
+  type Category,
+  type CompatConflict,
+  type CompatOutput,
+} from '../core/types';
 import type { Database } from '../db/client';
 import { packages } from '../db/schema';
 import { inferCategory } from '../search/categoryInference';
@@ -54,6 +61,10 @@ export interface PlanSlot {
   recommended: Candidate | null;
   alternatives: Candidate[];
   note?: string;
+  /** Other picked packages this slot's pick is incompatible with (Tier-1/sandbox). */
+  conflictsWith?: string[];
+  /** An alternative for this slot that resolves its conflict, if one was found. */
+  compatAlternative?: string;
 }
 
 export interface PlanOutput {
@@ -70,6 +81,10 @@ export interface PlanOutput {
   unmatched: string[];
   mermaid: string;
   note: string;
+  /** Whole-stack compatibility of the picked packages (peer-deps/engines +
+   *  recorded sandbox conflicts). Evidence-backed, with name@version of each
+   *  member; null if the check couldn't run. */
+  compatibility: CompatOutput | null;
 }
 
 /** Candidates to surface per slot: the pick plus a couple of alternatives. */
@@ -165,6 +180,11 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
       .map((s) => ({ label: s.recommended!.name, category: s.category })),
   );
 
+  // Evidence-backed coherence: do the picked packages actually form a compatible
+  // stack? Annotates each slot with conflicts + a resolving alternative. The
+  // existing category re-rank stays; this is the empirical layer on top.
+  const compatibility = await annotateCompat(db, slots);
+
   return {
     dataAsOf,
     optimize,
@@ -174,7 +194,66 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
     unmatched,
     mermaid,
     note: planNote(decomposed.source, unmatched.length, optimize, framework),
+    compatibility,
   };
+}
+
+/** Map each slot (by need) to the other picked packages its pick conflicts with. */
+export function flagSlotConflicts(
+  picks: { need: string; name: string | null }[],
+  conflicts: CompatConflict[],
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const c of conflicts) {
+    for (const p of picks) {
+      if (p.name && c.packages.includes(p.name)) {
+        const others = c.packages.filter((n) => n !== p.name);
+        out.set(p.need, [...new Set([...(out.get(p.need) ?? []), ...others])]);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Run the whole-stack compat check, annotate each slot with its conflicts and a
+ * resolving alternative where one exists. Mutates `slots`; returns the result
+ * (null if it couldn't run). Best-effort: never fails the plan.
+ */
+async function annotateCompat(db: Database, slots: PlanSlot[]): Promise<CompatOutput | null> {
+  const picked = slots.map((s) => s.recommended?.name).filter((n): n is string => Boolean(n));
+  if (picked.length < 2) return null;
+
+  const compat = await checkCompat(db, picked).catch((err) => {
+    logger.warn(`plan: compat check failed: ${String(err)}`);
+    return null;
+  });
+  if (!compat || compat.conflicts.length === 0) return compat;
+
+  const flags = flagSlotConflicts(
+    slots.map((s) => ({ need: s.need, name: s.recommended?.name ?? null })),
+    compat.conflicts,
+  );
+  for (const s of slots) {
+    const conflictsWith = flags.get(s.need);
+    if (conflictsWith?.length) s.conflictsWith = conflictsWith;
+  }
+
+  // For each conflicting slot, try its alternatives to find one that lowers the
+  // conflict count. Bounded (≤2 alts per conflicting slot) to cap latency.
+  const base = compat.conflicts.length;
+  for (const s of slots) {
+    if (!s.conflictsWith?.length || !s.recommended) continue;
+    for (const alt of s.alternatives.slice(0, 2)) {
+      const swapped = picked.map((n) => (n === s.recommended!.name ? alt.name : n));
+      const res = await checkCompat(db, swapped).catch(() => null);
+      if (res && res.conflicts.length < base) {
+        s.compatAlternative = alt.name;
+        break;
+      }
+    }
+  }
+  return compat;
 }
 
 function planNote(
