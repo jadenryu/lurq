@@ -8,9 +8,9 @@ lurq is a **companion to your coding agent**: it recommends and explains package
 
 ---
 
-## quick start — connect your agent
+## quick start: connect your agent
 
-> **not public yet.** lurq unlocks at launch — [join the waitlist](https://lurq.run). the steps below are how it'll work once it's live.
+> **not public yet.** lurq unlocks at launch. [join the waitlist](https://lurq.run); the steps below are how it'll work once it's live.
 
 lurq is a **hosted service**: you don't run a database or a sync. get an API key,
 then run the guided installer:
@@ -21,7 +21,7 @@ npx lurqrun install
 
 it prompts for your key, validates it, detects your installed assistants
 (Claude Code, Cursor, Windsurf, VS Code/Copilot, Codex), and writes a keyed
-remote MCP entry —
+remote MCP entry:
 `{ "type": "http", "url": "https://api.lurq.run/mcp", "headers": { "Authorization": "Bearer …" } }`.
 **no database credentials ever touch your machine.** restart your agent afterward.
 
@@ -30,11 +30,11 @@ remote MCP entry —
 once installed, the agent can call these tools over MCP. every response is
 compact and carries a `dataAsOf` timestamp.
 
-- **`recommend`** — best current packages for a described need (≤5, scored, with confidence)
-- **`evaluate`** — full evidence read for one package (scores, advisories, usage guide)
-- **`compare`** — 2–5 packages ranked by health
-- **`verify`** — is a package real, healthy, and not risky? (anti-hallucination guard)
-- **`diagram`** — a reference-architecture mermaid diagram for a stack (optional)
+- **`recommend`**: best current packages for a described need (≤5, scored, with confidence)
+- **`evaluate`**: full evidence read for one package (scores, advisories, usage guide)
+- **`compare`**: 2 to 5 packages ranked by health
+- **`verify`**: is a package real, healthy, and not risky? (anti-hallucination guard)
+- **`diagram`**: a reference-architecture mermaid diagram for a stack (optional)
 
 ## outreach 
 
