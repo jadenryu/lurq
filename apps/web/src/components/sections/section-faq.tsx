@@ -61,7 +61,7 @@ export function SectionFaq() {
                   </h3>
                   <p className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">
                     Partnerships, edge cases, or just curious how the scoring
-                    works? Send it over. A real person reads every message.
+                    works? Send it over.
                   </p>
                   <div className="mt-8">
                     <ContactForm />
