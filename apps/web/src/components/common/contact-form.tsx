@@ -54,6 +54,9 @@ export function ContactForm() {
     } catch (err) {
       setStatus("error");
       setErrorMsg((err as Error).message);
+      // Turnstile tokens are single-use; the failed attempt spent it. Reset so
+      // the next submit gets a fresh token instead of reusing the dead one.
+      window.turnstile?.reset();
     }
   }
 
