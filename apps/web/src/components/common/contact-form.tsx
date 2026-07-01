@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,12 +20,59 @@ export function ContactForm() {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [token, setToken] = useState("");
+
+  // Render Turnstile *explicitly* (not via the auto-scanned `.cf-turnstile`
+  // class): implicit rendering only scans the DOM once at script load, so the
+  // widget never reappears after the form unmounts on success and remounts via
+  // "Send another". Explicit render + reset keeps every attempt with a live
+  // token. Mirrors the waitlist dialog.
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+  const showForm = status !== "success";
+
+  useEffect(() => {
+    if (!showForm) return;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout>;
+
+    function renderWidget() {
+      if (cancelled) return;
+      const el = widgetRef.current;
+      if (!window.turnstile || !el) {
+        retry = setTimeout(renderWidget, 150); // script not ready yet
+        return;
+      }
+      if (widgetIdRef.current) return; // already rendered
+      setToken("");
+      widgetIdRef.current = window.turnstile.render(el, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: "dark",
+        callback: (t) => setToken(t),
+        "error-callback": () => setToken(""),
+        "expired-callback": () => setToken(""),
+      });
+    }
+
+    renderWidget();
+    return () => {
+      cancelled = true;
+      clearTimeout(retry);
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch {
+          // widget DOM may already be gone, ignore
+        }
+      }
+      widgetIdRef.current = null;
+    };
+  }, [showForm]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
-    const token = String(data.get("cf-turnstile-response") ?? "");
     const company = String(data.get("company") ?? "");
 
     if (!token) {
@@ -50,13 +97,13 @@ export function ContactForm() {
       setName("");
       setEmail("");
       setMessage("");
-      window.turnstile?.reset();
     } catch (err) {
       setStatus("error");
       setErrorMsg((err as Error).message);
       // Turnstile tokens are single-use; the failed attempt spent it. Reset so
       // the next submit gets a fresh token instead of reusing the dead one.
-      window.turnstile?.reset();
+      if (widgetIdRef.current) window.turnstile?.reset(widgetIdRef.current);
+      setToken("");
     }
   }
 
@@ -132,12 +179,8 @@ export function ContactForm() {
           />
         </div>
 
-        {/* Cloudflare Turnstile (injects a hidden cf-turnstile-response field) */}
-        <div
-          className="cf-turnstile"
-          data-sitekey={TURNSTILE_SITE_KEY}
-          data-theme="dark"
-        />
+        {/* Cloudflare Turnstile, rendered explicitly into this container */}
+        <div ref={widgetRef} />
 
         <Button type="submit" disabled={status === "submitting"} className="mt-1 w-full">
           {status === "submitting" ? "Sending…" : "Send message"}
