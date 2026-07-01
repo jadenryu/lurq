@@ -6,7 +6,4 @@ export type NavLink = {
   external?: boolean;
 };
 
-export const navLinks: NavLink[] = [
-  { label: "Product", href: "#product" },
-  { label: "Reviews", href: "#reviews" },
-];
+export const navLinks: NavLink[] = [];
