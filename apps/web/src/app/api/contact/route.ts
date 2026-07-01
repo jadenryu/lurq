@@ -23,10 +23,24 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function renderEmail(name: string, email: string, message: string): string {
+interface Origin {
+  ip: string | null;
+  country: string | null;
+  userAgent: string | null;
+}
+
+function renderEmail(
+  name: string,
+  email: string,
+  message: string,
+  origin: Origin,
+): string {
   const safeName = escapeHtml(name || "(no name given)");
   const safeEmail = escapeHtml(email);
   const safeMessage = escapeHtml(message).replace(/\n/g, "<br />");
+  const safeOrigin = escapeHtml(
+    `${origin.ip ?? "unknown IP"} · ${origin.country ?? "??"} · ${origin.userAgent ?? "unknown UA"}`,
+  );
   return `
   <div style="background:#0a0a0a;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
     <div style="max-width:560px;margin:0 auto;background:#141414;border:1px solid #262626;border-radius:14px;overflow:hidden;">
@@ -53,6 +67,7 @@ function renderEmail(name: string, email: string, message: string): string {
       </div>
       <div style="padding:14px 28px;border-top:1px solid #1f1f1f;background:#0f0f0f;font-size:12px;color:#6b6b6b;">
         Reply to this email to respond &ndash; it goes straight to ${safeEmail}.
+        <div style="margin-top:8px;font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:11px;color:#5a5a5a;word-break:break-all;">origin: ${safeOrigin}</div>
       </div>
     </div>
   </div>`;
@@ -146,14 +161,20 @@ export async function POST(req: Request) {
     );
   }
 
+  const origin: Origin = {
+    ip,
+    country: req.headers.get("CF-IPCountry"),
+    userAgent: req.headers.get("user-agent"),
+  };
+
   const resend = new Resend(apiKey);
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: TO_EMAIL,
     replyTo: email,
     subject: `New lurq inquiry from ${name || email}`,
-    text: `New contact form submission\n\nName: ${name || "(no name given)"}\nEmail: ${email}\n\n${message}`,
-    html: renderEmail(name, email, message),
+    text: `New contact form submission\n\nName: ${name || "(no name given)"}\nEmail: ${email}\n\n${message}\n\n---\norigin: ${origin.ip ?? "unknown IP"} · ${origin.country ?? "??"} · ${origin.userAgent ?? "unknown UA"}`,
+    html: renderEmail(name, email, message, origin),
   });
 
   if (error) {
