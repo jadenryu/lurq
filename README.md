@@ -10,6 +10,8 @@ lurq is a **companion to your coding agent**: it recommends and explains package
 
 ## quick start — connect your agent
 
+> **not public yet.** lurq unlocks at launch — [join the waitlist](https://lurq.run). the steps below are how it'll work once it's live.
+
 lurq is a **hosted service**: you don't run a database or a sync. get an API key,
 then run the guided installer:
 
