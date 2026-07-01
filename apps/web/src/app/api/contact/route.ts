@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { rateLimit } from "@/lib/rate-limit";
 
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL ?? "jadenryu@gmail.com";
 // Resend requires a verified sender; onboarding@resend.dev works for testing.
@@ -121,6 +122,14 @@ export async function POST(req: Request) {
     req.headers.get("CF-Connecting-IP") ??
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     null;
+
+  // Throttle repeat submissions per IP before spending the Turnstile round-trip.
+  if (!rateLimit(`contact:${ip ?? "unknown"}`)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again in a minute." },
+      { status: 429 },
+    );
+  }
 
   if (!(await verifyTurnstile(token, ip))) {
     return NextResponse.json(
