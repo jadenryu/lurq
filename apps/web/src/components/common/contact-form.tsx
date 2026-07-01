@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-const CONTACT_EMAIL = "jadenryu@gmail.com";
 // Cloudflare's "always passes" test key renders the widget locally; set the real
 // NEXT_PUBLIC_TURNSTILE_SITE_KEY (and TURNSTILE_SECRET_KEY on the server) in prod.
 const TURNSTILE_SITE_KEY =
@@ -144,17 +143,6 @@ export function ContactForm() {
         {status === "error" && (
           <p className="text-center text-xs text-destructive">{errorMsg}</p>
         )}
-
-        <p className="text-center text-xs text-muted-foreground/70">
-          Goes straight to{" "}
-          <a
-            href={`mailto:${CONTACT_EMAIL}`}
-            className="underline underline-offset-2 transition-colors hover:text-foreground"
-          >
-            {CONTACT_EMAIL}
-          </a>
-          .
-        </p>
       </form>
     </>
   );
