@@ -3,9 +3,9 @@ import { Resend } from "resend";
 import { rateLimit } from "@/lib/rate-limit";
 
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL ?? "jadenryu@gmail.com";
-// Resend requires a verified sender; onboarding@resend.dev works for testing.
+// Resend sends from any address on a verified domain; lurq.run is verified.
 const FROM_EMAIL =
-  process.env.CONTACT_FROM_EMAIL ?? "lurq contact <onboarding@resend.dev>";
+  process.env.CONTACT_FROM_EMAIL ?? "lurq contact <contact@lurq.run>";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
