@@ -157,6 +157,13 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
           )
           .optional()
           .describe('Pre-decomposed components (skip if you pass a document)'),
+        using: z
+          .array(npmName)
+          .max(12)
+          .optional()
+          .describe(
+            'Packages you have already decided on. lurq pins these as fixed slots, recommends only the remaining needs, and checks/optimizes the whole stack around your picks.',
+          ),
         optimize: z
           .enum(['speed', 'balanced'])
           .optional()

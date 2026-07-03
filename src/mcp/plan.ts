@@ -39,8 +39,56 @@ import type { Database } from '../db/client';
 import { packages } from '../db/schema';
 import { inferCategory } from '../search/categoryInference';
 import { recommend } from '../search/recommend';
+import { getOrFetchPackage } from '../pipeline/single';
+import type { PackageRow } from '../db/schema';
 import { buildMermaid, layerFor } from './diagram';
 import { latestDataAsOf } from './handlers';
+
+/** A pinned package the user chose, resolved to a fixed single-candidate slot. */
+function packageToCandidate(row: PackageRow): Candidate {
+  return {
+    name: row.name,
+    category: row.category,
+    healthScore: row.healthScore ?? 0,
+    qualityScore: row.qualityScore,
+    confidence: row.confidence ?? 'unproven',
+    why: 'pinned by you',
+    latestVersion: row.latestVersion,
+    weeklyDownloads: row.weeklyDownloads,
+    lastReleaseAt: row.lastReleaseAt ? row.lastReleaseAt.toISOString() : null,
+    repoUrl: row.repoUrl,
+  };
+}
+
+/** Resolve user-pinned packages into fixed slots (one candidate, no alternatives)
+ *  so the optimizer routes the recommended slots around them. Unresolvable pins
+ *  (not on npm) are returned so the caller can report them. */
+export async function resolvePins(
+  db: Database,
+  using: string[] | undefined,
+  recommendedNames: Set<string>,
+): Promise<{ slots: PlanSlot[]; unresolved: string[] }> {
+  const slots: PlanSlot[] = [];
+  const unresolved: string[] = [];
+  // Dedupe, and skip a pin the recommender already picked (avoid double slots).
+  for (const name of new Set(using ?? [])) {
+    if (recommendedNames.has(name)) continue;
+    const { row } = await getOrFetchPackage(db, name);
+    if (!row) {
+      unresolved.push(name);
+      continue;
+    }
+    slots.push({
+      need: `using ${name}`,
+      category: row.category,
+      layer: layerFor({ label: name, category: row.category }),
+      recommended: packageToCandidate(row),
+      alternatives: [], // fixed: the user chose this, so it never gets swapped
+      note: 'pinned by you',
+    });
+  }
+  return { slots, unresolved };
+}
 
 /** A single component/slot to recommend a package for. */
 export interface PlanNeed {
@@ -53,6 +101,9 @@ export interface PlanInput {
   document?: string;
   /** Pre-decomposed needs (e.g. the calling agent already read the doc). */
   needs?: PlanNeed[];
+  /** Packages the user has already chosen. Pinned as fixed slots; lurq
+   *  recommends only the remaining needs and plans the stack around these. */
+  using?: string[];
   /** Ranking bias. 'speed' prefers the lightest-bundle option among the top
    *  candidates for a slot; 'balanced' (default) uses the normal ranking. */
   optimize?: 'speed' | 'balanced';
@@ -107,13 +158,15 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
       ? await decompose(input.document)
       : null;
 
-  if (!decomposed || decomposed.needs.length === 0) {
+  const hasPins = Boolean(input.using?.length);
+  if ((!decomposed || decomposed.needs.length === 0) && !hasPins) {
     return {
-      note: 'Provide a `document` (a detailed description of your program) or a `needs` array. lurq recommends evidence-scored packages per component — it does not invent an architecture from a bare prompt.',
+      note: 'Provide a `document` (a detailed description of your program), a `needs` array, or a `using` list of packages you have already chosen. lurq recommends evidence-scored packages per component — it does not invent an architecture from a bare prompt.',
     };
   }
 
-  const needs = decomposed.needs.slice(0, MAX_SLOTS);
+  const needs = (decomposed?.needs ?? []).slice(0, MAX_SLOTS);
+  const source = decomposed?.source ?? 'needs';
 
   const safeRecommend = (need: string, category: Category | undefined) =>
     recommend(db, { need, category, limit: PER_SLOT }).catch((err) => {
@@ -165,7 +218,7 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
   // `recommend` itself untouched.
   const bundleByName = optimize === 'speed' ? await bundleSizes(db, recs.flat()) : new Map<string, number>();
 
-  const slots: PlanSlot[] = needs.map((n, i) => {
+  const recSlots: PlanSlot[] = needs.map((n, i) => {
     const candidates = orderCandidates(recs[i]!, anchorFamily, optimize, bundleByName);
     const recommended = candidates[0] ?? null;
     const category = n.category ?? recommended?.category ?? inferCategory(n.need);
@@ -179,12 +232,28 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
     };
   });
 
+  // Pin the user's chosen packages as fixed slots, then plan the rest around
+  // them. Pins lead so they anchor the stack; the optimizer can only move the
+  // recommended slots, so it routes them to stay compatible with the pins.
+  const recommendedNames = new Set(
+    recSlots.map((s) => s.recommended?.name).filter((n): n is string => Boolean(n)),
+  );
+  const { slots: pinnedSlots, unresolved: unresolvedPins } = await resolvePins(
+    db,
+    input.using,
+    recommendedNames,
+  );
+  const slots = [...pinnedSlots, ...recSlots];
+
   // Auto-resolve compatibility: actually make the picked stack coherent by
   // swapping a conflicting slot's pick for an alternative that resolves it.
   // Runs before the diagram/output so everything below reflects the final stack.
   const compatibility = await resolveCompat(db, slots);
 
-  const unmatched = slots.filter((s) => !s.recommended).map((s) => s.need);
+  const unmatched = [
+    ...slots.filter((s) => !s.recommended).map((s) => s.need),
+    ...unresolvedPins.map((n) => `${n} (pinned, but not found on npm)`),
+  ];
   const mermaid = buildMermaid(
     slots
       .filter((s) => s.recommended)
@@ -194,12 +263,12 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
   return {
     dataAsOf,
     optimize,
-    source: decomposed.source,
+    source,
     framework,
     slots,
     unmatched,
     mermaid,
-    note: planNote(decomposed.source, unmatched.length, optimize, framework),
+    note: planNote(source, unmatched.length, optimize, framework),
     compatibility,
   };
 }
