@@ -69,10 +69,10 @@ export function Navbar() {
             {isSignedIn ? (
               <>
                 <Link
-                  href="/dashboard"
+                  href="/book-demo"
                   className={buttonVariants({ variant: "ghost", size: "sm" })}
                 >
-                  Dashboard
+                  Book a demo
                 </Link>
                 <UserButton />
               </>
@@ -116,10 +116,10 @@ export function Navbar() {
               <div className="mt-6 flex flex-col gap-2">
                 {isSignedIn ? (
                   <Link
-                    href="/dashboard"
+                    href="/book-demo"
                     className={buttonVariants({ className: "w-full" })}
                   >
-                    Dashboard
+                    Book a demo
                   </Link>
                 ) : (
                   <>

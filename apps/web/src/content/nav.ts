@@ -6,4 +6,13 @@ export type NavLink = {
   external?: boolean;
 };
 
-export const navLinks: NavLink[] = [];
+// Anchors resolve to sections rendered on the marketing home page
+// (section-showcase #product, section-comparison, section-faq), plus the
+// real /changelog and /about routes.
+export const navLinks: NavLink[] = [
+  { label: "Product", href: "/#product" },
+  { label: "Comparison", href: "/#comparison" },
+  { label: "Changelog", href: "/changelog" },
+  { label: "About", href: "/about" },
+  { label: "FAQ", href: "/#faq" },
+];
