@@ -4,7 +4,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 export default function SignInPage() {
   return (
     <AuthShell>
-      <SignIn />
+      <SignIn forceRedirectUrl="/book-demo" signUpUrl="/sign-up" />
     </AuthShell>
   );
 }
