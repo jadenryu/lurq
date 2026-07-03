@@ -155,7 +155,13 @@ export async function getOrFetchPackage(db: Database, name: string): Promise<Get
   if (!exists) return { row: null, wasTracked: false, existsOnNpm: false };
 
   const row = await syncOnePackage(db, name);
-  // Persist the discovery into the seed list so future syncs keep it fresh.
-  await ensureSeedEntry(db, name, row.category);
+  // Only commit genuinely-trackable discoveries to the seed list, which the
+  // daily sync then refreshes forever. Without this bar any authenticated key
+  // could permanently inflate sync cost by evaluating an endless tail of
+  // obscure-but-real packages. Low-signal ones are still evaluated and returned
+  // to the caller, just not kept on the sync roster.
+  if (row.confidence && row.confidence !== 'unproven') {
+    await ensureSeedEntry(db, name, row.category);
+  }
   return { row, wasTracked: false, existsOnNpm: true };
 }

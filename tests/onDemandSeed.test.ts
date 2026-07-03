@@ -90,8 +90,12 @@ describe('getOrFetchPackage — on-demand seed promotion', () => {
     expect(ensureSeedEntry).not.toHaveBeenCalled();
   });
 
-  it('seeds a fresh discovery with the resolved category', async () => {
-    const stored = { name: 'leftpad', category: 'utility' } as unknown as PackageRow;
+  it('seeds a fresh discovery that clears the quality bar', async () => {
+    const stored = {
+      name: 'leftpad',
+      category: 'utility',
+      confidence: 'proven',
+    } as unknown as PackageRow;
     // Untracked on the first two lookups (getOrFetchPackage + syncOnePackage),
     // then the stored row once it has been upserted.
     getPackageByName
@@ -107,5 +111,23 @@ describe('getOrFetchPackage — on-demand seed promotion', () => {
     expect(res.row).toBe(stored);
     expect(ensureSeedEntry).toHaveBeenCalledTimes(1);
     expect(ensureSeedEntry).toHaveBeenCalledWith(db, 'leftpad', 'utility');
+  });
+
+  it('does NOT seed a low-signal (unproven) discovery, but still returns it', async () => {
+    const stored = {
+      name: 'obscure-pkg',
+      category: 'utility',
+      confidence: 'unproven',
+    } as unknown as PackageRow;
+    getPackageByName
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(stored);
+    npmPackageExists.mockResolvedValue(true);
+
+    const res = await getOrFetchPackage(fakeDb(), 'obscure-pkg');
+
+    expect(res.row).toBe(stored);
+    expect(ensureSeedEntry).not.toHaveBeenCalled();
   });
 });
