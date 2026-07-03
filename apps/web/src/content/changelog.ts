@@ -14,6 +14,30 @@ export interface Entry {
 
 export const entries: Entry[] = [
   {
+    version: "0.0.3",
+    date: "July 3, 2026",
+    summary:
+      "verify now runs in a throwaway VM, discovery got a quality bar, and search stopped mixing embeddings across providers.",
+    changes: [
+      { tag: "Added", text: "verify installs and smoke-loads packages inside an E2B VM, so untrusted install scripts run isolated from your machine." },
+      { tag: "Fixed", text: "on-demand discoveries are only seeded into the index once they clear a quality bar." },
+      { tag: "Fixed", text: "embeddings are tagged with their provider space and filtered on it, so search never compares vectors across providers." },
+    ],
+  },
+  {
+    version: "0.0.2",
+    date: "June 24, 2026",
+    summary:
+      "Hosted mode landed: a one-command install wizard, API keys, and a smarter scoring/discovery engine.",
+    changes: [
+      { tag: "Added", text: "Hosted HTTP serve mode (serve-http) with API keys, so agents can connect without self-hosting a database." },
+      { tag: "Added", text: "install: a guided wizard that connects lurq to your AI assistant against the hosted endpoint." },
+      { tag: "Added", text: "Scoring and discovery upgrade: a quality axis, hybrid search, edit-tunable weights, and on-demand package discovery." },
+      { tag: "Fixed", text: "Per-key rate limiter no longer crashes on IPv6 clients (ERR_ERL_KEY_GEN_IPV6)." },
+      { tag: "Fixed", text: "serve-http boots cleanly when the pgvector extension already exists." },
+    ],
+  },
+  {
     version: "0.0.1",
     date: "June 23, 2026",
     badge: "First release",
