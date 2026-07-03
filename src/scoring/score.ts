@@ -333,8 +333,13 @@ export function computeConfidence(
   // `promising` (§1): adoption-independent — high intrinsic quality on a package
   // that hasn't yet earned adoption traction. This is how new-but-good packages
   // surface on merit instead of sinking to `unproven`.
+  // A freshly published package may have no separate release date (registry and
+  // GitHub both empty); fall back to first-publish recency so a new-but-good
+  // package isn't locked to `unproven` — the exact case this tier targets.
+  const promisingRecencyMonths = lastReleaseMonths ?? ageMonths;
   const promisingReleaseOk =
-    lastReleaseMonths !== null && lastReleaseMonths <= CONFIDENCE.promising.maxLastReleaseMonths;
+    promisingRecencyMonths !== null &&
+    promisingRecencyMonths <= CONFIDENCE.promising.maxLastReleaseMonths;
   if (
     qualityScore !== null &&
     qualityScore >= CONFIDENCE.promising.minQuality &&

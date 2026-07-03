@@ -26,8 +26,15 @@ export interface WizardOptions {
 /** Where users obtain a key (operator-issued for now; self-serve dashboard later). */
 const GET_KEY_URL = 'https://lurq.run';
 
-/** Lightweight MCP `tools/list` ping to confirm the key authenticates. */
-async function validateKey(url: string, apiKey: string): Promise<boolean> {
+/**
+ * Lightweight MCP `tools/list` ping to confirm the key authenticates.
+ * Distinguishes a rejected key (401/403) from an unreachable endpoint so the
+ * wizard can tell the user which one happened instead of blaming the key on a
+ * flaky network.
+ */
+type KeyCheck = 'valid' | 'invalid' | 'unreachable';
+
+async function validateKey(url: string, apiKey: string): Promise<KeyCheck> {
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -38,9 +45,11 @@ async function validateKey(url: string, apiKey: string): Promise<boolean> {
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
     });
-    return res.ok;
+    if (res.ok) return 'valid';
+    if (res.status === 401 || res.status === 403) return 'invalid';
+    return 'unreachable';
   } catch {
-    return false;
+    return 'unreachable';
   }
 }
 
@@ -66,11 +75,16 @@ export async function runInstallWizard(opts: WizardOptions): Promise<void> {
     }
 
     process.stdout.write('  Validating key… ');
-    const ok = await validateKey(url, apiKey);
-    console.log(ok ? 'ok' : 'could not reach endpoint');
-    if (!ok) {
+    const check = await validateKey(url, apiKey);
+    console.log(
+      check === 'valid' ? 'ok' : check === 'invalid' ? 'rejected' : 'could not reach endpoint',
+    );
+    if (check !== 'valid') {
       const proceed = await confirm({
-        message: `Couldn't validate the key against ${url}. Continue anyway?`,
+        message:
+          check === 'invalid'
+            ? `That key was rejected (401) by ${url}. Continue anyway?`
+            : `Couldn't reach ${url} to validate the key. Continue anyway?`,
         default: false,
       });
       if (!proceed) {

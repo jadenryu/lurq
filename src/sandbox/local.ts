@@ -32,6 +32,11 @@ const ERROR_MAX = 500;
 
 /** npm args for a throwaway install of one or more specs into the sandbox dir. */
 export function npmInstallArgs(specs: string[], opts: { allowScripts: boolean }): string[] {
+  // A spec beginning with `-` would be parsed as an npm flag (e.g.
+  // `--registry=evil`), not a package. Legitimate names/specs never start with
+  // one, so reject rather than smuggle it into the install command.
+  const bad = specs.find((s) => s.startsWith('-'));
+  if (bad) throw new Error(`Invalid package spec: ${bad}`);
   const args = ['install', ...specs, '--no-audit', '--no-fund', '--no-package-lock', '--no-save'];
   if (!opts.allowScripts) args.push('--ignore-scripts');
   return args;

@@ -43,7 +43,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   app.use(helmet());
   app.use(express.json({ limit: '1mb' }));
 
-  // Unauthenticated, no DB hit — for Railway's healthcheck.
+  // Unauthenticated, no DB hit — for Railway's healthcheck. Intentionally not
+  // rate-limited: it's a static response with no backend cost, and limiting it
+  // risks 429'ing Railway's own frequent healthcheck poll into a restart loop.
   app.get('/healthz', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'ok' });
   });

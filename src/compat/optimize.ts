@@ -24,11 +24,6 @@ export interface OptimizeResult {
   regret: number;
 }
 
-export interface OptimizeOptions {
-  /** Stop after this many search nodes and return the best feasible found. */
-  nodeBudget?: number;
-}
-
 /** Conflicts for a (partial) selection: Tier-1 peer/engine + cached sandbox edges. */
 function conflictsFor(members: CompatMember[], sandboxConflicts: Set<string>): CompatConflict[] {
   const out = resolveArchitectureCompat(members);
@@ -56,10 +51,16 @@ function conflictsFor(members: CompatMember[], sandboxConflicts: Set<string>): C
 export function optimizeStack(
   slots: CompatMember[][],
   sandboxConflicts: Set<string> = new Set(),
-  opts: OptimizeOptions = {},
 ): OptimizeResult {
+  // Every slot must offer at least one candidate — otherwise the non-null
+  // indexing below (`slots[s]![idx]!`) yields undefined and crashes in
+  // conflictsFor. Callers pre-filter, but keep the exported fn safe to reuse.
+  if (slots.some((s) => s.length === 0)) {
+    throw new Error('optimizeStack: every slot must have at least one candidate');
+  }
+
   const n = slots.length;
-  const budget = opts.nodeBudget ?? 50_000;
+  const budget = 50_000;
   let nodes = 0;
 
   // Incumbent: top pick of every slot. Only a *feasible* stack bounds the search.
