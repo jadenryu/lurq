@@ -77,7 +77,6 @@ export const packages = pgTable(
     // Adoption signals
     weeklyDownloads: bigint('weekly_downloads', { mode: 'number' }),
     downloadGrowth90d: real('download_growth_90d'),
-    dependentsCount: integer('dependents_count'),
     stars: integer('stars'),
     openIssues: integer('open_issues'),
     closedIssues: integer('closed_issues'),

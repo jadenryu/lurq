@@ -23,7 +23,6 @@ function base(overrides: Partial<ScoringInput> = {}): ScoringInput {
     weeklyDownloads: 1000,
     downloadGrowth90d: 0,
     stars: null,
-    dependentsCount: null,
     firstPublishedAt: monthsAgo(24),
     lastReleaseAt: daysAgo(20),
     releasesLast12mo: 6,

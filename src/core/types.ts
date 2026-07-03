@@ -185,7 +185,6 @@ export interface EvaluateOutput {
   lastReleaseAt: string | null;
   weeklyDownloads: number | null;
   downloadGrowth90d: number | null;
-  dependentsCount: number | null;
   scorecard: number | null;
   bundleMinGzipKb: number | null;
   deprecated: boolean;

@@ -88,7 +88,6 @@ export function rowToEvaluate(row: PackageRow): EvaluateOutput {
     lastReleaseAt: row.lastReleaseAt ? row.lastReleaseAt.toISOString() : null,
     weeklyDownloads: row.weeklyDownloads,
     downloadGrowth90d: row.downloadGrowth90d,
-    dependentsCount: row.dependentsCount,
     scorecard: row.scorecard,
     bundleMinGzipKb: row.bundleMinGzipKb,
     deprecated: row.deprecated,

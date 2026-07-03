@@ -29,7 +29,6 @@ function makeRow(overrides: Partial<PackageRow> = {}): PackageRow {
     lastReleaseAt: new Date('2026-06-01'),
     weeklyDownloads: 1000,
     downloadGrowth90d: 0.1,
-    dependentsCount: null,
     stars: null,
     openIssues: null,
     closedIssues: null,

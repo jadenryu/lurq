@@ -27,7 +27,6 @@ export interface ScoringInput {
   weeklyDownloads: number | null;
   downloadGrowth90d: number | null;
   stars: number | null;
-  dependentsCount: number | null;
   firstPublishedAt: Date | null;
   lastReleaseAt: Date | null;
   releasesLast12mo: number | null;
@@ -68,7 +67,6 @@ export function toScoringInput(signals: RawPackageSignals, category: Category | 
     weeklyDownloads: downloads?.weeklyDownloads ?? null,
     downloadGrowth90d: downloads?.downloadGrowth90d ?? null,
     stars: github?.stars ?? null,
-    dependentsCount: null, // not collected in v1 (see spec R1 note)
     firstPublishedAt: registry?.firstPublishedAt ?? null,
     lastReleaseAt: github?.lastReleaseAt ?? registry?.lastReleaseAt ?? null,
     releasesLast12mo: github?.releasesLast12mo ?? null,

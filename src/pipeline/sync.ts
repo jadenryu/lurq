@@ -296,7 +296,6 @@ export function assemblePackageRow(p: {
     lastReleaseAt: p.input.lastReleaseAt,
     weeklyDownloads: p.input.weeklyDownloads,
     downloadGrowth90d: p.input.downloadGrowth90d,
-    dependentsCount: p.input.dependentsCount,
     stars: p.input.stars,
     openIssues: p.input.openIssues,
     closedIssues: p.input.closedIssues,
