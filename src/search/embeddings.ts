@@ -95,7 +95,11 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; i += OPENAI_BATCH) {
       const batch = texts.slice(i, i + OPENAI_BATCH);
-      const body = JSON.stringify({ model: this.model, input: batch });
+      // Pin the output dimension to the DB column width. Every text-embedding-3
+      // model honors `dimensions`, so a larger model (e.g. -3-large, natively
+      // 3072-dim) is projected to 1536 instead of overflowing the vector(1536)
+      // column at insert time.
+      const body = JSON.stringify({ model: this.model, input: batch, dimensions: EMBEDDING_DIM });
       const { data } = await httpRequest<any>('https://api.openai.com/v1/embeddings', {
         host: 'api.openai.com',
         method: 'POST',
@@ -107,7 +111,16 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
       });
       const vectors: { embedding: number[]; index: number }[] = data?.data ?? [];
       vectors.sort((a, b) => a.index - b.index);
-      for (const v of vectors) out.push(v.embedding);
+      for (const v of vectors) {
+        // Fail loud on any dimension drift rather than silently storing vectors
+        // that pgvector can't compare against the rest of the column.
+        if (v.embedding.length !== EMBEDDING_DIM) {
+          throw new Error(
+            `OpenAI model ${this.model} returned ${v.embedding.length}-dim vectors; expected ${EMBEDDING_DIM}. Set EMBEDDING_MODEL to a text-embedding-3 model or update EMBEDDING_DIM.`,
+          );
+        }
+        out.push(v.embedding);
+      }
     }
     return out;
   }
