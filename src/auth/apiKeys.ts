@@ -9,6 +9,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { API_KEY_PREFIX } from '../core/constants';
 import type { Database } from '../db/client';
 import { apiKeys, type ApiKeyRow } from '../db/schema';
+import { logger } from '../core/logger';
 
 /** Chars of the random body kept in the display prefix (`lurq_live_<6>`). */
 const DISPLAY_BODY = 6;
@@ -71,11 +72,12 @@ export async function lookupActiveKey(db: Database, key: string): Promise<ApiKey
     .where(and(eq(apiKeys.keyHash, hash), isNull(apiKeys.revokedAt)))
     .limit(1);
   if (!row) return null;
-  // Fire-and-forget usage stamp; failures must never affect the request.
+  // Fire-and-forget usage stamp; failures must never affect the request, but
+  // log at debug so a persistently-failing write isn't completely invisible.
   db.update(apiKeys)
     .set({ lastUsedAt: new Date() })
     .where(eq(apiKeys.id, row.id))
-    .then(undefined, () => {});
+    .then(undefined, (err) => logger.debug(`lastUsedAt stamp failed: ${String(err)}`));
   return row;
 }
 
