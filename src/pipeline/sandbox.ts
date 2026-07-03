@@ -14,7 +14,7 @@ export async function verifyPackageInSandbox(
   version: string | null,
   opts: SandboxVerifyOptions = {},
 ): Promise<SandboxResult> {
-  const result = await getSandbox().verify(pkg, version, opts);
+  const result = await (await getSandbox()).verify(pkg, version, opts);
   // Persist for the query path. Non-fatal: never fail the run on a write error.
   await storeVerificationRun(db, {
     packageName: pkg,
