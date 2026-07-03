@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "Partner with lurq: integrations, registries, and tooling for AI coding agents.",
 };
 
-const PARTNER_EMAIL = "jadenryu@gmail.com";
+const PARTNER_EMAIL = "contact@lurq.run";
 
 const tracks = [
   {

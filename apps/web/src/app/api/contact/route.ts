@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { rateLimit } from "@/lib/rate-limit";
 
-const TO_EMAIL = process.env.CONTACT_TO_EMAIL ?? "jadenryu@gmail.com";
+const TO_EMAIL = process.env.CONTACT_TO_EMAIL ?? "contact@lurq.run";
 // Resend sends from any address on a verified domain; lurq.run is verified.
 const FROM_EMAIL =
   process.env.CONTACT_FROM_EMAIL ?? "lurq <contact@lurq.run>";

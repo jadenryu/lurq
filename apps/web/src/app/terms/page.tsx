@@ -67,7 +67,7 @@ export default function TermsPage() {
         <h2>Contact</h2>
         <p>
           Questions about these terms? Reach us at{" "}
-          <a href="mailto:jadenryu@gmail.com">jadenryu@gmail.com</a>.
+          <a href="mailto:contact@lurq.run">contact@lurq.run</a>.
         </p>
       </Prose>
     </PageShell>

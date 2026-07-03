@@ -66,13 +66,13 @@ export default function PrivacyPage() {
         <p>
           You may request access to, correction of, or deletion of your personal
           information at any time by emailing{" "}
-          <a href="mailto:jadenryu@gmail.com">jadenryu@gmail.com</a>.
+          <a href="mailto:contact@lurq.run">contact@lurq.run</a>.
         </p>
 
         <h2>Contact</h2>
         <p>
           Questions about this policy? Reach us at{" "}
-          <a href="mailto:jadenryu@gmail.com">jadenryu@gmail.com</a>.
+          <a href="mailto:contact@lurq.run">contact@lurq.run</a>.
         </p>
       </Prose>
     </PageShell>

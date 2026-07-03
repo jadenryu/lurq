@@ -37,10 +37,10 @@ export function AnnouncementBar() {
         </span>{" "}
         · questions or feedback?{" "}
         <a
-          href="mailto:jadenryu@gmail.com"
+          href="mailto:contact@lurq.run"
           className="font-medium underline underline-offset-2 transition-colors hover:text-foreground"
         >
-          jadenryu@gmail.com
+          contact@lurq.run
         </a>
       </p>
       <button
