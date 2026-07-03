@@ -85,11 +85,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     limit: config.LURQ_RATE_LIMIT_MAX,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    // Key on the resolved API key (always present — auth runs first). The IP
-    // fallback uses express-rate-limit's ipKeyGenerator so IPv6 addresses are
-    // normalized correctly (v8 throws ERR_ERL_KEY_GEN_IPV6 on a raw req.ip).
-    keyGenerator: (req: Request) =>
-      (req as AuthedRequest).lurqKey?.prefix ?? ipKeyGenerator(req.ip ?? '0.0.0.0'),
+    // Key on the resolved API key's unique row id (always present — auth runs
+    // first). The display `prefix` is only 6 chars of body, so distinct keys
+    // can collide on it and share a quota; the id cannot. The IP fallback uses
+    // express-rate-limit's ipKeyGenerator so IPv6 addresses are normalized
+    // correctly (v8 throws ERR_ERL_KEY_GEN_IPV6 on a raw req.ip).
+    keyGenerator: (req: Request) => {
+      const id = (req as AuthedRequest).lurqKey?.id;
+      return id != null ? `key:${id}` : ipKeyGenerator(req.ip ?? '0.0.0.0');
+    },
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 
