@@ -22,6 +22,18 @@ import { handlePlan } from './plan';
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
+// Validate package names at the trust boundary. A name flows straight into a
+// registry URL (`registry.npmjs.org/${name}`) and the response cache key, so
+// reject anything that isn't a legal npm name: this blocks path/query
+// injection (`/`, `?`, `#`, `%`), whitespace, and control characters. Case is
+// permitted for legacy packages; the char class is what closes the hole.
+export const npmName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(214)
+  .regex(/^(?:@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/i, 'Invalid npm package name');
+
 const constraintsSchema = z
   .object({
     runtime: z.enum(['browser', 'node', 'both']).optional(),
@@ -61,7 +73,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
       description:
         'Full evidence read for one npm package: scores, signals, advisories, summary, and a usage guide. Fetches & scores on demand if not yet tracked.',
       inputSchema: {
-        package: z.string().min(1).describe('npm package name'),
+        package: npmName.describe('npm package name'),
       },
     },
     async (args) => json(await handleEvaluate(db, args)),
@@ -73,7 +85,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
       title: 'Compare packages',
       description: 'Side-by-side comparison of 2–5 npm packages, ranked by health score.',
       inputSchema: {
-        packages: z.array(z.string().min(1)).min(2).max(5).describe('2–5 npm package names'),
+        packages: z.array(npmName).min(2).max(5).describe('2–5 npm package names'),
       },
     },
     async (args) => json(await handleCompare(db, args)),
@@ -87,7 +99,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
         'Check whether a set of packages forms a coherent stack: peer-dependency and engine-range compatibility across the whole set (instant, from declared metadata), plus any recorded sandbox-verified conflicts. Returns the exact clashing constraints. Read-only — does not run installs. Call before committing to a multi-package stack.',
       inputSchema: {
         packages: z
-          .array(z.string().min(1))
+          .array(npmName)
           .min(2)
           .max(8)
           .describe('2–8 npm package names to check together'),
@@ -103,7 +115,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
       description:
         'Confirm an npm package is real, healthy, and not risky before installing — guards against hallucinated or typosquatted dependency names. Checks the live registry.',
       inputSchema: {
-        package: z.string().min(1).describe('npm package name to verify'),
+        package: npmName.describe('npm package name to verify'),
       },
     },
     async (args) => json(await handleVerify(db, args)),
@@ -117,7 +129,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
         'Emit a reference-architecture Mermaid diagram for a stack you have already chosen (package names). A labeled starting point keyed by layer — not a validated architecture, and not an architecture designer.',
       inputSchema: {
         stack: z
-          .array(z.string())
+          .array(npmName)
           .optional()
           .describe('Package names that make up the stack; omit or empty to get usage guidance'),
       },
