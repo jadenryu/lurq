@@ -160,6 +160,14 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
     const pending = await getPendingCandidates(handle.db, cap * 4);
     const scored: { name: string; preScore: number }[] = [];
     for (const cand of pending) {
+      // Reuse a stored pre-score: a candidate still 'pending' with a non-null
+      // pre-score already cleared the gate on a prior run and was deferred past
+      // the per-run cap. Re-fetching + re-scoring it every run is a wasted
+      // registry round-trip — only score candidates that have never been gated.
+      if (cand.preScore !== null) {
+        scored.push({ name: cand.name, preScore: cand.preScore });
+        continue;
+      }
       const preScore = await preScorePackage(cand.name);
       await setDiscoveryStatus(handle.db, cand.name, {
         status: passesGate(preScore) ? 'pending' : 'rejected',
