@@ -101,6 +101,10 @@ export const packages = pgTable(
     scoreBreakdown: jsonb('score_breakdown').$type<ScoreBreakdown>(),
     usageGuide: jsonb('usage_guide').$type<UsageGuide>(),
     embedding: vector('embedding', { dimensions: EMBEDDING_DIM }),
+    // Identity of the vector space `embedding` was produced in (e.g.
+    // `openai:text-embedding-3-small`, `local`). Vector search filters on the
+    // active provider so switching models can't compare incompatible spaces.
+    embeddingProvider: text('embedding_provider'),
 
     // Lexical search vector (§3): name weighted highest (A), then category (B),
     // then summary/description (C). Generated + STORED so it stays in sync with

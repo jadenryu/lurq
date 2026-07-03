@@ -16,6 +16,14 @@ import type { Category } from '../core/types';
 export interface EmbeddingProvider {
   readonly kind: 'openai' | 'local';
   readonly dimensions: number;
+  /**
+   * Stable identity of the vector space this provider produces (e.g.
+   * `openai:text-embedding-3-small`, `local`). Stored per row so vector search
+   * only compares vectors from the same space — switching providers then falls
+   * back to lexical retrieval until rows are re-embedded, instead of silently
+   * returning garbage from a cosine distance across incompatible spaces.
+   */
+  readonly id: string;
   embed(texts: string[]): Promise<number[][]>;
 }
 
@@ -72,6 +80,7 @@ export function localEmbed(text: string, dim = EMBEDDING_DIM): number[] {
 export class LocalEmbeddingProvider implements EmbeddingProvider {
   readonly kind = 'local' as const;
   readonly dimensions = EMBEDDING_DIM;
+  readonly id = 'local';
   async embed(texts: string[]): Promise<number[][]> {
     return texts.map((t) => localEmbed(t));
   }
@@ -84,12 +93,15 @@ const OPENAI_BATCH = 96;
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   readonly kind = 'openai' as const;
   readonly dimensions = EMBEDDING_DIM;
+  readonly id: string;
 
   constructor(
     private readonly apiKey: string,
     private readonly model: string,
     private readonly fetchImpl?: typeof fetch,
-  ) {}
+  ) {
+    this.id = `openai:${model}`;
+  }
 
   async embed(texts: string[]): Promise<number[][]> {
     const out: number[][] = [];

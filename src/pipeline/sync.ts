@@ -200,6 +200,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
           healthScore,
           qualityScore: c.quality,
           embedding: embeddings[i] ?? null,
+          embeddingProvider: embProvider.id,
           now,
         }),
       );
@@ -276,6 +277,7 @@ export function assemblePackageRow(p: {
   healthScore: number;
   qualityScore: number | null;
   embedding: number[] | null;
+  embeddingProvider: string | null;
   now: Date;
 }): NewPackageRow {
   const r = p.signals.registry;
@@ -311,6 +313,7 @@ export function assemblePackageRow(p: {
     scoreBreakdown: p.breakdown,
     usageGuide: p.usageGuide,
     embedding: p.embedding,
+    embeddingProvider: p.embedding ? p.embeddingProvider : null,
     dataAsOf: p.now,
   };
 }

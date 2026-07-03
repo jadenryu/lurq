@@ -68,10 +68,10 @@ export async function recommend(
   const pool = Math.max(limit * 5, 25);
 
   // Primary search (category-filtered when we have one).
-  let fused = await hybridSearch(db, queryVec, opts.need, opts.constraints, category, pool);
+  let fused = await hybridSearch(db, queryVec, provider.id, opts.need, opts.constraints, category, pool);
   // If a category filter starved the results, broaden to all categories.
   if (category && fused.length < limit) {
-    const broad = await hybridSearch(db, queryVec, opts.need, opts.constraints, null, pool);
+    const broad = await hybridSearch(db, queryVec, provider.id, opts.need, opts.constraints, null, pool);
     const seen = new Set(fused.map((f) => f.row.name));
     fused = fused.concat(broad.filter((f) => !seen.has(f.row.name)));
   }
@@ -108,13 +108,14 @@ interface Fused {
 async function hybridSearch(
   db: Database,
   queryVec: number[],
+  providerId: string,
   need: string,
   constraints: RecommendConstraints | undefined,
   category: Category | null,
   pool: number,
 ): Promise<Fused[]> {
   const [vectorRows, lexicalRows] = await Promise.all([
-    runVectorQuery(db, queryVec, constraints, category, pool),
+    runVectorQuery(db, queryVec, providerId, constraints, category, pool),
     runLexicalQuery(db, need, constraints, category, pool),
   ]);
   return rrfFuse([vectorRows, lexicalRows]);
@@ -180,12 +181,20 @@ function buildConditions(
 async function runVectorQuery(
   db: Database,
   queryVec: number[],
+  providerId: string,
   constraints: RecommendConstraints | undefined,
   category: Category | null,
   pool: number,
 ): Promise<Row[]> {
   const distance = cosineDistance(packages.embedding, queryVec);
-  const conditions = [isNotNull(packages.embedding), ...buildConditions(constraints, category)];
+  // Only compare vectors produced in the same space as the query vector. Rows
+  // embedded by a different provider/model are excluded (they get retrieved by
+  // the lexical leg instead) rather than compared across incompatible spaces.
+  const conditions = [
+    isNotNull(packages.embedding),
+    eq(packages.embeddingProvider, providerId),
+    ...buildConditions(constraints, category),
+  ];
   return db
     .select(ROW_COLUMNS)
     .from(packages)

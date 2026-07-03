@@ -104,7 +104,8 @@ export async function syncOnePackage(
   const healthScore = computeHealthScore(breakdown);
   const confidence = computeConfidence(input, now, quality);
 
-  const [embedding] = await createEmbeddingProvider().embed([
+  const embProvider = createEmbeddingProvider();
+  const [embedding] = await embProvider.embed([
     buildEmbeddingText({ name, category, summary, description: signals.registry?.description ?? null }),
   ]);
 
@@ -123,6 +124,7 @@ export async function syncOnePackage(
       healthScore,
       qualityScore: quality,
       embedding: embedding ?? null,
+      embeddingProvider: embProvider.id,
       now,
     }),
   );
