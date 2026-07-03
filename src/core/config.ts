@@ -43,6 +43,14 @@ const EnvSchema = z.object({
   // Client-side (install wizard / CLI talking to a remote endpoint).
   LURQ_ENDPOINT: z.string().url().optional(),
   LURQ_API_KEY: z.string().min(1).optional(),
+
+  // Sandbox verification. With E2B_API_KEY set, package install + smoke-load
+  // runs in an isolated E2B cloud sandbox (safe for UNTRUSTED packages);
+  // without it, the local child-process driver is used (trusted packages only).
+  E2B_API_KEY: z.string().min(1).optional(),
+  // E2B template to launch. Must provide node + npm on PATH; omit for E2B's
+  // default. Provision a Node-versioned template here for reproducible runs.
+  E2B_TEMPLATE: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

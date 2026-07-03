@@ -75,7 +75,7 @@ export async function verifyCompatibility(
     })),
   );
 
-  const result = await getSandbox().verifySet(
+  const result = await (await getSandbox()).verifySet(
     resolved.map((r) => ({ name: r.name, version: r.version === 'latest' ? null : r.version })),
     { allowScripts: opts.allowScripts },
   );
