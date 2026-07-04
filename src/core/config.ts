@@ -20,13 +20,19 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
   GITHUB_TOKEN: z.string().min(1).optional(),
 
+  // 'openai' here means "OpenAI-compatible" — any provider exposing /v1/embeddings
+  // + Bearer auth (OpenAI, Together, Fireworks, HF TEI, …). Point *_BASE_URL at it.
   EMBEDDING_PROVIDER: z.enum(['openai', 'local']).default('openai'),
   EMBEDDING_API_KEY: z.string().min(1).optional(),
   EMBEDDING_MODEL: z.string().min(1).default('text-embedding-3-small'),
+  EMBEDDING_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
 
+  // 'openai' means "OpenAI-compatible /v1/chat/completions": OpenAI, Groq, Together,
+  // Fireworks, xAI (Grok), etc. Swap provider by setting SUMMARY_BASE_URL + key + model.
   SUMMARY_PROVIDER: z.enum(['openai', 'none']).default('openai'),
   SUMMARY_API_KEY: z.string().min(1).optional(),
   SUMMARY_MODEL: z.string().min(1).default('gpt-4o-mini'),
+  SUMMARY_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
 
   LURQ_SYNC_CONCURRENCY: z.coerce.number().int().positive().max(50).default(5),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),

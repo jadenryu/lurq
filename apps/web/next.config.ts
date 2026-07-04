@@ -17,8 +17,15 @@ function resolveDocsZoneUrl(): string {
 const DOCS_ZONE_URL = resolveDocsZoneUrl();
 
 const nextConfig: NextConfig = {
+  // PostHog reverse proxy: route analytics through this origin so ad-blockers
+  // (which blocklist *.posthog.com) can't silently drop events. The static/array
+  // asset rules must precede the /ingest catch-all. US region — swap us→eu to move.
+  skipTrailingSlashRedirect: true,
   async rewrites() {
     return [
+      { source: "/ingest/static/:path*", destination: "https://us-assets.i.posthog.com/static/:path*" },
+      { source: "/ingest/array/:path*", destination: "https://us-assets.i.posthog.com/array/:path*" },
+      { source: "/ingest/:path*", destination: "https://us.i.posthog.com/:path*" },
       { source: "/docs", destination: `${DOCS_ZONE_URL}/docs` },
       { source: "/docs/:path*", destination: `${DOCS_ZONE_URL}/docs/:path*` },
     ];
