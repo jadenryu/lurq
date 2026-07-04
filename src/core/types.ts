@@ -198,6 +198,8 @@ export interface EvaluateOutput {
   summary: string | null;
   usageGuide: UsageGuide | null;
   repoUrl: string | null;
+  /** If this package is superseded, the recommended migration target (§1.2). */
+  replacedBy?: { name: string; reason: string } | null;
   /** Latest sandbox verdict for this package, if one has been run. */
   buildVerified?: BuildVerified | null;
 }

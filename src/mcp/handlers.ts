@@ -24,6 +24,7 @@ import type { Database } from '../db/client';
 import { getTopPackageNames } from '../db/packages';
 import { getLatestVerificationByName } from '../db/verification';
 import { recordOutcome } from '../db/outcomes';
+import { lookupSuccessor } from '../core/successors';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import { fetchNpmRegistry, npmPackageExists } from '../ingestion/sources';
@@ -98,6 +99,7 @@ export function rowToEvaluate(row: PackageRow): EvaluateOutput {
     summary: row.summary ? truncateSentences(row.summary, 3) : null,
     usageGuide: row.usageGuide ?? null,
     repoUrl: row.repoUrl,
+    replacedBy: lookupSuccessor(row.name),
   };
 }
 
