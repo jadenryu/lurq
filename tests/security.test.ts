@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { editDistance, detectTyposquat } from '../src/security/typosquat';
+import { editDistance, detectTyposquat, typosquatCorpus } from '../src/security/typosquat';
 import { assessRisk, type RiskInput } from '../src/security/risk';
 
 describe('editDistance', () => {
@@ -33,6 +33,20 @@ describe('detectTyposquat', () => {
   });
   it('returns null when nothing is close', () => {
     expect(detectTyposquat('drizzle-orm', popular)).toBeNull();
+  });
+
+  it('catches squats of famous packages on a cold/empty index via the baseline', () => {
+    // No tracked packages yet (fresh deploy) — detection must still work.
+    const corpus = typosquatCorpus([]);
+    expect(detectTyposquat('expres', corpus)?.target).toBe('express');
+    expect(detectTyposquat('reactdom', corpus)?.target).toBe('react-dom');
+    expect(detectTyposquat('typescriptt', corpus)?.target).toBe('typescript');
+  });
+
+  it('de-duplicates the baseline against tracked names', () => {
+    const corpus = typosquatCorpus(['react', 'my-private-pkg']);
+    expect(corpus.filter((n) => n === 'react')).toHaveLength(1);
+    expect(corpus).toContain('my-private-pkg');
   });
 });
 

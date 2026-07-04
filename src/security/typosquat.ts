@@ -8,6 +8,18 @@
  * tracks — a tiny edit distance to a popular name the package itself is NOT is
  * a strong signal.
  */
+import popularPackages from '../data/popular-packages.json';
+
+/** Static baseline of well-known npm names. Unioned with the tracked corpus so
+ *  detection still works on a cold/thin index (fresh deploy, few syncs) and
+ *  catches squats of famous packages that aren't tracked yet. */
+const POPULAR_BASELINE = popularPackages as string[];
+
+/** Tracked top-downloads names + the static baseline, de-duplicated. Pass the
+ *  result as the corpus to `detectTyposquat` so the guard is never silently off. */
+export function typosquatCorpus(trackedTopNames: string[]): string[] {
+  return [...new Set([...POPULAR_BASELINE, ...trackedTopNames])];
+}
 
 /** `@scope/name` → `name` so scope decoration doesn't dominate the distance. */
 function bareName(name: string): string {
