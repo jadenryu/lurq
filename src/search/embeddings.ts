@@ -95,12 +95,18 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   readonly dimensions = EMBEDDING_DIM;
   readonly id: string;
 
+  private readonly endpoint: string;
+  private readonly host: string;
+
   constructor(
     private readonly apiKey: string,
     private readonly model: string,
+    baseUrl: string,
     private readonly fetchImpl?: typeof fetch,
   ) {
     this.id = `openai:${model}`;
+    this.endpoint = `${baseUrl.replace(/\/$/, '')}/embeddings`;
+    this.host = new URL(baseUrl).host;
   }
 
   async embed(texts: string[]): Promise<number[][]> {
@@ -110,10 +116,11 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
       // Pin the output dimension to the DB column width. Every text-embedding-3
       // model honors `dimensions`, so a larger model (e.g. -3-large, natively
       // 3072-dim) is projected to 1536 instead of overflowing the vector(1536)
-      // column at insert time.
+      // column at insert time. ponytail: non-OpenAI providers may ignore
+      // `dimensions`; the length check below fails loud if the space mismatches.
       const body = JSON.stringify({ model: this.model, input: batch, dimensions: EMBEDDING_DIM });
-      const { data } = await httpRequest<any>('https://api.openai.com/v1/embeddings', {
-        host: 'api.openai.com',
+      const { data } = await httpRequest<any>(this.endpoint, {
+        host: this.host,
         method: 'POST',
         ttlMs: 30 * 24 * 60 * 60 * 1000, // cache embeddings 30d to control cost
         cacheKey: `openai-embed ${this.model} ${createHash('sha256').update(body).digest('hex')}`,
@@ -143,7 +150,12 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
 export function createEmbeddingProvider(fetchImpl?: typeof fetch): EmbeddingProvider {
   const config = getConfig();
   if (config.EMBEDDING_PROVIDER === 'openai' && config.EMBEDDING_API_KEY) {
-    return new OpenAIEmbeddingProvider(config.EMBEDDING_API_KEY, config.EMBEDDING_MODEL, fetchImpl);
+    return new OpenAIEmbeddingProvider(
+      config.EMBEDDING_API_KEY,
+      config.EMBEDDING_MODEL,
+      config.EMBEDDING_BASE_URL,
+      fetchImpl,
+    );
   }
   if (config.EMBEDDING_PROVIDER === 'openai' && !config.EMBEDDING_API_KEY) {
     logger.warn('EMBEDDING_API_KEY not set — falling back to the local embedder.');

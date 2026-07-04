@@ -459,12 +459,15 @@ async function bundleSizes(db: Database, candidates: Candidate[]): Promise<Map<s
 async function decompose(document: string): Promise<{ needs: PlanNeed[]; source: 'llm' | 'heuristic' }> {
   const config = getConfig();
   if (config.SUMMARY_PROVIDER === 'openai' && config.SUMMARY_API_KEY) {
-    const llm = await decomposeWithLlm(document, config.SUMMARY_API_KEY, config.SUMMARY_MODEL).catch(
-      (err) => {
-        logger.warn(`plan: LLM decomposition failed, using heuristic: ${(err as Error).message}`);
-        return null;
-      },
-    );
+    const llm = await decomposeWithLlm(
+      document,
+      config.SUMMARY_API_KEY,
+      config.SUMMARY_MODEL,
+      config.SUMMARY_BASE_URL,
+    ).catch((err) => {
+      logger.warn(`plan: LLM decomposition failed, using heuristic: ${(err as Error).message}`);
+      return null;
+    });
     if (llm?.length) return { needs: dedupeNeeds(llm), source: 'llm' };
   }
   return { needs: decomposeHeuristic(document), source: 'heuristic' };
@@ -478,6 +481,7 @@ async function decomposeWithLlm(
   document: string,
   apiKey: string,
   model: string,
+  baseUrl: string,
 ): Promise<PlanNeed[]> {
   const prompt = [
     'Project description:',
@@ -486,8 +490,8 @@ async function decomposeWithLlm(
     'Return JSON: { "needs": [ { "need": "<one phrase describing a component that needs a library>", "category": "<optional taxonomy hint or empty>" } ] }.',
     'One entry per distinct component (e.g. routing, validation, ORM, HTTP client). Omit anything not implied by the description.',
   ].join('\n');
-  const { data } = await httpRequest<any>('https://api.openai.com/v1/chat/completions', {
-    host: 'api.openai.com',
+  const { data } = await httpRequest<any>(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+    host: new URL(baseUrl).host,
     method: 'POST',
     ttlMs: 24 * 60 * 60 * 1000,
     // Hash the FULL document — length + a 64-char prefix collide for same-length

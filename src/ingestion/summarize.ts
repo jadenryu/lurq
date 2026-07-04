@@ -132,11 +132,18 @@ function buildUserPrompt(input: SummaryInput): string {
 export class OpenAISummaryProvider implements SummaryProvider {
   readonly kind = 'openai' as const;
 
+  private readonly endpoint: string;
+  private readonly host: string;
+
   constructor(
     private readonly apiKey: string,
     private readonly model: string,
+    baseUrl: string,
     private readonly fetchImpl?: typeof fetch,
-  ) {}
+  ) {
+    this.endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+    this.host = new URL(baseUrl).host;
+  }
 
   async generate(input: SummaryInput): Promise<SummaryResult> {
     try {
@@ -149,8 +156,8 @@ export class OpenAISummaryProvider implements SummaryProvider {
         response_format: { type: 'json_object' },
         temperature: 0.2,
       });
-      const { data } = await httpRequest<any>('https://api.openai.com/v1/chat/completions', {
-        host: 'api.openai.com',
+      const { data } = await httpRequest<any>(this.endpoint, {
+        host: this.host,
         method: 'POST',
         ttlMs: 30 * 24 * 60 * 60 * 1000, // cache summaries 30d to control cost
         cacheKey: `openai-summary ${this.model} ${input.name} ${(input.readme ?? '').length}`,
@@ -194,7 +201,12 @@ function str(value: unknown): string {
 export function createSummaryProvider(fetchImpl?: typeof fetch): SummaryProvider {
   const config = getConfig();
   if (config.SUMMARY_PROVIDER === 'openai' && config.SUMMARY_API_KEY) {
-    return new OpenAISummaryProvider(config.SUMMARY_API_KEY, config.SUMMARY_MODEL, fetchImpl);
+    return new OpenAISummaryProvider(
+      config.SUMMARY_API_KEY,
+      config.SUMMARY_MODEL,
+      config.SUMMARY_BASE_URL,
+      fetchImpl,
+    );
   }
   return new FallbackSummaryProvider();
 }

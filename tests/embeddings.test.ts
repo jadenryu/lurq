@@ -12,7 +12,7 @@ function fakeFetch(embedding: number[]): typeof fetch {
 
 describe('OpenAIEmbeddingProvider dimension guard', () => {
   it('accepts vectors of the expected width', async () => {
-    const p = new OpenAIEmbeddingProvider('k', 'text-embedding-3-small', fakeFetch(
+    const p = new OpenAIEmbeddingProvider('k', 'text-embedding-3-small', 'https://api.openai.com/v1', fakeFetch(
       new Array(EMBEDDING_DIM).fill(0.01),
     ));
     const [v] = await p.embed(['accepts correct-width vector']);
@@ -20,7 +20,7 @@ describe('OpenAIEmbeddingProvider dimension guard', () => {
   });
 
   it('throws on a wrong-dimension vector instead of storing garbage', async () => {
-    const p = new OpenAIEmbeddingProvider('k', 'text-embedding-3-large', fakeFetch([0.1, 0.2, 0.3]));
+    const p = new OpenAIEmbeddingProvider('k', 'text-embedding-3-large', 'https://api.openai.com/v1', fakeFetch([0.1, 0.2, 0.3]));
     await expect(p.embed(['rejects wrong-width vector'])).rejects.toThrow(/expected 1536/i);
   });
 });
