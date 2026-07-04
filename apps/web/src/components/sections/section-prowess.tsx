@@ -271,11 +271,15 @@ export function SectionProwess() {
 
         <Reveal delay={0.1}>
           <div
-            className="mt-14 grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16"
+            className="mt-14 grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
           >
-            {/* left: category list */}
+            {/* left: terminal clip, reports completion so the next tab only
+                swaps in once typing has finished */}
+            <Clip index={active} onDone={() => setDoneIndex(active)} />
+
+            {/* right: category list */}
             <div className="flex flex-col gap-1.5">
               {capabilities.map((cap, i) => (
                 <TabItem
@@ -286,10 +290,6 @@ export function SectionProwess() {
                 />
               ))}
             </div>
-
-            {/* right: terminal clip, reports completion so the next tab only
-                swaps in once typing has finished */}
-            <Clip index={active} onDone={() => setDoneIndex(active)} />
           </div>
         </Reveal>
       </Container>
