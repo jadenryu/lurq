@@ -18,6 +18,7 @@ import { lookupActiveKey } from '../auth/apiKeys';
 import { createDb } from '../db/client';
 import type { ApiKeyRow } from '../db/schema';
 import { buildMcpServer } from './server';
+import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
   lurqKey?: ApiKeyRow;
@@ -48,6 +49,24 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // risks 429'ing Railway's own frequent healthcheck poll into a restart loop.
   app.get('/healthz', (_req: Request, res: Response) => {
     res.status(200).json({ status: 'ok' });
+  });
+
+  // Prometheus scrape of per-tool call/error/latency counters. Disabled (404)
+  // unless LURQ_METRICS_TOKEN is set; when set, require it as a Bearer token so
+  // the endpoint doesn't leak usage on a public host.
+  app.get('/metrics', (req: Request, res: Response) => {
+    const token = config.LURQ_METRICS_TOKEN;
+    if (!token) {
+      res.status(404).end();
+      return;
+    }
+    const header = req.headers.authorization;
+    const presented = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    if (presented !== token) {
+      res.status(401).end();
+      return;
+    }
+    res.type('text/plain').send(renderPrometheus());
   });
 
   // Coarse per-IP limiter to blunt unauthenticated floods before the auth lookup.

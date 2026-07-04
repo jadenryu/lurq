@@ -45,6 +45,8 @@ const EnvSchema = z.object({
   LURQ_IP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(240),
   /** Rate-limit window, milliseconds (applies to both limiters). */
   LURQ_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  /** Bearer token guarding `/metrics`. Unset → the endpoint is disabled (404). */
+  LURQ_METRICS_TOKEN: z.string().min(1).optional(),
 
   // Client-side (install wizard / CLI talking to a remote endpoint).
   LURQ_ENDPOINT: z.string().url().optional(),
