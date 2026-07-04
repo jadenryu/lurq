@@ -83,6 +83,11 @@ export type Runtime = 'browser' | 'node' | 'both';
 /** Result of co-installing two package versions in the sandbox (compat matrix). */
 export type CompatStatus = 'compatible' | 'conflict';
 
+/** Coarse post-install result an agent reports back via `report_outcome` — never
+ *  source code, just whether the recommended package installed / compiled /
+ *  passed tests, or failed. Feeds the recommendation→outcome flywheel (§3.1). */
+export type BuildSignal = 'installed' | 'compiled' | 'tests_passed' | 'failed';
+
 /** Sandbox verdict surfaced to agents: did this version actually install + load? */
 export interface BuildVerified {
   version: string;

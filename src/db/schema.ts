@@ -33,6 +33,7 @@ const tsvector = customType<{ data: string; driverData: string }>({
 });
 import type {
   Advisory,
+  BuildSignal,
   Category,
   CategorySource,
   CompatStatus,
@@ -267,6 +268,28 @@ export const compatEdges = pgTable(
   ],
 );
 
+/**
+ * Recommendation → outcome capture (§3.1): the flywheel asset. lurq sits inside
+ * the agent loop at the choice moment, so a lightweight opt-in callback yields a
+ * recommendation→outcome dataset no downstream scanner can reconstruct (they see
+ * deployed deps, not the decision). Privacy: no source code — only which package,
+ * accepted or not, and a coarse build signal. Cheap to capture, compounds with use.
+ */
+export const recommendationOutcomes = pgTable(
+  'recommendation_outcomes',
+  {
+    id: serial('id').primaryKey(),
+    packageName: text('package_name').notNull(),
+    accepted: boolean('accepted').notNull(),
+    buildSignal: text('build_signal').$type<BuildSignal>(),
+    /** The original need text the recommendation was for — ties outcome back to
+     *  the ask. Optional, length-capped at the trust boundary; never source code. */
+    need: text('need'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('recommendation_outcomes_pkg_idx').on(table.packageName)],
+);
+
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';
 
 export interface SyncError {
@@ -288,3 +311,5 @@ export type VerificationRunRow = typeof verificationRuns.$inferSelect;
 export type NewVerificationRunRow = typeof verificationRuns.$inferInsert;
 export type CompatEdgeRow = typeof compatEdges.$inferSelect;
 export type NewCompatEdgeRow = typeof compatEdges.$inferInsert;
+export type RecommendationOutcomeRow = typeof recommendationOutcomes.$inferSelect;
+export type NewRecommendationOutcomeRow = typeof recommendationOutcomes.$inferInsert;

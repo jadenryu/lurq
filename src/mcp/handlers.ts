@@ -11,6 +11,7 @@ import { STALENESS_DAYS } from '../core/constants';
 import type {
   Advisory,
   AdvisorySeverity,
+  BuildSignal,
   BuildVerified,
   Category,
   CompatOutput,
@@ -22,6 +23,7 @@ import { checkCompat } from '../compat/check';
 import type { Database } from '../db/client';
 import { getTopPackageNames } from '../db/packages';
 import { getLatestVerificationByName } from '../db/verification';
+import { recordOutcome } from '../db/outcomes';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import { fetchNpmRegistry, npmPackageExists } from '../ingestion/sources';
@@ -296,4 +298,31 @@ export async function handleVerify(
     confidence: (row?.confidence as Confidence) ?? null,
     advisoryCount,
   };
+}
+
+// ── report_outcome ────────────────────────────────────────────────────────────
+
+export interface ReportOutcomeInput {
+  package: string;
+  accepted: boolean;
+  buildSignal?: BuildSignal;
+  need?: string;
+}
+
+/**
+ * Capture an opt-in recommendation outcome (§3.1). Append-only, no source code —
+ * just which package, accepted or not, and a coarse build signal. Not cached (a
+ * write), and cheap enough that the per-key rate limiter is the only guard needed.
+ */
+export async function handleReportOutcome(
+  db: Database,
+  input: ReportOutcomeInput,
+): Promise<{ recorded: true }> {
+  await recordOutcome(db, {
+    packageName: input.package,
+    accepted: input.accepted,
+    buildSignal: input.buildSignal ?? null,
+    need: input.need ?? null,
+  });
+  return { recorded: true };
 }
