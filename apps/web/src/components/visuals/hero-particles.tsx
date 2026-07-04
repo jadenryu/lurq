@@ -62,6 +62,9 @@ export function HeroParticles() {
       className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-black"
     >
       {enabled ? <GL /> : <Fallback />}
+      {/* Exposure gradient: crushes the field to near-black on the left, opens
+          it up toward the right — reads like the scene is lit from the side. */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black from-5% via-black/55 via-55% to-transparent" />
     </div>
   );
 }
