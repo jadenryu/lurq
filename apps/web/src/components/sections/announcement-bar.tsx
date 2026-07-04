@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { X } from "lucide-react";
 import { robotoMono } from "@/lib/fonts";
 
-const VERSION = "v0.1.0";
+const VERSION = "v0.0.3";
 const BANNER_H = "2.25rem"; // matches h-9
 const STORAGE_KEY = "lurq-banner-dismissed";
 
