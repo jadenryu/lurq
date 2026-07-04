@@ -17,6 +17,7 @@ describe('optimizeStack', () => {
     expect(r.selection).toEqual([0, 0]);
     expect(r.regret).toBe(0);
     expect(r.conflicts).toEqual([]);
+    expect(r.bounded).toBe(false); // completed within budget → proven optimum
   });
 
   it('swaps a slot to resolve a conflict, minimizing regret', () => {
