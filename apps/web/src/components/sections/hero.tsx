@@ -150,11 +150,14 @@ export function Hero() {
           </Container>
         </div>
 
-        {/* video: starts off-screen below, rises up over the field */}
-        <div className="absolute inset-0 flex items-center justify-center px-6">
+        {/* video: starts off-screen below, rises up over the field.
+            pointer-events-none on the full-screen layer so its empty area doesn't
+            swallow clicks meant for the headline CTAs beneath it; the video itself
+            re-enables pointer events. */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
           <div
             ref={videoRef}
-            className="w-full max-w-6xl"
+            className="pointer-events-auto w-full max-w-6xl"
             style={{ transform: "translateY(800px) scale(0.9)" }}
           >
             <VideoPlaceholder />

@@ -11,7 +11,13 @@
  * conflict edges), so the search runs purely in memory. Two prunes keep the tree
  * tiny: feasibility (a partial pick that already conflicts can never un-conflict)
  * and bound (a branch whose regret already exceeds the best feasible stack can't
- * win). Both are provably safe, so the result is order-independent — the optimum.
+ * win). Both are provably safe, so within the search budget the result is
+ * order-independent — the optimum.
+ *
+ * A node budget caps pathological search spaces (many slots × many candidates).
+ * If it's hit the search returns the best stack found so far and sets
+ * `bounded: true` — best-effort, no longer a proof of optimality. At realistic
+ * stack sizes the budget is never approached.
  */
 import type { CompatConflict } from '../core/types';
 import { resolveArchitectureCompat, type CompatMember } from './peerCompat';
@@ -22,6 +28,9 @@ export interface OptimizeResult {
   conflicts: CompatConflict[];
   /** Sum of chosen indices — how far the stack drifted from the ideal ranking. */
   regret: number;
+  /** True if the node budget was exhausted: the result is best-effort, not a
+   *  proven optimum. False (the normal case) means the search completed. */
+  bounded: boolean;
 }
 
 /** Conflicts for a (partial) selection: Tier-1 peer/engine + cached sandbox edges. */
@@ -62,6 +71,7 @@ export function optimizeStack(
   const n = slots.length;
   const budget = 50_000;
   let nodes = 0;
+  let exhausted = false;
 
   // Incumbent: top pick of every slot. Only a *feasible* stack bounds the search.
   let bestSelection = new Array<number>(n).fill(0);
@@ -74,7 +84,11 @@ export function optimizeStack(
 
   const chosen = new Array<number>(n).fill(0);
   const dfs = (slot: number, regret: number): void => {
-    if (nodes++ > budget || regret >= bestRegret) return; // budget / bound prune
+    if (nodes++ > budget) {
+      exhausted = true;
+      return;
+    }
+    if (regret >= bestRegret) return; // bound prune
     if (slot === n) {
       bestSelection = chosen.slice();
       bestRegret = regret;
@@ -89,7 +103,10 @@ export function optimizeStack(
       if (conflictsFor(assigned, sandboxConflicts).length === 0) {
         dfs(slot + 1, regret + i);
       }
-      if (nodes > budget) return;
+      if (nodes > budget) {
+        exhausted = true;
+        return;
+      }
     }
   };
   dfs(0, 0);
@@ -99,5 +116,6 @@ export function optimizeStack(
     selection: bestSelection,
     conflicts: conflictsFor(members, sandboxConflicts),
     regret: bestRegret === Infinity ? bestSelection.reduce((a, b) => a + b, 0) : bestRegret,
+    bounded: exhausted,
   };
 }

@@ -1,0 +1,54 @@
+{
+  "moment": {
+    "replacedBy": "dayjs",
+    "reason": "In maintenance mode since 2020 (the maintainers recommend alternatives). dayjs is a ~2KB immutable library with a near-identical API."
+  },
+  "request": {
+    "replacedBy": "got",
+    "reason": "Deprecated in 2020 and no longer maintained. Use the built-in fetch, or got for a full-featured HTTP client."
+  },
+  "request-promise": {
+    "replacedBy": "got",
+    "reason": "Deprecated alongside request. got returns promises natively."
+  },
+  "node-sass": {
+    "replacedBy": "sass",
+    "reason": "Deprecated; bindings break on new Node versions. sass is the Dart implementation (sass-embedded for speed)."
+  },
+  "tslint": {
+    "replacedBy": "typescript-eslint",
+    "reason": "Deprecated in 2019 in favor of ESLint. Use typescript-eslint to lint TypeScript."
+  },
+  "enzyme": {
+    "replacedBy": "@testing-library/react",
+    "reason": "Unmaintained with no official React 17+/18 adapter. React Testing Library is the current standard."
+  },
+  "protractor": {
+    "replacedBy": "@playwright/test",
+    "reason": "Reached end-of-life in 2023. Use Playwright (or Cypress) for browser E2E."
+  },
+  "faker": {
+    "replacedBy": "@faker-js/faker",
+    "reason": "The original package was sabotaged and deprecated. @faker-js/faker is the community-maintained fork."
+  },
+  "bower": {
+    "replacedBy": "npm",
+    "reason": "Deprecated; front-end packages ship on npm now. Use npm (or your package manager) directly."
+  },
+  "popper.js": {
+    "replacedBy": "@popperjs/core",
+    "reason": "v1 is deprecated. @popperjs/core is the maintained v2 line."
+  },
+  "create-react-app": {
+    "replacedBy": "vite",
+    "reason": "No longer recommended by the React team and effectively unmaintained. Vite is the current scaffolding standard."
+  },
+  "babel-eslint": {
+    "replacedBy": "@babel/eslint-parser",
+    "reason": "Deprecated and renamed. Use @babel/eslint-parser."
+  },
+  "istanbul": {
+    "replacedBy": "nyc",
+    "reason": "The istanbul package is legacy; nyc is its maintained CLI (or c8 for native V8 coverage)."
+  }
+}

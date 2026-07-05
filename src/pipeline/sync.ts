@@ -83,6 +83,12 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
   const handle = createDb({ max: Math.max(4, config.LURQ_SYNC_CONCURRENCY) });
   const provider = createSummaryProvider();
   logger.info(`Summary provider: ${provider.kind}`);
+  if (!config.GITHUB_TOKEN) {
+    logger.warn(
+      'GITHUB_TOKEN not set — GitHub signals (stars, issues, release cadence) will be ' +
+        'skipped, degrading maintenance/adoption scores. Set it for accurate scoring.',
+    );
+  }
 
   const runId = await startSyncRun(handle.db);
   const allErrors: SyncError[] = [];

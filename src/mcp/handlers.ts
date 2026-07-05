@@ -11,6 +11,7 @@ import { STALENESS_DAYS } from '../core/constants';
 import type {
   Advisory,
   AdvisorySeverity,
+  BuildSignal,
   BuildVerified,
   Category,
   CompatOutput,
@@ -22,6 +23,8 @@ import { checkCompat } from '../compat/check';
 import type { Database } from '../db/client';
 import { getTopPackageNames } from '../db/packages';
 import { getLatestVerificationByName } from '../db/verification';
+import { recordOutcome } from '../db/outcomes';
+import { lookupSuccessor } from '../core/successors';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import { fetchNpmRegistry, npmPackageExists } from '../ingestion/sources';
@@ -30,7 +33,7 @@ import { getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
 import { assessRisk } from '../security/risk';
-import { detectTyposquat } from '../security/typosquat';
+import { detectTyposquat, typosquatCorpus } from '../security/typosquat';
 
 const SEVERITY_RANK: Record<AdvisorySeverity, number> = {
   critical: 4,
@@ -96,6 +99,7 @@ export function rowToEvaluate(row: PackageRow): EvaluateOutput {
     summary: row.summary ? truncateSentences(row.summary, 3) : null,
     usageGuide: row.usageGuide ?? null,
     repoUrl: row.repoUrl,
+    replacedBy: lookupSuccessor(row.name),
   };
 }
 
@@ -228,7 +232,7 @@ export async function handleVerify(
   if (!exists) {
     // A name that doesn't exist but closely mimics a popular one is a squat the
     // agent was about to fall for — surface the suspected target.
-    const typo = detectTyposquat(name, await getTopPackageNames(db).catch(() => []));
+    const typo = detectTyposquat(name, typosquatCorpus(await getTopPackageNames(db).catch(() => [])));
     return {
       exists: false,
       tracked: false,
@@ -260,7 +264,7 @@ export async function handleVerify(
   const brandNew = withinDays(registry?.firstPublishedAt ?? null, 7);
   const lowTrust = weeklyDownloads === null || weeklyDownloads < 1000;
   const installScripts = registry?.hasInstallScripts ?? false;
-  const typo = detectTyposquat(name, popular);
+  const typo = detectTyposquat(name, typosquatCorpus(popular));
 
   const riskFlags: string[] = [];
   if (typo) riskFlags.push(`possible-typosquat-of:${typo.target}`);
@@ -296,4 +300,31 @@ export async function handleVerify(
     confidence: (row?.confidence as Confidence) ?? null,
     advisoryCount,
   };
+}
+
+// ── report_outcome ────────────────────────────────────────────────────────────
+
+export interface ReportOutcomeInput {
+  package: string;
+  accepted: boolean;
+  buildSignal?: BuildSignal;
+  need?: string;
+}
+
+/**
+ * Capture an opt-in recommendation outcome (§3.1). Append-only, no source code —
+ * just which package, accepted or not, and a coarse build signal. Not cached (a
+ * write), and cheap enough that the per-key rate limiter is the only guard needed.
+ */
+export async function handleReportOutcome(
+  db: Database,
+  input: ReportOutcomeInput,
+): Promise<{ recorded: true }> {
+  await recordOutcome(db, {
+    packageName: input.package,
+    accepted: input.accepted,
+    buildSignal: input.buildSignal ?? null,
+    need: input.need ?? null,
+  });
+  return { recorded: true };
 }

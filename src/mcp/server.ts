@@ -14,10 +14,12 @@ import {
   handleCompat,
   handleEvaluate,
   handleRecommend,
+  handleReportOutcome,
   handleVerify,
 } from './handlers';
 import { handleDiagram } from './diagram';
 import { handlePlan } from './plan';
+import { timed } from './metrics';
 
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
@@ -63,7 +65,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
         constraints: constraintsSchema,
       },
     },
-    async (args) => json(await handleRecommend(db, args)),
+    async (args) => json(await timed('recommend', () => handleRecommend(db, args))),
   );
 
   server.registerTool(
@@ -76,7 +78,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
         package: npmName.describe('npm package name'),
       },
     },
-    async (args) => json(await handleEvaluate(db, args)),
+    async (args) => json(await timed('evaluate', () => handleEvaluate(db, args))),
   );
 
   server.registerTool(
@@ -88,7 +90,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
         packages: z.array(npmName).min(2).max(5).describe('2–5 npm package names'),
       },
     },
-    async (args) => json(await handleCompare(db, args)),
+    async (args) => json(await timed('compare', () => handleCompare(db, args))),
   );
 
   server.registerTool(
@@ -105,7 +107,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
           .describe('2–8 npm package names to check together'),
       },
     },
-    async (args) => json(await handleCompat(db, args)),
+    async (args) => json(await timed('compat', () => handleCompat(db, args))),
   );
 
   server.registerTool(
@@ -118,7 +120,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
         package: npmName.describe('npm package name to verify'),
       },
     },
-    async (args) => json(await handleVerify(db, args)),
+    async (args) => json(await timed('verify', () => handleVerify(db, args))),
   );
 
   server.registerTool(
@@ -134,7 +136,7 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
           .describe('Package names that make up the stack; omit or empty to get usage guidance'),
       },
     },
-    async (args) => json(await handleDiagram(db, args)),
+    async (args) => json(await timed('diagram', () => handleDiagram(db, args))),
   );
 
   server.registerTool(
@@ -170,7 +172,30 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
           .describe("'speed' prefers the lightest-bundle option per slot; default 'balanced'"),
       },
     },
-    async (args) => json(await handlePlan(db, args)),
+    async (args) => json(await timed('plan', () => handlePlan(db, args))),
+  );
+
+  server.registerTool(
+    'report_outcome',
+    {
+      title: 'Report a recommendation outcome',
+      description:
+        'Opt-in feedback after acting on a lurq recommendation: report whether you went with the package and whether it built. No source code — only the coarse decision + a build signal. Helps lurq learn which packages agents actually succeed with; safe to skip.',
+      inputSchema: {
+        package: npmName.describe('The package that was recommended'),
+        accepted: z.boolean().describe('Did you go with this package?'),
+        buildSignal: z
+          .enum(['installed', 'compiled', 'tests_passed', 'failed'])
+          .optional()
+          .describe('Coarse post-install result, if known'),
+        need: z
+          .string()
+          .max(500)
+          .optional()
+          .describe('The original need this was recommended for (no source code)'),
+      },
+    },
+    async (args) => json(await timed('report_outcome', () => handleReportOutcome(db, args))),
   );
 
   return server;

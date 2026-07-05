@@ -64,6 +64,13 @@
       "when": 1783049097705,
       "tag": "0008_peaceful_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783197174371,
+      "tag": "0009_smooth_harrier",
+      "breakpoints": true
     }
   ]
 }
