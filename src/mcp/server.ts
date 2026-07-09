@@ -20,6 +20,7 @@ import {
 import { handleDiagram } from './diagram';
 import { handlePlan } from './plan';
 import { timed } from './metrics';
+import { compact } from './compact';
 
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
@@ -45,9 +46,10 @@ const constraintsSchema = z
   })
   .optional();
 
-/** Wrap any result object as a compact MCP text response. */
+/** Wrap any result object as a compact MCP text response. `compact` strips
+ *  null/empty fields so the agent's context only carries signal (§12.4). */
 function json(obj: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(obj) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(compact(obj)) }] };
 }
 
 export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer {
