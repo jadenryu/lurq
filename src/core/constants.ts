@@ -4,7 +4,7 @@ export const SERVER_NAME = 'lurq';
  *  Keep in sync with package.json "name". */
 export const PACKAGE_NAME = 'lurqrun';
 /** Keep in sync with package.json "version". */
-export const VERSION = '0.0.2';
+export const VERSION = '0.0.3';
 
 /** Default hosted endpoint the install wizard writes into agent configs. The
  *  marketing site is `lurq.run`; the MCP service lives on the `api.` subdomain.
