@@ -120,7 +120,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   app.post('/mcp', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
-    const server = buildMcpServer(db);
+    // Thread the authenticated key's org identity into the tools (§3.1).
+    const server = buildMcpServer(db, { ownerId: (req as AuthedRequest).lurqKey?.ownerId ?? null });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

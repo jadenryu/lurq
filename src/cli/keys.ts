@@ -70,12 +70,17 @@ async function presentNewKey(
 export async function runKeysCreate(opts: {
   label?: string;
   tier?: string;
+  owner?: string;
   json?: boolean;
 }): Promise<void> {
   requireConfig(['DATABASE_URL']);
   const { db, close } = createDb({ max: 1 });
   try {
-    const { key, row } = await createKey(db, { label: opts.label, tier: opts.tier });
+    const { key, row } = await createKey(db, {
+      label: opts.label,
+      tier: opts.tier,
+      ownerId: opts.owner,
+    });
     await presentNewKey(key, row, opts);
   } finally {
     await close();
