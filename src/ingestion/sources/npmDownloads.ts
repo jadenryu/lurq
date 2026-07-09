@@ -35,7 +35,10 @@ export function parseDownloadGrowth(json: any): number | null {
   const priorAvg = sum(prior) / prior.length;
   const recentAvg = sum(recent) / recent.length;
   if (priorAvg <= 0) return recentAvg > 0 ? 1 : 0;
-  return (recentAvg - priorAvg) / priorAvg;
+  // Round to 3 decimals: this is a best-effort secondary signal, so the float's
+  // precision tail is meaningless — and it ships in every recommend/evaluate
+  // response, where 19 chars of noise is tokens the calling agent pays for.
+  return Math.round(((recentAvg - priorAvg) / priorAvg) * 1000) / 1000;
 }
 
 /** Format a Date as YYYY-MM-DD (UTC) for the npm range API. */

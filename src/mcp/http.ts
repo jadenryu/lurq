@@ -39,6 +39,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // The DB pool is the expensive resource — created once, shared by all requests.
   const { db } = createDb({ max: 20 });
 
+  // Without Redis the response cache is a pass-through, so every recommend/
+  // evaluate/compare recomputes its search on the DB — fine for one box, but the
+  // first thing that buckles under real traffic. Warn loudly on the hosted path.
+  if (!process.env.REDIS_URL) {
+    logger.warn(
+      'REDIS_URL not set — response caching is OFF; every request recomputes on the ' +
+        'database. Set REDIS_URL before serving real traffic (and it also backs the ' +
+        'rate limiter across instances).',
+    );
+  }
+
   const app = express();
   app.set('trust proxy', 1); // Railway terminates TLS at the edge.
   app.use(helmet());
