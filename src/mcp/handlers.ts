@@ -156,7 +156,7 @@ export async function handleEvaluate(
         return {
           tracked: false as const,
           suggestion: existsOnNpm
-            ? `"${input.package}" is now being tracked — retry in a few seconds for full scores.`
+            ? `🎉 Congrats — you're the first to add "${input.package}" to lurq's registry! It's being fetched and scored now; retry in a few seconds for the full evidence read.`
             : `"${input.package}" was not found on the npm registry. Check the package name.`,
         };
       }
@@ -195,7 +195,7 @@ export async function handleCompare(db: Database, input: { packages: string[] })
         ...(missing.length
           ? {
               missing,
-              note: 'Missing packages are real but not scored yet — they are being tracked; retry shortly for a full comparison.',
+              note: "🎉 You're the first to add these to lurq's registry! They're being scored now; retry shortly for the full comparison.",
             }
           : {}),
       };
