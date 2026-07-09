@@ -156,7 +156,7 @@ export async function handleEvaluate(
         return {
           tracked: false as const,
           suggestion: existsOnNpm
-            ? `"${input.package}" exists on npm but could not be scored right now; try again.`
+            ? `🎉 Congrats — you're the first to add "${input.package}" to lurq's registry! It's being fetched and scored now; retry in a few seconds for the full evidence read.`
             : `"${input.package}" was not found on the npm registry. Check the package name.`,
         };
       }
@@ -189,7 +189,16 @@ export async function handleCompare(db: Database, input: { packages: string[] })
         .map(rowToEvaluate)
         .sort((a, b) => b.healthScore - a.healthScore);
       const missing = input.packages.filter((name) => !rows.some((r) => r.name === name));
-      return { dataAsOf: await latestDataAsOf(db), rows, ...(missing.length ? { missing } : {}) };
+      return {
+        dataAsOf: await latestDataAsOf(db),
+        rows,
+        ...(missing.length
+          ? {
+              missing,
+              note: "🎉 You're the first to add these to lurq's registry! They're being scored now; retry shortly for the full comparison.",
+            }
+          : {}),
+      };
     },
     // Don't cache a transient miss (a package that momentarily failed to fetch).
     { skipCache: (r) => Boolean((r as { missing?: string[] }).missing?.length) },
