@@ -61,23 +61,66 @@ export async function createKey(
 }
 
 /**
+ * Short-TTL cache of resolved keys. Auth runs on every hosted request, so an
+ * uncached lookup means a SELECT (plus a lastUsedAt UPDATE) per call — pure load
+ * on the DB, which is the scaling bottleneck. We cache only *valid* keys (the
+ * hot path); unknown tokens always hit the DB so a flood of garbage tokens can't
+ * bloat the map, and the per-IP limiter blunts that anyway. Trade-off: a revoked
+ * key keeps working for up to AUTH_TTL_MS. Process-local; each instance caches
+ * independently, which is fine for a bearer check.
+ */
+interface AuthEntry {
+  row: ApiKeyRow;
+  cachedAt: number;
+  lastStampAt: number;
+}
+const authCache = new Map<string, AuthEntry>();
+const AUTH_TTL_MS = 60_000;
+/** lastUsedAt is analytics, not correctness — stamp at most this often per key. */
+const STAMP_INTERVAL_MS = 60_000;
+
+/** Test-only: clear the auth cache so a fresh lookup re-reads the DB. */
+export function resetAuthCache(): void {
+  authCache.clear();
+}
+
+/** Fire-and-forget usage stamp, throttled per key. Never blocks the request. */
+function stampLastUsed(db: Database, entry: AuthEntry, now: number): void {
+  if (now - entry.lastStampAt < STAMP_INTERVAL_MS) return;
+  entry.lastStampAt = now;
+  db.update(apiKeys)
+    .set({ lastUsedAt: new Date(now) })
+    .where(eq(apiKeys.id, entry.row.id))
+    .then(undefined, (err) => logger.debug(`lastUsedAt stamp failed: ${String(err)}`));
+}
+
+/**
  * Look up an active (non-revoked) key by its plaintext form. Returns null if the
- * key is unknown or revoked. Stamps `lastUsedAt` best-effort without blocking.
+ * key is unknown or revoked. Cached for AUTH_TTL_MS; stamps `lastUsedAt`
+ * best-effort (throttled) without blocking.
  */
 export async function lookupActiveKey(db: Database, key: string): Promise<ApiKeyRow | null> {
   const hash = hashKey(key);
+  const now = Date.now();
+
+  const cached = authCache.get(hash);
+  if (cached && now - cached.cachedAt < AUTH_TTL_MS) {
+    stampLastUsed(db, cached, now);
+    return cached.row;
+  }
+
   const [row] = await db
     .select()
     .from(apiKeys)
     .where(and(eq(apiKeys.keyHash, hash), isNull(apiKeys.revokedAt)))
     .limit(1);
-  if (!row) return null;
-  // Fire-and-forget usage stamp; failures must never affect the request, but
-  // log at debug so a persistently-failing write isn't completely invisible.
-  db.update(apiKeys)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(apiKeys.id, row.id))
-    .then(undefined, (err) => logger.debug(`lastUsedAt stamp failed: ${String(err)}`));
+  if (!row) {
+    authCache.delete(hash); // e.g. a key revoked since it was last cached
+    return null;
+  }
+  const entry: AuthEntry = { row, cachedAt: now, lastStampAt: 0 };
+  authCache.set(hash, entry);
+  stampLastUsed(db, entry, now);
   return row;
 }
 
