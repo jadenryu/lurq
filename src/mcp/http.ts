@@ -12,6 +12,7 @@
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
+import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
@@ -60,6 +61,26 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     );
   }
 
+  // Rate-limit store: Redis-backed when REDIS_URL is set, so limits are shared
+  // and correct across horizontally-scaled instances. Without it the default
+  // in-memory store is per-process — fine for one box, but N instances would
+  // each enforce the full quota (N× the real limit). Each limiter gets its own
+  // prefix so their counters don't collide in one Redis keyspace.
+  let makeStore: ((prefix: string) => Store) | null = null;
+  if (process.env.REDIS_URL) {
+    const [{ default: Redis }, { default: RedisStore }] = await Promise.all([
+      import('ioredis'),
+      import('rate-limit-redis'),
+    ]);
+    const rlRedis = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 1, family: 0 });
+    rlRedis.on('error', (err: Error) => logger.warn(`rate-limit redis: ${err.message}`));
+    makeStore = (prefix: string) =>
+      new RedisStore({
+        prefix,
+        sendCommand: (...args: string[]) => rlRedis.call(args[0]!, ...args.slice(1)) as Promise<never>,
+      });
+  }
+
   const app = express();
   app.set('trust proxy', 1); // Railway terminates TLS at the edge.
   app.use(helmet());
@@ -96,6 +117,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     limit: config.LURQ_IP_RATE_LIMIT_MAX,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    ...(makeStore ? { store: makeStore('rl:ip:') } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 
@@ -136,6 +158,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       const id = (req as AuthedRequest).lurqKey?.id;
       return id != null ? `key:${id}` : ipKeyGenerator(req.ip ?? '0.0.0.0');
     },
+    ...(makeStore ? { store: makeStore('rl:key:') } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 
