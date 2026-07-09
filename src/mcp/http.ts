@@ -10,11 +10,12 @@
  * express/helmet/express-rate-limit are imported dynamically so the CLI and the
  * install wizard never pull server-only deps into their startup path.
  */
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
-import { lookupActiveKey } from '../auth/apiKeys';
+import { createKey, lookupActiveKey } from '../auth/apiKeys';
 import { createDb } from '../db/client';
 import type { ApiKeyRow } from '../db/schema';
 import { buildMcpServer } from './server';
@@ -27,6 +28,15 @@ interface AuthedRequest extends Request {
 /** JSON-RPC-shaped error envelope for HTTP-level rejections. */
 function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
+}
+
+/** Constant-time secret comparison (hash to a fixed length first, so length
+ *  never leaks and mismatched lengths don't throw). */
+export function secretEquals(a: string, b: string): boolean {
+  return timingSafeEqual(
+    createHash('sha256').update(a).digest(),
+    createHash('sha256').update(b).digest(),
+  );
 }
 
 export async function startHttpServer(opts: { port?: number } = {}): Promise<void> {
@@ -116,6 +126,41 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return id != null ? `key:${id}` : ipKeyGenerator(req.ip ?? '0.0.0.0');
     },
     message: rpcError(-32029, 'Rate limit exceeded.'),
+  });
+
+  // Self-serve key issuance for the web dashboard (§ identity). Gated by the
+  // shared LURQ_ISSUER_SECRET: the Clerk-authenticated web app presents it and
+  // supplies the signed-in user's resolved `ownerId`. The backend trusts the web
+  // app to have authenticated the user — it just mints the key. NOT behind the
+  // per-IP limiter: all web-app calls share one egress IP, so that would throttle
+  // every user together; the secret + the web app's own per-user auth are the
+  // gate. Disabled (404) when the secret is unset.
+  app.post('/keys', async (req: Request, res: Response) => {
+    const secret = config.LURQ_ISSUER_SECRET;
+    if (!secret) {
+      res.status(404).end();
+      return;
+    }
+    const header = req.headers.authorization;
+    const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    if (!token || !secretEquals(token, secret)) {
+      res.status(401).json({ error: 'Invalid issuer secret.' });
+      return;
+    }
+    const body = (req.body ?? {}) as { ownerId?: unknown; label?: unknown };
+    const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
+    try {
+      const { key, row } = await createKey(db, { ownerId, label, tier: 'free' });
+      res.status(201).json({ key, prefix: row.prefix });
+    } catch (err) {
+      logger.error('key issuance failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not issue key.' });
+    }
   });
 
   app.post('/mcp', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
