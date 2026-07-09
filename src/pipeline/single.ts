@@ -23,13 +23,15 @@ import {
 import { buildEmbeddingText, createEmbeddingProvider } from '../search/embeddings';
 import type { Database } from '../db/client';
 import {
-  ensureSeedEntry,
   getPackageByName,
   upsertPackage,
   upsertPackageVersions,
 } from '../db/packages';
 import { packages, seedPackages, type PackageRow } from '../db/schema';
 import { assemblePackageRow } from './sync';
+// Safe module cycle: ingestQueue imports syncOnePackage from here, but both
+// bindings are used only at call time, never at module-eval, so ESM resolves it.
+import { enqueueIngest } from './ingestQueue';
 
 async function getSeedCategory(db: Database, name: string): Promise<Category | null> {
   const [row] = await db
@@ -141,11 +143,17 @@ export interface GetOrFetchResult {
   /** True if the package was already in the index before this call. */
   wasTracked: boolean;
   existsOnNpm: boolean;
+  /** True if a real-but-untracked package was scheduled for background
+   *  ingestion this call — the caller should tell the agent to retry shortly. */
+  queued?: boolean;
 }
 
 /**
- * Return a tracked package, or fetch+store it on demand if it's a real npm
- * package not yet in the index (§12.5). Returns row=null when it doesn't exist.
+ * Return a tracked package, or — if it's a real npm package not yet in the index
+ * (§12.5) — schedule it for background ingestion and return row=null so the
+ * request never blocks on the heavy fetch→score→embed→upsert. The caller surfaces
+ * a "tracking, retry shortly" hint; a few seconds later the row exists. Returns
+ * existsOnNpm=false when the name isn't a real package at all.
  */
 export async function getOrFetchPackage(db: Database, name: string): Promise<GetOrFetchResult> {
   const existing = await getPackageByName(db, name);
@@ -154,14 +162,9 @@ export async function getOrFetchPackage(db: Database, name: string): Promise<Get
   const exists = await npmPackageExists(name);
   if (!exists) return { row: null, wasTracked: false, existsOnNpm: false };
 
-  const row = await syncOnePackage(db, name);
-  // Only commit genuinely-trackable discoveries to the seed list, which the
-  // daily sync then refreshes forever. Without this bar any authenticated key
-  // could permanently inflate sync cost by evaluating an endless tail of
-  // obscure-but-real packages. Low-signal ones are still evaluated and returned
-  // to the caller, just not kept on the sync roster.
-  if (row.confidence && row.confidence !== 'unproven') {
-    await ensureSeedEntry(db, name, row.category);
-  }
-  return { row, wasTracked: false, existsOnNpm: true };
+  // Real but untracked: ingest off the request path. Bounded + deduped so a
+  // flood of distinct names can't spawn unbounded work (the whole point of not
+  // doing it inline). Roster promotion happens in the worker, same quality bar.
+  enqueueIngest(db, name);
+  return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
 }

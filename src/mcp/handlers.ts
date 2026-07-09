@@ -27,7 +27,7 @@ import { recordOutcome } from '../db/outcomes';
 import { lookupSuccessor } from '../core/successors';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
-import { fetchNpmRegistry, npmPackageExists } from '../ingestion/sources';
+import { fetchNpmRegistry, fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
@@ -156,7 +156,7 @@ export async function handleEvaluate(
         return {
           tracked: false as const,
           suggestion: existsOnNpm
-            ? `"${input.package}" exists on npm but could not be scored right now; try again.`
+            ? `"${input.package}" is now being tracked — retry in a few seconds for full scores.`
             : `"${input.package}" was not found on the npm registry. Check the package name.`,
         };
       }
@@ -189,7 +189,16 @@ export async function handleCompare(db: Database, input: { packages: string[] })
         .map(rowToEvaluate)
         .sort((a, b) => b.healthScore - a.healthScore);
       const missing = input.packages.filter((name) => !rows.some((r) => r.name === name));
-      return { dataAsOf: await latestDataAsOf(db), rows, ...(missing.length ? { missing } : {}) };
+      return {
+        dataAsOf: await latestDataAsOf(db),
+        rows,
+        ...(missing.length
+          ? {
+              missing,
+              note: 'Missing packages are real but not scored yet — they are being tracked; retry shortly for a full comparison.',
+            }
+          : {}),
+      };
     },
     // Don't cache a transient miss (a package that momentarily failed to fetch).
     { skipCache: (r) => Boolean((r as { missing?: string[] }).missing?.length) },
@@ -256,7 +265,11 @@ export async function handleVerify(
     getTopPackageNames(db).catch(() => [] as string[]),
   ]);
 
-  const weeklyDownloads = row?.weeklyDownloads ?? null;
+  // On-demand ingestion is now async, so an untracked package has no row yet.
+  // Fetch weekly downloads live (one cheap call) rather than let the risk flags
+  // falsely trip 'zero-downloads' on a popular package the index hasn't caught up
+  // to. Only pays the extra call on the untracked path.
+  const weeklyDownloads = row?.weeklyDownloads ?? (await fetchWeeklyDownloads(name).catch(() => null));
   const advisories = row?.advisories ?? [];
   const advisoryCount = advisories.length;
   const deprecated = Boolean(row?.deprecated || registry?.deprecated);
