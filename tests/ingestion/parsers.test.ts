@@ -99,6 +99,9 @@ describe('npm downloads parsers', () => {
       downloads: i < 60 ? 100 : 150, // last 30 of the trailing 60 are higher
     }));
     expect(parseDownloadGrowth({ downloads: points })).toBeCloseTo(0.5, 5);
+    // Rounded to 3 decimals — no long precision tail ships in responses.
+    const g = parseDownloadGrowth({ downloads: points })!;
+    expect(g).toBe(Math.round(g * 1000) / 1000);
   });
 
   it('returns null with insufficient data', () => {
