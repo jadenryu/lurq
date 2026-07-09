@@ -27,7 +27,7 @@ import { recordOutcome } from '../db/outcomes';
 import { lookupSuccessor } from '../core/successors';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
-import { fetchNpmRegistry, npmPackageExists } from '../ingestion/sources';
+import { fetchNpmRegistry, fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
@@ -265,7 +265,11 @@ export async function handleVerify(
     getTopPackageNames(db).catch(() => [] as string[]),
   ]);
 
-  const weeklyDownloads = row?.weeklyDownloads ?? null;
+  // On-demand ingestion is now async, so an untracked package has no row yet.
+  // Fetch weekly downloads live (one cheap call) rather than let the risk flags
+  // falsely trip 'zero-downloads' on a popular package the index hasn't caught up
+  // to. Only pays the extra call on the untracked path.
+  const weeklyDownloads = row?.weeklyDownloads ?? (await fetchWeeklyDownloads(name).catch(() => null));
   const advisories = row?.advisories ?? [];
   const advisoryCount = advisories.length;
   const deprecated = Boolean(row?.deprecated || registry?.deprecated);
@@ -324,12 +328,16 @@ export interface ReportOutcomeInput {
  * Capture an opt-in recommendation outcome (§3.1). Append-only, no source code —
  * just which package, accepted or not, and a coarse build signal. Not cached (a
  * write), and cheap enough that the per-key rate limiter is the only guard needed.
+ * `ownerId` is server-injected from the authenticated key, attributing the
+ * outcome to an org so the flywheel accrues per-customer, not to a global pool.
  */
 export async function handleReportOutcome(
   db: Database,
   input: ReportOutcomeInput,
+  ownerId: string | null = null,
 ): Promise<{ recorded: true }> {
   await recordOutcome(db, {
+    ownerId,
     packageName: input.package,
     accepted: input.accepted,
     buildSignal: input.buildSignal ?? null,

@@ -47,6 +47,10 @@ const EnvSchema = z.object({
   LURQ_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   /** Bearer token guarding `/metrics`. Unset → the endpoint is disabled (404). */
   LURQ_METRICS_TOKEN: z.string().min(1).optional(),
+  /** Shared secret for self-serve key issuance (`POST /keys`). The Clerk-
+   *  authenticated web app presents it to mint a key for a signed-in user. Unset
+   *  → the endpoint is disabled (404). Keep it server-side, never in the client. */
+  LURQ_ISSUER_SECRET: z.string().min(1).optional(),
 
   // Client-side (install wizard / CLI talking to a remote endpoint).
   LURQ_ENDPOINT: z.string().url().optional(),

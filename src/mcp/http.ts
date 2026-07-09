@@ -10,11 +10,13 @@
  * express/helmet/express-rate-limit are imported dynamically so the CLI and the
  * install wizard never pull server-only deps into their startup path.
  */
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
+import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
-import { lookupActiveKey } from '../auth/apiKeys';
+import { createKey, lookupActiveKey } from '../auth/apiKeys';
 import { createDb } from '../db/client';
 import type { ApiKeyRow } from '../db/schema';
 import { buildMcpServer } from './server';
@@ -29,6 +31,15 @@ function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
 }
 
+/** Constant-time secret comparison (hash to a fixed length first, so length
+ *  never leaks and mismatched lengths don't throw). */
+export function secretEquals(a: string, b: string): boolean {
+  return timingSafeEqual(
+    createHash('sha256').update(a).digest(),
+    createHash('sha256').update(b).digest(),
+  );
+}
+
 export async function startHttpServer(opts: { port?: number } = {}): Promise<void> {
   const config = getConfig();
   const port = opts.port ?? config.PORT;
@@ -38,6 +49,37 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   // The DB pool is the expensive resource — created once, shared by all requests.
   const { db } = createDb({ max: 20 });
+
+  // Without Redis the response cache is a pass-through, so every recommend/
+  // evaluate/compare recomputes its search on the DB — fine for one box, but the
+  // first thing that buckles under real traffic. Warn loudly on the hosted path.
+  if (!process.env.REDIS_URL) {
+    logger.warn(
+      'REDIS_URL not set — response caching is OFF; every request recomputes on the ' +
+        'database. Set REDIS_URL before serving real traffic (and it also backs the ' +
+        'rate limiter across instances).',
+    );
+  }
+
+  // Rate-limit store: Redis-backed when REDIS_URL is set, so limits are shared
+  // and correct across horizontally-scaled instances. Without it the default
+  // in-memory store is per-process — fine for one box, but N instances would
+  // each enforce the full quota (N× the real limit). Each limiter gets its own
+  // prefix so their counters don't collide in one Redis keyspace.
+  let makeStore: ((prefix: string) => Store) | null = null;
+  if (process.env.REDIS_URL) {
+    const [{ default: Redis }, { default: RedisStore }] = await Promise.all([
+      import('ioredis'),
+      import('rate-limit-redis'),
+    ]);
+    const rlRedis = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 1, family: 0 });
+    rlRedis.on('error', (err: Error) => logger.warn(`rate-limit redis: ${err.message}`));
+    makeStore = (prefix: string) =>
+      new RedisStore({
+        prefix,
+        sendCommand: (...args: string[]) => rlRedis.call(args[0]!, ...args.slice(1)) as Promise<never>,
+      });
+  }
 
   const app = express();
   app.set('trust proxy', 1); // Railway terminates TLS at the edge.
@@ -75,6 +117,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     limit: config.LURQ_IP_RATE_LIMIT_MAX,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    ...(makeStore ? { store: makeStore('rl:ip:') } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 
@@ -115,12 +158,49 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       const id = (req as AuthedRequest).lurqKey?.id;
       return id != null ? `key:${id}` : ipKeyGenerator(req.ip ?? '0.0.0.0');
     },
+    ...(makeStore ? { store: makeStore('rl:key:') } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
+  });
+
+  // Self-serve key issuance for the web dashboard (§ identity). Gated by the
+  // shared LURQ_ISSUER_SECRET: the Clerk-authenticated web app presents it and
+  // supplies the signed-in user's resolved `ownerId`. The backend trusts the web
+  // app to have authenticated the user — it just mints the key. NOT behind the
+  // per-IP limiter: all web-app calls share one egress IP, so that would throttle
+  // every user together; the secret + the web app's own per-user auth are the
+  // gate. Disabled (404) when the secret is unset.
+  app.post('/keys', async (req: Request, res: Response) => {
+    const secret = config.LURQ_ISSUER_SECRET;
+    if (!secret) {
+      res.status(404).end();
+      return;
+    }
+    const header = req.headers.authorization;
+    const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    if (!token || !secretEquals(token, secret)) {
+      res.status(401).json({ error: 'Invalid issuer secret.' });
+      return;
+    }
+    const body = (req.body ?? {}) as { ownerId?: unknown; label?: unknown };
+    const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
+    try {
+      const { key, row } = await createKey(db, { ownerId, label, tier: 'free' });
+      res.status(201).json({ key, prefix: row.prefix });
+    } catch (err) {
+      logger.error('key issuance failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not issue key.' });
+    }
   });
 
   app.post('/mcp', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
-    const server = buildMcpServer(db);
+    // Thread the authenticated key's org identity into the tools (§3.1).
+    const server = buildMcpServer(db, { ownerId: (req as AuthedRequest).lurqKey?.ownerId ?? null });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
