@@ -17,17 +17,16 @@ function fakeDb(): { db: Database; inserted: NewRecommendationOutcomeRow[] } {
 }
 
 describe('handleReportOutcome', () => {
-  it('records the package, decision, and build signal', async () => {
+  it('stamps the server-injected ownerId onto the outcome', async () => {
     const { db, inserted } = fakeDb();
-    const res = await handleReportOutcome(db, {
-      package: 'drizzle-orm',
-      accepted: true,
-      buildSignal: 'tests_passed',
-      need: 'a typesafe ORM',
-    });
+    const res = await handleReportOutcome(
+      db,
+      { package: 'drizzle-orm', accepted: true, buildSignal: 'tests_passed', need: 'a typesafe ORM' },
+      'org_abc123',
+    );
     expect(res).toEqual({ recorded: true });
-    expect(inserted).toHaveLength(1);
     expect(inserted[0]).toEqual({
+      ownerId: 'org_abc123',
       packageName: 'drizzle-orm',
       accepted: true,
       buildSignal: 'tests_passed',
@@ -35,10 +34,11 @@ describe('handleReportOutcome', () => {
     });
   });
 
-  it('normalizes omitted optional fields to null', async () => {
+  it('defaults ownerId to null for anonymous/operator keys', async () => {
     const { db, inserted } = fakeDb();
     await handleReportOutcome(db, { package: 'zod', accepted: false });
     expect(inserted[0]).toEqual({
+      ownerId: null,
       packageName: 'zod',
       accepted: false,
       buildSignal: null,

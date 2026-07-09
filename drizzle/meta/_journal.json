@@ -71,6 +71,13 @@
       "when": 1783197174371,
       "tag": "0009_smooth_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783603392922,
+      "tag": "0010_curved_amphibian",
+      "breakpoints": true
     }
   ]
 }

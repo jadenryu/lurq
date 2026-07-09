@@ -279,6 +279,11 @@ export const recommendationOutcomes = pgTable(
   'recommendation_outcomes',
   {
     id: serial('id').primaryKey(),
+    /** The org this outcome belongs to (api_keys.owner_id). Null for anonymous /
+     *  operator-issued keys. This is what turns the flywheel from a global blob
+     *  into a per-org asset — "what did *this* org succeed with." Server-injected
+     *  from the authenticated key, never caller-supplied. */
+    ownerId: text('owner_id'),
     packageName: text('package_name').notNull(),
     accepted: boolean('accepted').notNull(),
     buildSignal: text('build_signal').$type<BuildSignal>(),
@@ -287,7 +292,10 @@ export const recommendationOutcomes = pgTable(
     need: text('need'),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
-  (table) => [index('recommendation_outcomes_pkg_idx').on(table.packageName)],
+  (table) => [
+    index('recommendation_outcomes_pkg_idx').on(table.packageName),
+    index('recommendation_outcomes_owner_idx').on(table.ownerId),
+  ],
 );
 
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';

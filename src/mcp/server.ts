@@ -52,7 +52,21 @@ function json(obj: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(compact(obj)) }] };
 }
 
-export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer {
+/**
+ * Per-connection identity, resolved from the authenticated API key at the HTTP
+ * boundary and threaded into the tools. This is the channel that lets lurq know
+ * *who* is calling — stamped onto the data it collects (§3.1 flywheel) so it
+ * accrues to an org instead of an anonymous pool. `ownerId` is null on the stdio
+ * / local path and for operator-issued keys with no org.
+ */
+export interface ServerContext {
+  ownerId?: string | null;
+}
+
+export function buildMcpServer(
+  db: ReturnType<typeof createDb>['db'],
+  ctx: ServerContext = {},
+): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: VERSION });
 
   server.registerTool(
@@ -197,7 +211,10 @@ export function buildMcpServer(db: ReturnType<typeof createDb>['db']): McpServer
           .describe('The original need this was recommended for (no source code)'),
       },
     },
-    async (args) => json(await timed('report_outcome', () => handleReportOutcome(db, args))),
+    // ownerId comes from the authenticated key (ctx), NOT the tool arguments —
+    // a caller must never be able to attribute an outcome to another org.
+    async (args) =>
+      json(await timed('report_outcome', () => handleReportOutcome(db, args, ctx.ownerId ?? null))),
   );
 
   return server;

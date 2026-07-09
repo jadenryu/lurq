@@ -239,8 +239,9 @@ export function buildProgram(): Command {
     .description('create a new API key (shown once; erased from the terminal after you copy it)')
     .option('--label <label>', 'human label (owner / org / purpose)')
     .option('--tier <tier>', 'tier name', 'free')
+    .option('--owner <id>', 'org/owner id to attribute this key to (e.g. a Clerk org id)')
     .option('--json', 'print the key as JSON and skip the interactive erase (for scripts)')
-    .action(async (opts: { label?: string; tier?: string; json?: boolean }) => {
+    .action(async (opts: { label?: string; tier?: string; owner?: string; json?: boolean }) => {
       const { runKeysCreate } = await import('./keys');
       await runKeysCreate(opts);
     });

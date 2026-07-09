@@ -328,12 +328,16 @@ export interface ReportOutcomeInput {
  * Capture an opt-in recommendation outcome (§3.1). Append-only, no source code —
  * just which package, accepted or not, and a coarse build signal. Not cached (a
  * write), and cheap enough that the per-key rate limiter is the only guard needed.
+ * `ownerId` is server-injected from the authenticated key, attributing the
+ * outcome to an org so the flywheel accrues per-customer, not to a global pool.
  */
 export async function handleReportOutcome(
   db: Database,
   input: ReportOutcomeInput,
+  ownerId: string | null = null,
 ): Promise<{ recorded: true }> {
   await recordOutcome(db, {
+    ownerId,
     packageName: input.package,
     accepted: input.accepted,
     buildSignal: input.buildSignal ?? null,
