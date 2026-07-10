@@ -1,17 +1,26 @@
 // Next.js 16 renamed `middleware.ts` → `proxy.ts`. Clerk needs this to run on
 // every request so the client SDK can hydrate auth state — without it,
 // <SignInButton>/<SignUpButton> and useAuth() silently do nothing.
-// No route protection here: this is a marketing site; clerkMiddleware() with no
-// matcher logic just establishes the Clerk context. Add createRouteMatcher +
-// auth.protect() here if /dashboard should be gated server-side.
-import { clerkMiddleware } from "@clerk/nextjs/server";
+//
+// There must be exactly ONE proxy file. Next 16 accepts it at `/proxy.ts` OR
+// `/src/proxy.ts` (PROXY_LOCATION_REGEXP = `(?:src/)?proxy`); having both is
+// ambiguous and the proxy may not run at all. Since `app` lives in `src/app`,
+// this is the canonical spot — do not re-add a root-level proxy.ts.
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-export default clerkMiddleware();
+// Default-public; protect by exception. Only the dashboard requires auth.
+const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    await auth.protect();
+  }
+});
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Skip Next.js internals, the /docs multi-zone, the /ingest PostHog proxy, and all static files, unless found in search params
+    "/((?!_next|docs|ingest|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     // Always run for API routes
     "/(api|trpc)(.*)",
     // Always run for Clerk-specific frontend API routes
