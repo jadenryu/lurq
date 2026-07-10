@@ -3,12 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
-import {
-  useAuth,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from "@clerk/nextjs";
+import { useAuth, SignInButton, UserButton } from "@clerk/nextjs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
@@ -83,9 +78,12 @@ export function Navbar() {
                     Sign in
                   </Button>
                 </SignInButton>
-                <SignUpButton mode="modal">
-                  <Button size="sm">Book a demo</Button>
-                </SignUpButton>
+                <Link
+                  href="/book-demo"
+                  className={buttonVariants({ size: "sm" })}
+                >
+                  Book a demo
+                </Link>
               </>
             )}
           </div>
@@ -128,9 +126,12 @@ export function Navbar() {
                         Sign in
                       </Button>
                     </SignInButton>
-                    <SignUpButton mode="modal">
-                      <Button className="w-full">Book a demo</Button>
-                    </SignUpButton>
+                    <Link
+                      href="/book-demo"
+                      className={buttonVariants({ className: "w-full" })}
+                    >
+                      Book a demo
+                    </Link>
                   </>
                 )}
               </div>
