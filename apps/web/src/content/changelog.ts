@@ -14,6 +14,16 @@ export interface Entry {
 
 export const entries: Entry[] = [
   {
+    version: "0.0.6",
+    date: "July 14, 2026",
+    badge: "Launch",
+    summary:
+      "Public launch: the pre-launch owner gate is lifted, so lurq is open to everyone — no owner key required.",
+    changes: [
+      { tag: "Changed", text: "The pre-launch owner gate is lifted — the CLI and MCP server no longer require LURQ_OWNER_KEY, so anyone can use lurq." },
+    ],
+  },
+  {
     version: "0.0.5",
     date: "July 14, 2026",
     badge: "Alpha",
