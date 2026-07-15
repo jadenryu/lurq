@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { join } from "node:path";
 
 // Multi-zone: forward `/docs` (and everything under it — pages, assets, search)
 // to the Fumadocs app. Override with DOCS_ZONE_URL in production (e.g. the
@@ -17,6 +18,11 @@ function resolveDocsZoneUrl(): string {
 const DOCS_ZONE_URL = resolveDocsZoneUrl();
 
 const nextConfig: NextConfig = {
+  // Pin the Turbopack root to the monorepo root. Otherwise Turbopack walks up
+  // and mis-detects a stray ~/package-lock.json as the workspace root, which
+  // breaks proxy.ts compilation ("adapterFn is not a function") so Clerk
+  // middleware never runs and every <SignInButton>/auth hook silently dies.
+  turbopack: { root: join(__dirname, "..", "..") },
   // PostHog reverse proxy: route analytics through this origin so ad-blockers
   // (which blocklist *.posthog.com) can't silently drop events. The static/array
   // asset rules must precede the /ingest catch-all. US region — swap us→eu to move.
