@@ -14,6 +14,16 @@ export interface Entry {
 
 export const entries: Entry[] = [
   {
+    version: "0.0.5",
+    date: "July 14, 2026",
+    badge: "Alpha",
+    summary:
+      "Hotfix: the CLI no longer crashes on launch when the E2B sandbox dependency is present.",
+    changes: [
+      { tag: "Fixed", text: "The E2B sandbox driver is now loaded lazily, so `lurq` no longer crashes at startup on Node 22.x (require(esm) of chalk@5 via e2b). Only `verify` touches E2B, and only when it runs." },
+    ],
+  },
+  {
     version: "0.0.4",
     date: "July 14, 2026",
     badge: "Alpha",

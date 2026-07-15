@@ -10,7 +10,6 @@
  * (see E2B_TEMPLATE). Like the local driver, target.node is recorded but not
  * provisioned — pin a Node-versioned template for reproducible majors.
  */
-import Sandbox from 'e2b';
 import { getConfig } from '../core/config';
 import {
   DEFAULT_TARGET,
@@ -100,6 +99,13 @@ export class E2BSandbox implements SandboxDriver {
 
     // Build install command up front so a bad spec fails before we spend a VM.
     const install = installCommand(specs, allowScripts);
+
+    // Lazy-load e2b: its CJS build does require('chalk'), and chalk@5 is
+    // ESM-only, which crashes require(esm) on some Node 22.x versions. Keeping
+    // it off the import graph means the crash can only ever reach `verify`,
+    // never `lurq` startup. (tsup would otherwise hoist a static top-level
+    // `import` even though sandbox/index.ts loads this module dynamically.)
+    const { default: Sandbox } = await import('e2b');
 
     // Sandbox lifetime must outlast install + every smoke run, plus buffer.
     const createOpts = {
