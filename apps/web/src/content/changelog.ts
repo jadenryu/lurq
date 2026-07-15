@@ -14,6 +14,30 @@ export interface Entry {
 
 export const entries: Entry[] = [
   {
+    version: "0.0.5",
+    date: "July 14, 2026",
+    badge: "Alpha",
+    summary:
+      "Hotfix: the CLI no longer crashes on launch when the E2B sandbox dependency is present.",
+    changes: [
+      { tag: "Fixed", text: "The E2B sandbox driver is now loaded lazily, so `lurq` no longer crashes at startup on Node 22.x (require(esm) of chalk@5 via e2b). Only `verify` touches E2B, and only when it runs." },
+    ],
+  },
+  {
+    version: "0.0.4",
+    date: "July 14, 2026",
+    badge: "Alpha",
+    summary:
+      "Tentatively available: hosted mode is now horizontally scalable — Redis-backed rate limiting, self-serve API keys, and on-demand ingestion moved off the request path.",
+    changes: [
+      { tag: "Added", text: "Self-serve API key issuance via Clerk, so you can provision keys without operator involvement." },
+      { tag: "Added", text: "Org identity threads through every tool call and stamps the discovery flywheel." },
+      { tag: "Changed", text: "Rate limiting is now Redis-backed, so hosted mode scales horizontally across instances." },
+      { tag: "Changed", text: "On-demand ingestion runs asynchronously off the request path — recommend/evaluate no longer block on package discovery." },
+      { tag: "Changed", text: "Auth key lookups are cached and lastUsedAt writes throttled, cutting ~2 DB ops per request." },
+    ],
+  },
+  {
     version: "0.0.3",
     date: "July 3, 2026",
     summary:
