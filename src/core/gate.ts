@@ -17,7 +17,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { PACKAGE_NAME } from './constants';
 
 /** Master switch. Set to false to open lurq to everyone at launch. */
-const PRE_LAUNCH = true;
+const PRE_LAUNCH = false;
 
 /**
  * SHA-256 of the owner secret. Regenerate after choosing a new secret with:

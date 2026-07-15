@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
-import { useAuth, SignInButton, UserButton } from "@clerk/nextjs";
+import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const { isSignedIn } = useAuth();
+  const { openSignIn } = useClerk();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -73,11 +74,9 @@ export function Navbar() {
               </>
             ) : (
               <>
-                <SignInButton mode="modal">
-                  <Button variant="ghost" size="sm">
-                    Sign in
-                  </Button>
-                </SignInButton>
+                <Button variant="ghost" size="sm" onClick={() => openSignIn()}>
+                  Sign in
+                </Button>
                 <Link
                   href="/book-demo"
                   className={buttonVariants({ size: "sm" })}
@@ -121,11 +120,13 @@ export function Navbar() {
                   </Link>
                 ) : (
                   <>
-                    <SignInButton mode="modal">
-                      <Button variant="outline" className="w-full">
-                        Sign in
-                      </Button>
-                    </SignInButton>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => openSignIn()}
+                    >
+                      Sign in
+                    </Button>
                     <Link
                       href="/book-demo"
                       className={buttonVariants({ className: "w-full" })}
