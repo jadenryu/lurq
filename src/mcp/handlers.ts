@@ -23,7 +23,7 @@ import type {
 import { checkCompat } from '../compat/check';
 import type { Database } from '../db/client';
 import { getPackageByName, getTopPackageNames } from '../db/packages';
-import { getOrExtractSurface } from '../usage/service';
+import { getStoredSurface } from '../db/apiSurfaces';
 import { diffSurface } from '../usage/diff';
 import { getLatestVerificationByName } from '../db/verification';
 import { recordOutcome } from '../db/outcomes';
@@ -349,8 +349,13 @@ export interface UsageInput {
 
 /**
  * Version-exact API surface + optional migration delta (§4D). The surface is the
- * package's real contract extracted from the shipped `.d.ts` — no prose lag, no
- * hallucination. Types unavailable → `available:false`, fall back to the README.
+ * package's real contract, extracted from the shipped `.d.ts` — no prose lag, no
+ * hallucination.
+ *
+ * Serves STORED surfaces only: extraction (which needs the TypeScript compiler)
+ * is operator-side (the discovery worker, §4D/§4G), so the public read plane
+ * never pulls `typescript` into its bundle. A version not yet extracted returns
+ * `available:false` (fall back to the README), same as an untyped package.
  */
 export async function handleUsage(db: Database, input: UsageInput): Promise<UsageOutput> {
   const version = await resolveVersion(db, input.package, input.version);
@@ -364,17 +369,19 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
     };
   }
 
-  const surface = await getOrExtractSurface(db, input.package, version);
+  const surface = await getStoredSurface(db, input.package, version);
   const out: UsageOutput = {
     package: input.package,
     version,
     surface,
     available: surface !== null,
-    note: surface ? undefined : 'No .d.ts types resolved for this version; fall back to the README.',
+    note: surface
+      ? undefined
+      : 'No extracted API surface for this version yet; fall back to the README.',
   };
 
   if (input.knownVersion && input.knownVersion !== version && surface) {
-    const known = await getOrExtractSurface(db, input.package, input.knownVersion);
+    const known = await getStoredSurface(db, input.package, input.knownVersion);
     if (known) out.delta = { ...diffSurface(known, surface), fromVersion: input.knownVersion };
   }
   return out;
