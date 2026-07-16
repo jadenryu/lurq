@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { rateLimit } from "@/lib/rate-limit";
+import { siteUrl } from "@/lib/site";
 
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL ?? "contact@lurq.run";
 // Resend sends from any address on a verified domain; lurq.run is verified.
@@ -10,9 +11,8 @@ const FROM_EMAIL =
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Email images need an absolute, non-redirecting URL (apex lurq.run 308s to www).
-const LOGO_URL =
-  (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.lurq.run") +
-  "/logos/logo.png";
+// siteUrl normalizes the apex to www so the logo never 308s inside an email.
+const LOGO_URL = siteUrl("/logos/logo.png");
 
 // User input lands in the email HTML; escape it to prevent injection.
 function escapeHtml(s: string): string {
