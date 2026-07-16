@@ -162,6 +162,25 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('worker')
+    .description('operator-side: run the autonomous discovery loop (discover → ingest → mine → extract → rescore); Ctrl-C stops it cleanly (§4G)')
+    .option('--interval <sec>', 'seconds between cycles (default 900)', (v) => parseInt(v, 10))
+    .option('--cap <n>', 'candidates ingested per cycle', (v) => parseInt(v, 10))
+    .option('--extract <n>', 'API surfaces extracted per cycle', (v) => parseInt(v, 10))
+    .option('--once', 'run exactly one cycle and exit')
+    .action(async (opts: { interval?: number; cap?: number; extract?: number; once?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { runWorker } = await import('../pipeline/index');
+      await runWorker({
+        intervalSec: opts.interval,
+        perRunCap: opts.cap,
+        extractPerCycle: opts.extract,
+        once: opts.once,
+      });
+    });
+
+  program
     .command('rescore')
     .description('re-derive health scores from cached breakdowns using current weights (no re-ingest)')
     .option('--json', 'output the rescore summary as JSON')
