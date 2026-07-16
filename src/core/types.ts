@@ -83,6 +83,23 @@ export type Runtime = 'browser' | 'node' | 'both';
 /** Result of co-installing two package versions in the sandbox (compat matrix). */
 export type CompatStatus = 'compatible' | 'conflict';
 
+/**
+ * Evidence class behind a compat edge (§3, §4B). Ordered weakest→strongest for
+ * upsert precedence: a mined `observed` must never overwrite a sandbox `verified`
+ * or `conflict`. `declared` = Tier-0 peer/engine semver; `observed` = co-resolved
+ * in N real dependency graphs; `verified` = sandbox co-install passed; `conflict`
+ * = declared conflict or a sandbox co-install failed.
+ */
+export type CompatProvenance = 'declared' | 'observed' | 'verified' | 'conflict';
+
+/** Upsert precedence: higher wins, so mining can't erase a proven verdict. */
+export const PROVENANCE_RANK: Record<CompatProvenance, number> = {
+  declared: 0,
+  observed: 1,
+  verified: 2,
+  conflict: 3,
+};
+
 /** Coarse post-install result an agent reports back via `report_outcome` — never
  *  source code, just whether the recommended package installed / compiled /
  *  passed tests, or failed. Feeds the recommendation→outcome flywheel (§3.1). */
@@ -112,6 +129,16 @@ export interface CompatConflict {
   detail: string;
 }
 
+/** One stored compat edge surfaced to agents, with its evidence class (§4B). */
+export interface CompatEvidence {
+  packages: [string, string];
+  versions: [string, string];
+  status: CompatStatus;
+  provenance: CompatProvenance;
+  /** Distinct resolved graphs an `observed` edge was witnessed in (0 otherwise). */
+  witnessCount: number;
+}
+
 /**
  * `compat` output: whole-architecture compatibility for a set of packages.
  * Tier-1 peer-dependency/engine analysis + any Tier-2 sandbox conflicts.
@@ -125,6 +152,9 @@ export interface CompatOutput {
   /** The exact members the check ran over, name + resolved version. Versions are
    *  always surfaced here, and the structure is stable for later scraping. */
   checked: { name: string; version: string | null }[];
+  /** Stored edges among these packages with their evidence strength (§4B) — lets
+   *  agents (and metrics) see *why* a pair is called compatible, not just that. */
+  evidence: CompatEvidence[];
 }
 
 export type AdvisorySeverity = 'critical' | 'high' | 'moderate' | 'low' | 'info';
