@@ -6,6 +6,7 @@ import {
   FRONTEND_CATEGORIES,
 } from '../src/core/types';
 import { buildProgram } from '../src/cli/index';
+import { registerOperatorCommands } from '../src/cli/operator';
 import {
   getConfig,
   requireConfig,
@@ -37,25 +38,37 @@ describe('taxonomy', () => {
 });
 
 describe('cli program', () => {
-  it('registers all v1 commands', () => {
+  it('public program registers the read-only oracle commands', () => {
     const program = buildProgram();
     const names = program.commands.map((c) => c.name());
     for (const expected of [
       'serve',
-      'sync',
       'recommend',
       'evaluate',
       'compare',
       'verify',
+      'usage',
+      'compat',
       'install-skill',
-      'db',
     ]) {
       expect(names).toContain(expected);
     }
   });
 
-  it('db has migrate and reset subcommands', () => {
+  it('public program excludes operator commands (§4E plane split)', () => {
+    const names = buildProgram().commands.map((c) => c.name());
+    for (const operatorOnly of ['sync', 'discover', 'worker', 'rescore', 'watch', 'sandbox', 'keys', 'db']) {
+      expect(names).not.toContain(operatorOnly);
+    }
+  });
+
+  it('operator plane adds the dataset-building commands + db subcommands', () => {
     const program = buildProgram();
+    registerOperatorCommands(program);
+    const names = program.commands.map((c) => c.name());
+    for (const expected of ['sync', 'discover', 'worker', 'watch', 'sandbox', 'keys', 'db']) {
+      expect(names).toContain(expected);
+    }
     const db = program.commands.find((c) => c.name() === 'db');
     const subs = db?.commands.map((c) => c.name()) ?? [];
     expect(subs).toContain('migrate');

@@ -4,7 +4,7 @@
  * Tier-2 sandbox conflicts. The result lists every member as name@version so
  * versions are explicit and the evidence stays structured for later scraping.
  */
-import type { CompatConflict, CompatOutput } from '../core/types';
+import type { CompatConflict, CompatEvidence, CompatOutput } from '../core/types';
 import type { Database } from '../db/client';
 import { getCompatEdges } from '../db/compat';
 import { assembleMembers } from './members';
@@ -15,7 +15,15 @@ export async function checkCompat(db: Database, packages: string[]): Promise<Com
   const { members, unverified } = await assembleMembers(db, names);
 
   const conflicts: CompatConflict[] = resolveArchitectureCompat(members);
-  for (const edge of await getCompatEdges(db, names)) {
+  const edges = await getCompatEdges(db, names);
+  const evidence: CompatEvidence[] = edges.map((edge) => ({
+    packages: [edge.packageA, edge.packageB],
+    versions: [edge.versionA, edge.versionB],
+    status: edge.status,
+    provenance: edge.provenance,
+    witnessCount: edge.witnessCount,
+  }));
+  for (const edge of edges) {
     if (edge.status === 'conflict') {
       conflicts.push({
         source: 'sandbox',
@@ -32,5 +40,6 @@ export async function checkCompat(db: Database, packages: string[]): Promise<Com
     conflicts,
     unverified,
     checked: members.map((m) => ({ name: m.name, version: m.version })),
+    evidence,
   };
 }

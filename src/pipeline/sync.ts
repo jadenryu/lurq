@@ -34,10 +34,12 @@ import {
 import { createDb, type Database } from '../db/client';
 import {
   finishSyncRun,
+  getAllPackageNames,
   getSeedTargets,
   startSyncRun,
   upsertPackage,
 } from '../db/packages';
+import { mineEdgesForPackage, remineAllClosures } from './mineEdges';
 import { isFrontendCategory } from '../core/types';
 import type { NewPackageRow, SyncError } from '../db/schema';
 
@@ -211,6 +213,25 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
         }),
       );
       updated++;
+    }
+
+    // ── Mine observed compat edges (§4B) ─────────────────────────────────────
+    // Every ingested package's resolved closure is a co-installation witness;
+    // mint free `observed` edges among its tracked nodes. Tracked set loaded once
+    // (§4B step 2). Best-effort + concurrent so it never blocks the sync result.
+    const tracked = new Set(await getAllPackageNames(handle.db));
+    await pMap(
+      ok,
+      (c) => mineEdgesForPackage(handle.db, c.target.name, c.signals.registry?.latestVersion ?? null, tracked, now),
+      config.LURQ_SYNC_CONCURRENCY,
+    );
+    // Trigger 2 (§4B): a full sync is the daily cron — re-mine every persisted
+    // closure against the *current* tracked set (no network) so packages tracked
+    // since the closure was captured get fully linked within 24h. Best-effort.
+    if (!opts.packageName) {
+      await remineAllClosures(handle.db).catch((err) =>
+        logger.warn(`re-mine pass failed: ${String(err)}`),
+      );
     }
 
     const status: SyncSummary['status'] =

@@ -36,11 +36,13 @@ import type {
   BuildSignal,
   Category,
   CategorySource,
+  CompatProvenance,
   CompatStatus,
   Confidence,
   DependencyRanges,
   DiscoverySource,
   DiscoveryStatus,
+  ExportSymbol,
   PeerMeta,
   ScoreBreakdown,
   UsageGuide,
@@ -255,6 +257,12 @@ export const compatEdges = pgTable(
     packageB: text('package_b').notNull(),
     versionB: text('version_b').notNull(),
     status: text('status').$type<CompatStatus>().notNull(),
+    /** Evidence class (§4B). Existing rows are sandbox co-installs, so the column
+     *  defaults to `verified` to preserve their meaning. */
+    provenance: text('provenance').$type<CompatProvenance>().notNull().default('verified'),
+    /** Distinct resolved graphs an `observed` edge was witnessed in (confidence).
+     *  Ignored for verified/conflict. Accumulates on conflict, never overwritten. */
+    witnessCount: integer('witness_count').notNull().default(0),
     driver: text('driver').notNull(),
     ranAt: ts('ran_at'),
   },
@@ -266,6 +274,46 @@ export const compatEdges = pgTable(
       table.versionB,
     ),
   ],
+);
+
+/**
+ * Persisted immutable resolved dependency closures (§4B). A `package@version`
+ * always resolves to the same tree, so we store it once at first ingest; the
+ * daily re-mine pass reads these with NO network to mint `observed` edges for
+ * nodes that became tracked after the closure was captured.
+ */
+export const resolvedClosures = pgTable(
+  'resolved_closures',
+  {
+    id: serial('id').primaryKey(),
+    packageName: text('package_name').notNull(),
+    version: text('version').notNull(),
+    /** Full closure: [{ name, version }, …] — every node in node_modules. */
+    nodes: jsonb('nodes').$type<{ name: string; version: string }[]>().notNull(),
+    fetchedAt: ts('fetched_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('resolved_closures_pkg_idx').on(table.packageName, table.version),
+  ],
+);
+
+/**
+ * Extracted public API surface per `package@version` (§4D — usage axis D1).
+ * Ground truth = the package's shipped `.d.ts`, parsed deterministically (no
+ * LLM). Versions are immutable, so a surface is extracted once and cached
+ * forever; `usage` serves it and diffs across versions for API drift.
+ */
+export const apiSurfaces = pgTable(
+  'api_surfaces',
+  {
+    id: serial('id').primaryKey(),
+    packageName: text('package_name').notNull(),
+    version: text('version').notNull(),
+    /** Normalized export list: [{ name, kind, signature }, …]. */
+    surface: jsonb('surface').$type<ExportSymbol[]>().notNull(),
+    extractedAt: ts('extracted_at').notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('api_surfaces_pkg_idx').on(table.packageName, table.version)],
 );
 
 /**
@@ -319,5 +367,9 @@ export type VerificationRunRow = typeof verificationRuns.$inferSelect;
 export type NewVerificationRunRow = typeof verificationRuns.$inferInsert;
 export type CompatEdgeRow = typeof compatEdges.$inferSelect;
 export type NewCompatEdgeRow = typeof compatEdges.$inferInsert;
+export type ResolvedClosureRow = typeof resolvedClosures.$inferSelect;
+export type NewResolvedClosureRow = typeof resolvedClosures.$inferInsert;
+export type ApiSurfaceRow = typeof apiSurfaces.$inferSelect;
+export type NewApiSurfaceRow = typeof apiSurfaces.$inferInsert;
 export type RecommendationOutcomeRow = typeof recommendationOutcomes.$inferSelect;
 export type NewRecommendationOutcomeRow = typeof recommendationOutcomes.$inferInsert;

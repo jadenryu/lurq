@@ -17,11 +17,14 @@ import type {
   CompatOutput,
   Confidence,
   EvaluateOutput,
+  UsageOutput,
   VerifyOutput,
 } from '../core/types';
 import { checkCompat } from '../compat/check';
 import type { Database } from '../db/client';
-import { getTopPackageNames } from '../db/packages';
+import { getPackageByName, getTopPackageNames } from '../db/packages';
+import { getOrExtractSurface } from '../usage/service';
+import { diffSurface } from '../usage/diff';
 import { getLatestVerificationByName } from '../db/verification';
 import { recordOutcome } from '../db/outcomes';
 import { lookupSuccessor } from '../core/successors';
@@ -29,7 +32,7 @@ import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import { fetchNpmRegistry, fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
-import { getOrFetchPackage } from '../pipeline/single';
+import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
 import { assessRisk } from '../security/risk';
@@ -151,7 +154,11 @@ export async function handleEvaluate(
     'eval',
     cacheKey([input.package]),
     async () => {
-      const { row, existsOnNpm } = await getOrFetchPackage(db, input.package);
+      // Block-on-first-touch (§4A): a single-package eval awaits the ingest so
+      // the first call returns real evidence, not a "retry shortly" placeholder.
+      const { row, existsOnNpm } = await getOrFetchPackage(db, input.package, {
+        blockMs: FIRST_TOUCH_BUDGET_MS,
+      });
       if (!row) {
         return {
           tracked: false as const,
@@ -261,7 +268,9 @@ export async function handleVerify(
 
   const [registry, { row, wasTracked }, popular] = await Promise.all([
     fetchNpmRegistry(name).catch(() => null),
-    getOrFetchPackage(db, name),
+    // Block-on-first-touch (§4A): verify is single-package, so await the ingest
+    // for a real confidence/tracked read on the first call.
+    getOrFetchPackage(db, name, { blockMs: FIRST_TOUCH_BUDGET_MS }),
     getTopPackageNames(db).catch(() => [] as string[]),
   ]);
 
@@ -313,6 +322,62 @@ export async function handleVerify(
     confidence: (row?.confidence as Confidence) ?? null,
     advisoryCount,
   };
+}
+
+// ── usage (§4D — API signature drift) ─────────────────────────────────────────
+
+/** Resolve the version to serve: explicit request → tracked latest → npm latest. */
+async function resolveVersion(
+  db: Database,
+  name: string,
+  requested?: string,
+): Promise<string | null> {
+  if (requested) return requested;
+  const row = await getPackageByName(db, name);
+  if (row?.latestVersion) return row.latestVersion;
+  const reg = await fetchNpmRegistry(name).catch(() => null);
+  return reg?.latestVersion ?? null;
+}
+
+export interface UsageInput {
+  package: string;
+  version?: string;
+  /** The version the agent already knows (e.g. its training-cutoff version) —
+   *  when given, the response includes the delta the agent must account for. */
+  knownVersion?: string;
+}
+
+/**
+ * Version-exact API surface + optional migration delta (§4D). The surface is the
+ * package's real contract extracted from the shipped `.d.ts` — no prose lag, no
+ * hallucination. Types unavailable → `available:false`, fall back to the README.
+ */
+export async function handleUsage(db: Database, input: UsageInput): Promise<UsageOutput> {
+  const version = await resolveVersion(db, input.package, input.version);
+  if (!version) {
+    return {
+      package: input.package,
+      version: null,
+      surface: null,
+      available: false,
+      note: `Could not resolve a version for "${input.package}" on npm.`,
+    };
+  }
+
+  const surface = await getOrExtractSurface(db, input.package, version);
+  const out: UsageOutput = {
+    package: input.package,
+    version,
+    surface,
+    available: surface !== null,
+    note: surface ? undefined : 'No .d.ts types resolved for this version; fall back to the README.',
+  };
+
+  if (input.knownVersion && input.knownVersion !== version && surface) {
+    const known = await getOrExtractSurface(db, input.package, input.knownVersion);
+    if (known) out.delta = { ...diffSurface(known, surface), fromVersion: input.knownVersion };
+  }
+  return out;
 }
 
 // ── report_outcome ────────────────────────────────────────────────────────────

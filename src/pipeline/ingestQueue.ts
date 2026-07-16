@@ -14,6 +14,7 @@
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { ensureSeedEntry } from '../db/packages';
+import type { PackageRow } from '../db/schema';
 import { syncOnePackage } from './single';
 
 const MAX_CONCURRENT = 3;
@@ -59,7 +60,7 @@ function pump(db: Database): void {
     queuedNames.delete(name);
     inFlight.add(name);
     active += 1;
-    void ingestOne(db, name).finally(() => {
+    void runIngest(db, name).finally(() => {
       inFlight.delete(name);
       active -= 1;
       pump(db);
@@ -67,15 +68,23 @@ function pump(db: Database): void {
   }
 }
 
-async function ingestOne(db: Database, name: string): Promise<void> {
+/**
+ * Fetch→score→embed→upsert one package and, if it clears the roster-promotion
+ * bar, seed it for future syncs. Returns the stored row, or null on failure.
+ * Shared by the background queue and the block-on-first-touch path (§4A) so both
+ * apply the same promotion rule.
+ */
+export async function runIngest(db: Database, name: string): Promise<PackageRow | null> {
   try {
     const row = await syncOnePackage(db, name);
     // Same roster-promotion bar as the old inline path: only genuinely-trackable
     // discoveries join the sync roster, so the on-demand tail can't inflate cost.
     if (row.confidence && row.confidence !== 'unproven') {
-      await ensureSeedEntry(db, name, row.category);
+      await ensureSeedEntry(db, name, row.category).catch(() => {});
     }
+    return row;
   } catch (err) {
     logger.warn(`on-demand ingest failed for ${name}: ${String(err)}`);
+    return null;
   }
 }

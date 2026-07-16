@@ -83,6 +83,23 @@ export type Runtime = 'browser' | 'node' | 'both';
 /** Result of co-installing two package versions in the sandbox (compat matrix). */
 export type CompatStatus = 'compatible' | 'conflict';
 
+/**
+ * Evidence class behind a compat edge (§3, §4B). Ordered weakest→strongest for
+ * upsert precedence: a mined `observed` must never overwrite a sandbox `verified`
+ * or `conflict`. `declared` = Tier-0 peer/engine semver; `observed` = co-resolved
+ * in N real dependency graphs; `verified` = sandbox co-install passed; `conflict`
+ * = declared conflict or a sandbox co-install failed.
+ */
+export type CompatProvenance = 'declared' | 'observed' | 'verified' | 'conflict';
+
+/** Upsert precedence: higher wins, so mining can't erase a proven verdict. */
+export const PROVENANCE_RANK: Record<CompatProvenance, number> = {
+  declared: 0,
+  observed: 1,
+  verified: 2,
+  conflict: 3,
+};
+
 /** Coarse post-install result an agent reports back via `report_outcome` — never
  *  source code, just whether the recommended package installed / compiled /
  *  passed tests, or failed. Feeds the recommendation→outcome flywheel (§3.1). */
@@ -112,6 +129,16 @@ export interface CompatConflict {
   detail: string;
 }
 
+/** One stored compat edge surfaced to agents, with its evidence class (§4B). */
+export interface CompatEvidence {
+  packages: [string, string];
+  versions: [string, string];
+  status: CompatStatus;
+  provenance: CompatProvenance;
+  /** Distinct resolved graphs an `observed` edge was witnessed in (0 otherwise). */
+  witnessCount: number;
+}
+
 /**
  * `compat` output: whole-architecture compatibility for a set of packages.
  * Tier-1 peer-dependency/engine analysis + any Tier-2 sandbox conflicts.
@@ -125,6 +152,56 @@ export interface CompatOutput {
   /** The exact members the check ran over, name + resolved version. Versions are
    *  always surfaced here, and the structure is stable for later scraping. */
   checked: { name: string; version: string | null }[];
+  /** Stored edges among these packages with their evidence strength (§4B) — lets
+   *  agents (and metrics) see *why* a pair is called compatible, not just that. */
+  evidence: CompatEvidence[];
+}
+
+// ── Usage axis D1: API signature drift (§4D) ─────────────────────────────────
+
+/** Kind of an exported symbol, from its `.d.ts` declaration. */
+export type ExportKind =
+  | 'function'
+  | 'class'
+  | 'interface'
+  | 'type'
+  | 'enum'
+  | 'variable'
+  | 'namespace'
+  | 'unknown';
+
+/** One normalized exported symbol of a package version's public API surface. */
+export interface ExportSymbol {
+  name: string;
+  kind: ExportKind;
+  /** Single-line normalized signature (params/return for functions, etc.), or
+   *  null when the declaration carries no useful signature. */
+  signature: string | null;
+}
+
+/** What changed between two API surfaces (§4D). Deltas are computed, not guessed. */
+export interface SurfaceDelta {
+  added: ExportSymbol[];
+  removed: ExportSymbol[];
+  /** A symbol that disappeared and a near-identical one that appeared — inferred
+   *  by signature similarity, so an agent sees a rename, not remove+add. */
+  renamed: { from: ExportSymbol; to: ExportSymbol }[];
+  /** Same name, changed signature. */
+  changed: { name: string; before: string | null; after: string | null }[];
+}
+
+/** `usage` tool output: version-exact API surface + optional delta from a known
+ *  version the agent was trained/working on (§4D). */
+export interface UsageOutput {
+  package: string;
+  version: string | null;
+  /** Extracted export list, or null when types are unavailable (falls back to
+   *  the README, which is already fetched). */
+  surface: ExportSymbol[] | null;
+  available: boolean;
+  /** Present when a `knownVersion` was supplied and both surfaces resolved. */
+  delta?: SurfaceDelta & { fromVersion: string };
+  note?: string;
 }
 
 export type AdvisorySeverity = 'critical' | 'high' | 'moderate' | 'low' | 'info';

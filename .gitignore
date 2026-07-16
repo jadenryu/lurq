@@ -1,6 +1,7 @@
 # ── Node / TypeScript (lurq) ──────────────────────────────────────────────
 node_modules/
 dist/
+dist-operator/
 coverage/
 *.tsbuildinfo
 .cache/

@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "node dist/bin/lurq.js sync",
+    "startCommand": "node dist-operator/bin/operator.js sync",
     "cronSchedule": "0 6 * * *",
     "restartPolicyType": "NEVER",
     "numReplicas": 1

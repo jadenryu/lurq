@@ -29,9 +29,19 @@ import {
 } from '../db/packages';
 import { packages, seedPackages, type PackageRow } from '../db/schema';
 import { assemblePackageRow } from './sync';
+import { mineEdgesForPackage } from './mineEdges';
 // Safe module cycle: ingestQueue imports syncOnePackage from here, but both
 // bindings are used only at call time, never at module-eval, so ESM resolves it.
-import { enqueueIngest } from './ingestQueue';
+import { enqueueIngest, runIngest } from './ingestQueue';
+
+/** Block-on-first-touch budget for single-package tools (§4A). Past this the
+ *  in-flight ingest keeps running in the background and the caller gets the
+ *  "retry shortly" hint instead of a stalled request. */
+export const FIRST_TOUCH_BUDGET_MS = 4000;
+
+function raceTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+}
 
 async function getSeedCategory(db: Database, name: string): Promise<Category | null> {
   const [row] = await db
@@ -135,6 +145,9 @@ export async function syncOnePackage(
   await upsertPackageVersions(db, name, signals.registry?.versionTimeline ?? []).catch(
     () => {},
   );
+  // Mint observed compat edges from this package's resolved closure (§4B
+  // Trigger 1). Best-effort — mineEdgesForPackage swallows its own errors.
+  await mineEdgesForPackage(db, name, signals.registry?.latestVersion ?? null, undefined, now);
   return (await getPackageByName(db, name))!;
 }
 
@@ -150,17 +163,37 @@ export interface GetOrFetchResult {
 
 /**
  * Return a tracked package, or — if it's a real npm package not yet in the index
- * (§12.5) — schedule it for background ingestion and return row=null so the
- * request never blocks on the heavy fetch→score→embed→upsert. The caller surfaces
- * a "tracking, retry shortly" hint; a few seconds later the row exists. Returns
- * existsOnNpm=false when the name isn't a real package at all.
+ * (§12.5) — fetch it. Two modes:
+ *
+ * - Default (async): schedule background ingestion and return row=null so a
+ *   multi-package fan-out never blocks on one slow package.
+ * - `blockMs` set (§4A block-on-first-touch): await the ingest up to a budget
+ *   and return the real row on the *first* call. On timeout the ingest keeps
+ *   running in the background and the caller gets the "retry shortly" hint.
+ *
+ * Returns existsOnNpm=false when the name isn't a real package at all.
  */
-export async function getOrFetchPackage(db: Database, name: string): Promise<GetOrFetchResult> {
+export async function getOrFetchPackage(
+  db: Database,
+  name: string,
+  opts: { blockMs?: number } = {},
+): Promise<GetOrFetchResult> {
   const existing = await getPackageByName(db, name);
   if (existing) return { row: existing, wasTracked: true, existsOnNpm: true };
 
   const exists = await npmPackageExists(name);
   if (!exists) return { row: null, wasTracked: false, existsOnNpm: false };
+
+  if (opts.blockMs && opts.blockMs > 0) {
+    // Single-package tools await the ingest so the first call returns a real row
+    // instead of a placeholder that reads as failure. On timeout the started
+    // ingest keeps running (not cancelled) and lands within a few more seconds.
+    // ponytail: inline ingest isn't queue-bounded; single-package request rate
+    // is the natural cap. Route through enqueueIngest if a flood ever appears.
+    const row = await raceTimeout(runIngest(db, name), opts.blockMs);
+    if (row) return { row, wasTracked: false, existsOnNpm: true };
+    return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
+  }
 
   // Real but untracked: ingest off the request path. Bounded + deduped so a
   // flood of distinct names can't spawn unbounded work (the whole point of not

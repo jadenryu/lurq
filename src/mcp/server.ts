@@ -15,6 +15,7 @@ import {
   handleEvaluate,
   handleRecommend,
   handleReportOutcome,
+  handleUsage,
   handleVerify,
 } from './handlers';
 import { handleDiagram } from './diagram';
@@ -137,6 +138,24 @@ export function buildMcpServer(
       },
     },
     async (args) => json(await timed('verify', () => handleVerify(db, args))),
+  );
+
+  server.registerTool(
+    'usage',
+    {
+      title: 'Version-exact API surface + drift',
+      description:
+        "Get a package version's real public API — the exported symbols and signatures extracted from its shipped .d.ts, exact to the version, none of it in the model's training data. Pass knownVersion (e.g. the version you were trained on) to get the precise delta: what was added, removed, renamed, or changed. Use before writing code against a package whose API may have moved. For framework file/convention changes (not exported symbols), consult the official migration guide / Context7 instead.",
+      inputSchema: {
+        package: npmName.describe('npm package name'),
+        version: z.string().optional().describe('Target version (defaults to latest)'),
+        knownVersion: z
+          .string()
+          .optional()
+          .describe('A version you already know; returns the API delta from it to the target'),
+      },
+    },
+    async (args) => json(await timed('usage', () => handleUsage(db, args))),
   );
 
   server.registerTool(

@@ -128,6 +128,90 @@ export async function fetchDependencyNames(
   }
 }
 
+export interface ResolvedNode {
+  name: string;
+  version: string;
+}
+
+/**
+ * The full resolved dependency closure for `name@version` (§4B) — every node npm
+ * would put in node_modules, each with its exact resolved version. This is a
+ * co-installation witness: the resolver found a working assignment including all
+ * of them and the artifact shipped, so every pair inside provably co-resolves.
+ * Best-effort: [] on any failure. Unlike `fetchDependencyNames`, keeps versions.
+ */
+export async function fetchResolvedGraph(
+  name: string,
+  version: string,
+  fetchImpl?: typeof fetch,
+): Promise<ResolvedNode[]> {
+  const url = `https://${HOST}/v3/systems/npm/packages/${encodeName(name)}/versions/${encodeURIComponent(version)}:dependencies`;
+  try {
+    const { data } = await httpGetJson<any>(url, {
+      host: HOST,
+      ttlMs: CACHE_TTL.depsDev,
+      fetchImpl,
+    });
+    const nodes: any[] = Array.isArray(data?.nodes) ? data.nodes : [];
+    const out: ResolvedNode[] = [];
+    const seen = new Set<string>();
+    for (const n of nodes) {
+      const nm = n?.versionKey?.name;
+      const ver = n?.versionKey?.version;
+      if (typeof nm !== 'string' || typeof ver !== 'string') continue;
+      const key = `${nm}@${ver}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ name: nm, version: ver });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Direct dependencies only (§4G BFS), with versions — the ~15 packages the author
+ * deliberately chose, not the transitive plumbing. Reads the graph `edges`: a
+ * node is direct iff an edge from the root (the `SELF` node) points to it. Falls
+ * back to [] on failure. Enqueuing only these keeps discovery from re-introducing
+ * the plumbing explosion one hop later.
+ */
+export async function fetchDirectDependencies(
+  name: string,
+  version: string,
+  fetchImpl?: typeof fetch,
+): Promise<ResolvedNode[]> {
+  const url = `https://${HOST}/v3/systems/npm/packages/${encodeName(name)}/versions/${encodeURIComponent(version)}:dependencies`;
+  try {
+    const { data } = await httpGetJson<any>(url, {
+      host: HOST,
+      ttlMs: CACHE_TTL.depsDev,
+      fetchImpl,
+    });
+    const nodes: any[] = Array.isArray(data?.nodes) ? data.nodes : [];
+    const edges: any[] = Array.isArray(data?.edges) ? data.edges : [];
+    // Root is the SELF node; deps.dev conventionally places it at index 0.
+    const rootIdx = nodes.findIndex((n) => n?.relation === 'SELF');
+    const root = rootIdx >= 0 ? rootIdx : 0;
+    const out: ResolvedNode[] = [];
+    const seen = new Set<string>();
+    for (const e of edges) {
+      if (e?.fromNode !== root) continue;
+      const target = nodes[e?.toNode];
+      const nm = target?.versionKey?.name;
+      const ver = target?.versionKey?.version;
+      if (typeof nm !== 'string' || typeof ver !== 'string' || nm === name) continue;
+      if (seen.has(nm)) continue;
+      seen.add(nm);
+      out.push({ name: nm, version: ver });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchDepsDev(
   name: string,
   version: string | null,

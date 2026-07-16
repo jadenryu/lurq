@@ -446,6 +446,58 @@ export async function runSandbox(
   });
 }
 
+/** Version-exact API surface + drift from a known version (§4D). */
+export async function runUsage(
+  pkg: string,
+  opts: { version?: string; known?: string; json?: boolean },
+): Promise<void> {
+  await withDb(async (db) => {
+    const { handleUsage } = await import('../mcp/handlers');
+    const res = await handleUsage(db, {
+      package: pkg,
+      version: opts.version,
+      knownVersion: opts.known,
+    });
+    if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+    console.log(`${bold(res.package)}${res.version ? `@${res.version}` : ''}`);
+    if (!res.available) return console.log(dim(res.note ?? 'no API surface available'));
+
+    console.log(
+      table(
+        ['Export', 'Kind', 'Signature'],
+        (res.surface ?? []).map((s) => [s.name, s.kind, s.signature ?? '']),
+      ),
+    );
+
+    if (res.delta) {
+      const d = res.delta;
+      console.log(bold(`\nΔ from ${res.package}@${d.fromVersion}:`));
+      for (const s of d.removed) console.log(red(`  - ${s.name}`));
+      for (const s of d.added) console.log(green(`  + ${s.name}`));
+      for (const r of d.renamed) console.log(yellow(`  ~ ${r.from.name} → ${r.to.name}`));
+      for (const c of d.changed) console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
+      if (!d.removed.length && !d.added.length && !d.renamed.length && !d.changed.length) {
+        console.log(dim('  no API changes'));
+      }
+    }
+  });
+}
+
+/** Operator: batched sandbox backfill of verified edges over the top-N packages (§4C). */
+export async function runCompatBackfill(opts: { topN?: number; batchSize?: number }): Promise<void> {
+  await withDb(async (db) => {
+    console.error(
+      yellow('co-installing top packages in the sandbox (loads package code locally without isolation unless E2B_API_KEY is set)'),
+    );
+    const { backfillVerify } = await import('../pipeline/compat');
+    const res = await backfillVerify(db, opts);
+    console.log(
+      `${green('backfill done')}: ${res.verified} edges across ${res.batches} runs, ${res.skipped} batches skipped`,
+    );
+  });
+}
+
 /** Read (or, with --run, sandbox-verify then read) pairwise package compatibility. */
 export async function runCompat(
   pkgs: string[],
@@ -476,6 +528,20 @@ export async function runCompat(
     }
     if (res.unverified.length) {
       console.log(dim(`\nunverified (no metadata): ${res.unverified.join(', ')}`));
+    }
+    // Evidence strength (§4B): show co-install witnesses behind each pair.
+    const compatEvidence = res.evidence.filter((e) => e.status === 'compatible');
+    if (compatEvidence.length) {
+      console.log(
+        table(
+          ['Pair', 'Evidence', 'Witnesses'],
+          compatEvidence.map((e) => [
+            `${e.packages[0]} + ${e.packages[1]}`,
+            e.provenance,
+            e.provenance === 'observed' ? String(e.witnessCount) : '—',
+          ]),
+        ),
+      );
     }
   });
 }
