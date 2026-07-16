@@ -52,6 +52,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/bin/operator.ts db migrate",
     "operator": "tsx src/bin/operator.ts",
+    "operator:prod": "LURQ_ENV_FILE=.env.production tsx src/bin/operator.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
