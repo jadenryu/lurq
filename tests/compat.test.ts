@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalPair } from '../src/db/compat';
-import { deriveCompatEdges } from '../src/pipeline/compat';
+import { deriveCompatEdges, fullyCovered, pairKey } from '../src/pipeline/compat';
 import type { SandboxSetResult } from '../src/sandbox/types';
+
+describe('backfill gate (§4C)', () => {
+  it('skips a batch only when every pair is already covered', () => {
+    const covered = new Set([pairKey('a', 'b'), pairKey('a', 'c'), pairKey('b', 'c')]);
+    expect(fullyCovered(['a', 'b', 'c'], covered)).toBe(true);
+    // Missing b|c → not covered → must run.
+    covered.delete(pairKey('b', 'c'));
+    expect(fullyCovered(['a', 'b', 'c'], covered)).toBe(false);
+  });
+});
 
 function result(over: Partial<SandboxSetResult>): SandboxSetResult {
   return {
