@@ -446,6 +446,44 @@ export async function runSandbox(
   });
 }
 
+/** Version-exact API surface + drift from a known version (§4D). */
+export async function runUsage(
+  pkg: string,
+  opts: { version?: string; known?: string; json?: boolean },
+): Promise<void> {
+  await withDb(async (db) => {
+    const { handleUsage } = await import('../mcp/handlers');
+    const res = await handleUsage(db, {
+      package: pkg,
+      version: opts.version,
+      knownVersion: opts.known,
+    });
+    if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+    console.log(`${bold(res.package)}${res.version ? `@${res.version}` : ''}`);
+    if (!res.available) return console.log(dim(res.note ?? 'no API surface available'));
+
+    console.log(
+      table(
+        ['Export', 'Kind', 'Signature'],
+        (res.surface ?? []).map((s) => [s.name, s.kind, s.signature ?? '']),
+      ),
+    );
+
+    if (res.delta) {
+      const d = res.delta;
+      console.log(bold(`\nΔ from ${res.package}@${d.fromVersion}:`));
+      for (const s of d.removed) console.log(red(`  - ${s.name}`));
+      for (const s of d.added) console.log(green(`  + ${s.name}`));
+      for (const r of d.renamed) console.log(yellow(`  ~ ${r.from.name} → ${r.to.name}`));
+      for (const c of d.changed) console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
+      if (!d.removed.length && !d.added.length && !d.renamed.length && !d.changed.length) {
+        console.log(dim('  no API changes'));
+      }
+    }
+  });
+}
+
 /** Operator: batched sandbox backfill of verified edges over the top-N packages (§4C). */
 export async function runCompatBackfill(opts: { topN?: number; batchSize?: number }): Promise<void> {
   await withDb(async (db) => {

@@ -17,11 +17,14 @@ import type {
   CompatOutput,
   Confidence,
   EvaluateOutput,
+  UsageOutput,
   VerifyOutput,
 } from '../core/types';
 import { checkCompat } from '../compat/check';
 import type { Database } from '../db/client';
-import { getTopPackageNames } from '../db/packages';
+import { getPackageByName, getTopPackageNames } from '../db/packages';
+import { getOrExtractSurface } from '../usage/service';
+import { diffSurface } from '../usage/diff';
 import { getLatestVerificationByName } from '../db/verification';
 import { recordOutcome } from '../db/outcomes';
 import { lookupSuccessor } from '../core/successors';
@@ -319,6 +322,62 @@ export async function handleVerify(
     confidence: (row?.confidence as Confidence) ?? null,
     advisoryCount,
   };
+}
+
+// ── usage (§4D — API signature drift) ─────────────────────────────────────────
+
+/** Resolve the version to serve: explicit request → tracked latest → npm latest. */
+async function resolveVersion(
+  db: Database,
+  name: string,
+  requested?: string,
+): Promise<string | null> {
+  if (requested) return requested;
+  const row = await getPackageByName(db, name);
+  if (row?.latestVersion) return row.latestVersion;
+  const reg = await fetchNpmRegistry(name).catch(() => null);
+  return reg?.latestVersion ?? null;
+}
+
+export interface UsageInput {
+  package: string;
+  version?: string;
+  /** The version the agent already knows (e.g. its training-cutoff version) —
+   *  when given, the response includes the delta the agent must account for. */
+  knownVersion?: string;
+}
+
+/**
+ * Version-exact API surface + optional migration delta (§4D). The surface is the
+ * package's real contract extracted from the shipped `.d.ts` — no prose lag, no
+ * hallucination. Types unavailable → `available:false`, fall back to the README.
+ */
+export async function handleUsage(db: Database, input: UsageInput): Promise<UsageOutput> {
+  const version = await resolveVersion(db, input.package, input.version);
+  if (!version) {
+    return {
+      package: input.package,
+      version: null,
+      surface: null,
+      available: false,
+      note: `Could not resolve a version for "${input.package}" on npm.`,
+    };
+  }
+
+  const surface = await getOrExtractSurface(db, input.package, version);
+  const out: UsageOutput = {
+    package: input.package,
+    version,
+    surface,
+    available: surface !== null,
+    note: surface ? undefined : 'No .d.ts types resolved for this version; fall back to the README.',
+  };
+
+  if (input.knownVersion && input.knownVersion !== version && surface) {
+    const known = await getOrExtractSurface(db, input.package, input.knownVersion);
+    if (known) out.delta = { ...diffSurface(known, surface), fromVersion: input.knownVersion };
+  }
+  return out;
 }
 
 // ── report_outcome ────────────────────────────────────────────────────────────

@@ -91,6 +91,18 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('usage')
+    .argument('<package>', 'npm package name')
+    .description("version-exact API surface (exported symbols/signatures) + drift from a known version")
+    .option('--version <v>', 'target version (defaults to latest)')
+    .option('--known <v>', 'a version you know; shows the API delta to the target')
+    .option('--json', 'output JSON')
+    .action(async (pkg: string, opts: { version?: string; known?: string; json?: boolean }) => {
+      const { runUsage } = await import('./commands');
+      await runUsage(pkg, opts);
+    });
+
+  program
     .command('versions')
     .argument('<package>', 'npm package name')
     .description('show the stored version timeline for a package')
