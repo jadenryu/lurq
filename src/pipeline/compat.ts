@@ -89,6 +89,10 @@ export async function verifyCompatibility(
     await upsertCompatEdge(db, {
       ...pair,
       status: e.status,
+      // Sandbox is the only mechanism that proves a negative; a failed pair is a
+      // `conflict`, a passed set is `verified`. Both outrank a mined `observed`.
+      provenance: e.status === 'conflict' ? 'conflict' : 'verified',
+      witnessCount: 0,
       driver: result.driver,
       ranAt: new Date(),
     }).catch(() => {});
