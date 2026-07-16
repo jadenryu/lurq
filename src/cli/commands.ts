@@ -477,5 +477,19 @@ export async function runCompat(
     if (res.unverified.length) {
       console.log(dim(`\nunverified (no metadata): ${res.unverified.join(', ')}`));
     }
+    // Evidence strength (§4B): show co-install witnesses behind each pair.
+    const compatEvidence = res.evidence.filter((e) => e.status === 'compatible');
+    if (compatEvidence.length) {
+      console.log(
+        table(
+          ['Pair', 'Evidence', 'Witnesses'],
+          compatEvidence.map((e) => [
+            `${e.packages[0]} + ${e.packages[1]}`,
+            e.provenance,
+            e.provenance === 'observed' ? String(e.witnessCount) : '—',
+          ]),
+        ),
+      );
+    }
   });
 }
