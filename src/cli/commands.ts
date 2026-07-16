@@ -446,6 +446,20 @@ export async function runSandbox(
   });
 }
 
+/** Operator: batched sandbox backfill of verified edges over the top-N packages (§4C). */
+export async function runCompatBackfill(opts: { topN?: number; batchSize?: number }): Promise<void> {
+  await withDb(async (db) => {
+    console.error(
+      yellow('co-installing top packages in the sandbox (loads package code locally without isolation unless E2B_API_KEY is set)'),
+    );
+    const { backfillVerify } = await import('../pipeline/compat');
+    const res = await backfillVerify(db, opts);
+    console.log(
+      `${green('backfill done')}: ${res.verified} edges across ${res.batches} runs, ${res.skipped} batches skipped`,
+    );
+  });
+}
+
 /** Read (or, with --run, sandbox-verify then read) pairwise package compatibility. */
 export async function runCompat(
   pkgs: string[],

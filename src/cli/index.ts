@@ -204,6 +204,16 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('compat-backfill')
+    .description('operator-side: sandbox-verify the top-N popular packages in batches, minting verified edges for unverified pairs (§4C)')
+    .option('--top <n>', 'how many popular packages to cover', (v) => parseInt(v, 10))
+    .option('--batch <k>', 'packages co-installed per VM run', (v) => parseInt(v, 10))
+    .action(async (opts: { top?: number; batch?: number }) => {
+      const { runCompatBackfill } = await import('./commands');
+      await runCompatBackfill({ topN: opts.top, batchSize: opts.batch });
+    });
+
+  program
     .command('install')
     .description('guided setup: connect lurq to your AI assistant(s)')
     .option('--api-key <key>', 'hosted API key (skips the prompt)')
