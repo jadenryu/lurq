@@ -51,34 +51,48 @@ function provenanceRank(col: SQLWrapper) {
   return sql`case ${col} when 'conflict' then 3 when 'verified' then 2 when 'observed' then 1 else 0 end`;
 }
 
-/**
- * Upsert a compat edge with provenance precedence (§4B). On conflict:
- *  - witness_count *accumulates* (corroboration must add up, never overwrite);
- *    verified/conflict edges pass 0 so they're unaffected.
- *  - status/provenance/driver/ranAt update only when the incoming edge is at least
- *    as strong as the stored one, so a mined `observed` can never erase a sandbox
- *    `verified`/`conflict`. Encodes conflict > verified > observed > declared.
- */
-export async function upsertCompatEdge(db: Database, edge: NewCompatEdgeRow): Promise<void> {
+/** The provenance-precedence conflict SET, shared by single + batch upsert (§4B).
+ *  witness_count accumulates; status/provenance/driver/ranAt update only when the
+ *  incoming edge is at least as strong, so a mined `observed` never erases a
+ *  sandbox `verified`/`conflict`. Encodes conflict > verified > observed > declared. */
+function conflictSet() {
   const incomingWins = sql`${provenanceRank(sql`excluded.provenance`)} >= ${provenanceRank(compatEdges.provenance)}`;
+  return {
+    status: sql`case when ${incomingWins} then excluded.status else ${compatEdges.status} end`,
+    provenance: sql`case when ${incomingWins} then excluded.provenance else ${compatEdges.provenance} end`,
+    driver: sql`case when ${incomingWins} then excluded.driver else ${compatEdges.driver} end`,
+    ranAt: sql`case when ${incomingWins} then excluded.ran_at else ${compatEdges.ranAt} end`,
+    witnessCount: sql`${compatEdges.witnessCount} + excluded.witness_count`,
+  };
+}
+
+const CONFLICT_TARGET = [
+  compatEdges.packageA,
+  compatEdges.versionA,
+  compatEdges.packageB,
+  compatEdges.versionB,
+] as const;
+
+export async function upsertCompatEdge(db: Database, edge: NewCompatEdgeRow): Promise<void> {
   await db
     .insert(compatEdges)
     .values(edge)
-    .onConflictDoUpdate({
-      target: [
-        compatEdges.packageA,
-        compatEdges.versionA,
-        compatEdges.packageB,
-        compatEdges.versionB,
-      ],
-      set: {
-        status: sql`case when ${incomingWins} then excluded.status else ${compatEdges.status} end`,
-        provenance: sql`case when ${incomingWins} then excluded.provenance else ${compatEdges.provenance} end`,
-        driver: sql`case when ${incomingWins} then excluded.driver else ${compatEdges.driver} end`,
-        ranAt: sql`case when ${incomingWins} then excluded.ran_at else ${compatEdges.ranAt} end`,
-        witnessCount: sql`${compatEdges.witnessCount} + excluded.witness_count`,
-      },
-    });
+    .onConflictDoUpdate({ target: [...CONFLICT_TARGET], set: conflictSet() });
+}
+
+/**
+ * Batch-upsert edges in one round-trip (§4F write-behind for high-volume, loss-
+ * tolerant `observed` mints). The caller MUST pass a batch with unique conflict
+ * keys (Postgres rejects the same ON CONFLICT target twice per statement) — one
+ * resolved closure's canonical pairs are unique by construction. Same precedence
+ * as the single upsert; verified/conflict/score writes stay individual (durable).
+ */
+export async function upsertCompatEdgesBatch(db: Database, edges: NewCompatEdgeRow[]): Promise<void> {
+  if (edges.length === 0) return;
+  await db
+    .insert(compatEdges)
+    .values(edges)
+    .onConflictDoUpdate({ target: [...CONFLICT_TARGET], set: conflictSet() });
 }
 
 /** Persist a resolved closure once (§4B); refresh nodes if the version reappears
