@@ -15,10 +15,10 @@ describe('parseSurface (§4D)', () => {
     const surface = parseSurface(dts);
     const byName = Object.fromEntries(surface.map((s) => [s.name, s]));
     expect(byName.connect).toMatchObject({ kind: 'function', signature: '(url: string, opts?: Options): Client' });
-    expect(byName.Client.kind).toBe('class');
-    expect(byName.Options.kind).toBe('interface');
-    expect(byName.Handler.kind).toBe('type');
-    expect(byName.VERSION.kind).toBe('variable');
+    expect(byName.Client?.kind).toBe('class');
+    expect(byName.Options?.kind).toBe('interface');
+    expect(byName.Handler?.kind).toBe('type');
+    expect(byName.VERSION?.kind).toBe('variable');
     // Non-exported declarations are excluded.
     expect(byName.internalOnly).toBeUndefined();
   });

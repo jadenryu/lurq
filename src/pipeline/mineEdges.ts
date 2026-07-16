@@ -12,7 +12,7 @@
  */
 import { logger } from '../core/logger';
 import { getAllPackageNames } from '../db/packages';
-import { canonicalPair, getAllClosures, persistClosure, upsertCompatEdge } from '../db/compat';
+import { canonicalPair, getAllClosures, persistClosure, upsertCompatEdgesBatch } from '../db/compat';
 import type { Database } from '../db/client';
 import { fetchResolvedGraph, type ResolvedNode } from '../ingestion/sources/depsDev';
 
@@ -37,7 +37,9 @@ export function trackedPairs(
   return pairs;
 }
 
-/** Mint `observed` edges for every tracked-tracked pair in a resolved closure. */
+/** Mint `observed` edges for every tracked-tracked pair in a resolved closure.
+ *  One batch upsert per closure (§4F) — pairs are unique within a closure, so the
+ *  whole set collapses to a single round-trip instead of C(k,2) statements. */
 async function mintObservedPairs(
   db: Database,
   nodes: ResolvedNode[],
@@ -45,16 +47,17 @@ async function mintObservedPairs(
   now: Date,
 ): Promise<number> {
   const pairs = trackedPairs(nodes, tracked);
-  for (const pair of pairs) {
-    await upsertCompatEdge(db, {
+  await upsertCompatEdgesBatch(
+    db,
+    pairs.map((pair) => ({
       ...pair,
-      status: 'compatible',
-      provenance: 'observed',
+      status: 'compatible' as const,
+      provenance: 'observed' as const,
       witnessCount: 1,
       driver: 'depsdev',
       ranAt: now,
-    });
-  }
+    })),
+  );
   return pairs.length;
 }
 
