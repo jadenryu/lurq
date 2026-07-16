@@ -50,7 +50,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/bin/lurq.ts db migrate",
+    "db:migrate": "tsx src/bin/operator.ts db migrate",
+    "operator": "tsx src/bin/operator.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -59,7 +60,6 @@
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
-    "e2b": "^2.31.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
@@ -76,6 +76,7 @@
     "@types/node": "^22.5.0",
     "@types/semver": "^7.7.1",
     "drizzle-kit": "^0.31.10",
+    "e2b": "^2.31.0",
     "eslint": "^9.9.0",
     "prettier": "^3.3.3",
     "tsup": "^8.2.4",
