@@ -6,7 +6,7 @@
  * exact-name hits (especially the keyless local embedder); the lexical leg fixes
  * that, and RRF avoids having to normalize two incomparable score scales.
  */
-import { and, cosineDistance, eq, isNotNull, lte, sql } from 'drizzle-orm';
+import { and, cosineDistance, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
 import type { Candidate, Category, Confidence, Runtime } from '../core/types';
 import type { Database } from '../db/client';
 import { packages } from '../db/schema';
@@ -170,9 +170,9 @@ function buildConditions(
     const allowed = (['proven', 'emerging', 'promising', 'unproven'] as Confidence[]).filter(
       (c) => CONFIDENCE_RANK[c] >= CONFIDENCE_RANK[constraints.minConfidence!],
     );
-    conditions.push(
-      sql`${packages.confidence} in ${sql.raw(`(${allowed.map((c) => `'${c}'`).join(',')})`)}`,
-    );
+    // Parameterized: drizzle binds each value, closing the sql.raw interpolation
+    // hole (safe today — validated enum — but no reason to keep a raw string).
+    conditions.push(inArray(packages.confidence, allowed));
   }
   return conditions;
 }
