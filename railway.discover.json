@@ -8,6 +8,7 @@
     "startCommand": "node dist-operator/bin/operator.js worker --once --cap 100 --extract 50",
     "cronSchedule": "*/15 * * * *",
     "restartPolicyType": "NEVER",
-    "numReplicas": 1
+    "numReplicas": 1,
+    "region": "us-east4-eqdc4a"
   }
 }
