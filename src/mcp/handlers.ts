@@ -29,7 +29,7 @@ import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import { fetchNpmRegistry, fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
-import { getOrFetchPackage } from '../pipeline/single';
+import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
 import { assessRisk } from '../security/risk';
@@ -151,7 +151,11 @@ export async function handleEvaluate(
     'eval',
     cacheKey([input.package]),
     async () => {
-      const { row, existsOnNpm } = await getOrFetchPackage(db, input.package);
+      // Block-on-first-touch (§4A): a single-package eval awaits the ingest so
+      // the first call returns real evidence, not a "retry shortly" placeholder.
+      const { row, existsOnNpm } = await getOrFetchPackage(db, input.package, {
+        blockMs: FIRST_TOUCH_BUDGET_MS,
+      });
       if (!row) {
         return {
           tracked: false as const,
@@ -261,7 +265,9 @@ export async function handleVerify(
 
   const [registry, { row, wasTracked }, popular] = await Promise.all([
     fetchNpmRegistry(name).catch(() => null),
-    getOrFetchPackage(db, name),
+    // Block-on-first-touch (§4A): verify is single-package, so await the ingest
+    // for a real confidence/tracked read on the first call.
+    getOrFetchPackage(db, name, { blockMs: FIRST_TOUCH_BUDGET_MS }),
     getTopPackageNames(db).catch(() => [] as string[]),
   ]);
 
