@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const BASE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.lurq.run";
+import { SITE_ORIGIN } from "@/lib/site";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -10,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
       // Keep the app/auth surfaces out of the index.
       disallow: ["/dashboard", "/sign-in", "/sign-up", "/api/"],
     },
-    sitemap: `${BASE}/sitemap.xml`,
-    host: BASE,
+    sitemap: `${SITE_ORIGIN}/sitemap.xml`,
+    host: SITE_ORIGIN,
   };
 }

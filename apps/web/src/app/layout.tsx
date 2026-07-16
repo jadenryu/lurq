@@ -5,6 +5,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { geist } from "@/lib/fonts";
+import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 
 const TITLE = "lurq | objective package recommendations for AI coding agents";
@@ -12,8 +13,9 @@ const DESCRIPTION =
   "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries: fresh, objective dependency recommendations for your coding agent.";
 
 export const metadata: Metadata = {
-  // Canonical base for resolving relative metadata URLs (OG images, etc.).
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.lurq.run"),
+  // Canonical base for resolving relative metadata URLs (canonical, OG images).
+  // SITE_ORIGIN normalizes the apex to the non-redirecting www host (see lib/site).
+  metadataBase: new URL(SITE_ORIGIN),
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/" },

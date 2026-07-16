@@ -1,8 +1,8 @@
 import type { MetadataRoute } from "next";
+import { siteUrl as url } from "@/lib/site";
 
 // Canonical host: the apex (lurq.run) 308-redirects to www, so www is canonical.
-const BASE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.lurq.run";
-const url = (path: string) => `${BASE}${path === "/" ? "" : path}`;
+// `siteUrl` normalizes the apex to www so no <loc> points at the redirecting host.
 
 // Public marketing pages only — /dashboard and the auth routes are intentionally
 // excluded (and disallowed in robots.ts).
