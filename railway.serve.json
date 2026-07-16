@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "node dist/bin/lurq.js db migrate; node dist/bin/lurq.js serve-http",
+    "startCommand": "node dist-operator/bin/operator.js db migrate; node dist/bin/lurq.js serve-http",
     "healthcheckPath": "/healthz",
     "restartPolicyType": "ON_FAILURE",
     "numReplicas": 1

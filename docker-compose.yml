@@ -1,6 +1,6 @@
 # Local Postgres with pgvector for lurq development.
 #   docker compose up -d
-# Then: lurq db migrate && lurq sync
+# Then (operator plane, §4E): npm run operator -- db migrate && npm run operator -- sync
 services:
   db:
     image: pgvector/pgvector:pg16
