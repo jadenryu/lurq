@@ -25,7 +25,7 @@ import {
   type DiscoveryCandidate,
 } from '../db/discovery';
 import { packages } from '../db/schema';
-import { fetchDependencyNames } from '../ingestion/sources/depsDev';
+import { fetchDirectDependencies } from '../ingestion/sources/depsDev';
 import { fetchNpmRegistry } from '../ingestion/sources/npmRegistry';
 import { searchNpm } from '../ingestion/sources/npmSearch';
 import type { RawPackageSignals } from '../ingestion/types';
@@ -100,7 +100,14 @@ export async function preScorePackage(
 
 // ── Channels ─────────────────────────────────────────────────────────────────
 
-/** Dependency-graph neighbors of tracked packages (adjacency, not ranking). */
+/**
+ * Dependency-graph neighbors of tracked packages (adjacency, not ranking).
+ * §4G: **direct dependencies only** — the ~15 packages the author deliberately
+ * chose, not the transitive closure. Enqueuing the whole closure would re-import
+ * the plumbing explosion one hop later (`ms`/`bytes` etc.); BFS still reaches the
+ * whole ecosystem because each discovered package contributes its own direct deps
+ * on ingest — one deliberate hop at a time. The quality gate filters the rest.
+ */
 async function graphChannel(db: Database): Promise<DiscoveryCandidate[]> {
   const tracked = await db
     .select({ name: packages.name, version: packages.latestVersion })
@@ -110,11 +117,11 @@ async function graphChannel(db: Database): Promise<DiscoveryCandidate[]> {
   const out: DiscoveryCandidate[] = [];
   for (const t of tracked) {
     if (!t.version) continue;
-    const deps = (await fetchDependencyNames(t.name, t.version)).slice(
+    const deps = (await fetchDirectDependencies(t.name, t.version)).slice(
       0,
       DISCOVERY.graphNeighborsPerSeed,
     );
-    for (const name of deps) out.push({ name, via: 'dependency-graph' });
+    for (const dep of deps) out.push({ name: dep.name, via: 'dependency-graph' });
   }
   return out;
 }
