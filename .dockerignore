@@ -1,0 +1,15 @@
+# Build context hygiene — keep secrets, local state, and heavy artifacts out of
+# the image (and out of any build layer).
+.git
+.env
+.env.*
+node_modules
+**/node_modules
+dist
+dist-operator
+apps/*/.next
+coverage
+*.log
+vault
+Icon?
+.DS_Store
