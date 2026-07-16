@@ -42,6 +42,7 @@ import type {
   DependencyRanges,
   DiscoverySource,
   DiscoveryStatus,
+  ExportSymbol,
   PeerMeta,
   ScoreBreakdown,
   UsageGuide,
@@ -297,6 +298,25 @@ export const resolvedClosures = pgTable(
 );
 
 /**
+ * Extracted public API surface per `package@version` (§4D — usage axis D1).
+ * Ground truth = the package's shipped `.d.ts`, parsed deterministically (no
+ * LLM). Versions are immutable, so a surface is extracted once and cached
+ * forever; `usage` serves it and diffs across versions for API drift.
+ */
+export const apiSurfaces = pgTable(
+  'api_surfaces',
+  {
+    id: serial('id').primaryKey(),
+    packageName: text('package_name').notNull(),
+    version: text('version').notNull(),
+    /** Normalized export list: [{ name, kind, signature }, …]. */
+    surface: jsonb('surface').$type<ExportSymbol[]>().notNull(),
+    extractedAt: ts('extracted_at').notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('api_surfaces_pkg_idx').on(table.packageName, table.version)],
+);
+
+/**
  * Recommendation → outcome capture (§3.1): the flywheel asset. lurq sits inside
  * the agent loop at the choice moment, so a lightweight opt-in callback yields a
  * recommendation→outcome dataset no downstream scanner can reconstruct (they see
@@ -349,5 +369,7 @@ export type CompatEdgeRow = typeof compatEdges.$inferSelect;
 export type NewCompatEdgeRow = typeof compatEdges.$inferInsert;
 export type ResolvedClosureRow = typeof resolvedClosures.$inferSelect;
 export type NewResolvedClosureRow = typeof resolvedClosures.$inferInsert;
+export type ApiSurfaceRow = typeof apiSurfaces.$inferSelect;
+export type NewApiSurfaceRow = typeof apiSurfaces.$inferInsert;
 export type RecommendationOutcomeRow = typeof recommendationOutcomes.$inferSelect;
 export type NewRecommendationOutcomeRow = typeof recommendationOutcomes.$inferInsert;

@@ -157,6 +157,53 @@ export interface CompatOutput {
   evidence: CompatEvidence[];
 }
 
+// ── Usage axis D1: API signature drift (§4D) ─────────────────────────────────
+
+/** Kind of an exported symbol, from its `.d.ts` declaration. */
+export type ExportKind =
+  | 'function'
+  | 'class'
+  | 'interface'
+  | 'type'
+  | 'enum'
+  | 'variable'
+  | 'namespace'
+  | 'unknown';
+
+/** One normalized exported symbol of a package version's public API surface. */
+export interface ExportSymbol {
+  name: string;
+  kind: ExportKind;
+  /** Single-line normalized signature (params/return for functions, etc.), or
+   *  null when the declaration carries no useful signature. */
+  signature: string | null;
+}
+
+/** What changed between two API surfaces (§4D). Deltas are computed, not guessed. */
+export interface SurfaceDelta {
+  added: ExportSymbol[];
+  removed: ExportSymbol[];
+  /** A symbol that disappeared and a near-identical one that appeared — inferred
+   *  by signature similarity, so an agent sees a rename, not remove+add. */
+  renamed: { from: ExportSymbol; to: ExportSymbol }[];
+  /** Same name, changed signature. */
+  changed: { name: string; before: string | null; after: string | null }[];
+}
+
+/** `usage` tool output: version-exact API surface + optional delta from a known
+ *  version the agent was trained/working on (§4D). */
+export interface UsageOutput {
+  package: string;
+  version: string | null;
+  /** Extracted export list, or null when types are unavailable (falls back to
+   *  the README, which is already fetched). */
+  surface: ExportSymbol[] | null;
+  available: boolean;
+  /** Present when a `knownVersion` was supplied and both surfaces resolved. */
+  delta?: SurfaceDelta & { fromVersion: string };
+  note?: string;
+}
+
 export type AdvisorySeverity = 'critical' | 'high' | 'moderate' | 'low' | 'info';
 
 export interface Advisory {
