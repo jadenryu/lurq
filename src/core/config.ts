@@ -9,9 +9,19 @@ import { z } from 'zod';
 
 let envLoaded = false;
 
-/** Load `.env` into process.env exactly once. Safe to call repeatedly. */
+/**
+ * Load env into process.env exactly once. Safe to call repeatedly.
+ *
+ * Layering: if `LURQ_ENV_FILE` is set (e.g. `.env.production`), that file loads
+ * *first* so its values win, then `.env` fills in the rest (dotenv never
+ * overrides an already-set key). This is how the explicit prod path works —
+ * `LURQ_ENV_FILE=.env.production` supplies the prod DATABASE_URL while `.env`
+ * still provides shared secrets — without prod ever being the ambient default.
+ */
 export function loadEnv(): void {
   if (envLoaded) return;
+  const overrideFile = process.env.LURQ_ENV_FILE;
+  if (overrideFile) dotenvConfig({ path: overrideFile });
   dotenvConfig();
   envLoaded = true;
 }
