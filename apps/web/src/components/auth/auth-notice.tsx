@@ -1,16 +1,16 @@
 import Link from "next/link";
 
-// Legal consent notice shown under the Clerk auth form. Sign-up carries the full
-// account-creation + marketing-email disclosure; sign-in a shorter agreement
-// line. Links route to the /terms and /privacy pages.
+// Notice shown under the Clerk auth form. Terms/Privacy agreement on sign-up is
+// handled by Clerk's own legal-consent checkbox (Dashboard → Legal), so sign-up
+// here only carries the marketing-email opt-out disclosure that the checkbox
+// doesn't cover. Sign-in has no checkbox, so it keeps the agreement line.
 export function AuthNotice({ mode }: { mode: "sign-in" | "sign-up" }) {
   return (
     <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
       {mode === "sign-up" ? (
         <>
-          By creating an account you agree to the <TermsLink /> and our{" "}
-          <PrivacyLink />. We&apos;ll occasionally send you emails about news,
-          products, and services; you can opt-out anytime.
+          We&apos;ll occasionally send you emails about news, products, and
+          services; you can opt-out anytime.
         </>
       ) : (
         <>
