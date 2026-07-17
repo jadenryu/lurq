@@ -45,15 +45,30 @@ export function AuthShell({
           {children}
         </div>
       </div>
-      <div className="relative hidden items-center justify-center bg-muted lg:flex">
+      <div className="relative hidden items-center justify-center overflow-hidden bg-black lg:flex">
         <Image
-          src="/logos/lq.png"
-          alt="lurq"
-          width={640}
-          height={640}
+          src="/logos/larp.jpg"
+          alt=""
+          fill
           priority
-          className="w-2/3 max-w-md object-contain opacity-90"
+          sizes="50vw"
+          className="object-cover object-center brightness-[0.4]"
         />
+        {/* darken further toward the edges so overlaid text stays legible */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/50" />
+        <div className="relative z-10 flex flex-col items-center gap-4 px-8 text-center">
+          <Image
+            src="/logos/lq.png"
+            alt="lurq"
+            width={72}
+            height={72}
+            priority
+            className="h-16 w-16 object-contain"
+          />
+          <p className="max-w-xs text-2xl font-semibold leading-snug tracking-tight text-white">
+            Objective package recommendations for your coding agent.
+          </p>
+        </div>
       </div>
     </div>
   );
