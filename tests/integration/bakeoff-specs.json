@@ -1,0 +1,38 @@
+[
+  {
+    "id": "t3-stack",
+    "document": "A full-stack Next.js application using the T3 architecture. Needs tRPC for API, TailwindCSS for styling, Prisma for database ORM, and NextAuth for authentication."
+  },
+  {
+    "id": "mern-stack",
+    "document": "A classic MERN stack application. Needs MongoDB with Mongoose, Express.js backend, React frontend with React Router, and Node.js."
+  },
+  {
+    "id": "epic-stack",
+    "document": "A modern web app using the Epic Stack architecture. Needs Remix for the framework, SQLite with Prisma for the database, and Zod for validation."
+  },
+  {
+    "id": "ai-chatbot",
+    "document": "An AI chatbot application. Needs React for the frontend, Vercel AI SDK for managing AI state, the OpenAI Node.js SDK, and TailwindCSS for styling."
+  },
+  {
+    "id": "realtime-collab-editor",
+    "document": "A real-time collaborative document editor similar to Notion. The backend needs a Node.js WebSocket server with Redis for pub/sub. The frontend needs React, a rich text editor framework like TipTap, and Yjs for CRDT-based conflict resolution."
+  },
+  {
+    "id": "headless-ecommerce",
+    "document": "A modern headless e-commerce storefront. Needs Next.js for SSR, Stripe for payment processing, GraphQL for fetching products from a headless CMS, and Framer Motion for complex cart animations."
+  },
+  {
+    "id": "enterprise-hr-dashboard",
+    "document": "An internal HR analytics dashboard with strict Role-Based Access Control. Needs an enterprise-grade data grid component, a charting library for analytics, Auth0 for SSO integration, and React Query for data fetching."
+  },
+  {
+    "id": "background-audio-processor",
+    "document": "A heavy-duty asynchronous worker service for audio transcription. Needs Express for the API, BullMQ for handling background job queues backed by Redis, AWS SDK for S3 file storage, and a reliable multipart form-data parser for handling large file uploads."
+  },
+  {
+    "id": "web3-nft-dapp",
+    "document": "A decentralized Web3 application for minting NFTs. Needs React for the frontend, ethers.js for blockchain interaction, Wagmi for wallet connections, and a reliable IPFS client for uploading metadata."
+  }
+]
