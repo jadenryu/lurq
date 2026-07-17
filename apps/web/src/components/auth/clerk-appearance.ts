@@ -5,6 +5,8 @@
 // three ids: `cardBox` (outer), `card` (inner), and a gray `footer` that sits
 // outside `card` but inside `cardBox`. Flatten all three. Shared by sign-in and
 // sign-up so both look identical.
+const hairline = "1px solid rgba(255,255,255,0.14)"; // faint light border on near-black
+
 export const borderlessAppearance = {
   elements: {
     rootBox: { width: "100%" },
@@ -29,5 +31,15 @@ export const borderlessAppearance = {
       borderTop: "none",
     },
     footerItem: { background: "transparent" },
+
+    // Subtle 1px hairline on the interactive elements for definition (freeform
+    // layout, but each control still reads as its own surface).
+    socialButtonsBlockButton: { border: hairline },
+    formFieldInput: { border: hairline },
+    formButtonPrimary: { border: hairline },
+
+    // GitHub's mark is solid black → invisible on our dark buttons. Force it
+    // white (brightness(0) flattens to black, invert(1) flips black→white).
+    socialButtonsProviderIcon__github: { filter: "brightness(0) invert(1)" },
   },
 } as const;
