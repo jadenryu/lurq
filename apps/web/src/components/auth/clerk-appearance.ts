@@ -5,7 +5,7 @@
 // three ids: `cardBox` (outer), `card` (inner), and a gray `footer` that sits
 // outside `card` but inside `cardBox`. Flatten all three. Shared by sign-in and
 // sign-up so both look identical.
-const hairline = "1px solid rgba(255,255,255,0.14)"; // faint light border on near-black
+const hairline = "1px solid rgba(255,255,255,0.28)"; // light border on near-black
 
 export const borderlessAppearance = {
   elements: {
@@ -15,12 +15,18 @@ export const borderlessAppearance = {
       border: "none",
       boxShadow: "none",
       background: "transparent",
+      // Clerk sets overflow:hidden on the card box for its rounded corners;
+      // with our zero card padding that clips the flush-left legal checkbox.
+      overflow: "visible",
     },
     card: {
       border: "none",
       boxShadow: "none",
       background: "transparent",
-      padding: 0,
+      // small horizontal inset so controls (esp. the legal checkbox) aren't
+      // flush against the edge; vertical stays tight for the freeform look.
+      padding: "0 2px",
+      overflow: "visible",
     },
     // our title/subtitle come from AuthShell, not Clerk's header
     header: { display: "none" },
