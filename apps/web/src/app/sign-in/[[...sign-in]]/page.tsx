@@ -7,7 +7,7 @@ export default function SignInPage() {
   return (
     <AuthShell
       title="Log in"
-      subtitle="Welcome back — log in to your lurq account."
+      subtitle="Welcome back. Sign in to pick up where you left off."
     >
       <SignIn
         forceRedirectUrl="/dashboard"
