@@ -40,7 +40,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider appearance={{ theme: dark }}>
+    <ClerkProvider
+      appearance={{
+        theme: dark,
+        // Site is monochrome — override Clerk's default purple accent so its
+        // buttons/links match the white CTA (and kill the purple load flash).
+        variables: { colorPrimary: "#fafafa" },
+      }}
+    >
       <html
         lang="en"
         className={`${geist.variable} dark h-full antialiased`}
