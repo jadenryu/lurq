@@ -5,7 +5,7 @@
 // three ids: `cardBox` (outer), `card` (inner), and a gray `footer` that sits
 // outside `card` but inside `cardBox`. Flatten all three. Shared by sign-in and
 // sign-up so both look identical.
-const hairline = "1px solid rgba(255,255,255,0.14)"; // faint light border on near-black
+const hairline = "1px solid rgba(255,255,255,0.28)"; // light border on near-black
 
 export const borderlessAppearance = {
   elements: {
