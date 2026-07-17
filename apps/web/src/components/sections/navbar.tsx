@@ -77,7 +77,7 @@ export function Navbar() {
                   href="/sign-in"
                   className={buttonVariants({ variant: "ghost", size: "sm" })}
                 >
-                  Sign in
+                  Log in
                 </Link>
                 <Link
                   href="/book-demo"
@@ -129,7 +129,7 @@ export function Navbar() {
                         className: "w-full",
                       })}
                     >
-                      Sign in
+                      Log in
                     </SheetClose>
                     <Link
                       href="/book-demo"
