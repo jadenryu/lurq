@@ -5,7 +5,7 @@ import Link from "next/link";
 // line. Links route to the /terms and /privacy pages.
 export function AuthNotice({ mode }: { mode: "sign-in" | "sign-up" }) {
   return (
-    <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground lg:text-left">
+    <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
       {mode === "sign-up" ? (
         <>
           By creating an account you agree to the <TermsLink /> and our{" "}
