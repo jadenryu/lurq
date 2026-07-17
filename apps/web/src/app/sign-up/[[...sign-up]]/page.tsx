@@ -1,5 +1,6 @@
 import { SignUp } from "@clerk/nextjs";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { AuthNotice } from "@/components/auth/auth-notice";
 
 export default function SignUpPage() {
   return (
@@ -9,6 +10,7 @@ export default function SignUpPage() {
       subtitle="Sign up to generate your API key and connect your coding agent."
     >
       <SignUp forceRedirectUrl="/dashboard" signInUrl="/sign-in" />
+      <AuthNotice mode="sign-up" />
     </AuthShell>
   );
 }

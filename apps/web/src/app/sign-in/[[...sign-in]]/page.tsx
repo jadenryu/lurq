@@ -1,5 +1,6 @@
 import { SignIn } from "@clerk/nextjs";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { AuthNotice } from "@/components/auth/auth-notice";
 
 // Strip Clerk's card chrome so the form reads freeform against the page (our
 // own header comes from AuthShell), and hide Clerk's built-in "Sign in" title.
@@ -22,6 +23,7 @@ export default function SignInPage() {
         signUpUrl="/sign-up"
         appearance={{ elements: borderless }}
       />
+      <AuthNotice mode="sign-in" />
     </AuthShell>
   );
 }
