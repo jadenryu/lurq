@@ -55,14 +55,14 @@ export function AuthShell({
           </Link>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center">
-          <div className="w-full max-w-sm text-center">
+          <div className="w-full max-w-md text-center">
             {eyebrow && (
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 {eyebrow}
               </span>
             )}
             {title && (
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="mt-2 whitespace-nowrap text-2xl font-semibold tracking-tight sm:text-3xl">
                 {title}
               </h1>
             )}
