@@ -15,17 +15,17 @@ export default function PrivacyPage() {
       </p>
 
       <div className="mb-10 rounded-lg border border-dashed border-border bg-card/40 p-4 text-sm text-muted-foreground">
-        <strong className="text-foreground">Pre-launch draft.</strong> This
-        policy describes what lurq actually collects today. lurq is not yet
-        incorporated and this is not legal advice; the operating entity and any
-        formal data-protection contacts will be finalized before general
-        availability.
+        <strong className="text-foreground">Note.</strong> This policy describes
+        what lurq actually collects today. lurq is currently operated by an
+        individual and this is not legal advice; it will be revisited if and when
+        lurq is incorporated as a company.
       </div>
 
       <Prose>
         <p>
-          This Privacy Policy explains how lurq (&ldquo;lurq&rdquo;,
-          &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) collects,
+          This Privacy Policy explains how lurq, operated by Jaden Ryu, an
+          individual based in the Commonwealth of Virginia (&ldquo;lurq&rdquo;,
+          &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;), collects,
           uses, and shares information about you when you use the lurq website at{" "}
           <a href="https://lurq.run">lurq.run</a>, the lurq command-line
           interface (&ldquo;CLI&rdquo;), the lurq MCP server, and any related

@@ -15,10 +15,9 @@ export default function TermsPage() {
       </p>
 
       <div className="mb-10 rounded-lg border border-dashed border-border bg-card/40 p-4 text-sm text-muted-foreground">
-        <strong className="text-foreground">Pre-launch draft.</strong> These
-        terms describe how lurq works today, but lurq is not yet incorporated and
-        this is not legal advice. The operating entity, governing law, and venue
-        will be finalized with counsel before general availability.
+        <strong className="text-foreground">Note.</strong> lurq is currently
+        operated by an individual and these terms are not legal advice. They will
+        be revisited if and when lurq is incorporated as a company.
       </div>
 
       <Prose>
@@ -27,9 +26,9 @@ export default function TermsPage() {
           use of the lurq website at{" "}
           <a href="https://lurq.run">lurq.run</a>, the lurq command-line
           interface (&ldquo;CLI&rdquo;), the lurq MCP server, and any related
-          services (together, the &ldquo;Services&rdquo;), provided by lurq
-          (&ldquo;lurq&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or
-          &ldquo;our&rdquo;).
+          services (together, the &ldquo;Services&rdquo;), provided by Jaden Ryu,
+          an individual based in the Commonwealth of Virginia (&ldquo;lurq&rdquo;,
+          &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;).
         </p>
         <p>
           <strong>
@@ -235,10 +234,11 @@ export default function TermsPage() {
 
         <h2>14. Governing law and disputes</h2>
         <p>
-          These Terms will be governed by the laws of the United States and the
-          state in which lurq is incorporated, without regard to conflict-of-laws
-          rules. The governing state and exclusive venue for disputes will be
-          confirmed here once lurq&apos;s operating entity is established.
+          These Terms are governed by the laws of the Commonwealth of Virginia,
+          without regard to its conflict-of-laws rules. You agree that any dispute
+          arising out of or relating to these Terms or the Services will be
+          resolved exclusively in the state or federal courts located in the
+          Commonwealth of Virginia, and you consent to their jurisdiction.
         </p>
 
         <h2>15. Miscellaneous</h2>
