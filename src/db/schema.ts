@@ -118,6 +118,11 @@ export const packages = pgTable(
 
     // Freshness + bookkeeping
     dataAsOf: timestamp('data_as_of', { withTimezone: true, mode: 'date' }),
+    /** latest_version this package's direct deps were last expanded for by the
+     *  discovery graph channel (§2B). Discovery re-scans a package only when this
+     *  differs from latest_version — deps are version-pinned, so an unchanged
+     *  version has unchanged neighbors. NULL = never scanned. */
+    graphScannedVersion: text('graph_scanned_version'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
