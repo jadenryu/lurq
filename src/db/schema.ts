@@ -175,6 +175,27 @@ export const discoveryQueue = pgTable(
 );
 
 /**
+ * Demand-driven compat-verify queue (§4C). A `compat` query that finds an
+ * unverified pair enqueues the set here (instant, off the query path); the worker
+ * drains it and runs the sandbox co-install, so the matrix self-densifies from
+ * real usage without ever blocking a user or running a VM in the HTTP process.
+ */
+export const compatVerifyQueue = pgTable(
+  'compat_verify_queue',
+  {
+    id: serial('id').primaryKey(),
+    /** Canonical order-independent key of the package set — dedups pending requests. */
+    setKey: text('set_key').notNull().unique(),
+    /** The package names to co-install in the sandbox. */
+    packages: jsonb('packages').$type<string[]>().notNull(),
+    /** Failed drains bump this; the worker drops a set that keeps failing. */
+    attempts: integer('attempts').notNull().default(0),
+    requestedAt: ts('requested_at').notNull().defaultNow(),
+  },
+  (table) => [index('compat_verify_queue_requested_idx').on(table.requestedAt)],
+);
+
+/**
  * API keys for the hosted HTTP service (docs/lurq-hosted-deployment.md §5). Each
  * user/org gets a key; only its sha256 hash is persisted, so a DB leak never
  * exposes a usable key — the plaintext is shown exactly once at creation.
@@ -364,6 +385,7 @@ export type NewPackageRow = typeof packages.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;
 export type SyncRunRow = typeof syncRuns.$inferSelect;
 export type DiscoveryQueueRow = typeof discoveryQueue.$inferSelect;
+export type CompatVerifyQueueRow = typeof compatVerifyQueue.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type NewApiKeyRow = typeof apiKeys.$inferInsert;
 export type PackageVersionRow = typeof packageVersions.$inferSelect;

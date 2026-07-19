@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalPair } from '../src/db/compat';
+import { canonicalPair, compatSetKey } from '../src/db/compat';
 import { deriveCompatEdges, fullyCovered, pairKey } from '../src/pipeline/compat';
 import type { SandboxSetResult } from '../src/sandbox/types';
 
@@ -10,6 +10,13 @@ describe('backfill gate (§4C)', () => {
     // Missing b|c → not covered → must run.
     covered.delete(pairKey('b', 'c'));
     expect(fullyCovered(['a', 'b', 'c'], covered)).toBe(false);
+  });
+});
+
+describe('compatSetKey (self-heal dedup)', () => {
+  it('is order-independent and dedups names, so one set enqueues once', () => {
+    expect(compatSetKey(['react', 'lodash'])).toBe(compatSetKey(['lodash', 'react']));
+    expect(compatSetKey(['a', 'b', 'a'])).toBe('a|b');
   });
 });
 

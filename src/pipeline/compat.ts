@@ -7,10 +7,23 @@
 import type { CompatStatus } from '../core/types';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
-import { canonicalPair, getCompatEdges, upsertCompatEdge } from '../db/compat';
+import {
+  bumpCompatVerifyAttempt,
+  canonicalPair,
+  deleteCompatVerify,
+  fullyCovered,
+  getCompatEdges,
+  getPendingCompatVerify,
+  pairKey,
+  upsertCompatEdge,
+} from '../db/compat';
 import { getPackageByName, getTopPackageNames } from '../db/packages';
 import { getSandbox } from '../sandbox';
 import type { SandboxSetResult } from '../sandbox/types';
+
+// Re-exported: the pure pair helpers live in the light db layer (so the query
+// path can use them without pulling in the sandbox), but they were minted here.
+export { fullyCovered, pairKey } from '../db/compat';
 
 export interface CompatEdge {
   a: string;
@@ -105,26 +118,11 @@ export async function verifyCompatibility(
 
 // ── Targeted backfill (§4C) ───────────────────────────────────────────────────
 
-/** Canonical `a|b` key for a name pair, order-independent. */
-export function pairKey(a: string, b: string): string {
-  return a <= b ? `${a}|${b}` : `${b}|${a}`;
-}
-
 /** Name-pair keys that already have *any* stored edge among `names` — the pairs
  *  a sandbox run would waste itself on (§4C: sandbox is only for unverified). */
 async function coveredPairs(db: Database, names: string[]): Promise<Set<string>> {
   const edges = await getCompatEdges(db, names);
   return new Set(edges.map((e) => pairKey(e.packageA, e.packageB)));
-}
-
-/** True if every C(K,2) pair in a batch already has an edge — skip the VM run. */
-export function fullyCovered(batch: string[], covered: Set<string>): boolean {
-  for (let i = 0; i < batch.length; i++) {
-    for (let j = i + 1; j < batch.length; j++) {
-      if (!covered.has(pairKey(batch[i]!, batch[j]!))) return false;
-    }
-  }
-  return true;
 }
 
 export interface BackfillResult {
@@ -169,4 +167,55 @@ export async function backfillVerify(
   }
   logger.info(`backfill: ${verified} edges across ${batches} runs, ${skipped} batches skipped`);
   return { batches, verified, skipped };
+}
+
+// ── Demand-driven self-heal drain (§4C) ───────────────────────────────────────
+
+const MAX_COMPAT_VERIFY_ATTEMPTS = 3;
+
+export interface DrainResult {
+  processed: number;
+  verified: number;
+  dropped: number;
+}
+
+/**
+ * Drain the demand-driven compat-verify queue (§4C): pop the oldest pending sets
+ * (capped) and co-install each in the sandbox, minting verified/conflict edges so
+ * a real `compat` query that missed gets a real answer on the next ask. A set
+ * already covered by edges since it was queued (backfill/remine/another drain got
+ * there first) is dropped without a VM run; a set that keeps failing is dropped
+ * after MAX attempts so a bad request can't wedge the queue.
+ */
+export async function drainCompatVerifyQueue(
+  db: Database,
+  opts: { limit?: number } = {},
+): Promise<DrainResult> {
+  const limit = Math.max(1, opts.limit ?? 10);
+  const pending = await getPendingCompatVerify(db, limit);
+  let verified = 0;
+  let dropped = 0;
+  for (const req of pending) {
+    const names = req.packages;
+    if (fullyCovered(names, await coveredPairs(db, names))) {
+      await deleteCompatVerify(db, req.id);
+      continue;
+    }
+    try {
+      const { edges } = await verifyCompatibility(db, names);
+      verified += edges.length;
+      await deleteCompatVerify(db, req.id);
+    } catch (err) {
+      logger.warn(`compat-verify drain failed for ${names.join(', ')}: ${String(err)}`);
+      const attempts = await bumpCompatVerifyAttempt(db, req.id);
+      if (attempts >= MAX_COMPAT_VERIFY_ATTEMPTS) {
+        await deleteCompatVerify(db, req.id);
+        dropped++;
+      }
+    }
+  }
+  logger.info(
+    `compat-verify: ${verified} edge(s) from ${pending.length} queued set(s), ${dropped} dropped`,
+  );
+  return { processed: pending.length, verified, dropped };
 }

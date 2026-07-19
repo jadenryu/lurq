@@ -43,18 +43,28 @@ export function registerOperatorCommands(program: Command): void {
     .option('--interval <sec>', 'seconds between cycles (default 900)', (v) => parseInt(v, 10))
     .option('--cap <n>', 'candidates ingested per cycle', (v) => parseInt(v, 10))
     .option('--extract <n>', 'API surfaces extracted per cycle', (v) => parseInt(v, 10))
+    .option('--compat-verify <n>', 'demand-driven compat-verify sets drained per cycle', (v) => parseInt(v, 10))
     .option('--once', 'run exactly one cycle and exit')
-    .action(async (opts: { interval?: number; cap?: number; extract?: number; once?: boolean }) => {
-      const { requireConfig } = await import('../core/config');
-      requireConfig(['DATABASE_URL']);
-      const { runWorker } = await import('../pipeline/index');
-      await runWorker({
-        intervalSec: opts.interval,
-        perRunCap: opts.cap,
-        extractPerCycle: opts.extract,
-        once: opts.once,
-      });
-    });
+    .action(
+      async (opts: {
+        interval?: number;
+        cap?: number;
+        extract?: number;
+        compatVerify?: number;
+        once?: boolean;
+      }) => {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { runWorker } = await import('../pipeline/index');
+        await runWorker({
+          intervalSec: opts.interval,
+          perRunCap: opts.cap,
+          extractPerCycle: opts.extract,
+          compatVerifyPerCycle: opts.compatVerify,
+          once: opts.once,
+        });
+      },
+    );
 
   program
     .command('rescore')
