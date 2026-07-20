@@ -10,6 +10,24 @@ import { enqueueCompatVerify, fullyCovered, getCompatEdges, pairKey } from '../d
 import { assembleMembers } from './members';
 import { resolveArchitectureCompat } from './peerCompat';
 
+/**
+ * Evidence-graded verdict (pure). `compatible` requires *positive* proof for every
+ * pair; absence of a declared conflict is not proof, so an unverified set is
+ * `likely`, never `compatible`. A single package has no pairs → trivially fine.
+ */
+export function gradeOverall(args: {
+  hasConflict: boolean;
+  hasUnverifiedMember: boolean;
+  memberNames: string[];
+  provenCompatible: Set<string>;
+}): CompatOutput['overall'] {
+  if (args.hasConflict) return 'conflict';
+  if (args.hasUnverifiedMember) return 'unknown';
+  if (args.memberNames.length < 2 || fullyCovered(args.memberNames, args.provenCompatible))
+    return 'compatible';
+  return 'likely';
+}
+
 export async function checkCompat(db: Database, packages: string[]): Promise<CompatOutput> {
   const names = [...new Set(packages)];
   const { members, unverified } = await assembleMembers(db, names);
@@ -33,19 +51,30 @@ export async function checkCompat(db: Database, packages: string[]): Promise<Com
     }
   }
 
-  // Self-heal (§4C): if any pair among the checked members has no edge yet, queue
-  // a background sandbox co-install so the next asker gets a real answer. One
-  // deduped insert — never blocks, never runs a VM here. Skip when a real conflict
-  // is already known (nothing to learn) or the set is fully covered.
+  // Pairs backed by a *positive* (compatible) edge — verified or observed. A
+  // `conflict` edge is not positive evidence, so it's excluded here (it already
+  // pushed a conflict above). ponytail: name-level coverage; a version-matched
+  // check (edge versions == members' current versions) is the stricter follow-up.
   const checkedNames = members.map((m) => m.name);
-  if (checkedNames.length >= 2 && !conflicts.length) {
-    const covered = new Set(edges.map((e) => pairKey(e.packageA, e.packageB)));
-    if (!fullyCovered(checkedNames, covered)) {
-      await enqueueCompatVerify(db, checkedNames).catch(() => {});
-    }
+  const provenCompatible = new Set(
+    edges.filter((e) => e.status === 'compatible').map((e) => pairKey(e.packageA, e.packageB)),
+  );
+
+  // Self-heal (§4C): if any pair among the checked members lacks a positive edge,
+  // queue a background sandbox co-install so the next asker gets a real answer.
+  // One deduped insert — never blocks, never runs a VM here. Skip when a conflict
+  // is already known (nothing to learn) or every pair is already proven.
+  if (checkedNames.length >= 2 && !conflicts.length && !fullyCovered(checkedNames, provenCompatible)) {
+    await enqueueCompatVerify(db, checkedNames).catch(() => {});
   }
 
-  const overall = conflicts.length ? 'conflict' : unverified.length ? 'unknown' : 'compatible';
+  const overall = gradeOverall({
+    hasConflict: conflicts.length > 0,
+    hasUnverifiedMember: unverified.length > 0,
+    memberNames: checkedNames,
+    provenCompatible,
+  });
+
   return {
     packages: names,
     overall,
