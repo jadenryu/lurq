@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalPair } from '../src/db/compat';
+import { canonicalPair, compatSetKey } from '../src/db/compat';
+import { gradeOverall } from '../src/compat/check';
 import { deriveCompatEdges, fullyCovered, pairKey } from '../src/pipeline/compat';
 import type { SandboxSetResult } from '../src/sandbox/types';
 
@@ -10,6 +11,37 @@ describe('backfill gate (§4C)', () => {
     // Missing b|c → not covered → must run.
     covered.delete(pairKey('b', 'c'));
     expect(fullyCovered(['a', 'b', 'c'], covered)).toBe(false);
+  });
+});
+
+describe('compatSetKey (self-heal dedup)', () => {
+  it('is order-independent and dedups names, so one set enqueues once', () => {
+    expect(compatSetKey(['react', 'lodash'])).toBe(compatSetKey(['lodash', 'react']));
+    expect(compatSetKey(['a', 'b', 'a'])).toBe('a|b');
+  });
+});
+
+describe('gradeOverall (evidence-graded verdict)', () => {
+  const proven = new Set([pairKey('a', 'b')]);
+  it('proven conflict wins over everything', () => {
+    expect(
+      gradeOverall({ hasConflict: true, hasUnverifiedMember: true, memberNames: ['a', 'b'], provenCompatible: proven }),
+    ).toBe('conflict');
+  });
+  it('an un-ingested member is unknown', () => {
+    expect(
+      gradeOverall({ hasConflict: false, hasUnverifiedMember: true, memberNames: ['a', 'b'], provenCompatible: proven }),
+    ).toBe('unknown');
+  });
+  it('compatible only when every pair has a positive edge', () => {
+    expect(
+      gradeOverall({ hasConflict: false, hasUnverifiedMember: false, memberNames: ['a', 'b'], provenCompatible: proven }),
+    ).toBe('compatible');
+  });
+  it('no conflict but unproven is likely, never compatible', () => {
+    expect(
+      gradeOverall({ hasConflict: false, hasUnverifiedMember: false, memberNames: ['a', 'c'], provenCompatible: proven }),
+    ).toBe('likely');
   });
 });
 

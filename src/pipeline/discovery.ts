@@ -13,7 +13,7 @@
  * Cost is bounded by a per-run cap; anything dropped is logged (no silent
  * truncation), and the tail stays queued for the next run.
  */
-import { isNotNull } from 'drizzle-orm';
+import { and, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { logger } from '../core/logger';
 import { CATEGORIES } from '../core/types';
 import { createDb, type Database } from '../db/client';
@@ -107,23 +107,60 @@ export async function preScorePackage(
  * the plumbing explosion one hop later (`ms`/`bytes` etc.); BFS still reaches the
  * whole ecosystem because each discovered package contributes its own direct deps
  * on ingest — one deliberate hop at a time. The quality gate filters the rest.
+ *
+ * Incremental (§2B): only expand packages whose direct deps we haven't seen at
+ * their current version — `graph_scanned_version IS NULL` (never scanned) or
+ * `!= latest_version` (published since). Deps are version-pinned, so an unchanged
+ * version has unchanged neighbors; re-fetching all N every cycle is wasted work
+ * (already-known names get dropped by selectCandidates anyway). Steady-state this
+ * scans ~0 packages; a version bump or new ingest re-arms exactly one. Each
+ * scanned seed is marked so the next cycle skips it.
  */
-async function graphChannel(db: Database): Promise<DiscoveryCandidate[]> {
+async function graphChannel(
+  db: Database,
+): Promise<{ candidates: DiscoveryCandidate[]; scannedSeeds: { name: string; version: string }[] }> {
   const tracked = await db
     .select({ name: packages.name, version: packages.latestVersion })
     .from(packages)
-    .where(isNotNull(packages.latestVersion));
+    .where(
+      and(
+        isNotNull(packages.latestVersion),
+        or(
+          isNull(packages.graphScannedVersion),
+          ne(packages.graphScannedVersion, packages.latestVersion),
+        ),
+      ),
+    );
 
-  const out: DiscoveryCandidate[] = [];
+  const candidates: DiscoveryCandidate[] = [];
+  const scannedSeeds: { name: string; version: string }[] = [];
   for (const t of tracked) {
     if (!t.version) continue;
     const deps = (await fetchDirectDependencies(t.name, t.version)).slice(
       0,
       DISCOVERY.graphNeighborsPerSeed,
     );
-    for (const dep of deps) out.push({ name: dep.name, via: 'dependency-graph' });
+    for (const dep of deps) candidates.push({ name: dep.name, via: 'dependency-graph' });
+    // A successful fetch (even zero deps) means this seed is fully expanded at this
+    // version — record it so the caller marks it *after* the neighbors are durably
+    // enqueued, never before (a crash pre-enqueue must leave it re-scannable).
+    scannedSeeds.push({ name: t.name, version: t.version });
   }
-  return out;
+  return { candidates, scannedSeeds };
+}
+
+/** Mark seeds scanned at their current version (§2B) so the next cycle skips them
+ *  until they republish. Called only after their neighbors are durably enqueued. */
+async function markSeedsScanned(
+  db: Database,
+  seeds: { name: string; version: string }[],
+): Promise<void> {
+  for (const s of seeds) {
+    await db
+      .update(packages)
+      .set({ graphScannedVersion: s.version })
+      .where(sql`${packages.name} = ${s.name}`);
+  }
 }
 
 /** Category-keyword + recency channel via npm search (the niche workhorse). */
@@ -157,10 +194,13 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
     logger.info('Discovery: gathering candidates from graph + search channels…');
     const [graph, search] = await Promise.all([graphChannel(handle.db), searchChannel()]);
     const known = await getKnownNames(handle.db);
-    const fresh = selectCandidates([...graph, ...search], known);
+    const fresh = selectCandidates([...graph.candidates, ...search], known);
     const enqueued = await enqueueCandidates(handle.db, fresh);
+    // Only now that neighbors are durably queued do we mark the seeds scanned;
+    // a crash before this point leaves them re-scannable next cycle.
+    await markSeedsScanned(handle.db, graph.scannedSeeds);
     logger.info(
-      `Discovery: ${graph.length} graph + ${search.length} search candidates → ${enqueued} new queued.`,
+      `Discovery: ${graph.candidates.length} graph (${graph.scannedSeeds.length} seeds expanded) + ${search.length} search candidates → ${enqueued} new queued.`,
     );
 
     // ── Merit gate: pre-score pending candidates on quality only ──────────────

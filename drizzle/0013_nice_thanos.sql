@@ -1,0 +1,1 @@
+ALTER TABLE "packages" ADD COLUMN "graph_scanned_version" text;

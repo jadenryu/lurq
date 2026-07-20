@@ -15,6 +15,7 @@ import { createDb } from '../db/client';
 import { getPackagesMissingSurface } from '../db/apiSurfaces';
 import { pMap } from '../core/concurrency';
 import { runDiscovery } from './discovery';
+import { drainCompatVerifyQueue } from './compat';
 import { runRescore } from './rescore';
 import { getOrExtractSurface } from '../usage/service';
 
@@ -25,6 +26,8 @@ export interface WorkerOptions {
   perRunCap?: number;
   /** API surfaces extracted per cycle. */
   extractPerCycle?: number;
+  /** Demand-driven compat-verify sets drained per cycle (§4C). */
+  compatVerifyPerCycle?: number;
   /** Run exactly one cycle and return (for tests / cron). */
   once?: boolean;
 }
@@ -59,6 +62,7 @@ async function interruptibleSleep(seconds: number, stopped: () => boolean): Prom
 export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
   const intervalSec = opts.intervalSec ?? 900;
   const extractPerCycle = opts.extractPerCycle ?? 25;
+  const compatVerifyPerCycle = opts.compatVerifyPerCycle ?? 10;
 
   let stopped = false;
   const stop = (sig: string) => {
@@ -80,6 +84,16 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
     await extractSurfacesPass(extractPerCycle).catch((err) =>
       logger.warn(`worker: extraction pass failed: ${String(err)}`),
     );
+    // Self-heal the compat matrix from real query misses (§4C) — bounded sandbox
+    // runs, off the HTTP path. A fresh DB handle keeps the sandbox work isolated.
+    await (async () => {
+      const handle = createDb({ max: 4 });
+      try {
+        await drainCompatVerifyQueue(handle.db, { limit: compatVerifyPerCycle });
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: compat-verify drain failed: ${String(err)}`));
     // Freshness of scores is a cheap rescore (§4G) — no re-fetch.
     await runRescore().catch((err) => logger.warn(`worker: rescore failed: ${String(err)}`));
 

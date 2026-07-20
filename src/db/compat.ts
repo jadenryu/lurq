@@ -1,12 +1,14 @@
 /** Read/write helpers for the compatibility matrix (`compat_edges`). */
-import { and, inArray, sql, type SQLWrapper } from 'drizzle-orm';
+import { and, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm';
 import type { DependencyRanges, PeerMeta } from '../core/types';
 import type { Database } from './client';
 import {
   compatEdges,
+  compatVerifyQueue,
   packages,
   resolvedClosures,
   type CompatEdgeRow,
+  type CompatVerifyQueueRow,
   type NewCompatEdgeRow,
   type ResolvedClosureRow,
 } from './schema';
@@ -124,4 +126,68 @@ export async function getCompatEdges(db: Database, names: string[]): Promise<Com
     .select()
     .from(compatEdges)
     .where(and(inArray(compatEdges.packageA, names), inArray(compatEdges.packageB, names)));
+}
+
+// ── Pure pair helpers (§4C) ──────────────────────────────────────────────────
+
+/** Canonical `a|b` key for a name pair, order-independent. */
+export function pairKey(a: string, b: string): string {
+  return a <= b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** True if every C(K,2) pair in a batch already has an edge in `covered`. */
+export function fullyCovered(batch: string[], covered: Set<string>): boolean {
+  for (let i = 0; i < batch.length; i++) {
+    for (let j = i + 1; j < batch.length; j++) {
+      if (!covered.has(pairKey(batch[i]!, batch[j]!))) return false;
+    }
+  }
+  return true;
+}
+
+/** Canonical order-independent key for a whole package set (queue dedup). */
+export function compatSetKey(names: string[]): string {
+  return [...new Set(names)].sort().join('|');
+}
+
+// ── Demand-driven compat-verify queue (§4C) ──────────────────────────────────
+
+/** Queue a package set for background sandbox co-install. Deduped on the set key,
+ *  so repeated queries for the same unverified set enqueue exactly one run.
+ *  Returns true if a new row was inserted. */
+export async function enqueueCompatVerify(db: Database, names: string[]): Promise<boolean> {
+  const packages = [...new Set(names)].filter(Boolean);
+  if (packages.length < 2) return false;
+  const inserted = await db
+    .insert(compatVerifyQueue)
+    .values({ setKey: compatSetKey(packages), packages })
+    .onConflictDoNothing({ target: compatVerifyQueue.setKey })
+    .returning({ id: compatVerifyQueue.id });
+  return inserted.length > 0;
+}
+
+/** Oldest-first pending verify requests (FIFO fairness). */
+export async function getPendingCompatVerify(
+  db: Database,
+  limit: number,
+): Promise<CompatVerifyQueueRow[]> {
+  return db
+    .select()
+    .from(compatVerifyQueue)
+    .orderBy(compatVerifyQueue.requestedAt)
+    .limit(limit);
+}
+
+export async function deleteCompatVerify(db: Database, id: number): Promise<void> {
+  await db.delete(compatVerifyQueue).where(eq(compatVerifyQueue.id, id));
+}
+
+/** Bump attempt count; returns the new count so the caller can drop a stuck set. */
+export async function bumpCompatVerifyAttempt(db: Database, id: number): Promise<number> {
+  const [row] = await db
+    .update(compatVerifyQueue)
+    .set({ attempts: sql`${compatVerifyQueue.attempts} + 1` })
+    .where(eq(compatVerifyQueue.id, id))
+    .returning({ attempts: compatVerifyQueue.attempts });
+  return row?.attempts ?? 0;
 }

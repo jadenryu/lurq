@@ -43,18 +43,28 @@ export function registerOperatorCommands(program: Command): void {
     .option('--interval <sec>', 'seconds between cycles (default 900)', (v) => parseInt(v, 10))
     .option('--cap <n>', 'candidates ingested per cycle', (v) => parseInt(v, 10))
     .option('--extract <n>', 'API surfaces extracted per cycle', (v) => parseInt(v, 10))
+    .option('--compat-verify <n>', 'demand-driven compat-verify sets drained per cycle', (v) => parseInt(v, 10))
     .option('--once', 'run exactly one cycle and exit')
-    .action(async (opts: { interval?: number; cap?: number; extract?: number; once?: boolean }) => {
-      const { requireConfig } = await import('../core/config');
-      requireConfig(['DATABASE_URL']);
-      const { runWorker } = await import('../pipeline/index');
-      await runWorker({
-        intervalSec: opts.interval,
-        perRunCap: opts.cap,
-        extractPerCycle: opts.extract,
-        once: opts.once,
-      });
-    });
+    .action(
+      async (opts: {
+        interval?: number;
+        cap?: number;
+        extract?: number;
+        compatVerify?: number;
+        once?: boolean;
+      }) => {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { runWorker } = await import('../pipeline/index');
+        await runWorker({
+          intervalSec: opts.interval,
+          perRunCap: opts.cap,
+          extractPerCycle: opts.extract,
+          compatVerifyPerCycle: opts.compatVerify,
+          once: opts.once,
+        });
+      },
+    );
 
   program
     .command('rescore')
@@ -107,12 +117,13 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('compat-backfill')
-    .description('sandbox-verify the top-N popular packages in batches, minting verified edges for unverified pairs (§4C)')
+    .description('backfill compat edges over the top-N popular packages in batches (§4C)')
     .option('--top <n>', 'how many popular packages to cover', (v) => parseInt(v, 10))
-    .option('--batch <k>', 'packages co-installed per VM run', (v) => parseInt(v, 10))
-    .action(async (opts: { top?: number; batch?: number }) => {
+    .option('--batch <k>', 'packages settled per run', (v) => parseInt(v, 10))
+    .option('--resolve', 'use the cheap resolve-only tier (npm resolution, no install/VM)')
+    .action(async (opts: { top?: number; batch?: number; resolve?: boolean }) => {
       const { runCompatBackfill } = await import('./commands');
-      await runCompatBackfill({ topN: opts.top, batchSize: opts.batch });
+      await runCompatBackfill({ topN: opts.top, batchSize: opts.batch, resolve: opts.resolve });
     });
 
   const keys = program

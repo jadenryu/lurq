@@ -145,7 +145,13 @@ export interface CompatEvidence {
  */
 export interface CompatOutput {
   packages: string[];
-  overall: 'compatible' | 'conflict' | 'unknown';
+  /** Evidence-graded verdict:
+   *  - `conflict`   — a proven incompatibility (peer-range violation or conflict edge).
+   *  - `compatible` — every pair is *positively evidenced* (verified/observed edge).
+   *  - `likely`     — no conflict found, but not proven; absence of a declared
+   *                   conflict is not proof, so an unverified set is never `compatible`.
+   *  - `unknown`    — a member has no metadata yet (not ingested). */
+  overall: 'compatible' | 'likely' | 'conflict' | 'unknown';
   conflicts: CompatConflict[];
   /** Packages lurq has no compatibility metadata for (counted toward `unknown`). */
   unverified: string[];

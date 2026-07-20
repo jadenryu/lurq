@@ -118,6 +118,11 @@ export const packages = pgTable(
 
     // Freshness + bookkeeping
     dataAsOf: timestamp('data_as_of', { withTimezone: true, mode: 'date' }),
+    /** latest_version this package's direct deps were last expanded for by the
+     *  discovery graph channel (§2B). Discovery re-scans a package only when this
+     *  differs from latest_version — deps are version-pinned, so an unchanged
+     *  version has unchanged neighbors. NULL = never scanned. */
+    graphScannedVersion: text('graph_scanned_version'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
@@ -167,6 +172,27 @@ export const discoveryQueue = pgTable(
     discoveredAt: ts('discovered_at').notNull().defaultNow(),
   },
   (table) => [index('discovery_queue_status_idx').on(table.status)],
+);
+
+/**
+ * Demand-driven compat-verify queue (§4C). A `compat` query that finds an
+ * unverified pair enqueues the set here (instant, off the query path); the worker
+ * drains it and runs the sandbox co-install, so the matrix self-densifies from
+ * real usage without ever blocking a user or running a VM in the HTTP process.
+ */
+export const compatVerifyQueue = pgTable(
+  'compat_verify_queue',
+  {
+    id: serial('id').primaryKey(),
+    /** Canonical order-independent key of the package set — dedups pending requests. */
+    setKey: text('set_key').notNull().unique(),
+    /** The package names to co-install in the sandbox. */
+    packages: jsonb('packages').$type<string[]>().notNull(),
+    /** Failed drains bump this; the worker drops a set that keeps failing. */
+    attempts: integer('attempts').notNull().default(0),
+    requestedAt: ts('requested_at').notNull().defaultNow(),
+  },
+  (table) => [index('compat_verify_queue_requested_idx').on(table.requestedAt)],
 );
 
 /**
@@ -359,6 +385,7 @@ export type NewPackageRow = typeof packages.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;
 export type SyncRunRow = typeof syncRuns.$inferSelect;
 export type DiscoveryQueueRow = typeof discoveryQueue.$inferSelect;
+export type CompatVerifyQueueRow = typeof compatVerifyQueue.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type NewApiKeyRow = typeof apiKeys.$inferInsert;
 export type PackageVersionRow = typeof packageVersions.$inferSelect;
