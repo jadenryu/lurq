@@ -117,12 +117,13 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('compat-backfill')
-    .description('sandbox-verify the top-N popular packages in batches, minting verified edges for unverified pairs (§4C)')
+    .description('backfill compat edges over the top-N popular packages in batches (§4C)')
     .option('--top <n>', 'how many popular packages to cover', (v) => parseInt(v, 10))
-    .option('--batch <k>', 'packages co-installed per VM run', (v) => parseInt(v, 10))
-    .action(async (opts: { top?: number; batch?: number }) => {
+    .option('--batch <k>', 'packages settled per run', (v) => parseInt(v, 10))
+    .option('--resolve', 'use the cheap resolve-only tier (npm resolution, no install/VM)')
+    .action(async (opts: { top?: number; batch?: number; resolve?: boolean }) => {
       const { runCompatBackfill } = await import('./commands');
-      await runCompatBackfill({ topN: opts.top, batchSize: opts.batch });
+      await runCompatBackfill({ topN: opts.top, batchSize: opts.batch, resolve: opts.resolve });
     });
 
   const keys = program

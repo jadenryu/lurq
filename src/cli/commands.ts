@@ -484,14 +484,27 @@ export async function runUsage(
   });
 }
 
-/** Operator: batched sandbox backfill of verified edges over the top-N packages (§4C). */
-export async function runCompatBackfill(opts: { topN?: number; batchSize?: number }): Promise<void> {
+/** Operator: batched backfill of compat edges over the top-N packages (§4C).
+ *  `resolve` uses the cheap resolve-only tier (no VM); otherwise the sandbox. */
+export async function runCompatBackfill(opts: {
+  topN?: number;
+  batchSize?: number;
+  resolve?: boolean;
+}): Promise<void> {
   await withDb(async (db) => {
+    const compat = await import('../pipeline/compat');
+    if (opts.resolve) {
+      console.error(yellow('resolve-only backfill (npm resolution, no install/VM)'));
+      const res = await compat.resolveBackfill(db, opts);
+      console.log(
+        `${green('resolve backfill done')}: ${res.verified} edges across ${res.batches} runs, ${res.skipped} batches skipped`,
+      );
+      return;
+    }
     console.error(
       yellow('co-installing top packages in the sandbox (loads package code locally without isolation unless E2B_API_KEY is set)'),
     );
-    const { backfillVerify } = await import('../pipeline/compat');
-    const res = await backfillVerify(db, opts);
+    const res = await compat.backfillVerify(db, opts);
     console.log(
       `${green('backfill done')}: ${res.verified} edges across ${res.batches} runs, ${res.skipped} batches skipped`,
     );
