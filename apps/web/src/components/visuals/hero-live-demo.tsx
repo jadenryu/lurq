@@ -68,7 +68,11 @@ const container = {
 };
 const item = {
   hidden: { opacity: 0, y: 6 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: "easeOut" } },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.55, ease: "easeOut" as const },
+  },
 };
 
 function Resolution({ id }: { id: string }) {
