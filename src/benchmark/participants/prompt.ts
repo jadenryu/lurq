@@ -5,6 +5,12 @@ export function formatPrompt(benchCase: BenchmarkCase): string {
     .map(n => `- ID: "${n.id}"\n  Requirement: ${n.need}\n  Required: ${n.required}`)
     .join('\n\n');
 
+  const constraints = benchCase.acceptance.constraints;
+  const constraintsText =
+    constraints.length > 0
+      ? constraints.map((c, i) => `${i + 1}. ${c}`).join('\n')
+      : '1. Prefer maintained, non-deprecated packages compatible with the stated runtime.';
+
   return `You are an expert full-stack TypeScript engineer architecting a new project.
 You must select the best npm packages to satisfy the following project requirements.
 
@@ -16,6 +22,9 @@ ${benchCase.document}
 
 Requirements:
 ${needsText}
+
+Hard acceptance constraints (must satisfy all):
+${constraintsText}
 
 Your task is to select exactly one npm package for each requirement ID above. 
 If a requirement cannot be fulfilled by a single package, pick the most central one. 
@@ -43,5 +52,6 @@ interface StackProposal {
 Constraints:
 1. "source" must be exactly "unaided-model".
 2. "lurqHealthScore", "lurqConfidence", and "lurqSwappedFrom" must be null.
-3. You must output raw JSON only, with no markdown code blocks, no backticks, and no explanation.`;
+3. You must output raw JSON only, with no markdown code blocks, no backticks, and no explanation.
+4. Selected packages must satisfy every hard acceptance constraint above.`;
 }

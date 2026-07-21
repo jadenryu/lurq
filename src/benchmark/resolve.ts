@@ -39,6 +39,8 @@ export type VersionResolver = (
 
 export interface ResolveOptions {
   dryRun: boolean;
+  /** Target Node major/full version for engines.node preflight (default "20"). */
+  node?: string;
   /** Dependency-injection hooks keep unit tests deterministic and offline. */
   versionResolver?: VersionResolver;
   verifyPackage?: typeof handleVerify;
@@ -76,14 +78,20 @@ export async function resolveProposal(
   const packageValidity = await verifyAll(db, resolvedSelections, opts.verifyPackage ?? handleVerify);
   packageValidity.unresolvedVersions = unresolvedVersions;
 
-  // ── Step 4: handleCompat preflight (name-level evidence preflight) ────────
+  // ── Step 4: handleCompat preflight (version-aware + runtime engines) ──────
   let compatPrediction: 'compatible' | 'conflict' | 'unknown' = 'unknown';
   if (allSelections.length >= 2) {
     try {
-      // Note: compatPrediction is a name-level evidence preflight, not exact-version
-      // compatibility. It is an early signal, not a claimed correctness metric.
       const names = resolvedSelections.map((s) => s.package);
-      const compat = await (opts.compatCheck ?? handleCompat)(db, { packages: names });
+      const versions: Record<string, string | null> = {};
+      for (const s of resolvedSelections) {
+        versions[s.package] = s.resolvedVersion;
+      }
+      const compat = await (opts.compatCheck ?? handleCompat)(db, {
+        packages: names,
+        versions,
+        node: opts.node ?? '20',
+      });
       compatPrediction = compat.overall;
     } catch {
       compatPrediction = 'unknown';

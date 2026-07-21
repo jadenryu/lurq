@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { resolveArchitectureCompat, type CompatMember } from '../src/compat/peerCompat';
+import {
+  resolveArchitectureCompat,
+  resolveRuntimeEngineConflicts,
+  type CompatMember,
+} from '../src/compat/peerCompat';
 
 function member(over: Partial<CompatMember> & { name: string }): CompatMember {
   return {
@@ -80,5 +84,40 @@ describe('resolveArchitectureCompat', () => {
     ]);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ source: 'engines' });
+  });
+
+  it('flags a package whose engines.node excludes the target runtime', () => {
+    const out = resolveRuntimeEngineConflicts(
+      [
+        member({ name: 'express', version: '5.0.0', engines: { node: '>=18' } }),
+        member({
+          name: '@angular/core',
+          version: '22.0.7',
+          engines: { node: '^22.22.3 || ^24.15.0 || >=26.0.0' },
+        }),
+      ],
+      '20.20.2',
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ source: 'engines', packages: ['@angular/core'] });
+  });
+
+  it('flags React 19 pinned against spring peers that only allow 16-18', () => {
+    const out = resolveArchitectureCompat([
+      member({ name: 'react', version: '19.2.7' }),
+      member({ name: 'react-dom', version: '19.2.7', peerDependencies: { react: '^19.0.0' } }),
+      member({
+        name: '@react-spring/web',
+        version: '9.7.5',
+        peerDependencies: {
+          react: '^16.8.0 || ^17.0.0 || ^18.0.0',
+          'react-dom': '^16.8.0 || ^17.0.0 || ^18.0.0',
+        },
+      }),
+    ]);
+    expect(out.length).toBeGreaterThanOrEqual(1);
+    expect(out.some((c) => c.source === 'peer-deps' && c.packages.includes('@react-spring/web'))).toBe(
+      true,
+    );
   });
 });

@@ -3,6 +3,12 @@ import type { BenchmarkCase, Participant, StackProposal } from '../types';
 import { formatPrompt } from './prompt';
 import { handlePlan } from '../../mcp/plan';
 import { handleVerify, handleCompat } from '../../mcp/handlers';
+import {
+  FINALIZE_NUDGE,
+  WITH_LURQ_MAX_ITERATIONS,
+  isFinalAgentTurn,
+  parseStackProposalJson,
+} from './agentLoop';
 
 const TOOLS = [
   {
@@ -17,13 +23,13 @@ const TOOLS = [
             type: 'object',
             properties: {
               need: { type: 'string' },
-              category: { type: 'string' }
+              category: { type: 'string' },
             },
-            required: ['need']
-          }
-        }
-      }
-    }
+            required: ['need'],
+          },
+        },
+      },
+    },
   },
   {
     name: 'verify',
@@ -31,25 +37,35 @@ const TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        package: { type: 'string' }
+        package: { type: 'string' },
       },
-      required: ['package']
-    }
+      required: ['package'],
+    },
   },
   {
     name: 'compat',
-    description: 'Check if a list of packages are compatible with each other.',
+    description:
+      'Check if packages are compatible (peer deps + engines). Pass exact versions when known, and node when targeting a specific runtime.',
     input_schema: {
       type: 'object',
       properties: {
         packages: {
           type: 'array',
-          items: { type: 'string' }
-        }
+          items: { type: 'string' },
+        },
+        versions: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Optional exact versions keyed by package name',
+        },
+        node: {
+          type: 'string',
+          description: 'Optional target Node version (e.g. "20" or "20.20.2")',
+        },
       },
-      required: ['packages']
-    }
-  }
+      required: ['packages'],
+    },
+  },
 ];
 
 export class AnthropicWithLurqParticipant implements Participant {
@@ -57,7 +73,7 @@ export class AnthropicWithLurqParticipant implements Participant {
 
   constructor(
     public readonly id: string,
-    public readonly model: string
+    public readonly model: string,
   ) {}
 
   async run(db: Database, benchCase: BenchmarkCase): Promise<StackProposal> {
@@ -65,15 +81,34 @@ export class AnthropicWithLurqParticipant implements Participant {
     if (!key) throw new Error(`Participant ${this.id} requires CLAUDE_API_KEY in .env`);
 
     const messages: any[] = [
-      { role: 'user', content: formatPrompt(benchCase) + '\n\nYou have access to Lurq MCP tools. Use them to pick the best stack before emitting your final JSON wrapped in a ```json markdown block.' }
+      {
+        role: 'user',
+        content:
+          formatPrompt(benchCase) +
+          '\n\nYou have access to Lurq MCP tools. Use them to pick the best stack before emitting your final JSON wrapped in a ```json markdown block.',
+      },
     ];
 
     let finalContent: string | null = null;
     let iterations = 0;
 
-    while (iterations < 5) {
+    while (iterations < WITH_LURQ_MAX_ITERATIONS) {
       iterations++;
-      
+      const finalize = isFinalAgentTurn(iterations);
+
+      if (finalize) {
+        messages.push({ role: 'user', content: FINALIZE_NUDGE });
+      }
+
+      const body: Record<string, unknown> = {
+        model: this.model,
+        messages,
+        max_tokens: 8192,
+      };
+      if (!finalize) {
+        body.tools = TOOLS;
+      }
+
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -81,12 +116,7 @@ export class AnthropicWithLurqParticipant implements Participant {
           'x-api-key': key,
           'anthropic-version': '2023-06-01',
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages,
-          tools: TOOLS,
-          max_tokens: 4096,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -94,12 +124,12 @@ export class AnthropicWithLurqParticipant implements Participant {
         throw new Error(`Anthropic API error ${res.status}: ${text}`);
       }
 
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       messages.push({ role: 'assistant', content: data.content });
 
-      const toolCalls = data.content.filter((c: any) => c.type === 'tool_use');
-      
-      if (toolCalls.length > 0) {
+      const toolCalls = (data.content ?? []).filter((c: any) => c.type === 'tool_use');
+
+      if (!finalize && toolCalls.length > 0) {
         const toolResults = [];
         for (const call of toolCalls) {
           try {
@@ -111,7 +141,11 @@ export class AnthropicWithLurqParticipant implements Participant {
             } else if (call.name === 'verify') {
               resultObj = await handleVerify(db, { package: args.package });
             } else if (call.name === 'compat') {
-              resultObj = await handleCompat(db, { packages: args.packages });
+              resultObj = await handleCompat(db, {
+                packages: args.packages,
+                versions: args.versions,
+                node: args.node ?? '20',
+              });
             } else {
               resultObj = { error: 'Unknown tool' };
             }
@@ -119,48 +153,46 @@ export class AnthropicWithLurqParticipant implements Participant {
             toolResults.push({
               type: 'tool_result',
               tool_use_id: call.id,
-              content: JSON.stringify(resultObj)
+              content: JSON.stringify(resultObj),
             });
           } catch (e) {
             toolResults.push({
               type: 'tool_result',
               tool_use_id: call.id,
               content: JSON.stringify({ error: String(e) }),
-              is_error: true
+              is_error: true,
             });
           }
         }
-        
+
         messages.push({
           role: 'user',
-          content: toolResults
+          content: toolResults,
         });
       } else {
-        const textContent = data.content.find((c: any) => c.type === 'text')?.text;
+        const textContent = (data.content ?? [])
+          .filter((c: any) => c.type === 'text')
+          .map((c: any) => c.text)
+          .join('');
         if (textContent) {
           finalContent = textContent;
           break;
-        } else {
-           throw new Error('Anthropic returned no text content and no tool calls');
         }
+        if (finalize) {
+          throw new Error('Anthropic finalize turn returned no text content');
+        }
+        throw new Error('Anthropic returned no text content and no tool calls');
       }
     }
 
     if (!finalContent) throw new Error('Agent loop exhausted without emitting final JSON');
 
-    const jsonStr = finalContent.replace(/^[\s\S]*```json\s*/, '').replace(/```\s*[\s\S]*$/, '').trim();
-
     try {
-      const parsed = JSON.parse(jsonStr);
-      if (!Array.isArray(parsed.selections) || !Array.isArray(parsed.unmatchedNeedIds)) {
-        throw new Error('Parsed JSON does not match StackProposal interface');
-      }
-      for (const sel of parsed.selections) {
-        sel.source = 'model-with-lurq';
-      }
-      return parsed as StackProposal;
+      return parseStackProposalJson(finalContent, 'model-with-lurq');
     } catch (err) {
-      throw new Error(`Failed to parse Anthropic JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${finalContent}`);
+      throw new Error(
+        `Failed to parse Anthropic JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${finalContent}`,
+      );
     }
   }
 }

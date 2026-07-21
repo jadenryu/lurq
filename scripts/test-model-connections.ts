@@ -1,12 +1,12 @@
 #!/usr/bin/env tsx
 /**
  * Test API connections to all three LLM providers.
- * 
+ *
  * Usage:
  *   npx tsx scripts/test-model-connections.ts
- * 
+ *
  * Reads from .env:
- *   - SUMMARY_API_KEY (OpenAI — already used by Lurq for embeddings/summaries)
+ *   - OPENAI_API_KEY / SUMMARY_API_KEY / EMBEDDING_API_KEY
  *   - CLAUDE_API_KEY (Anthropic)
  *   - GEMINI_API_KEY (Google)
  */
@@ -27,9 +27,16 @@ const SIMPLE_PROMPT = 'Respond with exactly one word: "hello"';
 // ── OpenAI ──────────────────────────────────────────────────────────────────
 
 async function testOpenAI(model: string): Promise<TestResult> {
-  const key = process.env.SUMMARY_API_KEY || process.env.EMBEDDING_API_KEY;
+  const key =
+    process.env.OPENAI_API_KEY || process.env.SUMMARY_API_KEY || process.env.EMBEDDING_API_KEY;
   if (!key) {
-    return { provider: 'openai', model, status: 'error', error: 'No SUMMARY_API_KEY or EMBEDDING_API_KEY in .env', latencyMs: 0 };
+    return {
+      provider: 'openai',
+      model,
+      status: 'error',
+      error: 'No OPENAI_API_KEY, SUMMARY_API_KEY, or EMBEDDING_API_KEY in .env',
+      latencyMs: 0,
+    };
   }
 
   const start = Date.now();
@@ -38,25 +45,37 @@ async function testOpenAI(model: string): Promise<TestResult> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`,
+        Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: SIMPLE_PROMPT }],
-        max_completion_tokens: 10,
+        max_completion_tokens: 16,
       }),
     });
 
-    const data = await res.json() as any;
+    const data = (await res.json()) as any;
     const latencyMs = Date.now() - start;
 
     if (!res.ok) {
-      return { provider: 'openai', model, status: 'error', error: `HTTP ${res.status}: ${data?.error?.message ?? JSON.stringify(data)}`, latencyMs };
+      return {
+        provider: 'openai',
+        model,
+        status: 'error',
+        error: `HTTP ${res.status}: ${data?.error?.message ?? JSON.stringify(data)}`,
+        latencyMs,
+      };
     }
 
     const text = data.choices?.[0]?.message?.content ?? '';
     const actualModel = data.model ?? model;
-    return { provider: 'openai', model: actualModel, status: 'ok', responseSnippet: text.trim().slice(0, 50), latencyMs };
+    return {
+      provider: 'openai',
+      model: actualModel,
+      status: 'ok',
+      responseSnippet: text.trim().slice(0, 50),
+      latencyMs,
+    };
   } catch (err) {
     return { provider: 'openai', model, status: 'error', error: String(err), latencyMs: Date.now() - start };
   }
@@ -82,22 +101,43 @@ async function testAnthropic(model: string): Promise<TestResult> {
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: SIMPLE_PROMPT }],
-        max_tokens: 10,
+        max_tokens: 16,
       }),
     });
 
-    const data = await res.json() as any;
+    const data = (await res.json()) as any;
     const latencyMs = Date.now() - start;
 
     if (!res.ok) {
-      return { provider: 'anthropic', model, status: 'error', error: `HTTP ${res.status}: ${data?.error?.message ?? JSON.stringify(data)}`, latencyMs };
+      return {
+        provider: 'anthropic',
+        model,
+        status: 'error',
+        error: `HTTP ${res.status}: ${data?.error?.message ?? JSON.stringify(data)}`,
+        latencyMs,
+      };
     }
 
-    const text = data.content?.[0]?.text ?? '';
+    const text =
+      data.content?.find((c: any) => c.type === 'text')?.text ??
+      data.content?.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('') ??
+      '';
     const actualModel = data.model ?? model;
-    return { provider: 'anthropic', model: actualModel, status: 'ok', responseSnippet: text.trim().slice(0, 50), latencyMs };
+    return {
+      provider: 'anthropic',
+      model: actualModel,
+      status: 'ok',
+      responseSnippet: text.trim().slice(0, 50) || `(connected; stop=${data.stop_reason ?? 'ok'})`,
+      latencyMs,
+    };
   } catch (err) {
-    return { provider: 'anthropic', model, status: 'error', error: String(err), latencyMs: Date.now() - start };
+    return {
+      provider: 'anthropic',
+      model,
+      status: 'error',
+      error: String(err),
+      latencyMs: Date.now() - start,
+    };
   }
 }
 
@@ -112,24 +152,70 @@ async function testGemini(model: string): Promise<TestResult> {
   const start = Date.now();
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+    const generationConfig: Record<string, unknown> = {
+      maxOutputTokens: 256,
+      temperature: 0,
+    };
+    // Flash can disable thinking for a cheap ping; Pro requires thinking mode.
+    if (model.includes('flash')) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: SIMPLE_PROMPT }] }],
-        generationConfig: { maxOutputTokens: 10, temperature: 0 },
+        generationConfig,
       }),
     });
 
-    const data = await res.json() as any;
+    const data = (await res.json()) as any;
     const latencyMs = Date.now() - start;
 
     if (!res.ok) {
-      return { provider: 'gemini', model, status: 'error', error: `HTTP ${res.status}: ${data?.error?.message ?? JSON.stringify(data)}`, latencyMs };
+      return {
+        provider: 'gemini',
+        model,
+        status: 'error',
+        error: `HTTP ${res.status}: ${data?.error?.message ?? JSON.stringify(data)}`,
+        latencyMs,
+      };
     }
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    return { provider: 'gemini', model, status: 'ok', responseSnippet: text.trim().slice(0, 50), latencyMs };
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const text = parts
+      .map((p: any) => p.text)
+      .filter((t: unknown) => typeof t === 'string' && t.trim())
+      .join('')
+      .trim();
+    const blockReason = data.candidates?.[0]?.finishReason ?? data.promptFeedback?.blockReason;
+    if (!text) {
+      // Connection still counts if the API accepted the model and returned a candidate.
+      if (data.candidates?.[0]) {
+        return {
+          provider: 'gemini',
+          model,
+          status: 'ok',
+          responseSnippet: `(connected; empty text, finish=${blockReason ?? 'unknown'})`,
+          latencyMs,
+        };
+      }
+      return {
+        provider: 'gemini',
+        model,
+        status: 'error',
+        error: `Empty response (finish/block: ${blockReason ?? JSON.stringify(data).slice(0, 200)})`,
+        latencyMs,
+      };
+    }
+    return {
+      provider: 'gemini',
+      model,
+      status: 'ok',
+      responseSnippet: text.slice(0, 50),
+      latencyMs,
+    };
   } catch (err) {
     return { provider: 'gemini', model, status: 'error', error: String(err), latencyMs: Date.now() - start };
   }
@@ -140,68 +226,67 @@ async function testGemini(model: string): Promise<TestResult> {
 async function main() {
   console.log('=== LLM Provider Connection Test ===\n');
   console.log('Keys detected:');
+  console.log(`  OPENAI_API_KEY:    ${process.env.OPENAI_API_KEY ? '✓ set' : '✗ missing'}`);
   console.log(`  SUMMARY_API_KEY:   ${process.env.SUMMARY_API_KEY ? '✓ set' : '✗ missing'}`);
   console.log(`  EMBEDDING_API_KEY: ${process.env.EMBEDDING_API_KEY ? '✓ set' : '✗ missing'}`);
   console.log(`  CLAUDE_API_KEY:    ${process.env.CLAUDE_API_KEY ? '✓ set' : '✗ missing'}`);
   console.log(`  GEMINI_API_KEY:    ${process.env.GEMINI_API_KEY ? '✓ set' : '✗ missing'}`);
   console.log('');
 
-  const tests: Promise<TestResult>[] = [
-    // OpenAI models
-    testOpenAI('gpt-5.6-sol'),
+  // Landing-page everyday lineup first, then extras already used in prior smoke runs.
+  const results = await Promise.all([
     testOpenAI('gpt-5.6-terra'),
-    testOpenAI('gpt-5.6-luna'),
-    testOpenAI('gpt-5.5-2026-04-23'),
-    // Anthropic models
+    testOpenAI('gpt-5.6-sol'),
     testAnthropic('claude-sonnet-5'),
-    testAnthropic('claude-opus-4-8'),
-    // Gemini models
+    testGemini('gemini-3.5-flash'),
     testGemini('gemini-3.1-pro-preview'),
-  ];
-
-  const results = await Promise.all(tests);
+  ]);
 
   console.log('--- Results ---\n');
   const pad = (s: string, n: number) => s.padEnd(n);
 
-  console.log(`${pad('Provider', 12)} ${pad('Model', 28)} ${pad('Status', 8)} ${pad('Latency', 10)} Response / Error`);
+  console.log(
+    `${pad('Provider', 12)} ${pad('Model', 28)} ${pad('Status', 8)} ${pad('Latency', 10)} Response / Error`,
+  );
   console.log('-'.repeat(100));
 
   for (const r of results) {
-    const statusIcon = r.status === 'ok' ? '✅' : '❌';
+    const statusIcon = r.status === 'ok' ? 'OK' : 'FAIL';
     const detail = r.status === 'ok' ? r.responseSnippet : r.error;
-    console.log(`${pad(r.provider, 12)} ${pad(r.model, 28)} ${statusIcon}${pad('', 5)} ${pad(r.latencyMs + 'ms', 10)} ${detail}`);
+    console.log(
+      `${pad(r.provider, 12)} ${pad(r.model, 28)} ${pad(statusIcon, 8)} ${pad(r.latencyMs + 'ms', 10)} ${detail}`,
+    );
   }
 
-  console.log('\n--- Recommendations ---\n');
+  console.log('\n--- Landing-page lineup ---\n');
 
-  const working = results.filter(r => r.status === 'ok');
-  const openaiOk = working.filter(r => r.provider === 'openai');
-  const anthropicOk = working.filter(r => r.provider === 'anthropic');
-  const geminiOk = working.filter(r => r.provider === 'gemini');
+  const openaiTerra = results[0]!;
+  const openaiSol = results[1]!;
+  const claude = results[2]!;
+  const gemFlash = results[3]!;
+  const gemPro = results[4]!;
 
-  if (openaiOk.length > 0) {
-    const pick = openaiOk.find(r => r.model.includes('sol')) ?? openaiOk.find(r => r.model.includes('terra')) ?? openaiOk[0]!;
-    console.log(`  OpenAI:    ${pick.model} (${pick.latencyMs}ms)`);
-  } else {
-    console.log('  OpenAI:    ❌ No working model found');
-  }
+  const line = (label: string, r: TestResult) =>
+    console.log(
+      `  ${label.padEnd(22)} ${r.status === 'ok' ? 'OK' : 'FAIL'}  ${r.model}  (${r.latencyMs}ms)${r.status === 'error' ? ` — ${r.error}` : ''}`,
+    );
 
-  if (anthropicOk.length > 0) {
-    const pick = anthropicOk.find(r => r.model.includes('sonnet')) ?? anthropicOk[0]!;
-    console.log(`  Anthropic: ${pick.model} (${pick.latencyMs}ms)`);
-  } else {
-    console.log('  Anthropic: ❌ No working model found');
-  }
+  line('gpt-5.6-terra', openaiTerra);
+  line('claude-sonnet-5', claude);
+  line('gemini-3.5-flash', gemFlash);
+  console.log('');
+  line('gpt-5.6-sol (extra)', openaiSol);
+  line('gemini-3.1-pro (extra)', gemPro);
 
-  if (geminiOk.length > 0) {
-    console.log(`  Gemini:    ${geminiOk[0]!.model} (${geminiOk[0]!.latencyMs}ms)`);
-  } else {
-    console.log('  Gemini:    ❌ No working model found');
-  }
-
-  const allOk = openaiOk.length > 0 && anthropicOk.length > 0 && geminiOk.length > 0;
-  console.log(`\n${allOk ? '✅ All three providers have working models. Ready for Step 5.' : '⚠️  Some providers are missing. Check your .env keys.'}`);
+  const coreOk =
+    openaiTerra.status === 'ok' && claude.status === 'ok' && gemFlash.status === 'ok';
+  console.log(
+    `\n${coreOk ? 'All core models reachable. Safe to start the bakeoff.' : 'Fix failing keys/models before the full run.'}`,
+  );
+  process.exit(coreOk ? 0 : 1);
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

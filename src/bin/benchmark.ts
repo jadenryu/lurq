@@ -55,6 +55,9 @@ program
       const suite = loadCases(suiteName);
       console.log(`✓ Suite "${suite.suite}" (schema v${suite.schemaVersion}) loaded cleanly.`);
       console.log(`  - Cases: ${suite.cases.length}`);
+      if (suite.failureCases?.length) {
+        console.log(`  - Failure-detection cases: ${suite.failureCases.length}`);
+      }
       console.log(`  - Runtime: Node ${suite.runtime.node}, ${suite.runtime.packageManager}`);
       
       let totalRequiredNeeds = 0;
@@ -84,6 +87,7 @@ program
   .requiredOption('--suite <name>', 'Suite name (e.g. stack-selection-v1)')
   .requiredOption('--participants <ids>', 'Comma-separated participant IDs (e.g. openai:gpt-5.6-sol,lurq-plan)')
   .option('--trials <number>', 'Number of trials per case', '1')
+  .option('--plan-retries <number>', 'Extra planning attempts after a participant error (default 2)', '2')
   .option('--cases <ids>', 'Comma-separated case IDs to run (runs all if omitted)')
   .option('--dry-run', 'Skip E2B and registry writes (plan + normalize only)')
   .action(async (options) => {
@@ -91,6 +95,11 @@ program
     const trials = parseInt(options.trials, 10);
     if (isNaN(trials) || trials < 1) {
       console.error('ERROR: --trials must be a positive integer.');
+      process.exit(1);
+    }
+    const planRetries = parseInt(options.planRetries, 10);
+    if (isNaN(planRetries) || planRetries < 0) {
+      console.error('ERROR: --plan-retries must be a non-negative integer.');
       process.exit(1);
     }
 
@@ -181,6 +190,7 @@ program
           participant: { id: 'lurq', kind: 'lurq', model: null },
           caseId: failureCase.id,
           trial: 1,
+          expectedOutcome: failureCase.expectedResult,
           proposal: null,
           normalization: null,
           resolvedSelections: null,
@@ -230,7 +240,14 @@ program
             sandbox,
             normalized,
             manifest.e2bTemplate,
-            { dryRun: isDryRun }
+            {
+              dryRun: isDryRun,
+              node:
+                manifest.nodeVersionInE2B !== 'unknown' &&
+                manifest.nodeVersionInE2B !== 'dry-run'
+                  ? manifest.nodeVersionInE2B.replace(/^v/i, '')
+                  : suite.runtime.node,
+            }
           );
           result.packageValidity = resolutionResult.packageValidity;
           result.compatPrediction = resolutionResult.compatPrediction;
@@ -250,7 +267,20 @@ program
           const valid = result.packageValidity.existing;
           const total = valid + result.packageValidity.nonexistent.length;
           const resolved = result.resolution?.installed ? 'yes' : (isDryRun ? 'dry' : 'no');
-          console.log(`  → Pkg: ${valid}/${total} exist | Resolves: ${resolved} | Lurq Predicts Compat: ${result.compatPrediction}`);
+          const predicted =
+            result.packageValidity.nonexistent.length > 0 ||
+            result.packageValidity.deprecated.length > 0 ||
+            result.packageValidity.archived.length > 0 ||
+            result.packageValidity.highRisk.length > 0 ||
+            result.packageValidity.unresolvedVersions.length > 0 ||
+            (result.normalization?.invalidNames.length ?? 0) > 0 ||
+            result.compatPrediction === 'conflict'
+              ? 'fail'
+              : 'pass';
+          const labelMatch = predicted === failureCase.expectedResult ? 'hit' : 'miss';
+          console.log(
+            `  → Expected: ${failureCase.expectedResult} | Lurq: ${predicted} (${labelMatch}) | Pkg: ${valid}/${total} exist | Resolves: ${resolved} | Compat: ${result.compatPrediction}`,
+          );
         }
       }
       
@@ -280,6 +310,7 @@ program
             },
             caseId: benchCase.id,
             trial,
+            expectedOutcome: null,
             proposal: null,
             normalization: null,
             resolvedSelections: null,
@@ -293,18 +324,32 @@ program
             rawProposalPath: `raw/${participant.id.replace(/:/g, '-')}-${benchCase.id}-trial-${trial}.json`,
           };
 
-          try {
-            const proposal = await participant.run(db, benchCase);
-            result.proposal = proposal;
-            writeRaw(runDir, `${participant.id.replace(/:/g, '-')}-${benchCase.id}`, trial, proposal);
-          } catch (err) {
-            result.participantError = String(err);
-            if (result.participantError.includes('Slot need text')) {
-               result.lurqDiagnosis = 'planning';
+          const maxAttempts = 1 + planRetries;
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+              const proposal = await participant.run(db, benchCase);
+              result.proposal = proposal;
+              result.participantError = null;
+              writeRaw(runDir, `${participant.id.replace(/:/g, '-')}-${benchCase.id}`, trial, proposal);
+              if (attempt > 1) {
+                console.log(`  ✓ recovered on attempt ${attempt}/${maxAttempts}`);
+              }
+              break;
+            } catch (err) {
+              result.participantError = String(err);
+              if (result.participantError.includes('Slot need text')) {
+                result.lurqDiagnosis = 'planning';
+              }
+              const msg = (err as Error).message;
+              if (attempt < maxAttempts) {
+                console.error(`  ↻ attempt ${attempt}/${maxAttempts} failed: ${msg}`);
+                console.log(`  retrying planning...`);
+              } else {
+                console.error(`  ✗ Error after ${maxAttempts} attempt(s): ${msg}`);
+              }
             }
-            console.error(`  ✗ Error: ${(err as Error).message}`);
           }
-          
+
           plans.push({ participant, benchCase, trial, result });
         }
       }
@@ -332,7 +377,14 @@ program
           sandbox,
           normalized,
           manifest.e2bTemplate,
-          { dryRun: isDryRun }
+          {
+            dryRun: isDryRun,
+            node:
+              manifest.nodeVersionInE2B !== 'unknown' &&
+              manifest.nodeVersionInE2B !== 'dry-run'
+                ? manifest.nodeVersionInE2B.replace(/^v/i, '')
+                : suite.runtime.node,
+          }
         );
         result.packageValidity = resolutionResult.packageValidity;
         result.compatPrediction = resolutionResult.compatPrediction;

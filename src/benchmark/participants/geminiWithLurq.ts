@@ -3,6 +3,12 @@ import type { BenchmarkCase, Participant, StackProposal } from '../types';
 import { formatPrompt } from './prompt';
 import { handlePlan } from '../../mcp/plan';
 import { handleVerify, handleCompat } from '../../mcp/handlers';
+import {
+  FINALIZE_NUDGE,
+  WITH_LURQ_MAX_ITERATIONS,
+  isFinalAgentTurn,
+  parseStackProposalJson,
+} from './agentLoop';
 
 const TOOLS = [
   {
@@ -19,13 +25,13 @@ const TOOLS = [
                 type: 'OBJECT',
                 properties: {
                   need: { type: 'STRING' },
-                  category: { type: 'STRING' }
+                  category: { type: 'STRING' },
                 },
-                required: ['need']
-              }
-            }
-          }
-        }
+                required: ['need'],
+              },
+            },
+          },
+        },
       },
       {
         name: 'verify',
@@ -33,27 +39,36 @@ const TOOLS = [
         parameters: {
           type: 'OBJECT',
           properties: {
-            package: { type: 'STRING' }
+            package: { type: 'STRING' },
           },
-          required: ['package']
-        }
+          required: ['package'],
+        },
       },
       {
         name: 'compat',
-        description: 'Check if a list of packages are compatible with each other.',
+        description:
+          'Check if packages are compatible (peer deps + engines). Pass exact versions when known, and node when targeting a specific runtime.',
         parameters: {
           type: 'OBJECT',
           properties: {
             packages: {
               type: 'ARRAY',
-              items: { type: 'STRING' }
-            }
+              items: { type: 'STRING' },
+            },
+            versions: {
+              type: 'OBJECT',
+              description: 'Optional exact versions keyed by package name',
+            },
+            node: {
+              type: 'STRING',
+              description: 'Optional target Node version (e.g. "20" or "20.20.2")',
+            },
           },
-          required: ['packages']
-        }
-      }
-    ]
-  }
+          required: ['packages'],
+        },
+      },
+    ],
+  },
 ];
 
 export class GeminiWithLurqParticipant implements Participant {
@@ -61,7 +76,7 @@ export class GeminiWithLurqParticipant implements Participant {
 
   constructor(
     public readonly id: string,
-    public readonly model: string
+    public readonly model: string,
   ) {}
 
   async run(db: Database, benchCase: BenchmarkCase): Promise<StackProposal> {
@@ -69,27 +84,41 @@ export class GeminiWithLurqParticipant implements Participant {
     if (!key) throw new Error(`Participant ${this.id} requires GEMINI_API_KEY in .env`);
 
     const contents: any[] = [
-      { 
-        role: 'user', 
-        parts: [{ text: formatPrompt(benchCase) + '\n\nYou have access to Lurq MCP tools. Use them to pick the best stack before emitting your final JSON.' }] 
-      }
+      {
+        role: 'user',
+        parts: [
+          {
+            text:
+              formatPrompt(benchCase) +
+              '\n\nYou have access to Lurq MCP tools. Use them to pick the best stack before emitting your final JSON.',
+          },
+        ],
+      },
     ];
 
     let finalContent: string | null = null;
     let iterations = 0;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${key}`;
 
-    while (iterations < 5) {
+    while (iterations < WITH_LURQ_MAX_ITERATIONS) {
       iterations++;
-      
+      const finalize = isFinalAgentTurn(iterations);
+
+      if (finalize) {
+        contents.push({ role: 'user', parts: [{ text: FINALIZE_NUDGE }] });
+      }
+
+      const body: Record<string, unknown> = { contents };
+      if (!finalize) {
+        body.tools = TOOLS;
+      } else {
+        body.generationConfig = { responseMimeType: 'application/json' };
+      }
+
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents,
-          tools: TOOLS,
-          // When tools are provided, Gemini sometimes ignores responseMimeType in older models, but we'll include it.
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -97,21 +126,21 @@ export class GeminiWithLurqParticipant implements Participant {
         throw new Error(`Gemini API error ${res.status}: ${text}`);
       }
 
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       const candidate = data.candidates?.[0];
       if (!candidate) {
-         throw new Error('Gemini returned no candidates');
+        throw new Error('Gemini returned no candidates');
       }
       const parts = candidate.content?.parts;
       if (!parts) {
-         throw new Error('Gemini candidate has no parts');
+        throw new Error('Gemini candidate has no parts');
       }
 
       contents.push({ role: 'model', parts });
 
       const toolCalls = parts.filter((p: any) => p.functionCall);
-      
-      if (toolCalls.length > 0) {
+
+      if (!finalize && toolCalls.length > 0) {
         const functionResponses = [];
         for (const callPart of toolCalls) {
           const call = callPart.functionCall;
@@ -124,7 +153,11 @@ export class GeminiWithLurqParticipant implements Participant {
             } else if (call.name === 'verify') {
               resultObj = await handleVerify(db, { package: args.package });
             } else if (call.name === 'compat') {
-              resultObj = await handleCompat(db, { packages: args.packages });
+              resultObj = await handleCompat(db, {
+                packages: args.packages,
+                versions: args.versions,
+                node: args.node ?? '20',
+              });
             } else {
               resultObj = { error: 'Unknown tool' };
             }
@@ -132,71 +165,47 @@ export class GeminiWithLurqParticipant implements Participant {
             functionResponses.push({
               functionResponse: {
                 name: call.name,
-                response: resultObj
-              }
+                response: resultObj,
+              },
             });
           } catch (e) {
             functionResponses.push({
               functionResponse: {
                 name: call.name,
-                response: { error: String(e) }
-              }
+                response: { error: String(e) },
+              },
             });
           }
         }
-        
+
         contents.push({
           role: 'user',
-          parts: functionResponses
+          parts: functionResponses,
         });
       } else {
-        const textContent = parts.find((p: any) => p.text)?.text;
+        const textContent = parts
+          .map((p: any) => p.text)
+          .filter((t: unknown) => typeof t === 'string' && t.trim())
+          .join('');
         if (textContent) {
           finalContent = textContent;
           break;
-        } else {
-           throw new Error('Gemini returned no text content and no tool calls');
         }
+        if (finalize) {
+          throw new Error('Gemini finalize turn returned no text content');
+        }
+        throw new Error('Gemini returned no text content and no tool calls');
       }
     }
 
     if (!finalContent) throw new Error('Agent loop exhausted without emitting final JSON');
 
-    let jsonStr = finalContent.replace(/^[\s\S]*```(?:json)?\s*/i, '').replace(/```\s*[\s\S]*$/, '').trim();
-
-    // Extract balanced JSON object to handle Gemini emitting extra or missing trailing braces
-    const start = jsonStr.indexOf('{');
-    if (start !== -1) {
-      let balance = 0;
-      let endIndex = -1;
-      for (let i = start; i < jsonStr.length; i++) {
-        if (jsonStr[i] === '{') balance++;
-        else if (jsonStr[i] === '}') {
-          balance--;
-          if (balance === 0) {
-            endIndex = i;
-            break;
-          }
-        }
-      }
-      if (endIndex !== -1) {
-        jsonStr = jsonStr.substring(start, endIndex + 1);
-      } else if (balance > 0) {
-        jsonStr = jsonStr.substring(start) + '}'.repeat(balance);
-      }
-    }
-
     try {
-      const parsed = JSON.parse(jsonStr);
-      if (!Array.isArray(parsed.selections) || !Array.isArray(parsed.unmatchedNeedIds)) {
-        throw new Error('Parsed JSON does not match StackProposal interface');
-      }
-      for (const sel of parsed.selections) {
-        sel.source = 'model-with-lurq';
-      }
-      return parsed as StackProposal;
+      return parseStackProposalJson(finalContent, 'model-with-lurq');
     } catch (err) {
-      throw new Error(`Failed to parse Gemini JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${finalContent}`);
+      throw new Error(
+        `Failed to parse Gemini JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${finalContent}`,
+      );
     }
   }
 }

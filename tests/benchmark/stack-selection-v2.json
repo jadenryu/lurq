@@ -1,0 +1,504 @@
+{
+  "suite": "stack-selection-v2",
+  "schemaVersion": 1,
+  "description": "Realistic Node 20 JS/TS dependency-selection suite (25 cases) grounded in live npm breakage patterns coding agents hit in 2026. Mix of multi-constraint traps (React 19 peers + Node 20 engines + deprecated brownfield migrations + TypeScript/eslint majors) and cleaner control scaffolds. Documents describe product requirements only; constraints mirror production CI/runtime policy. Not synthetic puzzles.",
+  "runtime": {
+    "node": "20",
+    "packageManager": "npm",
+    "sandboxTemplate": "lurq-benchmark-node20-v1"
+  },
+  "cases": [
+    {
+      "id": "typescript-latest-eslint",
+      "title": "Latest TypeScript with ESLint",
+      "document": "Greenfield Node service. The team wants the newest stable TypeScript release and a maintained ESLint-based TypeScript lint setup (the community typescript-eslint line, not legacy tslint). This mirrors agents that cheerfully bump typescript to latest and leave the lint stack unchanged.",
+      "topology": "library",
+      "needs": [
+        { "id": "typescript", "need": "newest stable TypeScript language compiler", "category": "build-tool", "required": true },
+        { "id": "lint", "need": "maintained ESLint TypeScript integration (typescript-eslint)", "category": "linting", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 2,
+        "constraints": [
+          "prefer the newest stable TypeScript major available on npm",
+          "lint stack must co-install with that TypeScript version (peer ranges must satisfy)",
+          "do not select the deprecated tslint package"
+        ]
+      }
+    },
+    {
+      "id": "react19-spa-node20-ci",
+      "title": "React 19 SPA on Node 20 CI",
+      "document": "Build a React 19 single-page internal dashboard with client-side routing and cached server-state fetching. Company CI and Docker images are pinned to Node 20 LTS — packages that require Node 22+ are not acceptable even if they are the newest major on npm. This mirrors teams still on Node 20 while ecosystem packages (e.g. newer React Router majors) raise their engines.node floor.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "routing", "need": "client-side routing for a React SPA", "category": "routing", "required": true },
+        { "id": "fetching", "need": "client data-fetching and cache library for React", "category": "data-fetching", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "all selected packages must support Node 20 engines (reject packages whose engines require Node 22+)",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "brownfield-replace-request",
+      "title": "Replace deprecated request HTTP client",
+      "document": "Brownfield Node 20 API still depending on the deprecated request package for outbound HTTP. Rebuild the outbound client layer with a maintained HTTP client and keep a small HTTP server framework for health checks. This is a common migration agents are asked to perform when security scanners flag request.",
+      "topology": "api-service",
+      "needs": [
+        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
+        { "id": "http", "need": "maintained Node HTTP client to replace deprecated request", "category": "http-client", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 2,
+        "constraints": [
+          "do not select the deprecated request package (or request-promise)",
+          "all runtime packages must be compatible with Node 20"
+        ]
+      }
+    },
+    {
+      "id": "sass-build-pipeline",
+      "title": "Sass build without node-sass",
+      "document": "Front-end build pipeline that compiles SCSS. Older repos still list node-sass, which is deprecated and breaks on newer Node versions. Choose a maintained Sass compiler and a bundler. Real migration path teams still hit in 2026.",
+      "topology": "library",
+      "needs": [
+        { "id": "sass", "need": "maintained Sass/SCSS stylesheet compiler", "category": "styling", "required": true },
+        { "id": "bundler", "need": "JavaScript bundler for front-end assets", "category": "bundler", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 2,
+        "constraints": [
+          "do not select the deprecated node-sass package; use Dart Sass or sass-embedded",
+          "all primary packages must have a current npm release"
+        ]
+      }
+    },
+    {
+      "id": "react19-animation",
+      "title": "React 19 spring animation UI",
+      "document": "Marketing site section needs React 19 with spring-physics panel animations (product/design asked for spring motion, not CSS-only). Include client routing. Older react-spring majors declared peers only through React 18 — a real class of 'works in the tutorial, fails npm install on React 19' failures.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
+        { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
+        { "id": "animation", "need": "React spring-physics animation library", "category": "animation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "animation library peerDependencies must include React 19",
+          "routing package must support Node 20 engines if it declares engines.node",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "accessible-tooltip-stack",
+      "title": "Accessible tooltip primitives",
+      "document": "Reusable React component library needs accessible primitives and floating tooltip/popover positioning. Legacy blog posts still recommend popper.js v1, which is deprecated in favor of @popperjs/core / Floating UI. Agents trained on older material still suggest the v1 name.",
+      "topology": "library",
+      "needs": [
+        { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "primitives", "need": "accessible React component primitives", "category": "ui-component-library", "required": true },
+        { "id": "positioning", "need": "maintained floating UI / popper positioning library", "category": "utility", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "do not select the deprecated popper.js v1 package",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "next15-node20-saas",
+      "title": "Next.js 15 SaaS on Node 20",
+      "document": "Ship a multi-tenant SaaS on Next.js App Router with React, schema validation, and PostgreSQL access via an ORM. Runtime and CI are Node 20. Typical agent starter-stack task — value is avoiding deprecated or engine-incompatible primary picks, not inventing an exotic stack.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React meta-framework with App Router / SSR", "category": "meta-framework", "required": true },
+        { "id": "validation", "need": "runtime schema validation", "category": "validation", "required": true },
+        { "id": "orm", "need": "PostgreSQL ORM", "category": "orm", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "all runtime packages must support Node 20 engines",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "node20-web-api",
+      "title": "Node 20 JSON API",
+      "document": "Production JSON API on Node 20 LTS: HTTP framework, request validation, and structured logging. Baseline service scaffold agents generate constantly — keep engine and deprecation constraints explicit so 'latest everything' cannot silently require Node 22+.",
+      "topology": "api-service",
+      "needs": [
+        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
+        { "id": "validation", "need": "HTTP request schema validation", "category": "validation", "required": true },
+        { "id": "logging", "need": "structured Node logging library", "category": "utility", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "all runtime packages must support Node 20 engines (do not select packages whose engines require Node 22+)",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "enzyme-to-rtl",
+      "title": "Replace Enzyme with Testing Library",
+      "document": "Legacy React component suite still uses Enzyme. Security and React 18+/19 peer reality make Enzyme a dead end. Migrate the test stack to a maintained React Testing Library setup with a modern test runner. Agents frequently still invent enzyme configs from outdated training data.",
+      "topology": "library",
+      "needs": [
+        { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
+        { "id": "runner", "need": "JavaScript unit test runner", "category": "testing", "required": true },
+        { "id": "rtl", "need": "maintained React Testing Library for DOM assertions", "category": "testing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "do not select enzyme or enzyme-adapter packages",
+          "React Testing Library peerDependencies must be compatible with the selected React major",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "moment-to-modern-dates",
+      "title": "Replace Moment.js date stack",
+      "document": "Product analytics UI still ships moment for date formatting and relative time. Bundle size and Moment's maintenance status push the team to a modern date library while keeping React 19 for the UI shell. Classic agent trap: keep recommending moment because tutorials still use it.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "dates", "need": "maintained date formatting / parsing library to replace moment", "category": "date-time", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "do not select the moment package (or moment-timezone as the primary date library)",
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "cra-to-vite-scaffold",
+      "title": "Replace Create React App with Vite",
+      "document": "Greenfield React dashboard. create-react-app / react-scripts is unmaintained and agents still scaffold with it. Choose a maintained Vite-based React toolchain with React 19 and client routing, on Node 20 CI.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "bundler", "need": "maintained Vite-based front-end build tool", "category": "bundler", "required": true },
+        { "id": "routing", "need": "client-side routing for a React SPA", "category": "routing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "do not select create-react-app or react-scripts",
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "all selected packages must support Node 20 engines",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "react19-forms-validation",
+      "title": "React 19 forms with schema validation",
+      "document": "Settings screen on React 19 needs performant form state and shared Zod/Yup-style schema validation between client and API. Peer-range mismatches between form libraries and React majors still show up when agents pin oldest-known majors from blog posts.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "forms", "need": "React form state management library", "category": "forms", "required": true },
+        { "id": "validation", "need": "runtime schema validation library", "category": "validation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "form library peerDependencies must include React 19",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "react19-charts-dashboard",
+      "title": "React 19 charts dashboard",
+      "document": "Internal metrics dashboard on React 19 with interactive charts and client-side routing. Chart libraries with stale React peer ranges are a recurring install failure when agents default to 'whatever the first search hit named'.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
+        { "id": "charts", "need": "React charting library for dashboards", "category": "charts", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "chart library peerDependencies must be compatible with React 19",
+          "routing package must support Node 20 engines if it declares engines.node",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "i18n-react-spa",
+      "title": "React SPA with i18n",
+      "document": "Customer-facing React 19 SPA must ship English and Spanish from day one. Need client routing plus a maintained i18n library. Avoid abandoned i18n packages that still rank high in older Stack Overflow answers.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
+        { "id": "i18n", "need": "React internationalization / translation library", "category": "i18n", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "i18n library peerDependencies must be compatible with React 19",
+          "all selected packages must support Node 20 engines if they declare engines.node",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "express-auth-api",
+      "title": "Express API with auth middleware",
+      "document": "Node 20 JSON API using Express-style middleware: HTTP framework, JWT/session auth helper, and request schema validation. Baseline B2B backend scaffold — keep Node 20 engines and avoid deprecated auth packages.",
+      "topology": "api-service",
+      "needs": [
+        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
+        { "id": "auth", "need": "JWT or session auth middleware for Node APIs", "category": "auth", "required": true },
+        { "id": "validation", "need": "HTTP request schema validation", "category": "validation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "all runtime packages must support Node 20 engines",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "state-management-react19",
+      "title": "React 19 client state management",
+      "document": "Complex React 19 SPA needs client-side global state (cart / wizard / multi-step editor) plus routing. Agents often mix incompatible state-library majors with React 19 peers or suggest unmaintained Redux companion packages from 2018 blog posts.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
+        { "id": "state", "need": "React client global state management library", "category": "state-management", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "state library peerDependencies must include React 19",
+          "routing package must support Node 20 engines if it declares engines.node",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "react19-spring-router-node20",
+      "title": "React 19 spring UI on Node 20",
+      "document": "Marketing microsite: React 19, spring-physics motion, client routing, and company CI locked to Node 20. Agents that independently pick 'latest' React Router and an older react-spring major fail peer or engines checks — the multi-constraint trap teams hit when every slot is optimized in isolation.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "routing", "need": "client-side routing for a React SPA", "category": "routing", "required": true },
+        { "id": "animation", "need": "React spring-physics animation library", "category": "animation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "animation library peerDependencies must include React 19",
+          "all selected packages must support Node 20 engines (reject packages whose engines require Node 22+)",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "typescript-eslint-react19-spa",
+      "title": "Latest TypeScript linting a React 19 SPA",
+      "document": "Greenfield React 19 SPA with the newest stable TypeScript and a maintained typescript-eslint lint pipeline. Agents often bump typescript alone or leave tslint/legacy eslint-plugin-typescript in place — peer ranges between TypeScript majors and typescript-eslint are a real 2026 install failure class.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "typescript", "need": "newest stable TypeScript language compiler", "category": "build-tool", "required": true },
+        { "id": "lint", "need": "maintained ESLint TypeScript integration (typescript-eslint)", "category": "linting", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "prefer the newest stable TypeScript major available on npm",
+          "lint stack must co-install with that TypeScript version (peer ranges must satisfy)",
+          "do not select the deprecated tslint package"
+        ]
+      }
+    },
+    {
+      "id": "brownfield-request-enzyme",
+      "title": "Replace request and Enzyme together",
+      "document": "Brownfield React + Node service still ships the deprecated request HTTP client and Enzyme tests. Migrate outbound HTTP and the React test stack in one pass while keeping React for the UI. Security scanners flag both; agents trained on older material still reintroduce them.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
+        { "id": "http", "need": "maintained Node HTTP client to replace deprecated request", "category": "http-client", "required": true },
+        { "id": "rtl", "need": "maintained React Testing Library for DOM assertions", "category": "testing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "do not select the deprecated request package (or request-promise)",
+          "do not select enzyme or enzyme-adapter packages",
+          "React Testing Library peerDependencies must be compatible with the selected React major",
+          "all runtime packages must be compatible with Node 20"
+        ]
+      }
+    },
+    {
+      "id": "next15-charts-node20",
+      "title": "Next.js 15 charts on Node 20",
+      "document": "Next.js App Router SaaS dashboard on Node 20 CI with React and a charting library for admin metrics. Combining meta-framework, React 19 peers, and chart libs with stale peer ranges is a common agent failure when each package is chosen from a different tutorial year.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React meta-framework with App Router / SSR", "category": "meta-framework", "required": true },
+        { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
+        { "id": "charts", "need": "React charting library for dashboards", "category": "charts", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select a Next.js 15.x line (or compatible App Router meta-framework) that supports Node 20",
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "chart library peerDependencies must be compatible with React 19",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "newest-router-on-node20",
+      "title": "Newest React Router on Node 20 CI",
+      "document": "React 19 SPA where eng leadership asked for the newest React Router major on npm, but Docker/CI remain Node 20 LTS. This isolates the 'latest major vs engines.node floor' conflict agents hit when they optimize for novelty without checking runtime policy.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "routing", "need": "newest stable React client-side router major on npm", "category": "routing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "prefer the newest stable React Router major available on npm ONLY if its engines support Node 20; otherwise select the newest major that supports Node 20",
+          "all selected packages must support Node 20 engines (reject packages whose engines require Node 22+)",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "react19-component-kit",
+      "title": "React 19 with a full UI kit",
+      "document": "Internal admin needs React 19 plus a maintained full-featured React component kit (buttons, dialogs, inputs) and client routing. Component kits with peers pinned to React 17/18 still appear in agent suggestions from older docs.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "kit", "need": "full-featured React UI component kit", "category": "ui-component-library", "required": true },
+        { "id": "routing", "need": "client-side routing", "category": "routing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 4,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "UI kit peerDependencies must include React 19",
+          "routing package must support Node 20 engines if it declares engines.node",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "react19-fetch-forms",
+      "title": "React 19 data fetching and forms",
+      "document": "React 19 settings and list views need cached server-state fetching, form state, and schema validation together. Peer mismatches across react-query/form libraries and React majors show up when agents assemble the stack from three different blog posts.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "fetching", "need": "client data-fetching and cache library for React", "category": "data-fetching", "required": true },
+        { "id": "forms", "need": "React form state management library", "category": "forms", "required": true },
+        { "id": "validation", "need": "runtime schema validation library", "category": "validation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 5,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "data-fetching and form libraries peerDependencies must be compatible with React 19",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "vite-react19-minimal",
+      "title": "Minimal Vite React 19 app",
+      "document": "Small internal tool: React 19 UI with a maintained Vite toolchain. Clean control case — few peer traps if the agent avoids create-react-app and deprecated tooling.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "bundler", "need": "maintained Vite-based front-end build tool", "category": "bundler", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "do not select create-react-app or react-scripts",
+          "all selected packages must support Node 20 engines",
+          "no deprecated primary package"
+        ]
+      }
+    },
+    {
+      "id": "node20-api-security",
+      "title": "Node 20 API security baseline",
+      "document": "Production JSON API on Node 20: HTTP framework plus standard security middleware (helmet-style headers, CORS). Clean control scaffold agents should pass without exotic packages.",
+      "topology": "api-service",
+      "needs": [
+        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
+        { "id": "headers", "need": "HTTP security headers middleware for Node", "category": "utility", "required": true },
+        { "id": "cors", "need": "CORS middleware for Node HTTP APIs", "category": "utility", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 3,
+        "constraints": [
+          "all runtime packages must support Node 20 engines",
+          "no deprecated primary package"
+        ]
+      }
+    }
+  ]
+}

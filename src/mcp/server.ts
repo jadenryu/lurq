@@ -122,6 +122,14 @@ export function buildMcpServer(
           .min(2)
           .max(8)
           .describe('2–8 npm package names to check together'),
+        versions: z
+          .record(z.string())
+          .optional()
+          .describe('Optional exact versions keyed by package name (use when not checking latest)'),
+        node: z
+          .string()
+          .optional()
+          .describe('Optional target Node runtime (e.g. "20" or "20.20.2") for engines.node checks'),
       },
     },
     async (args) => json(await timed('compat', () => handleCompat(db, args))),

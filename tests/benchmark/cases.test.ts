@@ -19,6 +19,56 @@ describe('loadCases', () => {
     }
   });
 
+  it('loads the adversarial 25-case stack-selection-v2 suite', () => {
+    const suite = loadCases('stack-selection-v2');
+    expect(suite.suite).toBe('stack-selection-v2');
+    expect(suite.schemaVersion).toBe(1);
+    expect(suite.cases).toHaveLength(25);
+    expect(suite.runtime.node).toBe('20');
+    expect(suite.runtime.packageManager).toBe('npm');
+
+    const ids = new Set(suite.cases.map((c) => c.id));
+    expect(ids.has('typescript-latest-eslint')).toBe(true);
+    expect(ids.has('react19-spa-node20-ci')).toBe(true);
+    expect(ids.has('brownfield-replace-request')).toBe(true);
+    expect(ids.has('enzyme-to-rtl')).toBe(true);
+    expect(ids.has('cra-to-vite-scaffold')).toBe(true);
+    expect(ids.has('state-management-react19')).toBe(true);
+    expect(ids.has('react19-spring-router-node20')).toBe(true);
+    expect(ids.has('newest-router-on-node20')).toBe(true);
+    expect(ids.has('brownfield-request-enzyme')).toBe(true);
+    expect(ids.has('vite-react19-minimal')).toBe(true);
+    expect(ids.has('node20-api-security')).toBe(true);
+
+    for (const c of suite.cases) {
+      expect(c.id).toBeTruthy();
+      expect(c.document).toBeTruthy();
+      expect(c.needs.some((n) => n.required)).toBe(true);
+      expect(c.acceptance.constraints.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('loads the 10-case failure-detection-v1 suite', () => {
+    const suite = loadCases('failure-detection-v1');
+    expect(suite.suite).toBe('failure-detection-v1');
+    expect(suite.schemaVersion).toBe(2);
+    expect(suite.cases).toHaveLength(0);
+    expect(suite.failureCases).toHaveLength(10);
+    expect(suite.runtime.node).toBe('20');
+
+    const ids = new Set(suite.failureCases!.map((c) => c.id));
+    expect(ids.has('peer-conflict-react19-spring')).toBe(true);
+    expect(ids.has('engine-conflict-angular22-on-node20')).toBe(true);
+    expect(ids.has('clean-next-stack')).toBe(true);
+    expect(ids.has('peer-conflict-react-17-18')).toBe(false);
+    expect(ids.has('engine-mismatch-node22')).toBe(false);
+
+    for (const c of suite.failureCases!) {
+      expect(c.stack.length).toBeGreaterThan(0);
+      expect(['pass', 'fail']).toContain(c.expectedResult);
+    }
+  });
+
   it('rejects duplicate case IDs', () => {
     expect(() =>
       validateRaw({

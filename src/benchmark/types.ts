@@ -158,6 +158,12 @@ export interface BenchmarkResult {
   participant: { id: string; kind: ParticipantKind; model: string | null };
   caseId: string;
   trial: number;
+  /**
+   * Fixture label for failure-detection suites (`pass` = clean control,
+   * `fail` = known-bad stack). Null for stack-selection suites.
+   * Ground truth for recall/precision — not inferred from E2B alone.
+   */
+  expectedOutcome: 'pass' | 'fail' | null;
   proposal: StackProposal | null;
   normalization: NormalizedProposal | null;
   /** Exact package versions selected for the E2B install, when resolved. */

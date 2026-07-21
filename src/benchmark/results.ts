@@ -218,7 +218,7 @@ export function computeMetrics(results: BenchmarkResult[]): BenchmarkMetrics {
       semanticValidStackRate: null,
       failureDetectionRecall: null,
       failureDetectionPrecision: null,
-      measurementStatus: 'not-measured-in-stack-selection-v1',
+      measurementStatus: 'not-measured-in-stack-selection',
     };
   }
 
@@ -290,45 +290,53 @@ export function computeMetrics(results: BenchmarkResult[]): BenchmarkMetrics {
 
   const div = (num: number, den: number): number => (den === 0 ? 0 : num / den);
 
-  const isFailureSuite = results.length > 0 && results[0]?.runId.includes('failure-detection-v1');
+  // runId shape is `<timestamp>-<suite>` (see makeRunId). Match any failure-detection suite.
+  const isFailureSuite =
+    results.length > 0 && /(?:^|-)failure-detection(?:-|$)/.test(results[0]?.runId ?? '');
   let failureDetectionRecall: number | null = null;
   let failureDetectionPrecision: number | null = null;
-  let measurementStatus = isFailureSuite ? 'measured' : 'not-measured-in-stack-selection-v1';
+  let measurementStatus = isFailureSuite ? 'measured' : 'not-measured-in-stack-selection';
 
   if (isFailureSuite) {
     let tp = 0;
     let fp = 0;
     let fn = 0;
     let tn = 0;
+    let labeled = 0;
 
     for (const r of results) {
-      // Lurq predicts failure if:
-      // 1. Any package is nonexistent, deprecated, archived, high risk, or has unresolved versions.
-      // 2. OR normalization failed (invalid names).
-      // 3. OR compat check returned 'conflict'.
-      const hasPreflightWarning = 
+      // Lurq predicts "risky / should not ship" if verify/compat preflight fires.
+      const hasPreflightWarning =
         r.packageValidity.nonexistent.length > 0 ||
         r.packageValidity.deprecated.length > 0 ||
         r.packageValidity.archived.length > 0 ||
         r.packageValidity.highRisk.length > 0 ||
         r.packageValidity.unresolvedVersions.length > 0 ||
         (r.normalization?.invalidNames.length ?? 0) > 0;
-      
-      const lurqPredictedFail = hasPreflightWarning || r.compatPrediction === 'conflict';
-      
-      // Actual E2B failure
-      const actualFail = 
-        !r.resolution?.installed || 
-        r.resolution.loaded.some(l => l.loaded === false);
 
-      if (lurqPredictedFail && actualFail) tp++;
-      else if (lurqPredictedFail && !actualFail) fp++;
-      else if (!lurqPredictedFail && actualFail) fn++;
-      else if (!lurqPredictedFail && !actualFail) tn++;
+      const lurqPredictedFail = hasPreflightWarning || r.compatPrediction === 'conflict';
+
+      // Ground truth is the fixture label (`expectedOutcome`), not E2B alone.
+      // Deprecated packages often still install; counting only install failure
+      // as "actual fail" would mark correct deprecation flags as false positives.
+      if (r.expectedOutcome !== 'pass' && r.expectedOutcome !== 'fail') {
+        continue;
+      }
+      labeled++;
+      const actualBad = r.expectedOutcome === 'fail';
+
+      if (lurqPredictedFail && actualBad) tp++;
+      else if (lurqPredictedFail && !actualBad) fp++;
+      else if (!lurqPredictedFail && actualBad) fn++;
+      else tn++;
     }
 
     failureDetectionRecall = tp + fn > 0 ? tp / (tp + fn) : 0;
     failureDetectionPrecision = tp + fp > 0 ? tp / (tp + fp) : 0;
+    measurementStatus =
+      labeled === results.length
+        ? 'measured-against-fixture-labels'
+        : `measured-against-fixture-labels (${labeled}/${results.length} labeled)`;
   }
 
   return {
