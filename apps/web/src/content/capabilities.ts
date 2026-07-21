@@ -22,7 +22,7 @@ export const capabilities: Capability[] = [
     id: "recommend",
     icon: Search,
     title: "Recommend",
-    body: "Ask in plain language; get a ranked, evidence-backed shortlist in seconds.",
+    body: "Ask in plain language. Get a short ranked list you can trust.",
     lines: [
       { text: 'lurq recommend "a form library for react"', tone: "prompt" },
       { text: "3 candidates · scored from npm · github · deps.dev", tone: "dim" },
@@ -36,7 +36,7 @@ export const capabilities: Capability[] = [
     id: "verify",
     icon: ScanLine,
     title: "Verify",
-    body: "Catch abandoned or vulnerable dependencies before your agent installs them.",
+    body: "Check a package before your agent installs it.",
     lines: [
       { text: 'lurq verify "jsonwebtoken@8"', tone: "prompt" },
       { text: "✗ 2 open advisories · algorithm confusion", tone: "bad" },
@@ -48,7 +48,7 @@ export const capabilities: Capability[] = [
     id: "plan",
     icon: Boxes,
     title: "Plan",
-    body: "Resolve every slot in your stack, checked for cross-slot coherence.",
+    body: "Fill every slot in the stack, and make sure the pieces fit.",
     lines: [
       { text: 'lurq plan "typescript api server"', tone: "prompt" },
       { text: "6 slots resolved · coherence ok", tone: "dim" },
@@ -62,7 +62,7 @@ export const capabilities: Capability[] = [
     id: "compare",
     icon: GitCompare,
     title: "Compare",
-    body: "Rank alternatives head-to-head on the signals that actually matter.",
+    body: "Put options side by side on what actually matters.",
     lines: [
       { text: "lurq compare date-fns dayjs moment", tone: "prompt" },
       { text: "date-fns  94  active · 3 KB" },

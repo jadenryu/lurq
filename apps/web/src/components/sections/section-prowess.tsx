@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { Container } from "@/components/common/container";
 import { Reveal } from "@/components/common/reveal";
+import { SectionLabel } from "@/components/common/section-label";
 import { capabilities, type ClipLine } from "@/content/capabilities";
 import { cn } from "@/lib/utils";
 
@@ -15,17 +16,16 @@ const LINE_PAUSE_MS = 420;
 const HOLD_MS = 2400;
 const REDUCED_HOLD_MS = 2600;
 
-// Terminal palette: kept theme-independent so the clip always renders dark,
-// like the real CLI, regardless of the site's light/dark mode.
+// Lifted charcoal frame + soft syntax colors.
 const term = {
-  bg: "#09090c",
+  bg: "#14161a",
   border: "rgba(255,255,255,0.10)",
-  text: "#d6d8e0",
-  dim: "#7e8298",
-  prompt: "#8b9bf5",
-  ok: "#79d2a6",
-  bad: "#e0796f",
-  accent: "#b9a4f0",
+  text: "#e4e4e4",
+  dim: "#8a8a8a",
+  prompt: "#9db4ff",
+  ok: "#7dcea0",
+  bad: "#e08b7a",
+  accent: "#c4b5fd",
 };
 
 function lineColor(tone: ClipLine["tone"]) {
@@ -263,8 +263,11 @@ export function SectionProwess() {
       <Container>
         <Reveal>
           <div className="mx-auto max-w-none text-center">
-            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-5xl lg:whitespace-nowrap">
-              Built to outperform the alternatives.
+            <SectionLabel index={4} align="center" className="mb-5">
+              what it can do
+            </SectionLabel>
+            <h2 className="text-3xl font-medium lowercase leading-[1.08] tracking-tight md:text-4xl lg:whitespace-nowrap">
+              recommend, check, plan, compare.
             </h2>
           </div>
         </Reveal>

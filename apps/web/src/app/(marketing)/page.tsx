@@ -5,9 +5,11 @@ import { SectionIdeMarquee } from "@/components/sections/section-ide-marquee";
 import { SectionShowcase } from "@/components/sections/section-showcase";
 import { SectionRoadmap } from "@/components/sections/section-roadmap";
 import { SectionComparison } from "@/components/sections/section-comparison";
+import { SectionBenchmark } from "@/components/sections/section-benchmark";
 import { SectionProwess } from "@/components/sections/section-prowess";
 import { SectionChangelog } from "@/components/sections/section-changelog";
 import { SectionFaq } from "@/components/sections/section-faq";
+import { SectionCta } from "@/components/sections/section-cta";
 import { Footer } from "@/components/sections/footer";
 
 export default function Home() {
@@ -18,12 +20,14 @@ export default function Home() {
       <main className="flex-1">
         <Hero />
         <SectionIdeMarquee />
+        <SectionShowcase />
         <SectionRoadmap />
         <SectionComparison />
-        <SectionShowcase />
+        <SectionBenchmark />
         <SectionProwess />
         <SectionChangelog />
         <SectionFaq />
+        <SectionCta />
       </main>
       <Footer />
     </>

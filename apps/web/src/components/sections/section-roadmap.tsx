@@ -22,11 +22,10 @@ export function SectionRoadmap() {
             <div className="lg:pt-1">
               <p className="text-lg leading-relaxed text-muted-foreground md:text-xl">
                 Describe the project once.{" "}
-                <span className="font-mono text-foreground">lurq plan</span> locks
-                in the strongest package for every slot (auth, validation, ORM,
-                styling), each scored on freshness, security, and maintenance,
-                then proves they hold together as a set. One command, a stack you
-                can defend in review.
+                <span className="font-mono text-foreground">lurq plan</span> picks
+                a strong package for each slot, auth, validation, database,
+                styling, and checks they work together. One answer you can defend
+                in review.
               </p>
             </div>
           </div>

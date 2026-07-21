@@ -44,18 +44,22 @@ export function AnnouncementBar() {
   if (dismissed !== false) return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[60] flex h-9 items-center justify-center border-b border-border bg-secondary px-10 text-xs text-secondary-foreground">
+    <div className="fixed inset-x-0 top-0 z-[60] flex h-9 items-center justify-center gap-2 border-b border-border bg-secondary px-10 text-xs text-secondary-foreground">
+      <span
+        aria-hidden
+        className="inline-block size-1.5 shrink-0 rounded-full bg-brand motion-safe:animate-pulse"
+      />
       <p className="truncate">
-        lurq is in <span className="font-medium">pre-alpha</span>{" "}
+        free while in pre-alpha{" "}
         <span className={`${robotoMono.className} text-muted-foreground`}>
           {VERSION}
         </span>{" "}
-        · questions or feedback?{" "}
+        · help your AI pick packages that work ·{" "}
         <a
-          href="mailto:contact@lurq.run"
+          href="#product"
           className="font-medium underline underline-offset-2 transition-colors hover:text-foreground"
         >
-          contact@lurq.run
+          how it works
         </a>
       </p>
       <button

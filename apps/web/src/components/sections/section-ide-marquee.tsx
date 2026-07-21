@@ -17,7 +17,7 @@ export function SectionIdeMarquee() {
   return (
     <section className="relative overflow-hidden border-y border-border/60 py-10">
       <p className="mb-6 text-center text-xs uppercase tracking-[0.2em] text-muted-foreground/60">
-        Works inside your coding agent
+        Works with the tools your team already uses
       </p>
 
       <Marquee pauseOnHover className="[--duration:32s] [--gap:3.5rem]">

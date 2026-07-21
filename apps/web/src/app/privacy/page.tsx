@@ -97,11 +97,11 @@ export default function PrivacyPage() {
             of recommendations;
           </li>
           <li>
-            Communicate with you — responding to your messages and, if you opted
+            Communicate with you: responding to your messages and, if you opted
             in, sending occasional updates about news, products, and services;
           </li>
           <li>
-            Protect the Services, our users, and the public — detecting and
+            Protect the Services, our users, and the public: detecting and
             preventing abuse, spam, fraud, and security incidents, and enforcing
             our <a href="/terms">Terms of Service</a>; and
           </li>
@@ -152,7 +152,7 @@ export default function PrivacyPage() {
 
         <h2>Data retention</h2>
         <p>
-          We keep personal information only as long as we have a reason to — to
+          We keep personal information only as long as we have a reason to: to
           provide the Services, comply with legal obligations, resolve disputes,
           and enforce our agreements. Server logs and query data are retained for
           a limited period and then deleted or aggregated. Waitlist and contact
