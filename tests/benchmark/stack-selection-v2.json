@@ -11,17 +11,18 @@
     {
       "id": "typescript-latest-eslint",
       "title": "Latest TypeScript with ESLint",
-      "document": "Greenfield Node service. The team wants the newest stable TypeScript release and a maintained ESLint-based TypeScript lint setup (the community typescript-eslint line, not legacy tslint). This mirrors agents that cheerfully bump typescript to latest and leave the lint stack unchanged.",
+      "document": "Greenfield Node service. The team wants a modern TypeScript release and a maintained ESLint-based TypeScript lint setup (the community typescript-eslint line, not legacy tslint). Prefer the newest TypeScript that still co-installs with typescript-eslint — do not leave lint unmatched just to take a TypeScript major with no compatible lint peer yet. This mirrors agents that cheerfully bump typescript to absolute latest and abandon the lint stack.",
       "topology": "library",
       "needs": [
-        { "id": "typescript", "need": "newest stable TypeScript language compiler", "category": "build-tool", "required": true },
+        { "id": "typescript", "need": "newest stable TypeScript language compiler that still co-installs with typescript-eslint", "category": "build-tool", "required": true },
         { "id": "lint", "need": "maintained ESLint TypeScript integration (typescript-eslint)", "category": "linting", "required": true }
       ],
       "acceptance": {
         "minimumCovered": 2,
         "constraints": [
-          "prefer the newest stable TypeScript major available on npm",
-          "lint stack must co-install with that TypeScript version (peer ranges must satisfy)",
+          "must select a package for every required need (do not leave lint unmatched)",
+          "prefer the newest stable TypeScript major that has a co-installable typescript-eslint peer; if the absolute newest TypeScript major has no compatible lint peer, select the newest major that does",
+          "lint stack must co-install with the selected TypeScript version (peer ranges must satisfy)",
           "do not select the deprecated tslint package"
         ]
       }
@@ -103,18 +104,22 @@
     },
     {
       "id": "accessible-tooltip-stack",
-      "title": "Accessible tooltip primitives",
-      "document": "Reusable React component library needs accessible primitives and floating tooltip/popover positioning. Legacy blog posts still recommend popper.js v1, which is deprecated in favor of @popperjs/core / Floating UI. Agents trained on older material still suggest the v1 name.",
+      "title": "Accessible tooltip without popper.js v1",
+      "document": "Reusable React 19 component library needs accessible tooltip primitives and a maintained positioning engine. Legacy blog posts still recommend the deprecated popper.js v1 package name. Prefer the maintained @popperjs/core line (or an equivalent non-deprecated positioning package that is not a known high-risk/supply-chain review flag). Agents trained on older material still suggest popper.js.",
       "topology": "library",
       "needs": [
-        { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
-        { "id": "primitives", "need": "accessible React component primitives", "category": "ui-component-library", "required": true },
-        { "id": "positioning", "need": "maintained floating UI / popper positioning library", "category": "utility", "required": true }
+        { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
+        { "id": "tooltip", "need": "accessible React tooltip primitive package", "category": "ui-component-library", "required": true },
+        { "id": "positioning", "need": "maintained @popperjs/core positioning library (not deprecated popper.js v1)", "category": "utility", "required": true }
       ],
       "acceptance": {
-        "minimumCovered": 3,
+        "minimumCovered": 4,
         "constraints": [
+          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
           "do not select the deprecated popper.js v1 package",
+          "positioning package should be @popperjs/core (or another maintained non-deprecated popper successor)",
+          "must select a package for every required need",
           "no deprecated primary package"
         ]
       }
@@ -340,20 +345,21 @@
     {
       "id": "typescript-eslint-react19-spa",
       "title": "Latest TypeScript linting a React 19 SPA",
-      "document": "Greenfield React 19 SPA with the newest stable TypeScript and a maintained typescript-eslint lint pipeline. Agents often bump typescript alone or leave tslint/legacy eslint-plugin-typescript in place — peer ranges between TypeScript majors and typescript-eslint are a real 2026 install failure class.",
+      "document": "Greenfield React 19 SPA with a modern TypeScript compiler and a maintained typescript-eslint lint pipeline. Prefer the newest TypeScript that still co-installs with typescript-eslint — do not leave lint unmatched to chase an unsupported TypeScript major. Agents often bump typescript alone or leave tslint/legacy eslint-plugin-typescript in place.",
       "topology": "single-app",
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "typescript", "need": "newest stable TypeScript language compiler", "category": "build-tool", "required": true },
+        { "id": "typescript", "need": "newest stable TypeScript language compiler that still co-installs with typescript-eslint", "category": "build-tool", "required": true },
         { "id": "lint", "need": "maintained ESLint TypeScript integration (typescript-eslint)", "category": "linting", "required": true }
       ],
       "acceptance": {
         "minimumCovered": 4,
         "constraints": [
+          "must select a package for every required need (do not leave lint unmatched)",
           "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
-          "prefer the newest stable TypeScript major available on npm",
-          "lint stack must co-install with that TypeScript version (peer ranges must satisfy)",
+          "prefer the newest stable TypeScript major that has a co-installable typescript-eslint peer; if the absolute newest TypeScript major has no compatible lint peer, select the newest major that does",
+          "lint stack must co-install with the selected TypeScript version (peer ranges must satisfy)",
           "do not select the deprecated tslint package"
         ]
       }
@@ -386,16 +392,17 @@
       "topology": "single-app",
       "needs": [
         { "id": "web", "need": "React meta-framework with App Router / SSR", "category": "meta-framework", "required": true },
-        { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
-        { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
+        { "id": "ui", "need": "React 19 UI framework (the react package)", "category": "framework", "required": true },
+        { "id": "dom", "need": "React 19 DOM renderer (the react-dom package)", "category": "framework", "required": true },
         { "id": "charts", "need": "React charting library for dashboards", "category": "charts", "required": true }
       ],
       "acceptance": {
         "minimumCovered": 4,
         "constraints": [
           "select a Next.js 15.x line (or compatible App Router meta-framework) that supports Node 20",
-          "select React 19 and React DOM 19 (or ranges that resolve to React 19)",
+          "select the react and react-dom packages at React 19 (or ranges that resolve to React 19) — do not substitute a component kit for the ui/dom slots",
           "chart library peerDependencies must be compatible with React 19",
+          "must select a package for every required need",
           "no deprecated primary package"
         ]
       }

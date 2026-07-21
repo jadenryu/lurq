@@ -9,7 +9,7 @@ export const WITH_LURQ_MAX_ITERATIONS = 12;
 
 /** Injected on the last turn so the model must stop calling tools. */
 export const FINALIZE_NUDGE =
-  'Stop calling tools now. Based on the tool results so far, emit ONLY the final StackProposal JSON object (selections + unmatchedNeedIds). No markdown, no explanation.';
+  'Stop calling tools now. Based on the tool results so far, emit ONLY the final StackProposal JSON object (selections + unmatchedNeedIds). Fill every required need with a co-installable package when possible — do not leave needs unmatched just because the absolute newest major conflicts. No markdown, no explanation.';
 
 export function isFinalAgentTurn(iteration: number, max = WITH_LURQ_MAX_ITERATIONS): boolean {
   return iteration >= max;

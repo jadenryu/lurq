@@ -26,9 +26,10 @@ ${needsText}
 Hard acceptance constraints (must satisfy all):
 ${constraintsText}
 
-Your task is to select exactly one npm package for each requirement ID above. 
-If a requirement cannot be fulfilled by a single package, pick the most central one. 
-If you cannot fulfill a requirement, add its ID to the unmatchedNeedIds array.
+Your task is to select exactly one npm package for each requirement ID above.
+You must fill every required need with a concrete package whenever a co-installable option exists.
+If a newer major cannot satisfy peers/engines with the rest of the stack, pick the newest major that does — do not leave the need unmatched just to chase absolute latest.
+Only add a need ID to unmatchedNeedIds when no viable maintained package exists at all.
 
 Output EXACTLY a JSON object conforming to this TypeScript interface:
 
