@@ -6,12 +6,11 @@ export type NavLink = {
   external?: boolean;
 };
 
-// Anchors resolve to sections rendered on the marketing home page
-// (section-showcase #product, section-comparison, section-faq), plus the
-// real /changelog and /about routes.
+// Anchors follow homepage story order: product → difference → faq.
+// Bakeoff stays on-page as quiet proof, not a nav highlight.
 export const navLinks: NavLink[] = [
   { label: "Product", href: "/#product" },
-  { label: "Comparison", href: "/#comparison" },
+  { label: "Difference", href: "/#comparison" },
   { label: "Changelog", href: "/changelog" },
   { label: "About", href: "/about" },
   { label: "FAQ", href: "/#faq" },

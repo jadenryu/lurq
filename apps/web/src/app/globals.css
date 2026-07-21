@@ -7,10 +7,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* Geist is the single family: powers both body (font-sans) and headings. */
+  /* Geist for body copy; Commit Mono gives the site its terminal-native
+     identity — it powers all headings and every mono/code surface. */
   --font-sans: var(--font-geist);
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-  --font-heading: var(--font-geist);
+  --font-mono: var(--font-commit-mono), ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font-heading: var(--font-commit-mono), ui-monospace, "SF Mono", Menlo, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -30,6 +31,8 @@
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -85,6 +88,8 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
+  --brand: oklch(0.62 0.13 280);
+  --brand-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
@@ -105,39 +110,43 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* lurq monochrome dark: strict greyscale, near-black surfaces. */
+/* lurq dark: Nia/Payload-style monochrome. Rich charcoal (not pitch), clear
+   surface lift for cards/panels, white as the only chrome accent. Soft cool
+   tint keeps it from reading as empty void. */
 .dark {
-  --background: oklch(0.1 0 0); /* ~#0a0a0a page bg */
-  --foreground: oklch(0.985 0 0); /* near-white text */
-  --card: oklch(0.16 0 0); /* ~#161616 surface */
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.16 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0); /* white CTA */
-  --primary-foreground: oklch(0.12 0 0); /* near-black text on white */
-  --secondary: oklch(0.215 0 0); /* raised surface */
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.205 0 0);
-  --muted-foreground: oklch(0.66 0 0); /* grey body / secondary text */
-  --accent: oklch(0.23 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.175 0.006 250); /* rich charcoal · slight cool */
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.215 0.005 250); /* clearly lifted above page */
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.225 0.005 250);
+  --popover-foreground: oklch(0.97 0 0);
+  --primary: oklch(0.97 0 0); /* white CTA */
+  --primary-foreground: oklch(0.16 0 0);
+  --secondary: oklch(0.255 0.004 250); /* raised control surface */
+  --secondary-foreground: oklch(0.97 0 0);
+  --muted: oklch(0.235 0.004 250);
+  --muted-foreground: oklch(0.7 0 0);
+  --accent: oklch(0.28 0.004 250);
+  --accent-foreground: oklch(0.97 0 0);
+  --brand: oklch(0.92 0 0); /* light grey mono accent */
+  --brand-foreground: oklch(0.16 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 9%); /* hairline */
+  --border: oklch(1 0 0 / 10%); /* hairline */
   --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.45 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.16 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.985 0 0);
-  --sidebar-primary-foreground: oklch(0.12 0 0);
-  --sidebar-accent: oklch(0.23 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.45 0 0);
+  --ring: oklch(0.58 0 0);
+  --chart-1: oklch(0.95 0 0); /* lead (lurq) series */
+  --chart-2: oklch(0.62 0 0);
+  --chart-3: oklch(0.5 0 0);
+  --chart-4: oklch(0.4 0 0);
+  --chart-5: oklch(0.32 0 0);
+  --sidebar: oklch(0.19 0.005 250);
+  --sidebar-foreground: oklch(0.97 0 0);
+  --sidebar-primary: oklch(0.97 0 0);
+  --sidebar-primary-foreground: oklch(0.16 0 0);
+  --sidebar-accent: oklch(0.28 0.004 250);
+  --sidebar-accent-foreground: oklch(0.97 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.58 0 0);
 }
 
 @layer base {
@@ -179,6 +188,16 @@
   }
   50% {
     transform: translate(-8%, 8%) scale(0.95);
+  }
+}
+
+/* Autoplay progress fill for the carousel tabs (scaleX 0 -> 1 over the dwell). */
+@keyframes carousel-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
   }
 }
 
@@ -331,39 +350,88 @@
   }
 }
 
-/* Minimal grayish glow for content-wrapping surfaces (cards/panels). Soft,
-   unobtrusive halo plus a faint drop for depth. Tune here in one place. */
+/* Soft top-light + depth for content panels. Hierarchy from lift, not glow. */
 .surface-glow {
   box-shadow:
-    0 0 0 1px color-mix(in oklab, white 5%, transparent),
-    0 0 30px 0 color-mix(in oklab, white 11%, transparent),
-    0 18px 40px -18px color-mix(in oklab, black 80%, transparent);
+    0 0 0 1px color-mix(in oklab, white 6%, transparent),
+    0 1px 0 0 color-mix(in oklab, white 6%, transparent),
+    0 18px 40px -20px color-mix(in oklab, black 70%, transparent);
 }
 
-/* Faint greyscale grid texture for content pages; fades out toward the edges
-   via a radial mask so it reads as ambient depth, not a hard pattern. */
+/* Mono CTA lift: thin white ring + soft light halo. No purple. */
+.cta-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, white 18%, transparent),
+    0 0 22px -4px color-mix(in oklab, white 18%, transparent),
+    0 10px 28px -12px color-mix(in oklab, black 65%, transparent);
+}
+.cta-glow:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, white 28%, transparent),
+    0 0 28px -2px color-mix(in oklab, white 22%, transparent),
+    0 12px 32px -12px color-mix(in oklab, black 65%, transparent);
+}
+
+/* Soft white halo for lead chart bars / highlighted surfaces. */
+.glow-brand {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, white 14%, transparent),
+    0 0 22px -6px color-mix(in oklab, white 20%, transparent);
+}
+
+/* Shared "lit panel" cue: hairline top edge + soft overhead wash. */
+.panel-lit {
+  position: relative;
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, white 5%, transparent),
+    0 20px 48px -28px color-mix(in oklab, black 75%, transparent);
+}
+.panel-lit::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, white 28%, transparent),
+    transparent
+  );
+}
+
+/* Inline emphasis for the payoff clause of a headline — monochrome: solid
+   white text with a subtle underline, no color box. */
+.brand-highlight {
+  color: var(--foreground);
+  box-shadow: inset 0 -0.09em 0 color-mix(in oklab, var(--foreground) 32%, transparent);
+}
+
+/* Faint greyscale grid; masked so it reads as ambient depth, not a hard cage. */
 .bg-grid {
   background-image:
     linear-gradient(
       to right,
-      color-mix(in oklab, white 4%, transparent) 1px,
+      color-mix(in oklab, white 3.5%, transparent) 1px,
       transparent 1px
     ),
     linear-gradient(
       to bottom,
-      color-mix(in oklab, white 4%, transparent) 1px,
+      color-mix(in oklab, white 3.5%, transparent) 1px,
       transparent 1px
     );
-  background-size: 56px 56px;
+  background-size: 48px 48px;
   -webkit-mask-image: radial-gradient(
-    ellipse 75% 65% at 50% 0%,
+    ellipse 70% 55% at 50% 8%,
     #000 0%,
-    transparent 78%
+    transparent 72%
   );
   mask-image: radial-gradient(
-    ellipse 75% 65% at 50% 0%,
+    ellipse 70% 55% at 50% 8%,
     #000 0%,
-    transparent 78%
+    transparent 72%
   );
 }
 
@@ -380,7 +448,14 @@
 html {
   scroll-behavior: smooth;
 }
-:where([id="product"], [id="reviews"], [id="faq"], [id="contact"]) {
+:where(
+  [id="product"],
+  [id="plan"],
+  [id="comparison"],
+  [id="benchmark"],
+  [id="faq"],
+  [id="contact"]
+) {
   scroll-margin-top: calc(var(--banner-h, 0px) + 6rem);
 }
 @media (prefers-reduced-motion: reduce) {

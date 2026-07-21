@@ -43,10 +43,10 @@ export function Navbar() {
         </Link>
 
         {/* centered nav links */}
-        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 md:flex">
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 lg:gap-12 md:flex">
           {navLinks.map((l) => {
             const cls =
-              "text-sm text-muted-foreground transition-colors hover:text-foreground";
+              "font-mono text-sm lowercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
             return l.external ? (
               <a key={l.href} href={l.href} className={cls}>
                 {l.label}

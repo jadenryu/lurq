@@ -68,7 +68,7 @@ function NodeCard({ node }: { node: Node }) {
         <span
           className={cn(
             "size-1.5 shrink-0 rounded-full",
-            strong ? "bg-emerald-400/90" : "bg-foreground/40",
+            strong ? "bg-foreground" : "bg-foreground/40",
           )}
         />
         <div className="leading-tight">

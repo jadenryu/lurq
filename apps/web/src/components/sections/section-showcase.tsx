@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
   Blocks,
-  CalendarCheck,
-  ChevronRight,
   Database,
   Network,
   Search,
@@ -18,11 +16,16 @@ import {
 } from "lucide-react";
 import { Container } from "@/components/common/container";
 import { Reveal } from "@/components/common/reveal";
+import { SectionLabel } from "@/components/common/section-label";
+import { ProductMedia } from "@/components/visuals/product-media";
+import { SurfaceVisual } from "@/components/visuals/surface-visuals";
+import { surfaceMedia } from "@/content/media";
 import { cn } from "@/lib/utils";
 
 type Pillar = {
   id: string;
   label: string;
+  group: "interface" | "engine";
   icon: LucideIcon;
   name: string;
   command: string;
@@ -31,103 +34,110 @@ type Pillar = {
   chips: string[];
 };
 
-const GROUPS: { label: string; items: Pillar[] }[] = [
+const PILLARS: Pillar[] = [
   {
-    label: "Interfaces",
-    items: [
-      {
-        id: "mcp",
-        label: "MCP",
-        icon: Network,
-        name: "MCP server",
-        command: "claude mcp add lurq",
-        blurb: "A remote server your coding agent connects to as a tool.",
-        detail:
-          "Claude Code, Cursor, Windsurf and others call lurq over MCP to fetch fresh, scored recommendations mid-task. The responses are compact and token-aware, built for agents.",
-        chips: ["recommend", "evaluate", "compare", "verify", "diagram"],
-      },
-      {
-        id: "cli",
-        label: "CLI",
-        icon: Terminal,
-        name: "Command line",
-        command: 'lurq recommend "form library for react"',
-        blurb: "The same index, scriptable from your terminal.",
-        detail:
-          "Every capability is a subcommand (recommend, evaluate, compare, verify, sync), so you can pull scored data into scripts, CI, or your own tooling.",
-        chips: ["recommend", "evaluate", "compare", "verify", "sync"],
-      },
-      {
-        id: "api",
-        label: "API",
-        icon: Webhook,
-        name: "HTTP API",
-        command: "lurq serve-http",
-        blurb: "Self-host the index behind a rate-limited endpoint.",
-        detail:
-          "Run lurq as a service with API-key auth, helmet, and rate limiting. No database credentials ever touch a client machine.",
-        chips: ["/recommend", "/evaluate", "/compare", "/verify"],
-      },
-      {
-        id: "skill",
-        label: "Skill",
-        icon: Blocks,
-        name: "Agent skill",
-        command: "npx lurqrun install-skill --agent claude-code",
-        blurb: "Drop lurq in as an installable skill, no config.",
-        detail:
-          "The guided installer detects your agent and writes the connection for you, so the index is available the next time it runs.",
-        chips: ["Claude Code", "Cursor", "Windsurf", "VS Code", "Codex"],
-      },
-    ],
+    id: "mcp",
+    label: "MCP",
+    group: "interface",
+    icon: Network,
+    name: "MCP server",
+    command: "claude mcp add lurq",
+    blurb: "Connect lurq as a tool your coding agent can call.",
+    detail:
+      "Claude Code, Cursor, Windsurf and others ask lurq mid-task for fresh package picks. Short answers, meant for agents.",
+    chips: ["recommend", "evaluate", "compare", "verify"],
   },
   {
-    label: "Engine",
-    items: [
-      {
-        id: "index",
-        label: "Index",
-        icon: Database,
-        name: "Package index",
-        command: "postgres · synced daily",
-        blurb: "A continuously-synced Postgres index of JS/TS libraries.",
-        detail:
-          "Public signals from npm, GitHub, and deps.dev are ingested and recomputed daily, so the index reflects releases long after a model's training cutoff.",
-        chips: ["npm", "GitHub", "deps.dev", "OSV"],
-      },
-      {
-        id: "search",
-        label: "Search",
-        icon: Search,
-        name: "Hybrid search",
-        command: "semantic + keyword",
-        blurb: "Find packages by need, not just exact name.",
-        detail:
-          "A hybrid of semantic and keyword search, weighted by quality and freshness, surfaces the right library even when the problem is described loosely.",
-        chips: ["semantic", "keyword", "quality", "freshness"],
-      },
-      {
-        id: "cache",
-        label: "Cache",
-        icon: Zap,
-        name: "Response cache",
-        command: "redis · ttl",
-        blurb: "Optional Redis layer for low-latency reads.",
-        detail:
-          "Hot recommendations are cached so repeat lookups return in milliseconds, keeping the agent's tool calls fast without re-querying the index.",
-        chips: ["redis", "ttl", "keyed", "edge"],
-      },
-    ],
+    id: "cli",
+    label: "CLI",
+    group: "interface",
+    icon: Terminal,
+    name: "Command line",
+    command: 'lurq recommend "form library for react"',
+    blurb: "The same answers, from your terminal.",
+    detail:
+      "Recommend, verify, compare, and plan as simple commands. Use them in scripts, CI, or by hand.",
+    chips: ["recommend", "evaluate", "compare", "verify"],
+  },
+  {
+    id: "api",
+    label: "API",
+    group: "interface",
+    icon: Webhook,
+    name: "HTTP API",
+    command: "lurq serve-http",
+    blurb: "Run lurq as a service for your own tools.",
+    detail:
+      "Host it behind an API key and rate limits. Your clients never need database credentials.",
+    chips: ["/recommend", "/evaluate", "/compare", "/verify"],
+  },
+  {
+    id: "skill",
+    label: "Skill",
+    group: "interface",
+    icon: Blocks,
+    name: "Agent skill",
+    command: "npx lurqrun install-skill --agent claude-code",
+    blurb: "Install it once. Your agent keeps it.",
+    detail:
+      "A short installer finds your agent and wires lurq in, so it is ready the next time you open a project.",
+    chips: ["Claude Code", "Cursor", "Windsurf", "Codex"],
+  },
+  {
+    id: "index",
+    label: "Index",
+    group: "engine",
+    icon: Database,
+    name: "Package index",
+    command: "postgres · synced daily",
+    blurb: "A live catalog of JS and TS libraries.",
+    detail:
+      "We pull public signals from npm, GitHub, and deps.dev every day, long after a model's training data stops.",
+    chips: ["npm", "GitHub", "deps.dev", "OSV"],
+  },
+  {
+    id: "search",
+    label: "Search",
+    group: "engine",
+    icon: Search,
+    name: "Hybrid search",
+    command: "semantic + keyword",
+    blurb: "Ask for what you need, not just a package name.",
+    detail:
+      "Describe the job in plain language. lurq finds libraries that fit, ranked by quality and freshness.",
+    chips: ["semantic", "keyword", "quality", "freshness"],
+  },
+  {
+    id: "cache",
+    label: "Cache",
+    group: "engine",
+    icon: Zap,
+    name: "Response cache",
+    command: "redis · ttl",
+    blurb: "Fast answers when the same question comes up again.",
+    detail:
+      "Recent lookups stay warm so your agent does not wait on every repeat ask.",
+    chips: ["redis", "ttl", "keyed"],
   },
 ];
 
-const FLAT = GROUPS.flatMap((g) => g.items);
+const ROTATE_MS = 6000;
 
 export function SectionShowcase() {
   const reduce = useReducedMotion();
   const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [dir, setDir] = useState(1);
-  const pillar = FLAT[active];
+  const pillar = PILLARS[active];
+
+  useEffect(() => {
+    if (paused || reduce) return;
+    const id = setInterval(() => {
+      setDir(1);
+      setActive((i) => (i + 1) % PILLARS.length);
+    }, ROTATE_MS);
+    return () => clearInterval(id);
+  }, [paused, reduce, active]);
 
   const select = (idx: number) => {
     setDir(idx >= active ? 1 : -1);
@@ -135,11 +145,10 @@ export function SectionShowcase() {
   };
   const go = (d: number) => {
     setDir(d);
-    setActive((i) => (i + d + FLAT.length) % FLAT.length);
+    setActive((i) => (i + d + PILLARS.length) % PILLARS.length);
   };
 
-  // shared enter/exit for the active surface; x offset flips with direction
-  const off = reduce ? 0 : 18;
+  const off = reduce ? 0 : 14;
   const variants = {
     enter: (d: number) => ({ opacity: 0, x: d >= 0 ? off : -off }),
     center: { opacity: 1, x: 0 },
@@ -150,120 +159,66 @@ export function SectionShowcase() {
     <section
       id="product"
       className="relative border-t border-border py-24 md:py-32"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
     >
       <Container>
-        <div className="grid gap-12 lg:grid-cols-[240px_1fr] lg:gap-16">
-          {/* LEFT: surface nav */}
-          <Reveal>
-            <nav className="font-mono">
-              {GROUPS.map((g) => (
-                <div key={g.label} className="mb-6">
-                  <p className="px-4 text-[0.7rem] uppercase tracking-[0.22em] text-muted-foreground/50">
-                    {g.label}
-                  </p>
-                  <ul className="mt-3 space-y-0.5">
-                    {g.items.map((t) => {
-                      const idx = FLAT.indexOf(t);
-                      const on = idx === active;
-                      const Icon = t.icon;
-                      return (
-                        <li key={t.id}>
-                          <button
-                            type="button"
-                            onClick={() => select(idx)}
-                            aria-current={on ? "true" : undefined}
-                            className={cn(
-                              "relative flex w-full items-center gap-3 rounded-sm py-2 pl-4 pr-3 text-left text-sm transition-colors",
-                              on
-                                ? "bg-foreground/[0.05] text-foreground"
-                                : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground",
-                            )}
-                          >
-                            {on && (
-                              <motion.span
-                                layoutId="surfaceBar"
-                                aria-hidden
-                                className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-foreground"
-                                transition={{ duration: 0.3, ease: "easeOut" }}
-                              />
-                            )}
-                            <Icon className="size-4 shrink-0" />
-                            <span>{t.label}</span>
-                            {on && <ChevronRight className="ml-auto size-3.5" />}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
+        <Reveal>
+          <div className="mb-10 max-w-3xl">
+            <SectionLabel index={1} className="mb-5">
+              how it works
+            </SectionLabel>
+            <h2 className="text-3xl font-medium lowercase leading-[1.08] tracking-tight md:text-4xl">
+              one place your AI can check packages.
+            </h2>
+            <p className="mt-4 max-w-xl text-muted-foreground">
+              Plug lurq into Claude Code, Cursor, or the terminal. Same live
+              index, whichever way you work.
+            </p>
+          </div>
+        </Reveal>
 
-              <div className="my-5 border-t border-border" />
-
-              <ul className="space-y-2">
-                <li>
-                  <a
-                    href="/book-demo"
-                    className="flex items-center gap-3 px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <CalendarCheck className="size-4 shrink-0" />
-                    Book a demo →
-                  </a>
-                </li>
-              </ul>
-            </nav>
-          </Reveal>
-
-          {/* RIGHT: active surface */}
-          <Reveal delay={0.1}>
-            <div className="overflow-hidden">
-              <div className="flex items-start justify-between gap-6">
-                <div>
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                    How it works
-                  </span>
-                  <AnimatePresence mode="wait" custom={dir} initial={false}>
-                    <motion.div
+        {/* Horizontal surface tabs — fills width, no empty left column */}
+        <Reveal delay={0.06}>
+          <div className="flex flex-wrap items-center gap-2 border-b border-border pb-4">
+            {PILLARS.map((t, i) => {
+              const on = i === active;
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => select(i)}
+                  aria-pressed={on}
+                  className={cn(
+                    "relative inline-flex items-center gap-2 overflow-hidden rounded-full border px-3 py-1.5 font-mono text-xs transition-colors",
+                    on
+                      ? "border-foreground/25 text-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {on && !paused && !reduce && (
+                    <span
                       key={active}
-                      custom={dir}
-                      variants={variants}
-                      initial="enter"
-                      animate="center"
-                      exit="exit"
-                      transition={{ duration: reduce ? 0 : 0.24, ease: "easeOut" }}
-                    >
-                      <h2 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
-                        {pillar.name}
-                      </h2>
-                      <p className="mt-3 max-w-xl text-muted-foreground">
-                        {pillar.blurb}
-                      </p>
-                      <code className="mt-4 inline-flex rounded-sm border border-border bg-background/40 px-3 py-1.5 font-mono text-xs text-foreground/80">
-                        {pillar.command}
-                      </code>
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => go(-1)}
-                    aria-label="Previous surface"
-                    className="flex size-9 items-center justify-center rounded-sm border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-                  >
-                    <ArrowLeft className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => go(1)}
-                    aria-label="Next surface"
-                    className="flex size-9 items-center justify-center rounded-sm border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-                  >
-                    <ArrowRight className="size-4" />
-                  </button>
-                </div>
-              </div>
+                      aria-hidden
+                      className="absolute inset-0 origin-left bg-foreground/[0.07]"
+                      style={{
+                        animation: `carousel-progress ${ROTATE_MS}ms linear forwards`,
+                      }}
+                    />
+                  )}
+                  <Icon className="relative z-10 size-3.5" />
+                  <span className="relative z-10">{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Reveal>
 
+        {/* Dense two-column panel: copy + live visual */}
+        <Reveal delay={0.1}>
+          <div className="mt-8 grid items-stretch gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-10">
+            <div className="flex flex-col">
               <AnimatePresence mode="wait" custom={dir} initial={false}>
                 <motion.div
                   key={active}
@@ -272,47 +227,89 @@ export function SectionShowcase() {
                   initial="enter"
                   animate="center"
                   exit="exit"
-                  transition={{ duration: reduce ? 0 : 0.24, ease: "easeOut" }}
+                  transition={{ duration: reduce ? 0 : 0.22, ease: "easeOut" }}
+                  className="flex flex-1 flex-col"
                 >
-                  {/* framed technical panel */}
-                  <div className="relative mt-8 overflow-hidden rounded-sm border border-border/70 bg-card/20">
-                <span aria-hidden className="absolute left-0 top-0 size-3 border-l border-t border-foreground/40" />
-                <span aria-hidden className="absolute right-0 top-0 size-3 border-r border-t border-foreground/40" />
-                <span aria-hidden className="absolute bottom-0 left-0 size-3 border-b border-l border-foreground/40" />
-                <span aria-hidden className="absolute bottom-0 right-0 size-3 border-b border-r border-foreground/40" />
-
-                {/* placeholder: swap for the real per-surface diagram */}
-                <div className="relative flex aspect-[16/9] w-full items-center justify-center md:pr-14">
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:18px_18px]"
-                  />
-                  <span className="relative font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground/60">
-                    {pillar.label} diagram · coming soon
+                  <span className="font-mono text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground/60">
+                    {pillar.group}
                   </span>
-                </div>
-
-                {/* right-edge instrument gutter */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-y-0 right-0 hidden w-14 border-l border-dashed border-border md:block"
-                >
-                  <span className="absolute right-[1.15rem] top-1/2 -translate-y-1/2 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground/50 [writing-mode:vertical-rl]">
-                    lurq · {pillar.id}
-                  </span>
-                  <span className="absolute right-0 top-6 h-6 w-3 border-y border-border" />
-                  <span className="absolute bottom-0 right-0 h-12 w-full bg-[radial-gradient(circle,rgba(255,255,255,0.14)_1px,transparent_1px)] [background-size:6px_6px]" />
-                </div>
-              </div>
-
-                  <p className="mt-8 max-w-2xl leading-relaxed text-muted-foreground">
+                  <h3 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">
+                    {pillar.name}
+                  </h3>
+                  <p className="mt-3 text-muted-foreground">{pillar.blurb}</p>
+                  <code className="mt-5 inline-flex w-fit max-w-full truncate rounded-sm border border-border bg-card/40 px-3 py-1.5 font-mono text-xs text-foreground/85">
+                    {pillar.command}
+                  </code>
+                  <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
                     {pillar.detail}
                   </p>
+                  <div className="mt-5 flex flex-wrap gap-1.5">
+                    {pillar.chips.map((chip) => (
+                      <span
+                        key={chip}
+                        className="rounded-sm border border-border px-2 py-0.5 font-mono text-[0.65rem] text-muted-foreground"
+                      >
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
                 </motion.div>
               </AnimatePresence>
+
+              <div className="mt-8 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => go(-1)}
+                  aria-label="Previous surface"
+                  className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+                >
+                  <ArrowLeft className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go(1)}
+                  aria-label="Next surface"
+                  className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+                >
+                  <ArrowRight className="size-4" />
+                </button>
+                <span className="ml-2 font-mono text-xs text-muted-foreground/50">
+                  {String(active + 1).padStart(2, "0")} /{" "}
+                  {String(PILLARS.length).padStart(2, "0")}
+                </span>
+              </div>
             </div>
-          </Reveal>
-        </div>
+
+            <AnimatePresence mode="wait" custom={dir} initial={false}>
+              <motion.div
+                key={active}
+                custom={dir}
+                variants={variants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: reduce ? 0 : 0.22, ease: "easeOut" }}
+              >
+                <ProductMedia
+                  src={surfaceMedia[pillar.id]?.src}
+                  gif={surfaceMedia[pillar.id]?.gif}
+                  poster={surfaceMedia[pillar.id]?.poster}
+                  chrome="window"
+                  title={`lurq · ${pillar.id}`}
+                  aspect={
+                    surfaceMedia[pillar.id]?.src || surfaceMedia[pillar.id]?.gif
+                      ? "video"
+                      : "auto"
+                  }
+                  label={`${pillar.name}: ${pillar.blurb}`}
+                  className="surface-glow h-full"
+                >
+                  <SurfaceVisual id={pillar.id} />
+                </ProductMedia>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </Reveal>
       </Container>
     </section>
   );

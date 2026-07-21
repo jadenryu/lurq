@@ -1,169 +1,151 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Container } from "@/components/common/container";
 import { WaitlistDialog } from "@/components/common/waitlist-dialog";
-import { HeroParticles } from "@/components/visuals/hero-particles";
-import { VideoPlaceholder } from "@/components/visuals/video-placeholder";
+import { CrypticInstall } from "@/components/common/cryptic-install";
+import { HeroLiveDemo } from "@/components/visuals/hero-live-demo";
+import { cn } from "@/lib/utils";
 
-const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-// eased 0..1 for x mapped from [a,b]
-const seg = (x: number, a: number, b: number) => clamp01((x - a) / (b - a));
+const EASE = [0.22, 1, 0.36, 1] as const;
 
-// Scroll stage driven by a plain scroll listener writing inline styles directly
-// (framer's useScroll pipeline silently no-ops under this Next/Turbopack/React
-// stack, so we don't route through it). Timeline over the pinned stage:
-//   0.05–0.26  headline fades + lifts away as the video climbs (R3F bg stays)
-//   0.06–0.48  video rises from below and settles centered on the R3F field
-//   0.55–0.85  whole stage (bg + video) fades out into the next section
+const fadeUp = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE } },
+};
+
+const stagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.1, delayChildren: 0.08 } },
+};
+
+type Tab = "install" | "demo";
+
 export function Hero() {
-  const trackRef = useRef<HTMLElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return;
-
-    // Land at the top so the scroll animation always starts fresh — browsers
-    // otherwise restore the previous scroll position on reload, dropping the
-    // user mid- or post-animation.
-    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-    window.scrollTo(0, 0);
-
-    // smoothstep — softens the entry/exit of every phase so nothing snaps
-    const ease = (t: number) => t * t * (3 - 2 * t);
-
-    const apply = (p: number) => {
-      // video: rise (0.06→0.48), hold, then drift up as the stage fades
-      const rise = ease(seg(p, 0.06, 0.5));
-      let vy = lerp(800, 0, rise);
-      if (p > 0.7) vy = lerp(0, -140, ease(seg(p, 0.7, 1))); // lift-out
-      const vs = lerp(0.9, 1, rise);
-      // headline: fade + lift, gone by 0.26 (well before the video covers)
-      const fade = ease(seg(p, 0.05, 0.26));
-      // stage: fade out ending exactly at the section end (1.0), so the marquee
-      // hands off the instant the video finishes fading — no trailing black.
-      const stage = 1 - ease(seg(p, 0.7, 1));
-
-      if (videoRef.current)
-        videoRef.current.style.transform = `translateY(${vy}px) scale(${vs})`;
-      if (textRef.current) {
-        textRef.current.style.opacity = String(1 - fade);
-        textRef.current.style.transform = `translateY(${lerp(0, -60, fade)}px)`;
-      }
-      if (stageRef.current) stageRef.current.style.opacity = String(stage);
-    };
-
-    const readTarget = () => {
-      const rect = track.getBoundingClientRect();
-      const total = rect.height - window.innerHeight;
-      return total > 0 ? clamp01(-rect.top / total) : 0;
-    };
-
-    // Reduced motion: no scroll animation — just show the video centered.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      if (videoRef.current) videoRef.current.style.transform = "none";
-      return;
-    }
-
-    let raf = 0;
-    let current = readTarget();
-    let target = current;
-    let running = false;
-
-    // damping: ease the applied progress toward the real scroll position each
-    // frame, so the whole sequence trails the scroll smoothly (buttery, slower-
-    // feeling) instead of tracking it 1:1 (harsh). Lower factor = slower trail.
-    const render = () => {
-      current += (target - current) * 0.09;
-      apply(current);
-      if (Math.abs(target - current) > 0.0004) {
-        raf = requestAnimationFrame(render);
-      } else {
-        current = target;
-        apply(current);
-        running = false;
-      }
-    };
-    const kick = () => {
-      target = readTarget();
-      if (!running) {
-        running = true;
-        raf = requestAnimationFrame(render);
-      }
-    };
-
-    apply(current);
-    window.addEventListener("scroll", kick, { passive: true });
-    window.addEventListener("resize", kick);
-    return () => {
-      window.removeEventListener("scroll", kick);
-      window.removeEventListener("resize", kick);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  const headline = (
-    <div className="max-w-none">
-      <h1 className="font-heading text-5xl font-medium leading-[1.0] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
-        <span className="block text-muted-foreground lg:whitespace-nowrap">
-          Your agent&apos;s package
-        </span>
-        <span className="block text-muted-foreground lg:whitespace-nowrap">
-          knowledge is frozen.
-        </span>
-        <span className="mt-2 block font-bold text-foreground lg:whitespace-nowrap">
-          lurq keeps it current.
-        </span>
-      </h1>
-
-      <div className="mt-10 flex flex-col items-start gap-x-7 gap-y-4 sm:flex-row sm:items-center">
-        <WaitlistDialog />
-        <a
-          href="#product"
-          className="group inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          See how it works
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-        </a>
-      </div>
-    </div>
-  );
+  const reduce = useReducedMotion();
+  const [tab, setTab] = useState<Tab>("demo");
+  const animateProps = reduce
+    ? {}
+    : { initial: "hidden" as const, animate: "show" as const };
 
   return (
-    <section ref={trackRef} className="relative h-[200vh]">
-      <div
-        ref={stageRef}
-        className="sticky top-0 h-screen overflow-hidden"
-      >
-        {/* R3F particle field behind the whole stage — the video lands on it */}
-        <HeroParticles />
-
-        {/* headline: fades + lifts as the video rises (initial state = visible) */}
-        <div className="absolute inset-0 flex items-center px-6 pt-24 pb-[20vh]">
-          <Container className="relative" >
-            <div ref={textRef}>{headline}</div>
-          </Container>
-        </div>
-
-        {/* video: starts off-screen below, rises up over the field.
-            pointer-events-none on the full-screen layer so its empty area doesn't
-            swallow clicks meant for the headline CTAs beneath it; the video itself
-            re-enables pointer events. */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
-          <div
-            ref={videoRef}
-            className="pointer-events-auto w-full max-w-6xl"
-            style={{ transform: "translateY(800px) scale(0.9)" }}
-          >
-            <VideoPlaceholder />
-          </div>
-        </div>
+    <section className="relative overflow-hidden pb-10 pt-[calc(var(--banner-h,0px)+4.25rem)] md:pb-14 md:pt-[calc(var(--banner-h,0px)+5rem)]">
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_75%_50%_at_50%_-8%,rgba(255,255,255,0.09),transparent_62%)]" />
+        <div className="bg-grid absolute inset-0 opacity-50" />
       </div>
+
+      <Container>
+        <motion.div
+          className="mx-auto max-w-3xl text-center"
+          variants={stagger}
+          {...animateProps}
+        >
+          <motion.p
+            variants={fadeUp}
+            className="inline-flex items-center gap-2 font-mono text-[0.68rem] uppercase tracking-[0.22em] text-muted-foreground"
+          >
+            <span className="size-1.5 rounded-full bg-[#7dcea0] motion-safe:animate-pulse" />
+            free while in pre-alpha
+          </motion.p>
+
+          <motion.h1
+            variants={fadeUp}
+            className="mt-6 font-heading text-[2.15rem] font-medium lowercase leading-[1.05] tracking-tight sm:text-5xl md:text-[3.1rem]"
+          >
+            the package index for coding agents.
+          </motion.h1>
+
+          <motion.p
+            variants={fadeUp}
+            className="mx-auto mt-5 max-w-xl text-[0.95rem] leading-relaxed text-muted-foreground sm:text-lg"
+          >
+            Helps your AI pick libraries that work, and catch bad ones before
+            they break the build.
+          </motion.p>
+
+          <motion.div
+            variants={fadeUp}
+            className="mt-8 flex flex-wrap items-center justify-center gap-3"
+          >
+            <WaitlistDialog
+              triggerLabel="get started free"
+              triggerClassName="cta-glow"
+            />
+            <a
+              href="#product"
+              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border px-4 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground"
+            >
+              how it works
+              <ArrowRight className="size-3.5" />
+            </a>
+          </motion.div>
+        </motion.div>
+
+        <motion.div
+          className="mx-auto mt-12 max-w-4xl"
+          initial={reduce ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.75, ease: EASE, delay: reduce ? 0 : 0.4 }}
+        >
+          <div className="panel-lit overflow-hidden rounded-[var(--radius-lg)] border border-border">
+            <div className="flex items-center gap-1 border-b border-border px-2 py-2 sm:px-3">
+              {(
+                [
+                  { id: "demo" as const, label: "Live demo" },
+                  { id: "install" as const, label: "Install" },
+                ] as const
+              ).map(({ id, label }) => {
+                const on = tab === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setTab(id)}
+                    aria-pressed={on}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 font-mono text-xs transition-colors",
+                      on
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <span className="ml-auto hidden font-mono text-[0.65rem] text-muted-foreground/50 sm:inline">
+                same question · with and without lurq
+              </span>
+            </div>
+
+            <div className="p-3 sm:p-4">
+              {tab === "demo" ? (
+                <HeroLiveDemo />
+              ) : (
+                <div className="flex min-h-[16.5rem] flex-col items-center justify-center gap-5 px-4 py-8 md:min-h-[17.5rem]">
+                  <div className="text-center">
+                    <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground/60">
+                      install lurq
+                    </p>
+                    <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                      One command into Claude Code, Cursor, or your coding agent.
+                      Unlocks at launch.
+                    </p>
+                  </div>
+                  <CrypticInstall className="max-w-lg" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="mt-3 text-center font-mono text-[0.65rem] text-muted-foreground/45">
+            try a need in the demo · see what changes with lurq
+          </p>
+        </motion.div>
+      </Container>
     </section>
   );
 }

@@ -2,27 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Container } from "@/components/common/container";
 import { Reveal } from "@/components/common/reveal";
+import { SectionLabel } from "@/components/common/section-label";
 import { contrastCases, type ContrastCase } from "@/content/contrast";
+import { cn } from "@/lib/utils";
 
 const ROTATE_MS = 5500;
 
-// Claude Code TUI palette: kept theme-independent so the terminal always
-// renders dark, exactly like the real CLI.
+// Lifted charcoal frame + restrained terminal syntax colors (hue only inside
+// the mock; page chrome stays monochrome).
 const cc = {
-  bg: "#1f2030",
-  border: "#2c2e44",
-  text: "#c8cad8",
-  dim: "#7e8298",
-  blue: "#8b9bf5",
-  salmon: "#d18266",
-  green: "#79d2a6",
-  red: "#e0796f",
+  bg: "#14161a",
+  border: "rgba(255,255,255,0.10)",
+  text: "#e4e4e4",
+  dim: "#8a8a8a",
+  prompt: "#9db4ff", // soft blue · user prompt
+  ok: "#7dcea0", // soft green · success / tool hit
+  bad: "#e08b7a", // soft coral · failure flag
+  accent: "#c4b5fd", // soft violet · package / emphasis
 };
 
 function Mascot() {
-  // pixel-art approximation of the Claude Code crab
+  // pixel-art mark — warm grey so it sits with the mono chrome, not neon
   return (
     <svg
       viewBox="0 0 16 9"
@@ -32,7 +35,7 @@ function Mascot() {
       aria-hidden
       className="shrink-0"
     >
-      <g fill={cc.salmon}>
+      <g fill="#c9a88a">
         <rect x="3" y="0" width="10" height="2" />
         <rect x="1" y="2" width="14" height="4" />
         <rect x="2" y="6" width="12" height="1" />
@@ -40,7 +43,7 @@ function Mascot() {
         <rect x="6" y="7" width="2" height="1" />
         <rect x="10" y="7" width="2" height="1" />
       </g>
-      <g fill="#1c1d29">
+      <g fill={cc.bg}>
         <rect x="4" y="2" width="1" height="2" />
         <rect x="6" y="2" width="1" height="2" />
       </g>
@@ -54,7 +57,7 @@ function TerminalHeader() {
       <Mascot />
       <div className="font-mono text-[12px] leading-snug">
         <p>
-          <span className="font-semibold" style={{ color: cc.blue }}>
+          <span className="font-semibold" style={{ color: cc.prompt }}>
             Claude Code
           </span>{" "}
           <span style={{ color: cc.dim }}>v2.1.195</span>
@@ -90,7 +93,7 @@ function TerminalInputBar({ placeholder }: { placeholder: string }) {
 function PromptLine({ prompt }: { prompt: string }) {
   return (
     <p className="flex gap-2">
-      <span style={{ color: cc.blue }}>{">"}</span>
+      <span style={{ color: cc.prompt }}>{">"}</span>
       <span style={{ color: cc.text }}>{prompt}</span>
     </p>
   );
@@ -105,7 +108,7 @@ function WithoutBody({ c }: { c: ContrastCase }) {
           <p key={i}>{line}</p>
         ))}
       </div>
-      <p className="flex gap-2 pt-1" style={{ color: cc.red }}>
+      <p className="flex gap-2 pt-1" style={{ color: cc.bad }}>
         <span>✗</span>
         <span>{c.without.flag}</span>
       </p>
@@ -121,14 +124,15 @@ function WithBody({ c }: { c: ContrastCase }) {
       {/* lurq tool call, Claude Code MCP style */}
       <div className="space-y-1">
         <p className="flex gap-2">
-          <span style={{ color: cc.green }}>⏺</span>
+          <span style={{ color: cc.ok }}>⏺</span>
           <span style={{ color: cc.text }}>{c.with.toolCall}</span>
         </p>
         <div className="pl-[18px]" style={{ color: cc.dim }}>
           <p className="flex gap-2">
             <span>⎿</span>
             <span>
-              <span style={{ color: cc.green }}>{c.with.pkg}</span> · {c.with.score}
+              <span style={{ color: cc.accent }}>{c.with.pkg}</span> ·{" "}
+              {c.with.score}
             </span>
           </p>
           <div className="mt-1 space-y-0.5 pl-5">
@@ -165,7 +169,7 @@ function Terminal({
   children: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
-  const dot = tone === "green" ? cc.green : cc.red;
+  const dot = tone === "green" ? cc.ok : cc.bad;
 
   return (
     <div>
@@ -173,6 +177,7 @@ function Terminal({
         <span
           className="size-2 rounded-full"
           style={{ backgroundColor: dot }}
+          aria-hidden
         />
         <span className="text-sm font-medium text-muted-foreground">
           {label}
@@ -213,6 +218,7 @@ function Terminal({
 export function SectionComparison() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     if (paused) return;
@@ -220,7 +226,13 @@ export function SectionComparison() {
       setActive((i) => (i + 1) % contrastCases.length);
     }, ROTATE_MS);
     return () => clearInterval(id);
-  }, [paused]);
+    // `active` restarts the dwell timer whenever the user steps the carousel.
+  }, [paused, active]);
+
+  const go = (dir: number) =>
+    setActive(
+      (i) => (i + dir + contrastCases.length) % contrastCases.length,
+    );
 
   const current = contrastCases[active];
 
@@ -232,9 +244,16 @@ export function SectionComparison() {
       <Container>
         <Reveal>
           <div className="mx-auto max-w-4xl text-center">
-            <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-5xl">
-              Same prompt. One agent guesses, the other knows.
+            <SectionLabel index={2} align="center" className="mb-5">
+              the difference
+            </SectionLabel>
+            <h2 className="text-3xl font-medium lowercase leading-[1.08] tracking-tight md:text-4xl">
+              same question. one guess, one check.
             </h2>
+            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+              Without lurq, the model reaches for what it remembers. With lurq,
+              it checks live package data first.
+            </p>
           </div>
         </Reveal>
 
@@ -264,23 +283,69 @@ export function SectionComparison() {
           </div>
         </Reveal>
 
-        {/* rotation indicator */}
-        <div className="relative z-10 mt-12 flex items-center justify-center gap-2.5">
-          {contrastCases.map((c, i) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setActive(i)}
-              aria-label={`Show ${c.tab} example`}
-              aria-pressed={i === active}
-              className="h-1.5 rounded-full transition-all duration-500 ease-in-out"
-              style={{
-                width: i === active ? 28 : 8,
-                backgroundColor:
-                  i === active ? "var(--foreground)" : "var(--border)",
-              }}
-            />
-          ))}
+        {/* carousel controls: prev/next + labeled scenario tabs with an
+            autoplay progress fill on the active tab */}
+        <div
+          className="relative z-10 mt-12 flex flex-wrap items-center justify-center gap-3"
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+        >
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            aria-label="Previous example"
+            className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {contrastCases.map((c, i) => {
+              const isActive = i === active;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setActive(i)}
+                  aria-label={`Show ${c.tab} example`}
+                  aria-pressed={isActive}
+                  className={cn(
+                    "relative overflow-hidden rounded-full border px-3.5 py-1.5 font-mono text-xs transition-colors",
+                    isActive
+                      ? "border-foreground/25 text-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {/* autoplay progress fill (restarts each time `active` flips) */}
+                  {isActive && !paused && !reduce && (
+                    <span
+                      key={active}
+                      aria-hidden
+                      className="absolute inset-0 origin-left bg-foreground/[0.08]"
+                      style={{
+                        animation: `carousel-progress ${ROTATE_MS}ms linear forwards`,
+                      }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <span className="opacity-40">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    {c.tab.toLowerCase()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => go(1)}
+            aria-label="Next example"
+            className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+          >
+            <ChevronRight className="size-4" />
+          </button>
         </div>
       </Container>
     </section>

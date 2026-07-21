@@ -18,8 +18,11 @@ export function SectionChangelog() {
         <Reveal>
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="text-4xl font-semibold leading-[1.04] tracking-tight md:text-5xl">
-              Changelog
+              What&apos;s new
             </h2>
+            <p className="mx-auto mt-4 max-w-md text-muted-foreground">
+              Recent shipping notes. Full history lives on the changelog.
+            </p>
           </div>
         </Reveal>
 

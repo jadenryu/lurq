@@ -18,9 +18,9 @@ export const entries: Entry[] = [
     date: "July 14, 2026",
     badge: "Launch",
     summary:
-      "Public launch: the pre-launch owner gate is lifted, so lurq is open to everyone — no owner key required.",
+      "Public launch: the pre-launch owner gate is lifted, so lurq is open to everyone. No owner key required.",
     changes: [
-      { tag: "Changed", text: "The pre-launch owner gate is lifted — the CLI and MCP server no longer require LURQ_OWNER_KEY, so anyone can use lurq." },
+      { tag: "Changed", text: "The pre-launch owner gate is lifted. The CLI and MCP server no longer require LURQ_OWNER_KEY, so anyone can use lurq." },
     ],
   },
   {
@@ -38,12 +38,12 @@ export const entries: Entry[] = [
     date: "July 14, 2026",
     badge: "Alpha",
     summary:
-      "Tentatively available: hosted mode is now horizontally scalable — Redis-backed rate limiting, self-serve API keys, and on-demand ingestion moved off the request path.",
+      "Tentatively available: hosted mode is now horizontally scalable: Redis-backed rate limiting, self-serve API keys, and on-demand ingestion moved off the request path.",
     changes: [
       { tag: "Added", text: "Self-serve API key issuance via Clerk, so you can provision keys without operator involvement." },
       { tag: "Added", text: "Org identity threads through every tool call and stamps the discovery flywheel." },
       { tag: "Changed", text: "Rate limiting is now Redis-backed, so hosted mode scales horizontally across instances." },
-      { tag: "Changed", text: "On-demand ingestion runs asynchronously off the request path — recommend/evaluate no longer block on package discovery." },
+      { tag: "Changed", text: "On-demand ingestion runs asynchronously off the request path. recommend/evaluate no longer block on package discovery." },
       { tag: "Changed", text: "Auth key lookups are cached and lastUsedAt writes throttled, cutting ~2 DB ops per request." },
     ],
   },
