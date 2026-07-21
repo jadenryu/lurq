@@ -93,7 +93,8 @@ export class LocalSandbox implements Sandbox {
     const specs = packages.map(toSpec);
     const dir = await mkdtemp(join(tmpdir(), 'lurq-sandbox-'));
     const started = Date.now();
-    const loaded = packages.map((p) => ({ name: p.name, loaded: null as boolean | null }));
+    const smokeTargets = opts.smokePackages ?? packages;
+    const loaded = smokeTargets.map((p) => ({ name: p.name, loaded: null as boolean | null }));
     let installed = false;
     let error: string | null = null;
 
@@ -109,9 +110,9 @@ export class LocalSandbox implements Sandbox {
       });
       installed = true;
 
-      for (let i = 0; i < packages.length; i++) {
+      for (let i = 0; i < smokeTargets.length; i++) {
         try {
-          await execFileAsync('node', smokeScript(packages[i]!.name, target.moduleSystem), {
+          await execFileAsync('node', smokeScript(smokeTargets[i]!.name, target.moduleSystem), {
             cwd: dir,
             timeout: SMOKE_TIMEOUT_MS,
             signal: opts.signal,
@@ -136,5 +137,17 @@ export class LocalSandbox implements Sandbox {
       durationMs: Date.now() - started,
       error,
     };
+  }
+
+  async getRuntimeInfo(): Promise<{ nodeVersion: string; npmVersion: string }> {
+    let nodeVersion = 'unknown';
+    let npmVersion = 'unknown';
+    try {
+      const nodeOut = await execFileAsync('node', ['--version']);
+      nodeVersion = nodeOut.stdout.trim() || 'unknown';
+      const npmOut = await execFileAsync('npm', ['--version']);
+      npmVersion = npmOut.stdout.trim() || 'unknown';
+    } catch { /* ignore */ }
+    return { nodeVersion, npmVersion };
   }
 }

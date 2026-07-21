@@ -42,6 +42,8 @@
     "build": "tsup",
     "dev": "tsx src/bin/lurq.ts",
     "lurq": "tsx src/bin/lurq.ts",
+    "benchmark:validate": "tsx src/bin/benchmark.ts validate",
+    "benchmark:run": "tsx src/bin/benchmark.ts run",
     "start": "node dist/bin/lurq.js",
     "test": "vitest run",
     "test:watch": "vitest",

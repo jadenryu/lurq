@@ -6,6 +6,7 @@ coverage/
 *.tsbuildinfo
 .cache/
 .lurq-cache/
+artifacts/benchmarks/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

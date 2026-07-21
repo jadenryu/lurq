@@ -93,7 +93,8 @@ export class E2BSandbox implements SandboxDriver {
     const specs = packages.map(toSpec);
     const installTimeout = opts.timeoutMs ?? INSTALL_TIMEOUT_MS;
     const started = Date.now();
-    const loaded = packages.map((p) => ({ name: p.name, loaded: null as boolean | null }));
+    const smokeTargets = opts.smokePackages ?? packages;
+    const loaded = smokeTargets.map((p) => ({ name: p.name, loaded: null as boolean | null }));
     let installed = false;
     let error: string | null = null;
 
@@ -124,9 +125,9 @@ export class E2BSandbox implements SandboxDriver {
       await sandbox.commands.run(install, { cwd: WORKDIR, timeoutMs: installTimeout });
       installed = true;
 
-      for (let i = 0; i < packages.length; i++) {
+      for (let i = 0; i < smokeTargets.length; i++) {
         try {
-          await sandbox.commands.run(smokeCommand(packages[i]!.name, target.moduleSystem), {
+          await sandbox.commands.run(smokeCommand(smokeTargets[i]!.name, target.moduleSystem), {
             cwd: WORKDIR,
             timeoutMs: SMOKE_TIMEOUT_MS,
           });
@@ -150,5 +151,27 @@ export class E2BSandbox implements SandboxDriver {
       durationMs: Date.now() - started,
       error,
     };
+  }
+
+  async getRuntimeInfo(): Promise<{ nodeVersion: string; npmVersion: string }> {
+    let nodeVersion = 'unknown';
+    let npmVersion = 'unknown';
+    const config = getConfig();
+    try {
+      const { default: Sandbox } = await import('e2b');
+      const createOpts = { apiKey: config.E2B_API_KEY, timeoutMs: 30_000 };
+      const sandbox = config.E2B_TEMPLATE
+        ? await Sandbox.create(config.E2B_TEMPLATE, createOpts)
+        : await Sandbox.create(createOpts);
+      try {
+        const nodeOut = await sandbox.commands.run('node --version');
+        nodeVersion = (nodeOut.stdout ?? '').trim() || 'unknown';
+        const npmOut = await sandbox.commands.run('npm --version');
+        npmVersion = (npmOut.stdout ?? '').trim() || 'unknown';
+      } finally {
+        await sandbox.kill().catch(() => {});
+      }
+    } catch { /* ignore */ }
+    return { nodeVersion, npmVersion };
   }
 }
