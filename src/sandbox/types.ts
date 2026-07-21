@@ -27,6 +27,10 @@ export interface SandboxVerifyOptions {
   allowScripts?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** When set, only these packages are smoke-loaded after install. The full
+   *  install list is still co-installed. Defaults to the install list itself.
+   *  Use this to install all packages but smoke-load only runtime ones. */
+  smokePackages?: SandboxPackage[];
 }
 
 export interface SandboxResult {
@@ -69,12 +73,16 @@ export interface Sandbox {
     version: string | null,
     opts?: SandboxVerifyOptions,
   ): Promise<SandboxResult>;
-  /** Co-install a set of packages and smoke-load each — the basis of the
-   *  compatibility matrix. A successful co-install proves the set coexists. */
+  /** Co-install a set of packages and smoke-load a subset (or all).
+   *  `packages` are all co-installed; `opts.smokePackages` controls which are
+   *  smoke-loaded (defaults to `packages`). A successful co-install proves
+   *  the set coexists. */
   verifySet(
     packages: SandboxPackage[],
     opts?: SandboxVerifyOptions,
   ): Promise<SandboxSetResult>;
+  /** Retrieve the node and npm versions running inside this sandbox. */
+  getRuntimeInfo(): Promise<{ nodeVersion: string; npmVersion: string }>;
 }
 
 export const DEFAULT_TARGET: SandboxTarget = {

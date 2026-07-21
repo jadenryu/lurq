@@ -1,0 +1,222 @@
+{
+  "suite": "stack-selection-v1",
+  "schemaVersion": 1,
+  "description": "Frozen 12-case pilot for evaluating JS/TS dependency-stack selection. Participant-facing documents express requirements only; acceptance criteria remain evaluator-side and do not prescribe one package list.",
+  "runtime": {
+    "node": "20",
+    "packageManager": "npm",
+    "sandboxTemplate": "lurq-benchmark-node20-v1"
+  },
+  "cases": [
+    {
+      "id": "typed-saas-next",
+      "title": "Typed full-stack SaaS",
+      "document": "Build a multi-tenant SaaS web application. It needs a React meta-framework with server rendering, a type-safe API layer, a PostgreSQL ORM, authentication with protected routes, schema validation, and utility-first styling.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React meta-framework with SSR", "category": "meta-framework", "required": true },
+        { "id": "api", "need": "type-safe API/RPC layer", "required": true },
+        { "id": "orm", "need": "PostgreSQL ORM", "category": "orm", "required": true },
+        { "id": "auth", "need": "web application authentication", "category": "auth", "required": true },
+        { "id": "validation", "need": "runtime schema validation", "category": "validation", "required": true },
+        { "id": "styling", "need": "utility-first CSS styling", "category": "styling", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 6,
+        "constraints": ["all runtime packages must be compatible with Node 20", "no deprecated primary package"]
+      }
+    },
+    {
+      "id": "mern-service-boundary",
+      "title": "MERN application with an API boundary",
+      "document": "Build a React single-page application backed by a separate Node API service. It needs client routing, an HTTP server, MongoDB object modeling, request validation, and browser-to-API data fetching.",
+      "topology": "web-and-api",
+      "needs": [
+        { "id": "client", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
+        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
+        { "id": "database", "need": "MongoDB object modeling", "category": "database-client", "required": true },
+        { "id": "validation", "need": "HTTP request validation", "category": "validation", "required": true },
+        { "id": "fetching", "need": "client data-fetching library", "category": "data-fetching", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 6,
+        "constraints": ["web and API dependencies may be placed in separate workspaces", "do not require a browser-only dependency in the API workspace"]
+      }
+    },
+    {
+      "id": "modern-fullstack-react-router",
+      "title": "Modern React full-stack application",
+      "document": "Build a modern full-stack React app using a server-rendered routing framework, SQLite for local development, a type-safe ORM, form validation, and end-to-end tests. Prefer current packages rather than legacy framework aliases.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "current server-rendered React routing framework", "category": "meta-framework", "required": true },
+        { "id": "orm", "need": "SQLite-capable ORM", "category": "orm", "required": true },
+        { "id": "database", "need": "SQLite database driver", "category": "database-client", "required": true },
+        { "id": "validation", "need": "form and runtime validation", "category": "validation", "required": true },
+        { "id": "testing", "need": "end-to-end testing framework", "category": "testing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 5,
+        "constraints": ["do not select a deprecated framework package", "all primary packages must have a current npm release"]
+      }
+    },
+    {
+      "id": "ai-chatbot-streaming",
+      "title": "Streaming AI chatbot",
+      "document": "Build a React web chatbot with streamed responses. It needs a UI, an AI application SDK for streaming/state management, an official provider SDK, server-side request handling, and styling.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React web framework", "category": "framework", "required": true },
+        { "id": "ai-sdk", "need": "AI application SDK with streaming support", "required": true },
+        { "id": "provider", "need": "official AI provider JavaScript SDK", "required": true },
+        { "id": "server", "need": "Node request handler or server framework", "category": "framework", "required": true },
+        { "id": "styling", "need": "web styling system", "category": "styling", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 5,
+        "constraints": ["AI SDK and provider package must exist on npm", "server-side provider credentials must not be placed in browser-only code"]
+      }
+    },
+    {
+      "id": "realtime-collaborative-editor",
+      "title": "Real-time collaborative editor",
+      "document": "Build a Notion-like collaborative document editor. It needs React, rich-text editing, CRDT conflict resolution, a real-time transport, and Redis-backed pub/sub for horizontally scaled collaboration servers.",
+      "topology": "web-and-realtime-service",
+      "needs": [
+        { "id": "client", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "editor", "need": "rich-text editor framework", "required": true },
+        { "id": "crdt", "need": "JavaScript CRDT library", "required": true },
+        { "id": "realtime", "need": "Node real-time transport or WebSocket server", "required": true },
+        { "id": "redis", "need": "Node Redis client", "category": "database-client", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 5,
+        "constraints": ["editor and CRDT integrations must be compatible", "Redis client belongs in the server workspace"]
+      }
+    },
+    {
+      "id": "headless-commerce",
+      "title": "Headless commerce storefront",
+      "document": "Build a server-rendered commerce storefront. It needs a React meta-framework, payment processing, GraphQL product fetching from a headless CMS, client data fetching, and animation for cart interactions.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React meta-framework with SSR", "category": "meta-framework", "required": true },
+        { "id": "payments", "need": "JavaScript payments SDK", "required": true },
+        { "id": "graphql", "need": "GraphQL client", "category": "data-fetching", "required": true },
+        { "id": "fetching", "need": "client data-fetching and cache library", "category": "data-fetching", "required": true },
+        { "id": "animation", "need": "React animation library", "category": "animation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 5,
+        "constraints": ["payment secret handling must be server-side", "animation package must support the chosen React runtime"]
+      }
+    },
+    {
+      "id": "enterprise-hr-analytics",
+      "title": "Enterprise HR analytics dashboard",
+      "document": "Build an internal React HR analytics dashboard with role-based access control, enterprise data grids, charts, SSO, query caching, and accessible component primitives.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "auth", "need": "enterprise SSO and RBAC integration", "category": "auth", "required": true },
+        { "id": "grid", "need": "enterprise React data grid", "category": "ui-component-library", "required": true },
+        { "id": "charts", "need": "React charting library", "category": "charts", "required": true },
+        { "id": "fetching", "need": "client query caching", "category": "data-fetching", "required": true },
+        { "id": "ui", "need": "accessible component primitives", "category": "ui-component-library", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 6,
+        "constraints": ["SSO package must be appropriate for a browser/server web application", "grid and chart packages must support React"]
+      }
+    },
+    {
+      "id": "background-audio-worker",
+      "title": "Background audio-processing service",
+      "document": "Build a Node worker service for audio transcription jobs. It needs an HTTP intake API, multipart upload handling, a Redis-backed job queue, S3-compatible object storage, schema validation, and observability-friendly errors.",
+      "topology": "api-and-worker",
+      "needs": [
+        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
+        { "id": "uploads", "need": "multipart form-data parser", "required": true },
+        { "id": "queue", "need": "Redis-backed Node job queue", "required": true },
+        { "id": "redis", "need": "Node Redis client", "category": "database-client", "required": true },
+        { "id": "storage", "need": "S3-compatible JavaScript SDK", "required": true },
+        { "id": "validation", "need": "runtime schema validation", "category": "validation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 6,
+        "constraints": ["queue and Redis client must run on Node 20", "multipart parser must run server-side"]
+      }
+    },
+    {
+      "id": "web3-nft-minting",
+      "title": "Web3 NFT minting application",
+      "document": "Build a React application for minting NFTs. It needs wallet connection, EVM chain interaction, client state for wallet/session state, metadata upload to IPFS, and runtime validation for mint form input.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React UI framework", "category": "framework", "required": true },
+        { "id": "wallet", "need": "React wallet connection library", "required": true },
+        { "id": "evm", "need": "EVM JavaScript client", "required": true },
+        { "id": "state", "need": "client state management", "category": "state-management", "required": true },
+        { "id": "ipfs", "need": "JavaScript IPFS client", "required": true },
+        { "id": "validation", "need": "runtime form validation", "category": "validation", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 6,
+        "constraints": ["wallet and EVM packages must be React-compatible", "do not expose private keys in browser dependencies"]
+      }
+    },
+    {
+      "id": "design-system-documentation",
+      "title": "Accessible design system",
+      "document": "Build a reusable React component library with accessible primitives, composable styling, form support, visual component documentation, and component tests.",
+      "topology": "library",
+      "needs": [
+        { "id": "ui", "need": "accessible React component primitives", "category": "ui-component-library", "required": true },
+        { "id": "styling", "need": "component styling solution", "category": "styling", "required": true },
+        { "id": "forms", "need": "React form state library", "category": "forms", "required": true },
+        { "id": "docs", "need": "component documentation and visual development tool", "required": true },
+        { "id": "testing", "need": "React component testing framework", "category": "testing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 5,
+        "constraints": ["UI and styling packages must support reusable library distribution", "testing package must work with React components"]
+      }
+    },
+    {
+      "id": "internationalized-analytics",
+      "title": "Internationalized analytics product",
+      "document": "Build a React analytics product used in English, French, Japanese, and Arabic. It needs server-rendered pages, internationalization with right-to-left support, date/time formatting, charts, and URL state for shareable filtered reports.",
+      "topology": "single-app",
+      "needs": [
+        { "id": "web", "need": "React meta-framework with server rendering", "category": "meta-framework", "required": true },
+        { "id": "i18n", "need": "React internationalization library", "category": "i18n", "required": true },
+        { "id": "dates", "need": "date and time formatting library", "category": "date-time", "required": true },
+        { "id": "charts", "need": "React charting library", "category": "charts", "required": true },
+        { "id": "routing", "need": "URL query-state and routing support", "category": "routing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 5,
+        "constraints": ["i18n solution must support locale-aware formatting", "date library must support time zones"]
+      }
+    },
+    {
+      "id": "api-platform-openapi",
+      "title": "Type-safe API platform",
+      "document": "Build a Node API platform for third-party integrations. It needs a performant HTTP framework, OpenAPI documentation, request and response validation, PostgreSQL access through an ORM, authentication, rate limiting, and integration tests.",
+      "topology": "api-service",
+      "needs": [
+        { "id": "server", "need": "performant Node HTTP framework", "category": "framework", "required": true },
+        { "id": "openapi", "need": "OpenAPI documentation integration", "required": true },
+        { "id": "validation", "need": "request and response schema validation", "category": "validation", "required": true },
+        { "id": "orm", "need": "PostgreSQL ORM", "category": "orm", "required": true },
+        { "id": "auth", "need": "API authentication middleware", "category": "auth", "required": true },
+        { "id": "testing", "need": "API integration testing framework", "category": "testing", "required": true }
+      ],
+      "acceptance": {
+        "minimumCovered": 6,
+        "constraints": ["all runtime packages must support Node 20", "OpenAPI and validation choices must integrate with the chosen server"]
+      }
+    }
+  ]
+}

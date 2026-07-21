@@ -73,6 +73,9 @@ const EnvSchema = z.object({
   // E2B template to launch. Must provide node + npm on PATH; omit for E2B's
   // default. Provision a Node-versioned template here for reproducible runs.
   E2B_TEMPLATE: z.string().min(1).optional(),
+
+  // Lurq bakeoff testing toggle b/w local and prod DB
+  USE_LIVE_API: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

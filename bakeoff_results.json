@@ -1,0 +1,274 @@
+[
+  {
+    "id": "t3-stack",
+    "baselineOutcomes": [
+      {
+        "model": "gpt-4o",
+        "packages": [
+          "next",
+          "react",
+          "react-dom",
+          "@trpc/server",
+          "@trpc/client",
+          "@trpc/react-query",
+          "tailwindcss",
+          "prisma",
+          "@prisma/client",
+          "next-auth",
+          "@next-auth/prisma-adapter",
+          "autoprefixer",
+          "postcss",
+          "typescript",
+          "ts-node",
+          "@types/react",
+          "@types/node"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 13892,
+        "error": "node:internal/modules/esm/resolve:271 throw new ERR_MODULE_NOT_FOUND( ^ Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-ShMQpd/node_modules/prisma/build/types.js' imported from /private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-ShMQpd/[eval1] at finalizeResolution (node:internal/modules/esm/resolve:271:11) at moduleResolve (node:internal/modules/esm/resolve:865:10) at defaultResolve (node:internal/modules/"
+      },
+      {
+        "model": "gpt-4-turbo",
+        "packages": [
+          "next",
+          "react",
+          "react-dom",
+          "@trpc/server",
+          "@trpc/client",
+          "@trpc/next",
+          "tailwindcss",
+          "postcss",
+          "autoprefixer",
+          "prisma",
+          "next-auth"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 5709,
+        "error": "node:internal/modules/package_json_reader:301 throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null); ^ Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@tanstack/react-query' imported from /private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-EK1Arp/node_modules/@trpc/next/dist/index.mjs at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9) at packageResolve (node:internal/modules/esm/resolve:768:81) at moduleResolve (node:internal/modul"
+      },
+      {
+        "model": "gpt-4o-mini",
+        "packages": [
+          "next",
+          "react",
+          "react-dom",
+          "@trpc/server",
+          "@trpc/client",
+          "next-auth",
+          "prisma",
+          "@prisma/client",
+          "tailwindcss",
+          "postcss",
+          "autoprefixer",
+          "typescript",
+          "ts-node",
+          "zod"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 6283,
+        "error": "node:internal/modules/esm/resolve:271 throw new ERR_MODULE_NOT_FOUND( ^ Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-3kaTdZ/node_modules/prisma/build/types.js' imported from /private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-3kaTdZ/[eval1] at finalizeResolution (node:internal/modules/esm/resolve:271:11) at moduleResolve (node:internal/modules/esm/resolve:865:10) at defaultResolve (node:internal/modules/"
+      }
+    ],
+    "lurqPackages": [
+      "@analogjs/trpc",
+      "styled-components",
+      "drizzle-orm",
+      "@firebase/auth-types"
+    ],
+    "lurqInstallSuccess": true,
+    "lurqInstallTimeMs": 4049,
+    "lurqError": "node:internal/modules/esm/resolve:201 const resolvedOption = FSLegacyMainResolve(pkgPath, packageConfig.main, baseStringified); ^ Error: Cannot find package '/private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-6ndxSB/node_modules/@firebase/auth-types/index.js' imported from /private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-6ndxSB/[eval1] at legacyMainResolve (node:internal/modules/esm/resolve:201:26) at packageResolve (node:internal/modules/esm/resolve:778:1"
+  },
+  {
+    "id": "mern-stack",
+    "baselineOutcomes": [
+      {
+        "model": "gpt-4o",
+        "packages": [
+          "mongoose",
+          "express",
+          "react",
+          "react-dom",
+          "react-router-dom",
+          "nodemon",
+          "dotenv",
+          "cors",
+          "body-parser",
+          "concurrently",
+          "axios"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 5912,
+        "error": null
+      },
+      {
+        "model": "gpt-4-turbo",
+        "packages": [
+          "mongodb",
+          "mongoose",
+          "express",
+          "react",
+          "react-router-dom",
+          "react-dom",
+          "axios",
+          "nodemon",
+          "dotenv",
+          "cors",
+          "body-parser"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 1571,
+        "error": null
+      },
+      {
+        "model": "gpt-4o-mini",
+        "packages": [
+          "express",
+          "mongoose",
+          "cors",
+          "dotenv",
+          "bcryptjs",
+          "jsonwebtoken",
+          "express-validator",
+          "nodemon",
+          "react",
+          "react-dom",
+          "react-router-dom",
+          "axios",
+          "redux",
+          "react-redux",
+          "redux-thunk",
+          "concurrently"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 2994,
+        "error": null
+      }
+    ],
+    "lurqPackages": [
+      "mongodb",
+      "preact",
+      "preact",
+      "@tanstack/react-start",
+      "preact"
+    ],
+    "lurqInstallSuccess": true,
+    "lurqInstallTimeMs": 9829,
+    "lurqError": null
+  },
+  {
+    "id": "epic-stack",
+    "baselineOutcomes": [
+      {
+        "model": "gpt-4o",
+        "packages": [
+          "@epic-stack/core",
+          "remix",
+          "@prisma/client",
+          "prisma",
+          "sqlite3",
+          "zod"
+        ],
+        "installSuccess": false,
+        "installTimeMs": 2934,
+        "error": "npm error code E404 npm error 404 Not Found - GET https://registry.npmjs.org/@epic-stack%2fcore - Not found npm error 404 npm error 404 The requested resource '@epic-stack/core@*' could not be found or you do not have permission to access it. npm error 404 npm error 404 Note that you can also install from a npm error 404 tarball, folder, http url, or git url. npm error A complete log of this run can be found in: /Users/shivanshsingh/.npm/_logs/2026-07-15T05_51_17_994Z-debug-0.log"
+      },
+      {
+        "model": "gpt-4-turbo",
+        "packages": [
+          "remix",
+          "@remix-run/dev",
+          "@remix-run/node",
+          "@remix-run/react",
+          "@remix-run/serve",
+          "sqlite3",
+          "@prisma/client",
+          "prisma",
+          "zod"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 16231,
+        "error": "/private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-T0RemV/node_modules/remix/dist/index.js:21 throw new RemixPackageNotUsedError(); ^ RemixPackageNotUsedError: The `remix` package is no longer used for Remix modules and should be removed from your project dependencies. See https://github.com/remix-run/remix/releases/tag/remix%402.0.0 for more information. at Object.<anonymous> (/private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-T0RemV/node_modules/remix/dist"
+      },
+      {
+        "model": "gpt-4o-mini",
+        "packages": [
+          "remix",
+          "sqlite3",
+          "@prisma/client",
+          "prisma",
+          "zod"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 3556,
+        "error": "/private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-q7VOrm/node_modules/remix/dist/index.js:21 throw new RemixPackageNotUsedError(); ^ RemixPackageNotUsedError: The `remix` package is no longer used for Remix modules and should be removed from your project dependencies. See https://github.com/remix-run/remix/releases/tag/remix%402.0.0 for more information. at Object.<anonymous> (/private/var/folders/z2/yht346dx7ss3jn1spds116mr0000gn/T/lurq-sandbox-q7VOrm/node_modules/remix/dist"
+      }
+    ],
+    "lurqPackages": [
+      "fastify",
+      "fastify",
+      "ajv"
+    ],
+    "lurqInstallSuccess": true,
+    "lurqInstallTimeMs": 1650,
+    "lurqError": null
+  },
+  {
+    "id": "ai-chatbot",
+    "baselineOutcomes": [
+      {
+        "model": "gpt-4o",
+        "packages": [
+          "react",
+          "react-dom",
+          "vercel-ai",
+          "openai",
+          "tailwindcss",
+          "postcss",
+          "autoprefixer"
+        ],
+        "installSuccess": true,
+        "installTimeMs": 1687,
+        "error": null
+      },
+      {
+        "model": "gpt-4-turbo",
+        "packages": [
+          "react",
+          "vercel",
+          "@openai/node",
+          "tailwindcss",
+          "postcss",
+          "autoprefixer"
+        ],
+        "installSuccess": false,
+        "installTimeMs": 8334,
+        "error": "npm error code E404 npm error 404 Not Found - GET https://registry.npmjs.org/@openai%2fnode - Not found npm error 404 npm error 404 The requested resource '@openai/node@*' could not be found or you do not have permission to access it. npm error 404 npm error 404 Note that you can also install from a npm error 404 tarball, folder, http url, or git url. npm error A complete log of this run can be found in: /Users/shivanshsingh/.npm/_logs/2026-07-15T05_51_53_509Z-debug-0.log"
+      },
+      {
+        "model": "gpt-4o-mini",
+        "packages": [
+          "react",
+          "react-dom",
+          "@vercel/ai",
+          "openai",
+          "tailwindcss",
+          "postcss",
+          "autoprefixer"
+        ],
+        "installSuccess": false,
+        "installTimeMs": 587,
+        "error": "npm error code E404 npm error 404 Not Found - GET https://registry.npmjs.org/@vercel%2fai - Not found npm error 404 npm error 404 The requested resource '@vercel/ai@*' could not be found or you do not have permission to access it. npm error 404 npm error 404 Note that you can also install from a npm error 404 tarball, folder, http url, or git url. npm error A complete log of this run can be found in: /Users/shivanshsingh/.npm/_logs/2026-07-15T05_52_03_039Z-debug-0.log"
+      }
+    ],
+    "lurqPackages": [
+      "preact",
+      "@assistant-ui/store",
+      "fastify",
+      "@fastify/static"
+    ],
+    "lurqInstallSuccess": true,
+    "lurqInstallTimeMs": 32430,
+    "lurqError": "Command failed: node --input-type=module -e await import(\"@assistant-ui/store\")"
+  }
+]

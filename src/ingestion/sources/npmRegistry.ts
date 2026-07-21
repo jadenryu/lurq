@@ -194,6 +194,47 @@ export async function fetchNpmRegistry(
   return parseNpmRegistry(data);
 }
 
+/**
+ * Compat metadata for a specific published version (peers + engines).
+ * Falls back to `latest` when `version` is null/missing from the packument.
+ */
+export async function fetchNpmCompatAtVersion(
+  name: string,
+  version: string | null | undefined,
+  fetchImpl?: typeof fetch,
+): Promise<{
+  version: string | null;
+  peerDependencies: Record<string, string> | null;
+  peerDependenciesMeta: Record<string, { optional?: boolean }> | null;
+  engines: Record<string, string> | null;
+} | null> {
+  const url = `https://${HOST}/${encodeNpmName(name)}`;
+  try {
+    const { data } = await httpGetJson<any>(url, {
+      host: HOST,
+      ttlMs: CACHE_TTL.npmRegistry,
+      fetchImpl,
+    });
+    const latest: string | null = data?.['dist-tags']?.latest ?? null;
+    const wanted =
+      version && data?.versions?.[version]
+        ? version
+        : latest && data?.versions?.[latest]
+          ? latest
+          : null;
+    if (!wanted) return null;
+    const manifest = data.versions[wanted] ?? {};
+    return {
+      version: wanted,
+      peerDependencies: parseDepMap(manifest.peerDependencies),
+      peerDependenciesMeta: parsePeerMeta(manifest.peerDependenciesMeta),
+      engines: parseDepMap(manifest.engines),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Live existence check for `verify` (§12.3.4) — bypasses cache. */
 export async function npmPackageExists(name: string, fetchImpl?: typeof fetch): Promise<boolean> {
   const url = `https://${HOST}/${encodeNpmName(name)}`;

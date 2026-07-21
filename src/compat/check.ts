@@ -7,8 +7,8 @@
 import type { CompatConflict, CompatEvidence, CompatOutput } from '../core/types';
 import type { Database } from '../db/client';
 import { enqueueCompatVerify, fullyCovered, getCompatEdges, pairKey } from '../db/compat';
-import { assembleMembers } from './members';
-import { resolveArchitectureCompat } from './peerCompat';
+import { assembleMembers, type CompatPackageRef } from './members';
+import { resolveArchitectureCompat, resolveRuntimeEngineConflicts } from './peerCompat';
 
 /**
  * Evidence-graded verdict (pure). `compatible` requires *positive* proof for every
@@ -28,11 +28,29 @@ export function gradeOverall(args: {
   return 'likely';
 }
 
-export async function checkCompat(db: Database, packages: string[]): Promise<CompatOutput> {
-  const names = [...new Set(packages)];
-  const { members, unverified } = await assembleMembers(db, names);
+export interface CheckCompatOptions {
+  /** Exact versions to evaluate (name → version). Missing names use indexed latest. */
+  versions?: Record<string, string | null | undefined>;
+  /** Target Node runtime (e.g. "20" or "20.20.2"). Checks each package's engines.node. */
+  node?: string | null;
+}
 
-  const conflicts: CompatConflict[] = resolveArchitectureCompat(members);
+export async function checkCompat(
+  db: Database,
+  packages: string[],
+  opts: CheckCompatOptions = {},
+): Promise<CompatOutput> {
+  const names = [...new Set(packages)];
+  const refs: CompatPackageRef[] = names.map((name) => ({
+    name,
+    version: opts.versions?.[name] ?? null,
+  }));
+  const { members, unverified } = await assembleMembers(db, refs);
+
+  const conflicts: CompatConflict[] = [
+    ...resolveArchitectureCompat(members),
+    ...(opts.node ? resolveRuntimeEngineConflicts(members, opts.node) : []),
+  ];
   const edges = await getCompatEdges(db, names);
   const evidence: CompatEvidence[] = edges.map((edge) => ({
     packages: [edge.packageA, edge.packageB],

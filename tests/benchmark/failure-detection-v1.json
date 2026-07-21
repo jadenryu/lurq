@@ -1,0 +1,62 @@
+{
+  "suite": "failure-detection-v1",
+  "schemaVersion": 2,
+  "description": "Registry-grounded pass/fail stacks for measuring Lurq preflight failure detection against fixture labels. Ground truth is expectedResult (not E2B alone): deprecated packages may still install; engine cases expect engines.node vs Node 20 preflight; peer cases expect version-aware peer checks.",
+  "runtime": {
+    "node": "20",
+    "packageManager": "npm",
+    "sandboxTemplate": "lurq-benchmark-node20-v1:d0f56b7c-f3e4-477b-abb4-092bf3d4cf93"
+  },
+  "cases": [
+    {
+      "id": "nonexistent-xyzfoo",
+      "expectedResult": "fail",
+      "stack": ["express", "xyzfoo-not-real-pkg"]
+    },
+    {
+      "id": "typosquat-react-don",
+      "expectedResult": "fail",
+      "stack": ["react", "react-don", "react-router"]
+    },
+    {
+      "id": "deprecated-request",
+      "expectedResult": "fail",
+      "stack": ["express", "request"]
+    },
+    {
+      "id": "deprecated-node-sass",
+      "expectedResult": "fail",
+      "stack": ["express", "node-sass"]
+    },
+    {
+      "id": "deprecated-tslint",
+      "expectedResult": "fail",
+      "stack": ["typescript", "tslint"]
+    },
+    {
+      "id": "peer-conflict-react19-spring",
+      "expectedResult": "fail",
+      "stack": ["react@19", "react-dom@19", "@react-spring/web@9.7.5"]
+    },
+    {
+      "id": "engine-conflict-angular22-on-node20",
+      "expectedResult": "fail",
+      "stack": ["express", "@angular/core@22"]
+    },
+    {
+      "id": "clean-react-stack",
+      "expectedResult": "pass",
+      "stack": ["react@19", "react-dom@19", "react-router@7"]
+    },
+    {
+      "id": "clean-express-stack",
+      "expectedResult": "pass",
+      "stack": ["express", "cors", "helmet"]
+    },
+    {
+      "id": "clean-next-stack",
+      "expectedResult": "pass",
+      "stack": ["next@15", "react@19", "react-dom@19"]
+    }
+  ]
+}

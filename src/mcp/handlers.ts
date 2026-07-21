@@ -229,12 +229,23 @@ function toBuildVerified(v: VerificationRunRow): BuildVerified {
 /**
  * Whole-architecture compatibility for a set of packages: Tier-1 peer/engine
  * analysis + recorded Tier-2 sandbox conflicts (see compat/check).
+ *
+ * Optional `versions` pins peer/engine metadata to exact publishes (not just
+ * indexed latest). Optional `node` checks each package's engines.node against
+ * the target runtime.
  */
 export async function handleCompat(
   db: Database,
-  input: { packages: string[] },
+  input: {
+    packages: string[];
+    versions?: Record<string, string | null | undefined>;
+    node?: string | null;
+  },
 ): Promise<CompatOutput> {
-  return checkCompat(db, input.packages);
+  return checkCompat(db, input.packages, {
+    versions: input.versions,
+    node: input.node,
+  });
 }
 
 // ── verify ──────────────────────────────────────────────────────────────────

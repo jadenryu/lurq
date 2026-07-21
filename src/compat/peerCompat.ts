@@ -118,3 +118,38 @@ export function resolveArchitectureCompat(members: CompatMember[]): CompatConfli
 
   return conflicts;
 }
+
+/**
+ * Tier-1 check: each member's `engines.node` must satisfy the target runtime
+ * (e.g. the benchmark / sandbox Node version). Sparse/missing engines are ignored.
+ */
+export function resolveRuntimeEngineConflicts(
+  members: CompatMember[],
+  nodeVersion: string,
+): CompatConflict[] {
+  const runtime = normalizeNodeVersion(nodeVersion);
+  if (!runtime) return [];
+
+  const conflicts: CompatConflict[] = [];
+  for (const m of members) {
+    const range = m.engines?.node;
+    if (!range) continue;
+    if (satisfiesRange(runtime, range) === false) {
+      conflicts.push({
+        source: 'engines',
+        packages: [m.name],
+        detail: `${m.name}@${m.version ?? '?'} needs node ${range}, but the runtime is node ${runtime}`,
+      });
+    }
+  }
+  return conflicts;
+}
+
+/** Accept `20`, `v20.20.2`, or full semver — coerce to a concrete version string. */
+function normalizeNodeVersion(raw: string): string | null {
+  const trimmed = raw.trim().replace(/^v/i, '');
+  if (!trimmed) return null;
+  if (semver.valid(trimmed)) return trimmed;
+  const coerced = semver.coerce(trimmed);
+  return coerced?.version ?? null;
+}
