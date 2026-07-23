@@ -10,6 +10,7 @@
  * explodes. Mining only pairs where both endpoints are tracked keeps writes to
  * ~C(tracked-in-tree, 2) and to the universe we actually serve queries about.
  */
+import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 import { getAllPackageNames } from '../db/packages';
 import { canonicalPair, getAllClosures, persistClosure, upsertCompatEdgesBatch } from '../db/compat';
@@ -38,8 +39,8 @@ export function trackedPairs(
 }
 
 /** Mint `observed` edges for every tracked-tracked pair in a resolved closure.
- *  One batch upsert per closure (§4F) — pairs are unique within a closure, so the
- *  whole set collapses to a single round-trip instead of C(k,2) statements. */
+ *  One chunked batch upsert per closure (§4F) — pairs are unique within a
+ *  closure; upsertCompatEdgesBatch splits large sets so fat trees stay bounded. */
 async function mintObservedPairs(
   db: Database,
   nodes: ResolvedNode[],
@@ -85,7 +86,7 @@ export async function mineEdgesForPackage(
     const set = tracked ?? new Set(await getAllPackageNames(db));
     return await mintObservedPairs(db, closure, set, now);
   } catch (err) {
-    logger.warn(`edge mining failed for ${name}@${version}: ${String(err)}`);
+    logger.warn(`edge mining failed for ${name}@${version}: ${formatError(err)}`);
     return 0;
   }
 }

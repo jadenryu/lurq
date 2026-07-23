@@ -10,6 +10,7 @@
 import { buildProgram } from '../cli/index';
 import { registerOperatorCommands } from '../cli/operator';
 import { loadEnv } from '../core/config';
+import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 
 loadEnv();
@@ -18,6 +19,6 @@ const program = buildProgram();
 registerOperatorCommands(program);
 
 program.parseAsync(process.argv).catch((err) => {
-  logger.error(err instanceof Error ? err.message : String(err));
+  logger.error(formatError(err));
   process.exit(1);
 });

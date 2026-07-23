@@ -10,6 +10,7 @@
 import { invalidateCache } from '../core/cache';
 import { getConfig } from '../core/config';
 import { pMap } from '../core/concurrency';
+import { formatError } from '../core/errors';
 import { setCacheBypassRead } from '../core/http';
 import { logger } from '../core/logger';
 import type { Category, CategorySource, ScoreBreakdown } from '../core/types';
@@ -47,6 +48,10 @@ export interface SyncOptions {
   full?: boolean;
   packageName?: string;
 }
+
+/** Post-sync edge mining concurrency. Kept at 1 so fat dependency trees cannot
+ *  spike heap the way concurrent mega-upserts did on the Railway sync cron. */
+export const SYNC_MINE_CONCURRENCY = 1;
 
 export interface SyncSummary {
   seen: number;
@@ -218,19 +223,20 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
     // ── Mine observed compat edges (§4B) ─────────────────────────────────────
     // Every ingested package's resolved closure is a co-installation witness;
     // mint free `observed` edges among its tracked nodes. Tracked set loaded once
-    // (§4B step 2). Best-effort + concurrent so it never blocks the sync result.
+    // (§4B step 2). Best-effort; concurrency 1 caps peak memory for fat trees
+    // (ingest above stays concurrent).
     const tracked = new Set(await getAllPackageNames(handle.db));
     await pMap(
       ok,
       (c) => mineEdgesForPackage(handle.db, c.target.name, c.signals.registry?.latestVersion ?? null, tracked, now),
-      config.LURQ_SYNC_CONCURRENCY,
+      SYNC_MINE_CONCURRENCY,
     );
     // Trigger 2 (§4B): a full sync is the daily cron — re-mine every persisted
     // closure against the *current* tracked set (no network) so packages tracked
     // since the closure was captured get fully linked within 24h. Best-effort.
     if (!opts.packageName) {
       await remineAllClosures(handle.db).catch((err) =>
-        logger.warn(`re-mine pass failed: ${String(err)}`),
+        logger.warn(`re-mine pass failed: ${formatError(err)}`),
       );
     }
 
