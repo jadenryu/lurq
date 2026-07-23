@@ -16,7 +16,7 @@ export function SectionFaq() {
       <Container>
         <div className="grid gap-14 lg:grid-cols-[1.15fr_0.85fr] lg:gap-20">
           <Reveal>
-            <SectionLabel index={5} className="mb-5">
+            <SectionLabel index={4} className="mb-5">
               faq
             </SectionLabel>
             <h2 className="text-3xl font-medium lowercase leading-[1.08] tracking-tight md:text-4xl">

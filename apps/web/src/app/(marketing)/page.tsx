@@ -5,7 +5,6 @@ import { SectionIdeMarquee } from "@/components/sections/section-ide-marquee";
 import { SectionShowcase } from "@/components/sections/section-showcase";
 import { SectionRoadmap } from "@/components/sections/section-roadmap";
 import { SectionComparison } from "@/components/sections/section-comparison";
-import { SectionBenchmark } from "@/components/sections/section-benchmark";
 import { SectionProwess } from "@/components/sections/section-prowess";
 import { SectionChangelog } from "@/components/sections/section-changelog";
 import { SectionFaq } from "@/components/sections/section-faq";
@@ -23,7 +22,6 @@ export default function Home() {
         <SectionShowcase />
         <SectionRoadmap />
         <SectionComparison />
-        <SectionBenchmark />
         <SectionProwess />
         <SectionChangelog />
         <SectionFaq />

@@ -37,16 +37,19 @@ export function Navbar() {
           : "border-transparent bg-transparent",
       )}
     >
-      <Container className="relative flex h-16 items-center justify-between">
-        <Link href="/" className="relative z-10">
-          <Logo />
-        </Link>
+      <Container className="flex h-16 items-center gap-4">
+        {/* left flank — equal-width so the centered nav stays page-centered */}
+        <div className="flex flex-1 items-center">
+          <Link href="/">
+            <Logo />
+          </Link>
+        </div>
 
         {/* centered nav links */}
-        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-10 lg:gap-12 md:flex">
+        <nav className="hidden shrink-0 items-center gap-8 lg:flex lg:gap-10">
           {navLinks.map((l) => {
             const cls =
-              "font-mono text-sm lowercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
+              "whitespace-nowrap font-mono text-sm lowercase tracking-wide text-muted-foreground transition-colors hover:text-foreground";
             return l.external ? (
               <a key={l.href} href={l.href} className={cls}>
                 {l.label}
@@ -59,8 +62,9 @@ export function Navbar() {
           })}
         </nav>
 
-        <div className="relative z-10 flex items-center gap-2">
-          <div className="hidden items-center gap-2 md:flex">
+        {/* right flank — equal-width, content pinned right */}
+        <div className="flex flex-1 items-center justify-end gap-2">
+          <div className="hidden items-center gap-2 lg:flex">
             {isSignedIn ? (
               <>
                 <Link
@@ -92,7 +96,7 @@ export function Navbar() {
           {/* mobile */}
           <Sheet>
             <SheetTrigger
-              className="md:hidden"
+              className="lg:hidden"
               render={
                 <Button variant="ghost" size="icon" aria-label="Open menu" />
               }

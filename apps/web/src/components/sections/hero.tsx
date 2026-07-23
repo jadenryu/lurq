@@ -31,7 +31,7 @@ export function Hero() {
     : { initial: "hidden" as const, animate: "show" as const };
 
   return (
-    <section className="relative overflow-hidden pb-10 pt-[calc(var(--banner-h,0px)+4.25rem)] md:pb-14 md:pt-[calc(var(--banner-h,0px)+5rem)]">
+    <section className="relative overflow-hidden pb-10 pt-[calc(var(--banner-h,0px)+6.5rem)] md:pb-14 md:pt-[calc(var(--banner-h,0px)+8rem)]">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_75%_50%_at_50%_-8%,rgba(255,255,255,0.09),transparent_62%)]" />
         <div className="bg-grid absolute inset-0 opacity-50" />
@@ -43,17 +43,9 @@ export function Hero() {
           variants={stagger}
           {...animateProps}
         >
-          <motion.p
-            variants={fadeUp}
-            className="inline-flex items-center gap-2 font-mono text-[0.68rem] uppercase tracking-[0.22em] text-muted-foreground"
-          >
-            <span className="size-1.5 rounded-full bg-[#7dcea0] motion-safe:animate-pulse" />
-            free while in pre-alpha
-          </motion.p>
-
           <motion.h1
             variants={fadeUp}
-            className="mt-6 font-heading text-[2.15rem] font-medium lowercase leading-[1.05] tracking-tight sm:text-5xl md:text-[3.1rem]"
+            className="font-heading text-[2.15rem] font-medium lowercase leading-[1.05] tracking-tight sm:text-5xl md:text-[3.1rem]"
           >
             the package index for coding agents.
           </motion.h1>
@@ -85,7 +77,7 @@ export function Hero() {
         </motion.div>
 
         <motion.div
-          className="mx-auto mt-12 max-w-4xl"
+          className="mx-auto mt-8 max-w-4xl md:mt-9"
           initial={reduce ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.75, ease: EASE, delay: reduce ? 0 : 0.4 }}
