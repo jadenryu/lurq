@@ -82,19 +82,36 @@ export async function upsertCompatEdge(db: Database, edge: NewCompatEdgeRow): Pr
     .onConflictDoUpdate({ target: [...CONFLICT_TARGET], set: conflictSet() });
 }
 
+/** Max rows per compat_edges INSERT. Fat closures (10k+ pairs) must not become
+ *  one mega-statement — that OOMs Node and trips Postgres param limits. Chunks
+ *  lose per-closure atomicity; fine for loss-tolerant `observed` mints. */
+export const EDGE_UPSERT_CHUNK = 250;
+
+/** Split `items` into consecutive slices of at most `size`. Exported for tests. */
+export function chunk<T>(items: T[], size: number): T[][] {
+  if (size <= 0) throw new Error(`chunk size must be positive, got ${size}`);
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /**
- * Batch-upsert edges in one round-trip (§4F write-behind for high-volume, loss-
- * tolerant `observed` mints). The caller MUST pass a batch with unique conflict
- * keys (Postgres rejects the same ON CONFLICT target twice per statement) — one
- * resolved closure's canonical pairs are unique by construction. Same precedence
- * as the single upsert; verified/conflict/score writes stay individual (durable).
+ * Batch-upsert edges (§4F write-behind for high-volume, loss-tolerant `observed`
+ * mints). Writes in chunks of {@link EDGE_UPSERT_CHUNK} so large closures stay
+ * within Postgres bind limits and Drizzle AST depth. The caller MUST pass a
+ * batch with unique conflict keys (Postgres rejects the same ON CONFLICT target
+ * twice per statement) — one resolved closure's canonical pairs are unique by
+ * construction; each chunk inherits that. Same precedence as the single upsert;
+ * verified/conflict/score writes stay individual (durable).
  */
 export async function upsertCompatEdgesBatch(db: Database, edges: NewCompatEdgeRow[]): Promise<void> {
   if (edges.length === 0) return;
-  await db
-    .insert(compatEdges)
-    .values(edges)
-    .onConflictDoUpdate({ target: [...CONFLICT_TARGET], set: conflictSet() });
+  for (const part of chunk(edges, EDGE_UPSERT_CHUNK)) {
+    await db
+      .insert(compatEdges)
+      .values(part)
+      .onConflictDoUpdate({ target: [...CONFLICT_TARGET], set: conflictSet() });
+  }
 }
 
 /** Persist a resolved closure once (§4B); refresh nodes if the version reappears
