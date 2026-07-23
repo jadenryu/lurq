@@ -7,7 +7,6 @@ export type NavLink = {
 };
 
 // Anchors follow homepage story order: product → difference → faq.
-// Bakeoff stays on-page as quiet proof, not a nav highlight.
 export const navLinks: NavLink[] = [
   { label: "Product", href: "/#product" },
   { label: "Difference", href: "/#comparison" },

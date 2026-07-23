@@ -263,7 +263,7 @@ export function SectionProwess() {
       <Container>
         <Reveal>
           <div className="mx-auto max-w-none text-center">
-            <SectionLabel index={4} align="center" className="mb-5">
+            <SectionLabel index={3} align="center" className="mb-5">
               what it can do
             </SectionLabel>
             <h2 className="text-3xl font-medium lowercase leading-[1.08] tracking-tight md:text-4xl lg:whitespace-nowrap">

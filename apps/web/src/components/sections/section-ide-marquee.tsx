@@ -1,9 +1,9 @@
 import { Marquee } from "@/components/ui/marquee";
 
-// Each editor's logo lives in /public/logos as an SVG. The files committed now
-// are simple monochrome placeholders; replace any of them in-place with the
-// official brand SVG (keep the same filename) and it shows up here automatically.
-// For the dark theme, prefer white/monochrome SVG variants.
+// Each editor's logo lives in /public/logos as an SVG. Claude Code, Cursor,
+// Windsurf, GitHub Copilot, and Codex use their real brand marks (official
+// colors where the brand has one). vscode.svg is still a generic placeholder
+// glyph tinted VS Code blue — swap in the official mark if you get one.
 const IDES = [
   { name: "Claude Code", logo: "/logos/claude-code.svg" },
   { name: "Cursor", logo: "/logos/cursor.svg" },
@@ -24,14 +24,10 @@ export function SectionIdeMarquee() {
         {IDES.map(({ name, logo }) => (
           <div
             key={name}
-            className="flex items-center gap-3 px-2 text-muted-foreground/70 transition-colors hover:text-foreground"
+            className="flex items-center gap-3 px-2 text-foreground/85 transition-colors hover:text-foreground"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={logo}
-              alt={`${name} logo`}
-              className="size-5 shrink-0 opacity-80"
-            />
+            <img src={logo} alt={`${name} logo`} className="size-5 shrink-0" />
             <span className="whitespace-nowrap text-lg font-medium tracking-tight">
               {name}
             </span>
