@@ -57,8 +57,8 @@ function json(obj: unknown) {
  * Per-connection identity, resolved from the authenticated API key at the HTTP
  * boundary and threaded into the tools. This is the channel that lets lurq know
  * *who* is calling — stamped onto the data it collects (§3.1 flywheel) so it
- * accrues to an org instead of an anonymous pool. `ownerId` is null on the stdio
- * / local path and for operator-issued keys with no org.
+ * accrues to an individual account instead of an anonymous pool. `ownerId` is
+ * null on the stdio/local path and for operator-issued keys with no account.
  */
 export interface ServerContext {
   ownerId?: string | null;

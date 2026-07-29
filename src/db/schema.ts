@@ -197,9 +197,10 @@ export const compatVerifyQueue = pgTable(
 
 /**
  * API keys for the hosted HTTP service (docs/lurq-hosted-deployment.md §5). Each
- * user/org gets a key; only its sha256 hash is persisted, so a DB leak never
+ * user gets a key; only its sha256 hash is persisted, so a DB leak never
  * exposes a usable key — the plaintext is shown exactly once at creation.
- * `ownerId` is reserved for future self-serve issuance via the Clerk dashboard.
+ * `ownerId` is the individual Clerk user id, set at self-serve issuance from
+ * the web dashboard (no org/team concept — one identity per account).
  */
 export const apiKeys = pgTable(
   'api_keys',
@@ -353,10 +354,10 @@ export const recommendationOutcomes = pgTable(
   'recommendation_outcomes',
   {
     id: serial('id').primaryKey(),
-    /** The org this outcome belongs to (api_keys.owner_id). Null for anonymous /
-     *  operator-issued keys. This is what turns the flywheel from a global blob
-     *  into a per-org asset — "what did *this* org succeed with." Server-injected
-     *  from the authenticated key, never caller-supplied. */
+    /** The individual user this outcome belongs to (api_keys.owner_id). Null for
+     *  anonymous/operator-issued keys. This is what turns the flywheel from a
+     *  global blob into a per-user asset — "what did *this* person succeed
+     *  with." Server-injected from the authenticated key, never caller-supplied. */
     ownerId: text('owner_id'),
     packageName: text('package_name').notNull(),
     accepted: boolean('accepted').notNull(),
