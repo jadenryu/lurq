@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { UsagePanel } from "@/components/dashboard/usage-panel";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { fetchUsage, type DashboardUsage } from "@/lib/lurq-issuer";
 
 export default async function DashboardUsagePage() {
@@ -15,14 +16,9 @@ export default async function DashboardUsagePage() {
 
   return (
     <div>
-      <h1 className="font-heading text-2xl font-medium lowercase tracking-tight md:text-3xl">
-        usage
-      </h1>
-      <p className="mt-3 text-muted-foreground">
-        How often your agents call lurq — by day, and by tool.
-      </p>
+      <PageHeader title="usage" subtitle="How often your agents call lurq — by day, and by tool." />
 
-      <div className="mt-10">
+      <div className="mt-8">
         <UsagePanel usage={usage} />
       </div>
     </div>

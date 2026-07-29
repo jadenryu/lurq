@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { ContributionsFeed } from "@/components/dashboard/contributions-feed";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { fetchContributions, type DashboardContribution } from "@/lib/lurq-issuer";
 
 export default async function DashboardContributionsPage() {
@@ -21,15 +22,12 @@ export default async function DashboardContributionsPage() {
 
   return (
     <div>
-      <h1 className="font-heading text-2xl font-medium lowercase tracking-tight md:text-3xl">
-        contributions
-      </h1>
-      <p className="mt-3 text-muted-foreground">
-        Packages you were the first to put on lurq&apos;s radar — fetched and scored because you
-        asked.
-      </p>
+      <PageHeader
+        title="contributions"
+        subtitle="Packages you were the first to put on lurq's radar — fetched and scored because you asked."
+      />
 
-      <div className="panel-lit mt-10 rounded-[var(--radius-xl)] border border-border p-5 md:p-7">
+      <div className="panel-lit mt-8 rounded-[var(--radius-xl)] border border-border p-5 md:p-7">
         <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
           {total} package{total === 1 ? "" : "s"}
         </p>

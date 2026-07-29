@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { fetchOutcomes, type DashboardOutcome } from "@/lib/lurq-issuer";
 
 export default async function DashboardActivityPage() {
@@ -14,14 +15,12 @@ export default async function DashboardActivityPage() {
 
   return (
     <div>
-      <h1 className="font-heading text-2xl font-medium lowercase tracking-tight md:text-3xl">
-        activity
-      </h1>
-      <p className="mt-3 text-muted-foreground">
-        Packages lurq has recommended for you, and what happened after.
-      </p>
+      <PageHeader
+        title="activity"
+        subtitle="Packages lurq has recommended for you, and what happened after."
+      />
 
-      <div className="panel-lit mt-10 rounded-[var(--radius-xl)] border border-border p-5 md:p-7">
+      <div className="panel-lit mt-8 rounded-[var(--radius-xl)] border border-border p-5 md:p-7">
         <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
           {outcomes.length} recommendation{outcomes.length === 1 ? "" : "s"}
         </p>
