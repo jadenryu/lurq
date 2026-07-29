@@ -6,7 +6,9 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "api keys" },
+  { href: "/dashboard/usage", label: "usage" },
   { href: "/dashboard/activity", label: "activity" },
+  { href: "/dashboard/contributions", label: "contributions" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -35,12 +37,16 @@ export function DashboardNav() {
           </Link>
         ))}
       </nav>
-      <aside className="hidden w-52 shrink-0 border-r border-border py-8 md:block">
-        <nav className="flex flex-col gap-1 px-3">
+      <aside className="hidden w-56 shrink-0 border-r border-border py-10 md:block">
+        <p className="px-6 pb-3 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted-foreground/50">
+          dashboard
+        </p>
+        <nav className="flex flex-col gap-0.5 px-3">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive(pathname, item.href) ? "page" : undefined}
               className={cn(
                 "rounded-md px-3 py-2 font-mono text-sm lowercase tracking-wide transition-colors",
                 isActive(pathname, item.href)

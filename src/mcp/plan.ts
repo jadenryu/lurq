@@ -67,13 +67,14 @@ export async function resolvePins(
   db: Database,
   using: string[] | undefined,
   recommendedNames: Set<string>,
+  requestedByOwnerId: string | null = null,
 ): Promise<{ slots: PlanSlot[]; unresolved: string[] }> {
   const slots: PlanSlot[] = [];
   const unresolved: string[] = [];
   // Dedupe, and skip a pin the recommender already picked (avoid double slots).
   for (const name of new Set(using ?? [])) {
     if (recommendedNames.has(name)) continue;
-    const { row } = await getOrFetchPackage(db, name);
+    const { row } = await getOrFetchPackage(db, name, { requestedByOwnerId });
     if (!row) {
       unresolved.push(name);
       continue;
@@ -149,7 +150,11 @@ const PER_SLOT = 3;
 /** Cap on slots so a huge document can't fan out into hundreds of queries. */
 const MAX_SLOTS = 24;
 
-export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOutput | { note: string }> {
+export async function handlePlan(
+  db: Database,
+  input: PlanInput,
+  ownerId: string | null = null,
+): Promise<PlanOutput | { note: string }> {
   const optimize = input.optimize ?? 'balanced';
 
   const decomposed = input.needs?.length
@@ -242,6 +247,7 @@ export async function handlePlan(db: Database, input: PlanInput): Promise<PlanOu
     db,
     input.using,
     recommendedNames,
+    ownerId,
   );
   const slots = [...pinnedSlots, ...recSlots];
 

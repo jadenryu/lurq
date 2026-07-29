@@ -149,6 +149,7 @@ export async function handleRecommend(db: Database, input: RecommendInput) {
 export async function handleEvaluate(
   db: Database,
   input: { package: string },
+  ownerId: string | null = null,
 ): Promise<EvaluateOutput | { tracked: false; suggestion: string }> {
   const out = await cached(
     'eval',
@@ -158,6 +159,7 @@ export async function handleEvaluate(
       // the first call returns real evidence, not a "retry shortly" placeholder.
       const { row, existsOnNpm } = await getOrFetchPackage(db, input.package, {
         blockMs: FIRST_TOUCH_BUDGET_MS,
+        requestedByOwnerId: ownerId,
       });
       if (!row) {
         return {
@@ -182,14 +184,20 @@ export async function handleEvaluate(
 
 // ── compare ─────────────────────────────────────────────────────────────────
 
-export async function handleCompare(db: Database, input: { packages: string[] }) {
+export async function handleCompare(
+  db: Database,
+  input: { packages: string[] },
+  ownerId: string | null = null,
+) {
   // Key on the exact input — the response echoes the caller's own names/order in
   // `missing`, so a normalized key would serve another caller's casing.
   const out = await cached(
     'cmp',
     cacheKey(input.packages),
     async () => {
-      const results = await Promise.all(input.packages.map((name) => getOrFetchPackage(db, name)));
+      const results = await Promise.all(
+        input.packages.map((name) => getOrFetchPackage(db, name, { requestedByOwnerId: ownerId })),
+      );
       const rows = results
         .map((r) => r.row)
         .filter((row): row is PackageRow => row !== null)
@@ -253,6 +261,7 @@ export async function handleCompat(
 export async function handleVerify(
   db: Database,
   input: { package: string },
+  ownerId: string | null = null,
 ): Promise<VerifyOutput> {
   const name = input.package;
   const exists = await npmPackageExists(name);
@@ -281,7 +290,7 @@ export async function handleVerify(
     fetchNpmRegistry(name).catch(() => null),
     // Block-on-first-touch (§4A): verify is single-package, so await the ingest
     // for a real confidence/tracked read on the first call.
-    getOrFetchPackage(db, name, { blockMs: FIRST_TOUCH_BUDGET_MS }),
+    getOrFetchPackage(db, name, { blockMs: FIRST_TOUCH_BUDGET_MS, requestedByOwnerId: ownerId }),
     getTopPackageNames(db).catch(() => [] as string[]),
   ]);
 

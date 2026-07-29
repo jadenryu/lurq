@@ -24,6 +24,7 @@ import { buildEmbeddingText, createEmbeddingProvider } from '../search/embedding
 import type { Database } from '../db/client';
 import {
   getPackageByName,
+  stampFirstRequester,
   upsertPackage,
   upsertPackageVersions,
 } from '../db/packages';
@@ -67,7 +68,7 @@ async function getCategoryMedianBundle(db: Database, category: Category): Promis
 export async function syncOnePackage(
   db: Database,
   name: string,
-  opts: { category?: Category | null } = {},
+  opts: { category?: Category | null; requestedByOwnerId?: string | null } = {},
 ): Promise<PackageRow> {
   const config = getConfig();
   const now = new Date();
@@ -140,6 +141,13 @@ export async function syncOnePackage(
       now,
     }),
   );
+  // Attribution (dashboard v1 phase 2): if this call is the one that first
+  // inserted the row, credit the requesting account. Standalone + IS NULL-guarded
+  // (see stampFirstRequester) so re-syncs never clobber it and concurrent
+  // first-touches resolve deterministically. Best-effort — never blocks the upsert.
+  if (!existing && opts.requestedByOwnerId) {
+    await stampFirstRequester(db, name, opts.requestedByOwnerId).catch(() => {});
+  }
   // Record the version timeline (idempotent). Non-fatal: never block a
   // successful package upsert on the version-history write.
   await upsertPackageVersions(db, name, signals.registry?.versionTimeline ?? []).catch(
@@ -176,7 +184,7 @@ export interface GetOrFetchResult {
 export async function getOrFetchPackage(
   db: Database,
   name: string,
-  opts: { blockMs?: number } = {},
+  opts: { blockMs?: number; requestedByOwnerId?: string | null } = {},
 ): Promise<GetOrFetchResult> {
   const existing = await getPackageByName(db, name);
   if (existing) return { row: existing, wasTracked: true, existsOnNpm: true };
@@ -190,7 +198,7 @@ export async function getOrFetchPackage(
     // ingest keeps running (not cancelled) and lands within a few more seconds.
     // ponytail: inline ingest isn't queue-bounded; single-package request rate
     // is the natural cap. Route through enqueueIngest if a flood ever appears.
-    const row = await raceTimeout(runIngest(db, name), opts.blockMs);
+    const row = await raceTimeout(runIngest(db, name, opts.requestedByOwnerId ?? null), opts.blockMs);
     if (row) return { row, wasTracked: false, existsOnNpm: true };
     return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
   }
@@ -198,6 +206,6 @@ export async function getOrFetchPackage(
   // Real but untracked: ingest off the request path. Bounded + deduped so a
   // flood of distinct names can't spawn unbounded work (the whole point of not
   // doing it inline). Roster promotion happens in the worker, same quality bar.
-  enqueueIngest(db, name);
+  enqueueIngest(db, name, opts.requestedByOwnerId ?? null);
   return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
 }

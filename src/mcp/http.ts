@@ -25,6 +25,8 @@ import {
   rotateKey,
 } from '../auth/apiKeys';
 import { getOutcomesByOwner } from '../db/outcomes';
+import { getContributionsByOwner } from '../db/packages';
+import { getUsageByTool, getUsageSummary } from '../db/usage';
 import { createDb } from '../db/client';
 import type { ApiKeyRow } from '../db/schema';
 import { buildMcpServer } from './server';
@@ -309,6 +311,45 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('outcomes read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read outcomes.' });
+    }
+  });
+
+  app.get('/usage', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const daysRaw = typeof req.query.days === 'string' ? Number(req.query.days) : NaN;
+    const days = Number.isInteger(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 365) : 30;
+    try {
+      const [summary, byTool] = await Promise.all([
+        getUsageSummary(db, ownerId, days),
+        getUsageByTool(db, ownerId, days),
+      ]);
+      res.status(200).json({ today: summary.today, series: summary.series, byTool });
+    } catch (err) {
+      logger.error('usage read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read usage.' });
+    }
+  });
+
+  app.get('/contributions', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : NaN;
+    const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
+    const offsetRaw = typeof req.query.offset === 'string' ? Number(req.query.offset) : NaN;
+    const offset = Number.isInteger(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
+    try {
+      const { total, packages: rows } = await getContributionsByOwner(db, ownerId, { limit, offset });
+      res.status(200).json({ total, packages: rows });
+    } catch (err) {
+      logger.error('contributions read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read contributions.' });
     }
   });
 

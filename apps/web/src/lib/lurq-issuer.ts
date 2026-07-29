@@ -112,3 +112,37 @@ export async function fetchOutcomes(ownerId: string, limit?: number): Promise<Da
   const data = (await res.json()) as { outcomes: DashboardOutcome[] };
   return data.outcomes;
 }
+
+export interface DashboardUsage {
+  today: number;
+  series: { date: string; count: number }[];
+  byTool: { tool: string; count: number }[];
+}
+
+export interface DashboardContribution {
+  name: string;
+  category: string | null;
+  healthScore: number | null;
+  firstRequestedAt: string;
+}
+
+export async function fetchUsage(ownerId: string, days = 30): Promise<DashboardUsage> {
+  const qs = new URLSearchParams({ ownerId, days: String(days) });
+  const res = await issuerFetch(`/usage?${qs.toString()}`);
+  if (!res.ok) throw new LurqIssuerError("Could not fetch usage.", 502);
+  const data = (await res.json()) as Partial<DashboardUsage>;
+  return { today: data.today ?? 0, series: data.series ?? [], byTool: data.byTool ?? [] };
+}
+
+export async function fetchContributions(
+  ownerId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<{ total: number; packages: DashboardContribution[] }> {
+  const qs = new URLSearchParams({ ownerId });
+  if (opts.limit) qs.set("limit", String(opts.limit));
+  if (opts.offset) qs.set("offset", String(opts.offset));
+  const res = await issuerFetch(`/contributions?${qs.toString()}`);
+  if (!res.ok) throw new LurqIssuerError("Could not fetch contributions.", 502);
+  const data = (await res.json()) as { total?: number; packages?: DashboardContribution[] };
+  return { total: data.total ?? 0, packages: data.packages ?? [] };
+}

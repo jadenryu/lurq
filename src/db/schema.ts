@@ -11,6 +11,7 @@ import {
   bigint,
   boolean,
   customType,
+  date,
   index,
   integer,
   jsonb,
@@ -125,6 +126,12 @@ export const packages = pgTable(
     graphScannedVersion: text('graph_scanned_version'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
+    /** The individual account (api_keys.owner_id) whose on-demand query first
+     *  caused this package to be ingested — nobody had asked for it before them.
+     *  Null for crawler/_changes-created packages, or ones ingested before
+     *  dashboard accounts existed. Stamped once via a standalone WHERE ... IS NULL
+     *  update kept out of upsertPackage, so re-syncs can never clobber it. */
+    firstRequestedByOwnerId: text('first_requested_by_owner_id'),
   },
   (table) => [
     index('packages_category_idx').on(table.category),
@@ -133,6 +140,7 @@ export const packages = pgTable(
     index('packages_embedding_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
     // GIN index for lexical full-text search (§3).
     index('packages_search_vector_idx').using('gin', table.searchVector),
+    index('packages_first_requested_by_idx').on(table.firstRequestedByOwnerId),
   ],
 );
 
@@ -373,6 +381,29 @@ export const recommendationOutcomes = pgTable(
   ],
 );
 
+/**
+ * Per-user, per-day, per-tool call counts for the dashboard usage view. Keyed by
+ * ownerId (not per-key — a user can hold multiple keys; the dashboard is
+ * per-individual). Display-only, not a billing ledger: writes are fire-and-forget
+ * UPSERTs, so an undercount on a DB hiccup is acceptable. Skipped entirely when a
+ * request has no ownerId (operator-issued keys with no dashboard account).
+ */
+export const ownerUsageDaily = pgTable(
+  'owner_usage_daily',
+  {
+    ownerId: text('owner_id').notNull(),
+    /** UTC day, 'YYYY-MM-DD'. */
+    date: date('date').notNull(),
+    /** recommend | evaluate | compare | compat | verify | usage | diagram | plan | report_outcome */
+    tool: text('tool').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.date, table.tool] }),
+    index('owner_usage_daily_owner_date_idx').on(table.ownerId, table.date),
+  ],
+);
+
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';
 
 export interface SyncError {
@@ -401,3 +432,5 @@ export type ApiSurfaceRow = typeof apiSurfaces.$inferSelect;
 export type NewApiSurfaceRow = typeof apiSurfaces.$inferInsert;
 export type RecommendationOutcomeRow = typeof recommendationOutcomes.$inferSelect;
 export type NewRecommendationOutcomeRow = typeof recommendationOutcomes.$inferInsert;
+export type OwnerUsageDailyRow = typeof ownerUsageDaily.$inferSelect;
+export type NewOwnerUsageDailyRow = typeof ownerUsageDaily.$inferInsert;

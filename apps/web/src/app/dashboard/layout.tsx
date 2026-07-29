@@ -15,19 +15,17 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="h-16 shrink-0 border-b border-border bg-background/80 px-6 backdrop-blur-md">
-        <div className="flex h-16 items-center justify-between">
-          <Link href="/">
+      <header className="sticky top-0 z-30 h-16 shrink-0 border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 md:px-8">
+          <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
           </Link>
           <UserButton />
         </div>
       </header>
-      <div className="flex flex-1">
+      <div className="mx-auto flex w-full max-w-6xl flex-1">
         <DashboardNav />
-        <main className="min-w-0 flex-1 px-6 py-16 md:px-10 md:py-20">
-          <div className="mx-auto max-w-3xl">{children}</div>
-        </main>
+        <main className="min-w-0 flex-1 px-6 py-10 md:px-10 md:py-12">{children}</main>
       </div>
     </div>
   );
