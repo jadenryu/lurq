@@ -23,6 +23,9 @@ const MAX_PENDING = 500;
 const pending: string[] = [];
 const inFlight = new Set<string>();
 const queuedNames = new Set<string>();
+/** First-requester ownerId per queued name (dashboard v1 phase 2 attribution).
+ *  Dedup stays keyed by name, so the first enqueue's owner is the one credited. */
+const owners = new Map<string, string | null>();
 let active = 0;
 
 /** Current backlog (pending + in-flight) — exposed for tests/observability. */
@@ -35,6 +38,7 @@ export function resetIngestQueue(): void {
   pending.length = 0;
   inFlight.clear();
   queuedNames.clear();
+  owners.clear();
   active = 0;
 }
 
@@ -43,13 +47,18 @@ export function resetIngestQueue(): void {
  * already pending or in-flight, or if the queue is at capacity. Returns without
  * awaiting any network/DB work.
  */
-export function enqueueIngest(db: Database, name: string): void {
+export function enqueueIngest(
+  db: Database,
+  name: string,
+  requestedByOwnerId: string | null = null,
+): void {
   if (queuedNames.has(name) || inFlight.has(name)) return;
   if (pending.length >= MAX_PENDING) {
     logger.warn(`ingest queue full (${MAX_PENDING}); dropping on-demand request for ${name}`);
     return;
   }
   queuedNames.add(name);
+  owners.set(name, requestedByOwnerId);
   pending.push(name);
   pump(db);
 }
@@ -58,9 +67,11 @@ function pump(db: Database): void {
   while (active < MAX_CONCURRENT && pending.length > 0) {
     const name = pending.shift()!;
     queuedNames.delete(name);
+    const owner = owners.get(name) ?? null;
+    owners.delete(name);
     inFlight.add(name);
     active += 1;
-    void runIngest(db, name).finally(() => {
+    void runIngest(db, name, owner).finally(() => {
       inFlight.delete(name);
       active -= 1;
       pump(db);
@@ -74,9 +85,13 @@ function pump(db: Database): void {
  * Shared by the background queue and the block-on-first-touch path (§4A) so both
  * apply the same promotion rule.
  */
-export async function runIngest(db: Database, name: string): Promise<PackageRow | null> {
+export async function runIngest(
+  db: Database,
+  name: string,
+  requestedByOwnerId: string | null = null,
+): Promise<PackageRow | null> {
   try {
-    const row = await syncOnePackage(db, name);
+    const row = await syncOnePackage(db, name, { requestedByOwnerId });
     // Same roster-promotion bar as the old inline path: only genuinely-trackable
     // discoveries join the sync roster, so the on-demand tail can't inflate cost.
     if (row.confidence && row.confidence !== 'unproven') {

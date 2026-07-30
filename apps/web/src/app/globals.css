@@ -33,6 +33,15 @@
   --color-accent: var(--accent);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  /* Soft syntax palette, promoted out of the landing-page terminal mocks so the
+     dashboard can carry the same colors instead of inventing a second set.
+     `signal` is the accent (nav, links, data marks); ok/bad/warn are reserved
+     for state and never reused as a series color. */
+  --color-signal: var(--signal);
+  --color-signal-muted: var(--signal-muted);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -43,6 +52,12 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Dashboard corners, deliberately tighter than the marketing radii. The
+     softer --radius-xl (~17px) reads friendly on a landing page but toy-like on
+     a data surface; instrument panels want a crisp corner. */
+  --radius-panel: 8px;
+  --radius-control: 5px;
+  --radius-chip: 3px;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -90,6 +105,12 @@
   --accent-foreground: oklch(0.205 0 0);
   --brand: oklch(0.62 0.13 280);
   --brand-foreground: oklch(0.98 0 0);
+  /* Same hues as dark mode, stepped darker for a light surface. */
+  --signal: #4a63c8;
+  --signal-muted: #7d90dd;
+  --ok: #2f8f5b;
+  --bad: #c2553c;
+  --warn: #a9761b;
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
@@ -130,6 +151,14 @@
   --accent-foreground: oklch(0.97 0 0);
   --brand: oklch(0.92 0 0); /* light grey mono accent */
   --brand-foreground: oklch(0.16 0 0);
+  /* The landing-page terminal palette, verbatim (see hero-live-demo.tsx). Soft
+     and desaturated on purpose — these read as syntax highlighting, not as an
+     "AI startup" glow, which the design brief rules out. */
+  --signal: #9db4ff; /* periwinkle · accent + data marks */
+  --signal-muted: #6b7fc4;
+  --ok: #7dcea0; /* accepted / active */
+  --bad: #e08b7a; /* failed / revoked-with-error */
+  --warn: #e6c07a; /* needs attention */
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%); /* hairline */
   --input: oklch(1 0 0 / 13%);

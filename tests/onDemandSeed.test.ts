@@ -53,6 +53,7 @@ describe('getOrFetchPackage — async on-demand', () => {
     const res = await getOrFetchPackage(db, 'freshpkg');
 
     expect(res).toEqual({ row: null, wasTracked: false, existsOnNpm: true, queued: true });
-    expect(enqueueIngest).toHaveBeenCalledWith(db, 'freshpkg');
+    // The async on-demand path threads the (here absent) requester through as null.
+    expect(enqueueIngest).toHaveBeenCalledWith(db, 'freshpkg', null);
   });
 });

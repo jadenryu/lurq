@@ -2,7 +2,7 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Category } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
@@ -115,6 +115,66 @@ export async function upsertPackage(db: Database, row: NewPackageRow): Promise<v
       target: packages.name,
       set: { ...mutable, updatedAt: new Date() },
     });
+}
+
+/**
+ * Credit the individual account whose on-demand query first caused `name` to be
+ * ingested. A standalone, idempotent UPDATE guarded by `IS NULL` — kept OUT of
+ * upsertPackage (which refreshes every field on conflict) so re-syncs and the
+ * `_changes` watcher, which never pass an owner, can never clobber the credit.
+ * The `IS NULL` guard is also the cross-process race tie-breaker: whichever
+ * concurrent first-ingest commits first wins; the rest match zero rows.
+ */
+export async function stampFirstRequester(
+  db: Database,
+  name: string,
+  ownerId: string,
+): Promise<void> {
+  await db
+    .update(packages)
+    .set({ firstRequestedByOwnerId: ownerId })
+    .where(and(eq(packages.name, name), isNull(packages.firstRequestedByOwnerId)));
+}
+
+export interface Contribution {
+  name: string;
+  category: Category | null;
+  healthScore: number | null;
+  /** = packages.createdAt (immutable since first insert). */
+  firstRequestedAt: Date;
+}
+
+/**
+ * Packages this account first caused to be ingested (dashboard v1 phase 2),
+ * newest first, plus the total for pagination. `firstRequestedAt` is the row's
+ * immutable `createdAt`, so no separate timestamp column is needed.
+ */
+export async function getContributionsByOwner(
+  db: Database,
+  ownerId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<{ total: number; packages: Contribution[] }> {
+  const limit = opts.limit ?? 50;
+  const offset = opts.offset ?? 0;
+  const [rows, [countRow]] = await Promise.all([
+    db
+      .select({
+        name: packages.name,
+        category: packages.category,
+        healthScore: packages.healthScore,
+        firstRequestedAt: packages.createdAt,
+      })
+      .from(packages)
+      .where(eq(packages.firstRequestedByOwnerId, ownerId))
+      .orderBy(desc(packages.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(packages)
+      .where(eq(packages.firstRequestedByOwnerId, ownerId)),
+  ]);
+  return { total: countRow?.count ?? 0, packages: rows };
 }
 
 // ── sync_runs audit ─────────────────────────────────────────────────────────

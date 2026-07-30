@@ -1,47 +1,59 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { demoIssuedKey, demoKeys, isDemoUser } from "@/lib/demo-data";
+import { fetchKeys, issueKey, LurqIssuerError } from "@/lib/lurq-issuer";
 
 /**
- * Self-serve API-key issuance. Clerk authenticates the user here; we resolve
- * their durable identity (org if they have one, else their user id) and ask the
- * backend to mint a key stamped with that `ownerId`. The backend never sees
- * Clerk — it trusts this route via the shared LURQ_ISSUER_SECRET. The plaintext
- * key is returned to the client exactly once and never stored here.
+ * Self-serve API-key issuance/listing. Clerk authenticates the user here;
+ * `ownerId` is always the individual Clerk user id (no org concept — one
+ * identity per account). The backend never sees Clerk — it trusts this route
+ * via the shared LURQ_ISSUER_SECRET. Plaintext keys are returned to the client
+ * exactly once, at creation, and never stored here.
+ *
+ * Demo accounts (see lib/demo-data) short-circuit *before* the issuer call.
+ * Without that, "New key" reaches an unconfigured issuer and dies with "Key
+ * issuance isn't configured yet." The simulated key is visibly marked and never
+ * written to Postgres.
  */
-export async function POST() {
-  const { userId, orgId } = await auth();
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Sign in to view your keys." }, { status: 401 });
+  }
+  if (await isDemoUser(userId)) {
+    return NextResponse.json({ keys: demoKeys(), demo: true });
+  }
+  try {
+    const keys = await fetchKeys(userId);
+    return NextResponse.json({ keys });
+  } catch (err) {
+    if (err instanceof LurqIssuerError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    return NextResponse.json({ error: "Key service unreachable." }, { status: 502 });
+  }
+}
+
+export async function POST(req: Request) {
+  const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Sign in to generate a key." }, { status: 401 });
   }
 
-  const base = process.env.LURQ_MCP_URL;
-  const secret = process.env.LURQ_ISSUER_SECRET;
-  if (!base || !secret) {
-    return NextResponse.json(
-      { error: "Key issuance isn't configured yet." },
-      { status: 503 },
-    );
+  const body = (await req.json().catch(() => ({}))) as { label?: unknown };
+  const label = typeof body.label === "string" ? body.label.slice(0, 200) : undefined;
+
+  if (await isDemoUser(userId)) {
+    return NextResponse.json({ ...demoIssuedKey(), demo: true });
   }
 
-  const ownerId = orgId ?? userId;
   try {
-    const res = await fetch(`${base.replace(/\/$/, "")}/keys`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify({ ownerId, label: `web:${ownerId}` }),
-    });
-    if (!res.ok) {
-      return NextResponse.json({ error: "Could not issue a key. Try again." }, { status: 502 });
+    const { key, prefix } = await issueKey({ ownerId: userId, label });
+    return NextResponse.json({ key, prefix });
+  } catch (err) {
+    if (err instanceof LurqIssuerError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    const data = (await res.json()) as { key?: string };
-    if (!data.key) {
-      return NextResponse.json({ error: "Issuer returned no key." }, { status: 502 });
-    }
-    return NextResponse.json({ key: data.key });
-  } catch {
     return NextResponse.json({ error: "Key service unreachable." }, { status: 502 });
   }
 }

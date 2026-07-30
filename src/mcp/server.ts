@@ -22,6 +22,7 @@ import { handleDiagram } from './diagram';
 import { handlePlan } from './plan';
 import { timed } from './metrics';
 import { compact } from './compact';
+import { recordUsage } from '../db/usage';
 
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
@@ -57,8 +58,8 @@ function json(obj: unknown) {
  * Per-connection identity, resolved from the authenticated API key at the HTTP
  * boundary and threaded into the tools. This is the channel that lets lurq know
  * *who* is calling — stamped onto the data it collects (§3.1 flywheel) so it
- * accrues to an org instead of an anonymous pool. `ownerId` is null on the stdio
- * / local path and for operator-issued keys with no org.
+ * accrues to an individual account instead of an anonymous pool. `ownerId` is
+ * null on the stdio/local path and for operator-issued keys with no account.
  */
 export interface ServerContext {
   ownerId?: string | null;
@@ -69,6 +70,19 @@ export function buildMcpServer(
   ctx: ServerContext = {},
 ): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: VERSION });
+
+  // Run a tool with Prometheus timing (metrics) AND a fire-and-forget per-user
+  // usage counter for the dashboard (§ dashboard v1 phase 2). The counter is
+  // recorded in a finally so an errored call still counts; recordUsage no-ops
+  // when ctx.ownerId is null (stdio/local or operator keys with no account).
+  const run = <T>(tool: string, fn: () => Promise<T>): Promise<T> =>
+    (async () => {
+      try {
+        return await timed(tool, fn);
+      } finally {
+        void recordUsage(db, ctx.ownerId ?? null, tool);
+      }
+    })();
 
   server.registerTool(
     'recommend',
@@ -82,7 +96,7 @@ export function buildMcpServer(
         constraints: constraintsSchema,
       },
     },
-    async (args) => json(await timed('recommend', () => handleRecommend(db, args))),
+    async (args) => json(await run('recommend', () => handleRecommend(db, args))),
   );
 
   server.registerTool(
@@ -95,7 +109,7 @@ export function buildMcpServer(
         package: npmName.describe('npm package name'),
       },
     },
-    async (args) => json(await timed('evaluate', () => handleEvaluate(db, args))),
+    async (args) => json(await run('evaluate', () => handleEvaluate(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -107,7 +121,7 @@ export function buildMcpServer(
         packages: z.array(npmName).min(2).max(5).describe('2–5 npm package names'),
       },
     },
-    async (args) => json(await timed('compare', () => handleCompare(db, args))),
+    async (args) => json(await run('compare', () => handleCompare(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -132,7 +146,7 @@ export function buildMcpServer(
           .describe('Optional target Node runtime (e.g. "20" or "20.20.2") for engines.node checks'),
       },
     },
-    async (args) => json(await timed('compat', () => handleCompat(db, args))),
+    async (args) => json(await run('compat', () => handleCompat(db, args))),
   );
 
   server.registerTool(
@@ -145,7 +159,7 @@ export function buildMcpServer(
         package: npmName.describe('npm package name to verify'),
       },
     },
-    async (args) => json(await timed('verify', () => handleVerify(db, args))),
+    async (args) => json(await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -163,7 +177,7 @@ export function buildMcpServer(
           .describe('A version you already know; returns the API delta from it to the target'),
       },
     },
-    async (args) => json(await timed('usage', () => handleUsage(db, args))),
+    async (args) => json(await run('usage', () => handleUsage(db, args))),
   );
 
   server.registerTool(
@@ -179,7 +193,7 @@ export function buildMcpServer(
           .describe('Package names that make up the stack; omit or empty to get usage guidance'),
       },
     },
-    async (args) => json(await timed('diagram', () => handleDiagram(db, args))),
+    async (args) => json(await run('diagram', () => handleDiagram(db, args))),
   );
 
   server.registerTool(
@@ -215,7 +229,7 @@ export function buildMcpServer(
           .describe("'speed' prefers the lightest-bundle option per slot; default 'balanced'"),
       },
     },
-    async (args) => json(await timed('plan', () => handlePlan(db, args))),
+    async (args) => json(await run('plan', () => handlePlan(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -241,7 +255,7 @@ export function buildMcpServer(
     // ownerId comes from the authenticated key (ctx), NOT the tool arguments —
     // a caller must never be able to attribute an outcome to another org.
     async (args) =>
-      json(await timed('report_outcome', () => handleReportOutcome(db, args, ctx.ownerId ?? null))),
+      json(await run('report_outcome', () => handleReportOutcome(db, args, ctx.ownerId ?? null))),
   );
 
   return server;

@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
-import { generateApiKey, hashKey, lookupActiveKey, resetAuthCache } from '../src/auth/apiKeys';
+import {
+  generateApiKey,
+  hashKey,
+  lookupActiveKey,
+  resetAuthCache,
+  listKeysForOwner,
+  findKeyForOwner,
+} from '../src/auth/apiKeys';
 import { API_KEY_PREFIX } from '../src/core/constants';
 import type { Database } from '../src/db/client';
 import type { ApiKeyRow } from '../src/db/schema';
@@ -73,5 +80,56 @@ describe('lookupActiveKey caching', () => {
     await lookupActiveKey(db, k);
     await lookupActiveKey(db, k);
     expect(counts.update).toBe(1); // throttled, not once per request
+  });
+});
+
+describe('listKeysForOwner', () => {
+  it('selects only the given owner\'s keys, newest first', async () => {
+    let whereArg: unknown;
+    const rows = [{ id: 2, ownerId: 'user_abc' } as ApiKeyRow];
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: (arg: unknown) => {
+            whereArg = arg;
+            return { orderBy: async () => rows };
+          },
+        }),
+      }),
+    } as unknown as Database;
+
+    const result = await listKeysForOwner(db, 'user_abc');
+    expect(result).toBe(rows);
+    expect(whereArg).toBeDefined();
+  });
+});
+
+describe('findKeyForOwner', () => {
+  function fakeDb(row: ApiKeyRow | undefined) {
+    return {
+      select: () => ({
+        from: () => ({ where: () => ({ limit: async () => (row ? [row] : []) }) }),
+      }),
+    } as unknown as Database;
+  }
+
+  it('returns the key when the prefix belongs to the given owner', async () => {
+    const row = { id: 1, prefix: 'lurq_live_ab12cd', ownerId: 'user_abc', revokedAt: null } as ApiKeyRow;
+    const db = fakeDb(row);
+    const result = await findKeyForOwner(db, { prefixOrId: 'lurq_live_ab12cd', ownerId: 'user_abc' });
+    expect(result).toBe(row);
+  });
+
+  it('returns null when the prefix belongs to a different owner', async () => {
+    const row = { id: 1, prefix: 'lurq_live_ab12cd', ownerId: 'user_other', revokedAt: null } as ApiKeyRow;
+    const db = fakeDb(row);
+    const result = await findKeyForOwner(db, { prefixOrId: 'lurq_live_ab12cd', ownerId: 'user_abc' });
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no active key matches the prefix at all', async () => {
+    const db = fakeDb(undefined);
+    const result = await findKeyForOwner(db, { prefixOrId: 'lurq_live_missing', ownerId: 'user_abc' });
+    expect(result).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ import {
   bigint,
   boolean,
   customType,
+  date,
   index,
   integer,
   jsonb,
@@ -125,6 +126,12 @@ export const packages = pgTable(
     graphScannedVersion: text('graph_scanned_version'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
+    /** The individual account (api_keys.owner_id) whose on-demand query first
+     *  caused this package to be ingested — nobody had asked for it before them.
+     *  Null for crawler/_changes-created packages, or ones ingested before
+     *  dashboard accounts existed. Stamped once via a standalone WHERE ... IS NULL
+     *  update kept out of upsertPackage, so re-syncs can never clobber it. */
+    firstRequestedByOwnerId: text('first_requested_by_owner_id'),
   },
   (table) => [
     index('packages_category_idx').on(table.category),
@@ -133,6 +140,7 @@ export const packages = pgTable(
     index('packages_embedding_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
     // GIN index for lexical full-text search (§3).
     index('packages_search_vector_idx').using('gin', table.searchVector),
+    index('packages_first_requested_by_idx').on(table.firstRequestedByOwnerId),
   ],
 );
 
@@ -197,9 +205,10 @@ export const compatVerifyQueue = pgTable(
 
 /**
  * API keys for the hosted HTTP service (docs/lurq-hosted-deployment.md §5). Each
- * user/org gets a key; only its sha256 hash is persisted, so a DB leak never
+ * user gets a key; only its sha256 hash is persisted, so a DB leak never
  * exposes a usable key — the plaintext is shown exactly once at creation.
- * `ownerId` is reserved for future self-serve issuance via the Clerk dashboard.
+ * `ownerId` is the individual Clerk user id, set at self-serve issuance from
+ * the web dashboard (no org/team concept — one identity per account).
  */
 export const apiKeys = pgTable(
   'api_keys',
@@ -353,10 +362,10 @@ export const recommendationOutcomes = pgTable(
   'recommendation_outcomes',
   {
     id: serial('id').primaryKey(),
-    /** The org this outcome belongs to (api_keys.owner_id). Null for anonymous /
-     *  operator-issued keys. This is what turns the flywheel from a global blob
-     *  into a per-org asset — "what did *this* org succeed with." Server-injected
-     *  from the authenticated key, never caller-supplied. */
+    /** The individual user this outcome belongs to (api_keys.owner_id). Null for
+     *  anonymous/operator-issued keys. This is what turns the flywheel from a
+     *  global blob into a per-user asset — "what did *this* person succeed
+     *  with." Server-injected from the authenticated key, never caller-supplied. */
     ownerId: text('owner_id'),
     packageName: text('package_name').notNull(),
     accepted: boolean('accepted').notNull(),
@@ -369,6 +378,29 @@ export const recommendationOutcomes = pgTable(
   (table) => [
     index('recommendation_outcomes_pkg_idx').on(table.packageName),
     index('recommendation_outcomes_owner_idx').on(table.ownerId),
+  ],
+);
+
+/**
+ * Per-user, per-day, per-tool call counts for the dashboard usage view. Keyed by
+ * ownerId (not per-key — a user can hold multiple keys; the dashboard is
+ * per-individual). Display-only, not a billing ledger: writes are fire-and-forget
+ * UPSERTs, so an undercount on a DB hiccup is acceptable. Skipped entirely when a
+ * request has no ownerId (operator-issued keys with no dashboard account).
+ */
+export const ownerUsageDaily = pgTable(
+  'owner_usage_daily',
+  {
+    ownerId: text('owner_id').notNull(),
+    /** UTC day, 'YYYY-MM-DD'. */
+    date: date('date').notNull(),
+    /** recommend | evaluate | compare | compat | verify | usage | diagram | plan | report_outcome */
+    tool: text('tool').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.date, table.tool] }),
+    index('owner_usage_daily_owner_date_idx').on(table.ownerId, table.date),
   ],
 );
 
@@ -400,3 +432,5 @@ export type ApiSurfaceRow = typeof apiSurfaces.$inferSelect;
 export type NewApiSurfaceRow = typeof apiSurfaces.$inferInsert;
 export type RecommendationOutcomeRow = typeof recommendationOutcomes.$inferSelect;
 export type NewRecommendationOutcomeRow = typeof recommendationOutcomes.$inferInsert;
+export type OwnerUsageDailyRow = typeof ownerUsageDaily.$inferSelect;
+export type NewOwnerUsageDailyRow = typeof ownerUsageDaily.$inferInsert;

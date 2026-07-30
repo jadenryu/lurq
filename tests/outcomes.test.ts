@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { handleReportOutcome } from '../src/mcp/handlers';
+import { getOutcomesByOwner } from '../src/db/outcomes';
 import type { Database } from '../src/db/client';
-import type { NewRecommendationOutcomeRow } from '../src/db/schema';
+import type { NewRecommendationOutcomeRow, RecommendationOutcomeRow } from '../src/db/schema';
 
 /** Minimal fake db capturing the inserted row — recordOutcome is insert-only. */
 function fakeDb(): { db: Database; inserted: NewRecommendationOutcomeRow[] } {
@@ -44,5 +45,40 @@ describe('handleReportOutcome', () => {
       buildSignal: null,
       need: null,
     });
+  });
+});
+
+describe('getOutcomesByOwner', () => {
+  function fakeSelectDb(rows: RecommendationOutcomeRow[]) {
+    const calls = { limit: undefined as number | undefined };
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: async (n: number) => {
+                calls.limit = n;
+                return rows;
+              },
+            }),
+          }),
+        }),
+      }),
+    } as unknown as Database;
+    return { db, calls };
+  }
+
+  it('returns the owner\'s outcomes and defaults the limit to 50', async () => {
+    const rows = [{ id: 1, ownerId: 'user_abc' } as RecommendationOutcomeRow];
+    const { db, calls } = fakeSelectDb(rows);
+    const result = await getOutcomesByOwner(db, 'user_abc');
+    expect(result).toBe(rows);
+    expect(calls.limit).toBe(50);
+  });
+
+  it('honors a custom limit', async () => {
+    const { db, calls } = fakeSelectDb([]);
+    await getOutcomesByOwner(db, 'user_abc', { limit: 5 });
+    expect(calls.limit).toBe(5);
   });
 });

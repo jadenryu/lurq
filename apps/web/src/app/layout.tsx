@@ -41,6 +41,15 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider
+      // Land on the dashboard after auth, from *any* entry point. The
+      // /sign-in and /sign-up pages set this too, but flows that don't route
+      // through them (Clerk's account portal, a verification link opened in a
+      // new tab, an <SignInButton> added later) would otherwise fall back to
+      // "/" and dump a brand-new user on the marketing page.
+      signUpForceRedirectUrl="/dashboard"
+      signInForceRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
+      signInFallbackRedirectUrl="/dashboard"
       appearance={{
         theme: dark,
         // Site is monochrome — override Clerk's default purple accent so its

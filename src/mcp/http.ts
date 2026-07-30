@@ -16,7 +16,17 @@ import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
-import { createKey, lookupActiveKey } from '../auth/apiKeys';
+import {
+  createKey,
+  findKeyForOwner,
+  listKeysForOwner,
+  lookupActiveKey,
+  revokeKey,
+  rotateKey,
+} from '../auth/apiKeys';
+import { getOutcomesByOwner } from '../db/outcomes';
+import { getContributionsByOwner } from '../db/packages';
+import { getUsageByTool, getUsageSummary } from '../db/usage';
 import { createDb } from '../db/client';
 import type { ApiKeyRow } from '../db/schema';
 import { buildMcpServer } from './server';
@@ -162,14 +172,18 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 
-  // Self-serve key issuance for the web dashboard (§ identity). Gated by the
-  // shared LURQ_ISSUER_SECRET: the Clerk-authenticated web app presents it and
-  // supplies the signed-in user's resolved `ownerId`. The backend trusts the web
-  // app to have authenticated the user — it just mints the key. NOT behind the
-  // per-IP limiter: all web-app calls share one egress IP, so that would throttle
-  // every user together; the secret + the web app's own per-user auth are the
-  // gate. Disabled (404) when the secret is unset.
-  app.post('/keys', async (req: Request, res: Response) => {
+  // Dashboard-authenticated routes (§ identity): gated by the shared
+  // LURQ_ISSUER_SECRET, never by a per-request API key. The Clerk-authenticated
+  // web app presents the secret and supplies the signed-in user's `ownerId` in
+  // the request body/query — the backend trusts the web app to have already
+  // authenticated the user. NOT behind the per-IP limiter: all web-app calls
+  // share one egress IP, so that would throttle every user together; the secret
+  // + the web app's own per-user auth are the gate. Disabled (404) when the
+  // secret is unset. This auth model never overlaps with the Bearer-API-key
+  // `auth` middleware below: the two tokens live in disjoint namespaces (an
+  // issued `lurq_live_...` key can never satisfy `secretEquals` against the
+  // issuer secret, and the issuer secret is never looked up in `apiKeys`).
+  const requireIssuerSecret = (req: Request, res: Response, next: NextFunction): void => {
     const secret = config.LURQ_ISSUER_SECRET;
     if (!secret) {
       res.status(404).end();
@@ -181,6 +195,21 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       res.status(401).json({ error: 'Invalid issuer secret.' });
       return;
     }
+    next();
+  };
+
+  // Safe DTO for the dashboard's key list — never includes keyHash.
+  const toDashboardKey = (row: ApiKeyRow) => ({
+    id: row.id,
+    prefix: row.prefix,
+    label: row.label,
+    tier: row.tier,
+    createdAt: row.createdAt,
+    lastUsedAt: row.lastUsedAt,
+    revokedAt: row.revokedAt,
+  });
+
+  app.post('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
     const body = (req.body ?? {}) as { ownerId?: unknown; label?: unknown };
     const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
     if (!ownerId) {
@@ -197,9 +226,136 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
   });
 
+  app.get('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      const rows = await listKeysForOwner(db, ownerId);
+      res.status(200).json({ keys: rows.map(toDashboardKey) });
+    } catch (err) {
+      logger.error('key listing failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not list keys.' });
+    }
+  });
+
+  app.post('/keys/:prefix/revoke', requireIssuerSecret, async (req: Request, res: Response) => {
+    const prefix = req.params.prefix;
+    const body = (req.body ?? {}) as { ownerId?: unknown };
+    const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
+    if (typeof prefix !== 'string' || !ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      const row = await findKeyForOwner(db, { prefixOrId: prefix, ownerId });
+      if (!row) {
+        res.status(404).json({ error: 'Key not found.' });
+        return;
+      }
+      await revokeKey(db, String(row.id));
+      res.status(200).json({ revoked: true });
+    } catch (err) {
+      logger.error('key revoke failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not revoke key.' });
+    }
+  });
+
+  app.post('/keys/:prefix/rotate', requireIssuerSecret, async (req: Request, res: Response) => {
+    const prefix = req.params.prefix;
+    const body = (req.body ?? {}) as { ownerId?: unknown };
+    const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
+    if (typeof prefix !== 'string' || !ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      const row = await findKeyForOwner(db, { prefixOrId: prefix, ownerId });
+      if (!row) {
+        res.status(404).json({ error: 'Key not found.' });
+        return;
+      }
+      const rotated = await rotateKey(db, String(row.id));
+      if (!rotated) {
+        res.status(404).json({ error: 'Key not found.' });
+        return;
+      }
+      res.status(200).json({ key: rotated.key, prefix: rotated.row.prefix });
+    } catch (err) {
+      logger.error('key rotate failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not rotate key.' });
+    }
+  });
+
+  app.get('/outcomes', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+    const limit = limitRaw && Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : undefined;
+    try {
+      const rows = await getOutcomesByOwner(db, ownerId, { limit });
+      res.status(200).json({
+        outcomes: rows.map((row) => ({
+          packageName: row.packageName,
+          accepted: row.accepted,
+          buildSignal: row.buildSignal,
+          need: row.need,
+          createdAt: row.createdAt,
+        })),
+      });
+    } catch (err) {
+      logger.error('outcomes read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read outcomes.' });
+    }
+  });
+
+  app.get('/usage', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const daysRaw = typeof req.query.days === 'string' ? Number(req.query.days) : NaN;
+    const days = Number.isInteger(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 365) : 30;
+    try {
+      const [summary, byTool] = await Promise.all([
+        getUsageSummary(db, ownerId, days),
+        getUsageByTool(db, ownerId, days),
+      ]);
+      res.status(200).json({ today: summary.today, series: summary.series, byTool });
+    } catch (err) {
+      logger.error('usage read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read usage.' });
+    }
+  });
+
+  app.get('/contributions', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : NaN;
+    const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
+    const offsetRaw = typeof req.query.offset === 'string' ? Number(req.query.offset) : NaN;
+    const offset = Number.isInteger(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
+    try {
+      const { total, packages: rows } = await getContributionsByOwner(db, ownerId, { limit, offset });
+      res.status(200).json({ total, packages: rows });
+    } catch (err) {
+      logger.error('contributions read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read contributions.' });
+    }
+  });
+
   app.post('/mcp', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
-    // Thread the authenticated key's org identity into the tools (§3.1).
+    // Thread the authenticated key's owner identity into the tools (§3.1).
     const server = buildMcpServer(db, { ownerId: (req as AuthedRequest).lurqKey?.ownerId ?? null });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

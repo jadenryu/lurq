@@ -128,12 +128,40 @@ export async function listKeys(db: Database): Promise<ApiKeyRow[]> {
   return db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
 }
 
+/** Keys belonging to one dashboard account (§ hosted dashboard), newest first. */
+export async function listKeysForOwner(db: Database, ownerId: string): Promise<ApiKeyRow[]> {
+  return db
+    .select()
+    .from(apiKeys)
+    .where(eq(apiKeys.ownerId, ownerId))
+    .orderBy(desc(apiKeys.createdAt));
+}
+
 /** Resolve a "prefix or numeric id" argument to a Drizzle equality filter. */
 function matchByPrefixOrId(prefixOrId: string) {
   const asId = Number(prefixOrId);
   return Number.isInteger(asId) && String(asId) === prefixOrId.trim()
     ? eq(apiKeys.id, asId)
     : eq(apiKeys.prefix, prefixOrId);
+}
+
+/**
+ * Resolve a key by display prefix, scoped to one owner — the ownership check
+ * the dashboard's revoke/rotate routes use before touching the row. Returns
+ * null if no active key with that prefix belongs to this owner (never reveals
+ * whether a key with that prefix exists for someone else).
+ */
+export async function findKeyForOwner(
+  db: Database,
+  args: { prefixOrId: string; ownerId: string },
+): Promise<ApiKeyRow | null> {
+  const [row] = await db
+    .select()
+    .from(apiKeys)
+    .where(and(matchByPrefixOrId(args.prefixOrId), isNull(apiKeys.revokedAt)))
+    .limit(1);
+  if (!row || row.ownerId !== args.ownerId) return null;
+  return row;
 }
 
 /**

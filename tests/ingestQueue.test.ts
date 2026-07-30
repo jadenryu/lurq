@@ -29,7 +29,7 @@ describe('ingestQueue', () => {
     syncOnePackage.mockResolvedValue({ confidence: 'proven', category: 'utility' } as never);
     enqueueIngest(db, 'goodpkg');
     await drain();
-    expect(syncOnePackage).toHaveBeenCalledWith(db, 'goodpkg');
+    expect(syncOnePackage).toHaveBeenCalledWith(db, 'goodpkg', { requestedByOwnerId: null });
     expect(ensureSeedEntry).toHaveBeenCalledWith(db, 'goodpkg', 'utility');
   });
 
@@ -60,5 +60,25 @@ describe('ingestQueue', () => {
     await drain();
     expect(ingestQueueDepth()).toBe(0);
     expect(ensureSeedEntry).not.toHaveBeenCalled();
+  });
+
+  it('threads the requesting ownerId through to syncOnePackage (contribution attribution)', async () => {
+    syncOnePackage.mockResolvedValue({ confidence: 'unproven' } as never);
+    enqueueIngest(db, 'attributed', 'user_x');
+    await drain();
+    expect(syncOnePackage).toHaveBeenCalledWith(db, 'attributed', { requestedByOwnerId: 'user_x' });
+  });
+
+  it('credits the FIRST requester when the same name is enqueued twice (dedup keeps owner)', async () => {
+    let release!: () => void;
+    syncOnePackage.mockImplementation(
+      () => new Promise((r) => (release = () => r({ confidence: 'unproven' } as never))),
+    );
+    enqueueIngest(db, 'dupe', 'user_a');
+    enqueueIngest(db, 'dupe', 'user_b'); // deduped while in flight — owner must stay user_a
+    release();
+    await drain();
+    expect(syncOnePackage).toHaveBeenCalledTimes(1);
+    expect(syncOnePackage).toHaveBeenCalledWith(db, 'dupe', { requestedByOwnerId: 'user_a' });
   });
 });
