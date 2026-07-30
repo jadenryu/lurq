@@ -1,45 +1,62 @@
-import { auth } from "@clerk/nextjs/server";
-import { CreateKeyDialog } from "@/components/dashboard/create-key-dialog";
-import { KeysPanel } from "@/components/dashboard/keys-panel";
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import { GettingStarted } from "@/components/dashboard/getting-started";
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel";
+import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { fetchKeys, type DashboardKey } from "@/lib/lurq-issuer";
+import { loadOverview } from "@/lib/dashboard-data";
 
-export default async function DashboardKeysPage() {
-  const { userId } = await auth();
+const WINDOW_DAYS = 30;
 
-  // Degrades independently — an MCP-server hiccup shouldn't 500 the page.
-  let keys: DashboardKey[] = [];
-  try {
-    keys = userId ? await fetchKeys(userId) : [];
-  } catch {
-    keys = [];
-  }
+export default async function DashboardOverviewPage() {
+  const { data, demo, failed } = await loadOverview(WINDOW_DAYS);
 
-  const activeKeys = keys.filter((k) => !k.revokedAt);
-  const showOnboarding = activeKeys.length > 0 && activeKeys.every((k) => !k.lastUsedAt);
+  const activeKeys = data.keys.filter((k) => !k.revokedAt);
+  const calls = data.usage.series.reduce((s, p) => s + p.count, 0);
+
+  // Nothing to chart, nothing to list — either a genuinely fresh account, or a
+  // read that failed and therefore also has nothing to show. Both get the setup
+  // path: an empty chart frame and four tiles reading `0` tell that person less
+  // than one page explaining how to produce data does, and a first-time visitor
+  // should never be greeted with a connection error. `failed` is logged in
+  // dashboard-data so an outage is still traceable.
+  const isNew =
+    failed || (calls === 0 && data.outcomes.length === 0 && data.contributions.total === 0);
+
+  // Has a key but has never used it — the one case where the nudge is the missing
+  // piece rather than the whole story.
+  const showOnboarding = !isNew && activeKeys.length > 0 && activeKeys.every((k) => !k.lastUsedAt);
 
   return (
     <div>
       <PageHeader
-        title="api keys"
-        subtitle="Manage the keys that connect your coding agent to lurq."
-        action={<CreateKeyDialog />}
+        title="overview"
+        subtitle="Your index activity at a glance."
+        demo={demo}
+        action={
+          <Link href="/dashboard/keys" className={buttonVariants({ variant: "outline" })}>
+            Manage keys
+          </Link>
+        }
       />
 
-      {showOnboarding && (
-        <div className="mt-8">
-          <OnboardingPanel />
-        </div>
-      )}
-
-      <div className="panel-lit mt-8 rounded-[var(--radius-xl)] border border-border p-5 md:p-7">
-        <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
-          {activeKeys.length} active {activeKeys.length === 1 ? "key" : "keys"}
-        </p>
-        <div className="mt-5">
-          <KeysPanel keys={keys} />
-        </div>
+      <div className="mt-8">
+        {isNew ? (
+          <GettingStarted
+            hasKey={activeKeys.length > 0}
+            keyPrefix={activeKeys[0]?.prefix}
+            connected={data.keys.some((k) => k.lastUsedAt)}
+          />
+        ) : (
+          <>
+            {showOnboarding && (
+              <div className="mb-6">
+                <OnboardingPanel />
+              </div>
+            )}
+            <OverviewPanel data={data} days={WINDOW_DAYS} />
+          </>
+        )}
       </div>
     </div>
   );

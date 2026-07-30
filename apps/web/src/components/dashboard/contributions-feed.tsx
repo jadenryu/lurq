@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   Table,
   TableHeader,
@@ -6,11 +9,9 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { Chip, EmptyState, Panel } from "@/components/dashboard/panel";
+import { TableToolbar, thClass } from "@/components/dashboard/table-toolbar";
 import type { DashboardContribution } from "@/lib/lurq-issuer";
-
-const chipClass = "rounded-sm border px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wide";
-const headClass = "font-mono text-xs font-normal uppercase tracking-wide text-muted-foreground/70";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -22,47 +23,70 @@ function formatDate(iso: string): string {
 
 /** Read-only: packages the signed-in user's queries first added to the index. */
 export function ContributionsFeed({ packages }: { packages: DashboardContribution[] }) {
-  if (packages.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Nothing yet — evaluate, compare, or verify a package no one has asked lurq about before,
-        and it shows up here.
-      </p>
+  const [query, setQuery] = useState("");
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return packages;
+    return packages.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.category ?? "").toLowerCase().includes(q),
     );
-  }
+  }, [packages, query]);
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow className="border-border/60 hover:bg-transparent">
-          <TableHead className={headClass}>Package</TableHead>
-          <TableHead className={headClass}>Category</TableHead>
-          <TableHead className={headClass}>Health</TableHead>
-          <TableHead className={headClass}>Added</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {packages.map((p) => (
-          <TableRow key={p.name} className="border-border/60">
-            <TableCell className="font-mono text-sm font-medium">{p.name}</TableCell>
-            <TableCell>
-              {p.category ? (
-                <span className={cn(chipClass, "border-border text-muted-foreground")}>
-                  {p.category}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
-            </TableCell>
-            <TableCell className="font-mono text-sm tabular-nums text-muted-foreground">
-              {p.healthScore ?? "—"}
-            </TableCell>
-            <TableCell className="font-mono text-xs text-muted-foreground">
-              {formatDate(p.firstRequestedAt)}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div className="space-y-4">
+      <TableToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="Search by package or category…"
+        count={visible.length}
+        noun="package"
+      />
+
+      {packages.length === 0 ? (
+        <EmptyState title="No contributions yet">
+          Credited when your query is the first to pull a package into the index.
+        </EmptyState>
+      ) : visible.length === 0 ? (
+        <EmptyState title="No matches" />
+      ) : (
+        <Panel padding="none" className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/60 hover:bg-transparent">
+                  <TableHead className={thClass}>Package</TableHead>
+                  <TableHead className={thClass}>Category</TableHead>
+                  <TableHead className={thClass}>Health</TableHead>
+                  <TableHead className={thClass}>Added</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((p) => (
+                  <TableRow key={p.name} className="border-border/60">
+                    <TableCell className="whitespace-nowrap font-mono text-sm font-medium">
+                      {p.name}
+                    </TableCell>
+                    <TableCell>
+                      {p.category ? (
+                        <Chip>{p.category}</Chip>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm tabular-nums text-muted-foreground">
+                      {p.healthScore ?? "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                      {formatDate(p.firstRequestedAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Panel>
+      )}
+    </div>
   );
 }

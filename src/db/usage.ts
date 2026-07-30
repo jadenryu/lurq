@@ -15,6 +15,19 @@ export interface UsagePoint {
 }
 
 /**
+ * First day of a trailing `days`-day window, inclusive of today.
+ *
+ * The `::int` cast is load-bearing, not decoration. postgres.js's `inferType`
+ * returns 0 (unspecified) for a plain JS number, so an uncast `CURRENT_DATE - $n`
+ * lets Postgres resolve the operator as `date - date -> integer`; the surrounding
+ * comparison then becomes `date >= integer` and the query dies with
+ * `operator does not exist`. Shared by both readers so the cast can't drift.
+ */
+export function windowStart(days: number) {
+  return sql`CURRENT_DATE - (${days}::int - 1)`;
+}
+
+/**
  * Increment today's counter for (owner, tool). No-op when ownerId is null/empty
  * (operator-issued keys with no dashboard account). Fire-and-forget: an undercount
  * on a transient DB failure is acceptable for a display-only counter.
@@ -38,26 +51,30 @@ export async function recordUsage(
   }
 }
 
-/** Trailing-`days`-window daily totals (summed across tools), plus today's total. */
+/**
+ * Trailing-`days`-window daily totals (summed across tools), plus today's total.
+ *
+ * The window is generated DB-side with `generate_series` and LEFT JOINed, so the
+ * result is **gap-free**: every day in the window is present, zero-count days
+ * included. Callers can therefore plot it on a uniform time axis — a series that
+ * only carried days-with-traffic would render equal-width bars for unequal time
+ * spans and misstate the trend.
+ */
 export async function getUsageSummary(
   db: Database,
   ownerId: string,
   days: number,
 ): Promise<{ today: number; series: UsagePoint[] }> {
-  const rows = await db
-    .select({
-      date: ownerUsageDaily.date,
-      count: sql<number>`sum(${ownerUsageDaily.count})::int`,
-    })
-    .from(ownerUsageDaily)
-    .where(
-      and(
-        eq(ownerUsageDaily.ownerId, ownerId),
-        gte(ownerUsageDaily.date, sql`CURRENT_DATE - ${days - 1}`),
-      ),
-    )
-    .groupBy(ownerUsageDaily.date)
-    .orderBy(ownerUsageDaily.date);
+  const rows = (await db.execute<{ date: string; count: number }>(sql`
+    select
+      to_char(d, 'YYYY-MM-DD') as date,
+      coalesce(sum(u.count), 0)::int as count
+    from generate_series(${windowStart(days)}, CURRENT_DATE, interval '1 day') as d
+    left join ${ownerUsageDaily} u
+      on u.date = d::date and u.owner_id = ${ownerId}
+    group by d
+    order by d
+  `)) as unknown as { date: string; count: number }[];
 
   const series: UsagePoint[] = rows.map((r) => ({ date: String(r.date), count: Number(r.count) }));
   const todayUtc = new Date().toISOString().slice(0, 10);
@@ -80,7 +97,7 @@ export async function getUsageByTool(
     .where(
       and(
         eq(ownerUsageDaily.ownerId, ownerId),
-        gte(ownerUsageDaily.date, sql`CURRENT_DATE - ${days - 1}`),
+        gte(ownerUsageDaily.date, windowStart(days)),
       ),
     )
     .groupBy(ownerUsageDaily.tool)

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
-import { useAuth, UserButton } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
@@ -73,7 +73,12 @@ export function Navbar() {
                 >
                   Book a demo
                 </Link>
-                <UserButton />
+                {/* A signed-in visitor's next step is their dashboard, not Clerk's
+                    account widget — account management lives in the dashboard's
+                    own sidebar, so the marketing chrome stays ours. */}
+                <Link href="/dashboard" className={buttonVariants({ size: "sm" })}>
+                  Dashboard
+                </Link>
               </>
             ) : (
               <>
@@ -118,12 +123,20 @@ export function Navbar() {
               </nav>
               <div className="mt-6 flex flex-col gap-2">
                 {isSignedIn ? (
-                  <Link
-                    href="/book-demo"
-                    className={buttonVariants({ className: "w-full" })}
-                  >
-                    Book a demo
-                  </Link>
+                  <>
+                    <SheetClose
+                      render={<Link href="/dashboard" />}
+                      className={buttonVariants({ className: "w-full" })}
+                    >
+                      Dashboard
+                    </SheetClose>
+                    <Link
+                      href="/book-demo"
+                      className={buttonVariants({ variant: "outline", className: "w-full" })}
+                    >
+                      Book a demo
+                    </Link>
+                  </>
                 ) : (
                   <>
                     <SheetClose

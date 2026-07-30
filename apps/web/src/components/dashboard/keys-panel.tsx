@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import {
@@ -27,7 +27,8 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { Chip, EmptyState, Panel } from "@/components/dashboard/panel";
+import { TableToolbar, thClass } from "@/components/dashboard/table-toolbar";
 import type { DashboardKey } from "@/lib/lurq-issuer";
 
 function formatDate(iso: string | null): string {
@@ -39,23 +40,42 @@ function formatDate(iso: string | null): string {
   });
 }
 
-const chipClass =
-  "rounded-sm border px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wide";
-const headClass = "font-mono text-xs font-normal uppercase tracking-wide text-muted-foreground/70";
+const FILTERS = [
+  { id: "active", label: "active" },
+  { id: "revoked", label: "revoked" },
+  { id: "all", label: "all" },
+];
 
 /**
- * Lists the signed-in user's keys and lets them rotate/revoke. Mutations call
- * the /api/keys/[prefix]/revoke|rotate proxies, then router.refresh() so the
- * parent server component re-fetches and passes fresh props back down.
+ * Lists the signed-in user's keys and lets them rotate/revoke. Mutations call the
+ * /api/keys/[prefix]/revoke|rotate proxies, then router.refresh() so the parent
+ * server component re-fetches and passes fresh props back down.
+ *
+ * `readOnly` is set when the rows are demo fixtures: their prefixes don't exist in
+ * `api_keys`, so offering Rotate/Revoke would just produce a 404.
  */
-export function KeysPanel({ keys }: { keys: DashboardKey[] }) {
+export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; readOnly?: boolean }) {
   const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("active");
   const [pendingRevoke, setPendingRevoke] = useState<DashboardKey | null>(null);
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [rotatingId, setRotatingId] = useState<number | null>(null);
   const [rotatedKey, setRotatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return keys.filter((k) => {
+      if (filter === "active" && k.revokedAt) return false;
+      if (filter === "revoked" && !k.revokedAt) return false;
+      if (!q) return true;
+      return (
+        (k.label ?? "").toLowerCase().includes(q) || k.prefix.toLowerCase().includes(q)
+      );
+    });
+  }, [keys, query, filter]);
 
   async function handleRevoke(key: DashboardKey) {
     setRevokingId(key.id);
@@ -102,80 +122,99 @@ export function KeysPanel({ keys }: { keys: DashboardKey[] }) {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  if (keys.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No keys yet — create one to connect a client.
-      </p>
-    );
-  }
-
   return (
-    <div>
-      <Table>
-        <TableHeader>
-          <TableRow className="border-border/60 hover:bg-transparent">
-            <TableHead className={headClass}>Label</TableHead>
-            <TableHead className={headClass}>Key</TableHead>
-            <TableHead className={headClass}>Tier</TableHead>
-            <TableHead className={headClass}>Created</TableHead>
-            <TableHead className={headClass}>Last used</TableHead>
-            <TableHead className={headClass}>Status</TableHead>
-            <TableHead className="w-8" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {keys.map((key) => (
-            <TableRow key={key.id} className="border-border/60">
-              <TableCell className="font-medium">{key.label || "—"}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {key.prefix}…
-              </TableCell>
-              <TableCell>
-                <span className={cn(chipClass, "border-border text-muted-foreground")}>
-                  {key.tier}
-                </span>
-              </TableCell>
-              <TableCell className="text-muted-foreground">{formatDate(key.createdAt)}</TableCell>
-              <TableCell className="text-muted-foreground">{formatDate(key.lastUsedAt)}</TableCell>
-              <TableCell>
-                {key.revokedAt ? (
-                  <span className={cn(chipClass, "border-border text-muted-foreground/70")}>
-                    Revoked
-                  </span>
-                ) : (
-                  <span className={cn(chipClass, "border-foreground/25 text-foreground")}>
-                    <span className="mr-1.5 inline-block size-1.5 rounded-full bg-foreground align-[1px]" />
-                    Active
-                  </span>
-                )}
-              </TableCell>
-              <TableCell>
-                {!key.revokedAt && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
-                      <MoreHorizontal />
-                      <span className="sr-only">Actions</span>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={rotatingId === key.id}
-                        onClick={() => handleRotate(key)}
-                      >
-                        {rotatingId === key.id ? "Rotating…" : "Rotate"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem variant="destructive" onClick={() => setPendingRevoke(key)}>
-                        Revoke
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+    <div className="space-y-4">
+      <TableToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="Search by label or prefix…"
+        filters={FILTERS}
+        activeFilter={filter}
+        onFilterChange={setFilter}
+        count={visible.length}
+        noun="key"
+      />
+
+      {keys.length === 0 ? (
+        <EmptyState title="No keys yet">
+          Create one with <span className="text-foreground">New key</span>, then run{" "}
+          <code className="font-mono text-foreground">npx lurqrun install</code>.
+        </EmptyState>
+      ) : visible.length === 0 ? (
+        <EmptyState title="No matches" />
+      ) : (
+        <Panel padding="none" className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/60 hover:bg-transparent">
+                  <TableHead className={thClass}>Label</TableHead>
+                  <TableHead className={thClass}>Key</TableHead>
+                  <TableHead className={thClass}>Tier</TableHead>
+                  <TableHead className={thClass}>Created</TableHead>
+                  <TableHead className={thClass}>Last used</TableHead>
+                  <TableHead className={thClass}>Status</TableHead>
+                  <TableHead className="w-8" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((key) => (
+                  <TableRow key={key.id} className="border-border/60">
+                    <TableCell className="font-medium">{key.label || "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                      {key.prefix}…
+                    </TableCell>
+                    <TableCell>
+                      <Chip>{key.tier}</Chip>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDate(key.createdAt)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDate(key.lastUsedAt)}
+                    </TableCell>
+                    <TableCell>
+                      {key.revokedAt ? (
+                        <Chip dot>Revoked</Chip>
+                      ) : (
+                        <Chip tone="good" dot>
+                          Active
+                        </Chip>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {!key.revokedAt && !readOnly && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
+                            <MoreHorizontal />
+                            <span className="sr-only">Actions</span>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              disabled={rotatingId === key.id}
+                              onClick={() => handleRotate(key)}
+                            >
+                              {rotatingId === key.id ? "Rotating…" : "Rotate"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => setPendingRevoke(key)}
+                            >
+                              Revoke
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Panel>
+      )}
+
+      {error && <p className="text-sm text-bad">{error}</p>}
 
       <Dialog open={!!pendingRevoke} onOpenChange={(next) => !next && setPendingRevoke(null)}>
         <DialogContent>
@@ -208,7 +247,7 @@ export function KeysPanel({ keys }: { keys: DashboardKey[] }) {
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2">
-            <code className="flex-1 overflow-x-auto rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
+            <code className="flex-1 overflow-x-auto rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
               {rotatedKey}
             </code>
             <Button variant="outline" onClick={copyRotated}>
