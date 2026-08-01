@@ -4,6 +4,12 @@ import { Marquee } from "@/components/ui/marquee";
 // Windsurf, GitHub Copilot, and Codex use their real brand marks (official
 // colors where the brand has one). vscode.svg is still a generic placeholder
 // glyph tinted VS Code blue — swap in the official mark if you get one.
+//
+// Marks whose brand color is black (Cursor, Windsurf, Copilot) are committed
+// with a hardcoded white fill, NOT `currentColor`: these render through <img>,
+// which parses the SVG in its own document where currentColor resolves to the
+// default black, not the page's foreground. The site is dark-only, so white is
+// the right constant. Inline the SVGs if a light theme ever lands.
 const IDES = [
   { name: "Claude Code", logo: "/logos/claude-code.svg" },
   { name: "Cursor", logo: "/logos/cursor.svg" },
