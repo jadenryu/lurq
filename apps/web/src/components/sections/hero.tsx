@@ -47,15 +47,16 @@ export function Hero() {
             variants={fadeUp}
             className="font-heading text-[2.15rem] font-medium lowercase leading-[1.05] tracking-tight sm:text-5xl md:text-[3.1rem]"
           >
-            the package index for coding agents.
+            the marketplace coding agents shop in.
           </motion.h1>
 
           <motion.p
             variants={fadeUp}
             className="mx-auto mt-5 max-w-xl text-[0.95rem] leading-relaxed text-muted-foreground sm:text-lg"
           >
-            Helps your AI pick libraries that work, and catch bad ones before
-            they break the build.
+            Every install your agent makes is a buying decision, taken from
+            stale training data. lurq ranks every package on live evidence, so
+            it picks what actually works.
           </motion.p>
 
           <motion.div
@@ -70,7 +71,7 @@ export function Hero() {
               href="#product"
               className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border px-4 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground"
             >
-              how it works
+              how the market works
               <ArrowRight className="size-3.5" />
             </a>
           </motion.div>

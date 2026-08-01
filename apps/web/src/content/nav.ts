@@ -8,9 +8,8 @@ export type NavLink = {
 
 // Anchors follow homepage story order: product → difference → faq.
 export const navLinks: NavLink[] = [
-  { label: "Product", href: "/#product" },
+  { label: "Marketplace", href: "/#product" },
   { label: "Difference", href: "/#comparison" },
-  { label: "Changelog", href: "/changelog" },
   { label: "About", href: "/about" },
   { label: "FAQ", href: "/#faq" },
 ];

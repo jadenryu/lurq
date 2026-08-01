@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "lurq: objective package recommendations for AI coding agents";
+export const alt = "lurq: the marketplace layer for AI coding agents";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -31,7 +31,7 @@ export default function OpengraphImage() {
             maxWidth: 900,
           }}
         >
-          Objective, evidence-scored package recommendations for AI coding agents.
+          Agents pick the software your company runs on. lurq is where they shop.
         </div>
       </div>
     ),

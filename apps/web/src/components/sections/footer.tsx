@@ -6,11 +6,11 @@ type FooterLink = { label: string; href: string; external?: boolean };
 
 const columns: { title: string; links: FooterLink[] }[] = [
   {
-    title: "Product",
+    title: "Marketplace",
     links: [
       { label: "How it works", href: "/#product" },
       { label: "Difference", href: "/#comparison" },
-      { label: "Changelog", href: "/changelog" },
+      { label: "List a package", href: "/partnerships" },
     ],
   },
   {
@@ -39,8 +39,8 @@ export function Footer() {
           <div>
             <Logo />
             <p className="mt-3 max-w-xs text-sm text-muted-foreground">
-              A live package index for AI coding tools. Helps agents pick
-              libraries that work, and catch bad ones early.
+              The marketplace layer for AI coding agents. Evidence-ranked,
+              refreshed daily, never pay-to-rank.
             </p>
           </div>
 

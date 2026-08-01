@@ -13,19 +13,19 @@ export function SectionRoadmap() {
           <div className="grid gap-8 lg:grid-cols-2 lg:gap-16">
             {/* left: oversized title */}
             <h2 className="text-4xl font-medium lowercase leading-[1.04] tracking-tight md:text-5xl">
-              plan the whole
+              agents don&apos;t buy
               <br />
-              stack at once.
+              one thing at a time.
             </h2>
 
             {/* right: description */}
             <div className="lg:pt-1">
               <p className="text-lg leading-relaxed text-muted-foreground md:text-xl">
-                Describe the project once.{" "}
-                <span className="font-mono text-foreground">lurq plan</span> picks
-                a strong package for each slot, auth, validation, database,
-                styling, and checks they work together. One answer you can defend
-                in review.
+                One prompt fills a whole cart.{" "}
+                <span className="font-mono text-foreground">lurq plan</span> sources
+                every slot at once, auth, validation, database, styling, and
+                checks the picks hold together. That is the unit of demand this
+                market is built around: not a lookup, a stack.
               </p>
             </div>
           </div>

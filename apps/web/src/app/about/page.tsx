@@ -8,32 +8,32 @@ import { FlowDiagram } from "@/components/visuals/flow-diagram";
 export const metadata: Metadata = {
   title: "About | lurq",
   description:
-    "Why lurq exists: objective, evidence-scored package recommendations for AI coding agents.",
+    "Why lurq exists: the evidence-ranked marketplace layer AI coding agents buy their dependencies through.",
 };
 
 const principles = [
   {
     icon: ScanSearch,
     title: "Evidence over popularity",
-    body: "Stars and download counts measure attention, not health. lurq scores real signals: maintenance cadence, advisories, deprecations, bundle cost.",
+    body: "Stars and download counts measure attention, not health. lurq ranks real signals: maintenance cadence, advisories, deprecations, bundle cost.",
+  },
+  {
+    icon: Eye,
+    title: "Never pay-to-rank",
+    body: "Placement is not for sale, at any price. Every ranking is reproducible from public evidence and carries a confidence and a dataAsOf timestamp.",
   },
   {
     icon: RefreshCw,
     title: "Fresh, not frozen",
-    body: "Models recommend from training data that ages out. lurq re-syncs from public sources so your agent sees what's true today.",
-  },
-  {
-    icon: Eye,
-    title: "Transparent by default",
-    body: "Every recommendation carries a confidence and a dataAsOf timestamp. No black-box rankings.",
+    body: "Models recommend from training data that ages out. lurq re-syncs daily, then learns from what agents report back after the pick ships.",
   },
 ];
 
 const pipeline = [
-  { title: "Public APIs", sub: "npm · GitHub · deps.dev" },
-  { title: "Scoring engine", sub: "health, risk, efficiency" },
-  { title: "Evidence index", sub: "pgvector search" },
-  { title: "Your agent", sub: "over MCP" },
+  { title: "Public signals", sub: "npm · GitHub · deps.dev" },
+  { title: "Ranking engine", sub: "health, risk, efficiency" },
+  { title: "Evidence index", sub: "pgvector matching" },
+  { title: "Agent buys", sub: "over MCP · reports back" },
 ];
 
 export default function AboutPage() {
@@ -41,41 +41,56 @@ export default function AboutPage() {
     <PageShell
       eyebrow="Company"
       title="About lurq"
-      lead="lurq is a continuously-updated, evidence-scored index of JS/TS frameworks and libraries: a companion to your coding agent that recommends dependencies that are real, healthy, and current."
+      lead="Software procurement is quietly moving from humans to agents. lurq is the marketplace layer that decision runs through: a live, evidence-ranked market of JS/TS packages, served to coding agents at the moment they choose."
     >
       <Prose>
-        <h2>The problem</h2>
+        <h2>The shift</h2>
         <p>
-          AI coding agents are excellent at writing code and surprisingly poor at
-          choosing what to build on. They suggest libraries that are abandoned,
-          deprecated, or simply hallucinated, because their knowledge is a
-          snapshot frozen at training time, ranked by how often a name appeared,
-          not by whether the package is healthy now.
+          For twenty years a developer chose the dependency. Now an agent does,
+          hundreds of times a week, in seconds, from a snapshot of the ecosystem
+          frozen at training time and ranked by how often a name appeared in text
+          rather than by whether the package is healthy now.
         </p>
         <p>
-          The cost lands on you: a dependency that looked fine in the diff but
-          hasn&apos;t shipped a release in three years, carries an open advisory,
-          or never existed at all.
+          The cost lands on the company: a dependency that looked fine in the
+          diff but hasn&apos;t shipped a release in three years, carries an open
+          advisory, or never existed at all. As the share of agent-written code
+          climbs, so does the value of being the layer that decision passes
+          through.
         </p>
 
-        <h2>What lurq does</h2>
+        <h2>The market</h2>
         <p>
-          lurq ingests public signals from npm, GitHub, and{" "}
+          lurq is two-sided by construction. On the <strong>demand side</strong>,
+          coding agents reach it through an <strong>MCP server</strong>, a{" "}
+          <strong>CLI</strong>, an <strong>HTTP API</strong>, and an installable{" "}
+          <strong>skill</strong> — free, instant, and inside tools teams already
+          run. On the <strong>supply side</strong>, every published package is
+          listed automatically and ranked on public signals from npm, GitHub, and{" "}
           <a href="https://deps.dev" target="_blank" rel="noopener noreferrer">
             deps.dev
           </a>
-          , scores each package on objective health metrics, and exposes the
-          result as an <strong>MCP server</strong>, a <strong>CLI</strong>, and
-          an installable <strong>agent skill</strong>. Your agent asks lurq
-          before it picks a dependency; lurq answers with a short, scored,
-          verifiable recommendation.
+          . Maintainers never apply, and they never pay.
         </p>
 
-        <h2>How it works</h2>
+        <h2>The loop</h2>
         <p>
-          Public APIs feed a scoring engine; the engine writes to an index your
-          agent queries over MCP. Sync runs on a schedule, so the index stays
-          current without you doing anything.
+          Public APIs feed a ranking engine; the engine writes to an index agents
+          query over MCP; agents report back what actually happened after the
+          pick shipped. Those outcomes re-rank the market, so every call makes
+          the next answer better — and that post-decision data is something only
+          the layer sitting inside the decision ever gets to see.
+        </p>
+
+        <h2>Where this goes</h2>
+        <p>
+          JS/TS packages are the beachhead: the largest registry, the fastest
+          churn, the most agent traffic. The same market structure extends to
+          every other slot an agent fills — other language ecosystems first, then
+          the paid infrastructure an agent increasingly selects on a
+          company&apos;s behalf: auth, payments, databases, email,
+          observability. The decision is the product; packages are where it
+          starts.
         </p>
       </Prose>
 

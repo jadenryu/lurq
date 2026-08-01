@@ -22,8 +22,8 @@ export function SectionCta() {
           </h2>
 
           <p className="mx-auto mt-5 max-w-md text-base leading-relaxed text-muted-foreground md:text-lg">
-            Give your coding agent a live package index. No cost while we are in
-            pre-alpha.
+            Put your coding agent on the buy side of a live package market. No
+            cost while we are in pre-alpha.
           </p>
 
           <div className="mt-9 flex flex-col items-center gap-5">

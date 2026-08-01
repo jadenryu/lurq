@@ -23,8 +23,8 @@ export function SectionFaq() {
               questions, answered.
             </h2>
             <p className="mt-3 max-w-md text-base text-muted-foreground">
-              What lurq is, how it differs from asking your model, and where the
-              data comes from.
+              What lurq is, why it is a market and not a search box, and why
+              placement is never for sale.
             </p>
 
             <Accordion className="mt-8 w-full border-t border-border">

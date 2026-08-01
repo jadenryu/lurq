@@ -6,7 +6,7 @@ import { Reveal } from "@/components/common/reveal";
 import { Footer } from "@/components/sections/footer";
 import { cn } from "@/lib/utils";
 
-// Shared shell for standalone content pages (company, legal, changelog).
+// Shared shell for standalone content pages (company, legal).
 // Sticky header + an ambient title block + the marketing footer, so every
 // sub-page keeps lurq's dark theme and feels of a piece with the home page.
 export function PageShell({

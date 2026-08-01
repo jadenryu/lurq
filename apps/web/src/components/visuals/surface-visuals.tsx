@@ -199,6 +199,46 @@ function Cache() {
   );
 }
 
+function Listings() {
+  return (
+    <Shell>
+      <p style={{ color: c.dim }}>listed automatically · rank earned</p>
+      <div className="mt-4 space-y-2.5" style={{ color: c.text }}>
+        <p className="flex items-center gap-3">
+          drizzle-orm <span style={{ color: c.dim }}>91</span> <Bar value={91} />
+        </p>
+        <p className="flex items-center gap-3">
+          prisma <span style={{ color: c.dim }}>84</span> <Bar value={84} />
+        </p>
+        <p className="flex items-center gap-3">
+          sequelize <span style={{ color: c.dim }}>67</span> <Bar value={67} />
+        </p>
+      </div>
+      <p className="mt-4" style={{ color: c.ok }}>
+        ✓ no sponsored slots · no paid placement
+        <Cursor />
+      </p>
+    </Shell>
+  );
+}
+
+function Outcomes() {
+  return (
+    <Shell>
+      <Prompt>report_outcome --pick drizzle-orm</Prompt>
+      <div className="mt-2 space-y-1">
+        <p style={{ color: c.ok }}>✓ installed clean</p>
+        <p style={{ color: c.ok }}>✓ task resolved</p>
+        <p style={{ color: c.bad }}>✗ 1 peer conflict reported</p>
+      </div>
+      <p className="mt-3" style={{ color: c.accent }}>
+        → rank updated from real usage
+        <Cursor />
+      </p>
+    </Shell>
+  );
+}
+
 const VISUALS: Record<string, () => React.ReactNode> = {
   mcp: Mcp,
   cli: Cli,
@@ -207,6 +247,8 @@ const VISUALS: Record<string, () => React.ReactNode> = {
   index: Index,
   search: Search,
   cache: Cache,
+  listings: Listings,
+  outcomes: Outcomes,
 };
 
 export function SurfaceVisual({ id }: { id: string }) {

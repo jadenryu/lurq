@@ -248,11 +248,11 @@ export function SectionComparison() {
               the difference
             </SectionLabel>
             <h2 className="text-3xl font-medium lowercase leading-[1.08] tracking-tight md:text-4xl">
-              same question. one guess, one check.
+              same question. one guesses, one checks the market.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
               Without lurq, the model reaches for what it remembers. With lurq,
-              it checks live package data first.
+              it checks what the market actually offers today.
             </p>
           </div>
         </Reveal>

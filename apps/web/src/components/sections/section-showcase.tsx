@@ -8,7 +8,9 @@ import {
   Blocks,
   Database,
   Network,
+  RefreshCw,
   Search,
+  Store,
   Terminal,
   Webhook,
   Zap,
@@ -25,7 +27,7 @@ import { cn } from "@/lib/utils";
 type Pillar = {
   id: string;
   label: string;
-  group: "interface" | "engine";
+  group: "demand side" | "supply side" | "market engine";
   icon: LucideIcon;
   name: string;
   command: string;
@@ -38,55 +40,79 @@ const PILLARS: Pillar[] = [
   {
     id: "mcp",
     label: "MCP",
-    group: "interface",
+    group: "demand side",
     icon: Network,
     name: "MCP server",
     command: "claude mcp add lurq",
-    blurb: "Connect lurq as a tool your coding agent can call.",
+    blurb: "The counter your agent walks up to, mid-task.",
     detail:
-      "Claude Code, Cursor, Windsurf and others ask lurq mid-task for fresh package picks. Short answers, meant for agents.",
+      "Claude Code, Cursor, Windsurf and others ask lurq the moment a dependency decision comes up. Short answers, priced for an agent's context window.",
     chips: ["recommend", "evaluate", "compare", "verify"],
   },
   {
     id: "cli",
     label: "CLI",
-    group: "interface",
+    group: "demand side",
     icon: Terminal,
     name: "Command line",
     command: 'lurq recommend "form library for react"',
-    blurb: "The same answers, from your terminal.",
+    blurb: "The same market, from your terminal.",
     detail:
-      "Recommend, verify, compare, and plan as simple commands. Use them in scripts, CI, or by hand.",
+      "Recommend, verify, compare, and plan as simple commands. The rankings that drive an agent can gate a CI job too.",
     chips: ["recommend", "evaluate", "compare", "verify"],
   },
   {
     id: "api",
     label: "API",
-    group: "interface",
+    group: "demand side",
     icon: Webhook,
     name: "HTTP API",
     command: "lurq serve-http",
-    blurb: "Run lurq as a service for your own tools.",
+    blurb: "Wholesale access for platforms built on top.",
     detail:
-      "Host it behind an API key and rate limits. Your clients never need database credentials.",
+      "Host it behind an API key and rate limits, and resell the decision to your own users. Clients never need database credentials.",
     chips: ["/recommend", "/evaluate", "/compare", "/verify"],
   },
   {
     id: "skill",
     label: "Skill",
-    group: "interface",
+    group: "demand side",
     icon: Blocks,
     name: "Agent skill",
     command: "npx lurqrun install-skill --agent claude-code",
     blurb: "Install it once. Your agent keeps it.",
     detail:
-      "A short installer finds your agent and wires lurq in, so it is ready the next time you open a project.",
+      "A short installer finds your agent and wires lurq in. Joining the demand side has to cost nothing, or the market never reaches volume.",
     chips: ["Claude Code", "Cursor", "Windsurf", "Codex"],
+  },
+  {
+    id: "listings",
+    label: "Listings",
+    group: "supply side",
+    icon: Store,
+    name: "Package listings",
+    command: "open · evidence-graded",
+    blurb: "Every package is listed. Rank is earned, not bought.",
+    detail:
+      "Maintainers never apply and never pay. Anything published is already listed, ranked on evidence a careful engineer would check anyway. Placement is the one thing this market will not sell.",
+    chips: ["no pay-to-rank", "auto-listed", "auditable"],
+  },
+  {
+    id: "outcomes",
+    label: "Outcomes",
+    group: "supply side",
+    icon: RefreshCw,
+    name: "Outcome loop",
+    command: "report_outcome",
+    blurb: "Agents report back what actually worked.",
+    detail:
+      "After a pick ships, the agent reports what happened: installed clean, broke the build, resolved the task. Those reports re-rank the market, and nobody else sees what agents do after the recommendation.",
+    chips: ["installed", "resolved", "regressed"],
   },
   {
     id: "index",
     label: "Index",
-    group: "engine",
+    group: "market engine",
     icon: Database,
     name: "Package index",
     command: "postgres · synced daily",
@@ -98,7 +124,7 @@ const PILLARS: Pillar[] = [
   {
     id: "search",
     label: "Search",
-    group: "engine",
+    group: "market engine",
     icon: Search,
     name: "Hybrid search",
     command: "semantic + keyword",
@@ -110,7 +136,7 @@ const PILLARS: Pillar[] = [
   {
     id: "cache",
     label: "Cache",
-    group: "engine",
+    group: "market engine",
     icon: Zap,
     name: "Response cache",
     command: "redis · ttl",
@@ -166,14 +192,15 @@ export function SectionShowcase() {
         <Reveal>
           <div className="mb-10 max-w-3xl">
             <SectionLabel index={1} className="mb-5">
-              how it works
+              the marketplace
             </SectionLabel>
             <h2 className="text-3xl font-medium lowercase leading-[1.08] tracking-tight md:text-4xl">
-              one place your AI can check packages.
+              two sides, one live market.
             </h2>
             <p className="mt-4 max-w-xl text-muted-foreground">
-              Plug lurq into Claude Code, Cursor, or the terminal. Same live
-              index, whichever way you work.
+              Agents buy through MCP, the CLI, the API, or a skill. Every
+              published package is listed, ranked on public evidence, and
+              re-ranked by what agents report back.
             </p>
           </div>
         </Reveal>

@@ -6,7 +6,6 @@ import { SectionShowcase } from "@/components/sections/section-showcase";
 import { SectionRoadmap } from "@/components/sections/section-roadmap";
 import { SectionComparison } from "@/components/sections/section-comparison";
 import { SectionProwess } from "@/components/sections/section-prowess";
-import { SectionChangelog } from "@/components/sections/section-changelog";
 import { SectionFaq } from "@/components/sections/section-faq";
 import { SectionCta } from "@/components/sections/section-cta";
 import { Footer } from "@/components/sections/footer";
@@ -23,7 +22,6 @@ export default function Home() {
         <SectionRoadmap />
         <SectionComparison />
         <SectionProwess />
-        <SectionChangelog />
         <SectionFaq />
         <SectionCta />
       </main>
