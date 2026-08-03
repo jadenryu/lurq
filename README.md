@@ -14,7 +14,8 @@ lurq recommends and explains packages; your agent writes the code. responses are
 
 ## quick start: connect your agent
 
-> **not public yet.** the published build (`lurqrun@0.0.5`) is still behind the pre-launch gate — anyone can install it, but running a command shows a placeholder. [join the waitlist](https://lurq.run); the steps below are how it works at launch.
+> **lurq is live.** [create a free account](https://lurq.run/sign-up) to generate
+> your API key, then connect your coding agent with the guided installer below.
 
 lurq is a **hosted service**: you don't run a database or a sync. get an API key,
 then run the guided installer:

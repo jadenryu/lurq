@@ -66,20 +66,9 @@ export function Navbar() {
         <div className="flex flex-1 items-center justify-end gap-2">
           <div className="hidden items-center gap-2 lg:flex">
             {isSignedIn ? (
-              <>
-                <Link
-                  href="/book-demo"
-                  className={buttonVariants({ variant: "ghost", size: "sm" })}
-                >
-                  Book a demo
-                </Link>
-                {/* A signed-in visitor's next step is their dashboard, not Clerk's
-                    account widget — account management lives in the dashboard's
-                    own sidebar, so the marketing chrome stays ours. */}
-                <Link href="/dashboard" className={buttonVariants({ size: "sm" })}>
-                  Dashboard
-                </Link>
-              </>
+              <Link href="/dashboard" className={buttonVariants({ size: "sm" })}>
+                Dashboard
+              </Link>
             ) : (
               <>
                 <Link
@@ -89,10 +78,10 @@ export function Navbar() {
                   Log in
                 </Link>
                 <Link
-                  href="/book-demo"
+                  href="/sign-up"
                   className={buttonVariants({ size: "sm" })}
                 >
-                  Book a demo
+                  Get started free
                 </Link>
               </>
             )}
@@ -114,6 +103,7 @@ export function Navbar() {
                 {navLinks.map((l) => (
                   <SheetClose
                     key={l.href}
+                    nativeButton={false}
                     className="rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                     render={l.external ? <a href={l.href} /> : <Link href={l.href} />}
                   >
@@ -123,23 +113,17 @@ export function Navbar() {
               </nav>
               <div className="mt-6 flex flex-col gap-2">
                 {isSignedIn ? (
-                  <>
-                    <SheetClose
-                      render={<Link href="/dashboard" />}
-                      className={buttonVariants({ className: "w-full" })}
-                    >
-                      Dashboard
-                    </SheetClose>
-                    <Link
-                      href="/book-demo"
-                      className={buttonVariants({ variant: "outline", className: "w-full" })}
-                    >
-                      Book a demo
-                    </Link>
-                  </>
+                  <SheetClose
+                    nativeButton={false}
+                    render={<Link href="/dashboard" />}
+                    className={buttonVariants({ className: "w-full" })}
+                  >
+                    Dashboard
+                  </SheetClose>
                 ) : (
                   <>
                     <SheetClose
+                      nativeButton={false}
                       render={<Link href="/sign-in" />}
                       className={buttonVariants({
                         variant: "outline",
@@ -148,12 +132,13 @@ export function Navbar() {
                     >
                       Log in
                     </SheetClose>
-                    <Link
-                      href="/book-demo"
+                    <SheetClose
+                      nativeButton={false}
+                      render={<Link href="/sign-up" />}
                       className={buttonVariants({ className: "w-full" })}
                     >
-                      Book a demo
-                    </Link>
+                      Get started free
+                    </SheetClose>
                   </>
                 )}
               </div>

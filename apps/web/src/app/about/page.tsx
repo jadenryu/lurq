@@ -125,10 +125,10 @@ export default function AboutPage() {
 
       <div className="mt-12 flex flex-wrap items-center gap-4">
         <Link
-          href="/book-demo"
+          href="/sign-up"
           className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
         >
-          Book a demo
+          Get started free
         </Link>
         <Link
           href="/#contact"

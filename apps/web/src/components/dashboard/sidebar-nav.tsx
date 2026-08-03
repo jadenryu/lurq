@@ -25,7 +25,7 @@ const WORKSPACE: NavItem[] = [
 const SUPPORT: NavItem[] = [
   { href: "/dashboard/guide", label: "how to use" },
   { href: DOCS_URL, label: "docs", external: true },
-  { href: "/book-demo", label: "support" },
+  { href: "/#contact", label: "support" },
 ];
 
 /** `/dashboard` is only active on an exact match — every other route is a prefix. */

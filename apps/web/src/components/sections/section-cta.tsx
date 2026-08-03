@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { Container } from "@/components/common/container";
-import { WaitlistDialog } from "@/components/common/waitlist-dialog";
+import { buttonVariants } from "@/components/ui/button";
 
 export function SectionCta() {
   return (
@@ -22,17 +23,22 @@ export function SectionCta() {
           </h2>
 
           <p className="mx-auto mt-5 max-w-md text-base leading-relaxed text-muted-foreground md:text-lg">
-            Put your coding agent on the buy side of a live package market. No
-            cost while we are in pre-alpha.
+            Create your account, generate an API key, and connect your coding
+            agent to the live package market.
           </p>
 
           <div className="mt-9 flex flex-col items-center gap-5">
-            <WaitlistDialog
-              triggerLabel="start free"
-              triggerClassName="cta-glow h-12 px-8 text-base"
-            />
+            <Link
+              href="/sign-up"
+              className={buttonVariants({
+                size: "lg",
+                className: "cta-glow h-12 px-8 text-base",
+              })}
+            >
+              start free
+            </Link>
             <p className="font-mono text-[0.7rem] text-muted-foreground/50">
-              free while in pre-alpha
+              free to get started
             </p>
           </div>
         </div>

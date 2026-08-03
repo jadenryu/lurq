@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Container } from "@/components/common/container";
-import { WaitlistDialog } from "@/components/common/waitlist-dialog";
-import { CrypticInstall } from "@/components/common/cryptic-install";
+import { InstallCommand } from "@/components/common/install-command";
+import { buttonVariants } from "@/components/ui/button";
 import { HeroLiveDemo } from "@/components/visuals/hero-live-demo";
 import { cn } from "@/lib/utils";
 
@@ -63,10 +64,15 @@ export function Hero() {
             variants={fadeUp}
             className="mt-8 flex flex-wrap items-center justify-center gap-3"
           >
-            <WaitlistDialog
-              triggerLabel="get started free"
-              triggerClassName="cta-glow"
-            />
+            <Link
+              href="/sign-up"
+              className={buttonVariants({
+                size: "lg",
+                className: "cta-glow px-7",
+              })}
+            >
+              get started free
+            </Link>
             <a
               href="#product"
               className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border px-4 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground"
@@ -124,11 +130,11 @@ export function Hero() {
                       install lurq
                     </p>
                     <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                      One command into Claude Code, Cursor, or your coding agent.
-                      Unlocks at launch.
+                      Run one command to connect Claude Code, Cursor, or your
+                      coding agent.
                     </p>
                   </div>
-                  <CrypticInstall className="max-w-lg" />
+                  <InstallCommand className="max-w-lg" />
                 </div>
               )}
             </div>

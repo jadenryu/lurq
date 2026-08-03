@@ -1,7 +1,6 @@
 // Cloudflare Turnstile global API (loaded via <script> on demand). Declared in
-// one place so the contact form and waitlist dialog share a single Window
-// augmentation; duplicate `declare global` blocks with differing shapes break
-// the build ("Subsequent property declarations must have the same type").
+// one place so the contact form can use the browser API without introducing
+// duplicate Window augmentations.
 
 interface TurnstileOptions {
   sitekey: string;

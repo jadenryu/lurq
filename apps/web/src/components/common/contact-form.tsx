@@ -26,7 +26,7 @@ export function ContactForm() {
   // class): implicit rendering only scans the DOM once at script load, so the
   // widget never reappears after the form unmounts on success and remounts via
   // "Send another". Explicit render + reset keeps every attempt with a live
-  // token. Mirrors the waitlist dialog.
+  // token.
   const widgetRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const showForm = status !== "success";

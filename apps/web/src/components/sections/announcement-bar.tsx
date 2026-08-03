@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState } from "react";
+import Link from "next/link";
 import { X } from "lucide-react";
 import { robotoMono } from "@/lib/fonts";
 
-const VERSION = "v0.0.3";
+const VERSION = "v0.0.6";
 const BANNER_H = "2.25rem"; // matches h-9
 const STORAGE_KEY = "lurq-banner-dismissed";
 
@@ -50,17 +51,17 @@ export function AnnouncementBar() {
         className="inline-block size-1.5 shrink-0 rounded-full bg-brand motion-safe:animate-pulse"
       />
       <p className="truncate">
-        free while in pre-alpha{" "}
+        lurq is live{" "}
         <span className={`${robotoMono.className} text-muted-foreground`}>
           {VERSION}
         </span>{" "}
         · help your AI pick packages that work ·{" "}
-        <a
-          href="#product"
+        <Link
+          href="/sign-up"
           className="font-medium underline underline-offset-2 transition-colors hover:text-foreground"
         >
-          how it works
-        </a>
+          get started free
+        </Link>
       </p>
       <button
         type="button"
