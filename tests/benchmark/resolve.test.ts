@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveProposal } from '../../src/benchmark/resolve';
 import type { Database } from '../../src/db/client';
-import type { Sandbox, SandboxResult, SandboxSetResult, SandboxVerifyOptions } from '../../src/sandbox/types';
+import type { ExecOptions, ExecResult, Sandbox, SandboxResult, SandboxSetResult, SandboxVerifyOptions } from '../../src/sandbox/types';
 import type { NormalizedProposal, NormalizedSelection } from '../../src/benchmark/types';
 
 // Dummy Sandbox
@@ -17,6 +17,9 @@ class DummySandbox implements Sandbox {
       durationMs: 10,
       error: null,
     };
+  }
+  async exec(_command: string, _opts?: ExecOptions): Promise<ExecResult> {
+    return { exitCode: 0, stdout: '', stderr: '' };
   }
   async verifySet(packages: any[], _opts?: SandboxVerifyOptions): Promise<SandboxSetResult> {
     return {

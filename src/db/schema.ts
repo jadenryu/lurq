@@ -48,6 +48,7 @@ import type {
   ScoreBreakdown,
   UsageGuide,
 } from '../core/types';
+import type { EntityKind, Verdict } from '../graph/types';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -412,8 +413,111 @@ export interface SyncError {
   message: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v2 graph (docs/lurq-v2-spec.md §5). Generic entity/claim/observation model,
+// running ALONGSIDE the npm-specific tables above — not replacing them yet. See
+// docs/lurq-v2-integration-plan.md §4 for why the migration is deferred.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A node in the graph. Anything an agent depends on that an oracle can check. */
+export const entities = pgTable(
+  'entities',
+  {
+    id: serial('id').primaryKey(),
+    kind: text('kind').$type<EntityKind>().notNull(),
+    /** Registry or authority: npm, api.stripe.com, … */
+    namespace: text('namespace').notNull(),
+    name: text('name').notNull(),
+    /** Null for unversioned kinds. */
+    version: text('version'),
+    /** `kind:namespace:name:version` */
+    canonicalKey: text('canonical_key').notNull(),
+    /**
+     * 0 = the public graph; a real id = a private deployment's tenant. The spec
+     * models public as NULL, but Postgres UNIQUE treats NULLs as distinct, so
+     * (key, NULL) would insert unlimited duplicates and the dedup silently fails.
+     * A non-null sentinel is the cheap fix that works on every PG version.
+     */
+    tenantId: bigint('tenant_id', { mode: 'number' }).notNull().default(0),
+    firstSeen: ts('first_seen').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('entities_canonical_idx').on(table.canonicalKey, table.tenantId),
+    index('entities_kind_idx').on(table.kind, table.namespace, table.name),
+  ],
+);
+
+/** The runtime a verdict holds in. Never a node — always a dimension (§2). */
+export const environments = pgTable('environments', {
+  id: serial('id').primaryKey(),
+  os: text('os').notNull(),
+  arch: text('arch').notNull(),
+  runtime: text('runtime').notNull(),
+  runtimeVer: text('runtime_ver').notNull(),
+  resolver: text('resolver'),
+  /** Hash of the above; the dedup key. */
+  fingerprint: text('fingerprint').notNull().unique(),
+});
+
+/** A (subject, relation, object, environment) tuple awaiting observations. */
+export const claims = pgTable(
+  'claims',
+  {
+    id: serial('id').primaryKey(),
+    subjectId: integer('subject_id')
+      .notNull()
+      .references(() => entities.id),
+    /** Null for unary claims ("does this install at all"). */
+    objectId: integer('object_id').references(() => entities.id),
+    relation: text('relation').notNull(),
+    environmentId: integer('environment_id')
+      .notNull()
+      .references(() => environments.id),
+    tenantId: bigint('tenant_id', { mode: 'number' }).notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex('claims_tuple_idx').on(
+      table.subjectId,
+      table.objectId,
+      table.relation,
+      table.environmentId,
+      table.tenantId,
+    ),
+  ],
+);
+
+/**
+ * APPEND-ONLY. Verdicts are never mutated — the history is the product, and
+ * `breaks_at` (the highest-value edge in the graph) is derived by scanning
+ * observations across versions. `stale` is applied at READ time from the
+ * oracle's TTL, never written by a background job.
+ */
+export const observations = pgTable(
+  'observations',
+  {
+    id: serial('id').primaryKey(),
+    claimId: integer('claim_id')
+      .notNull()
+      .references(() => claims.id),
+    verdict: text('verdict').$type<Verdict>().notNull(),
+    /** Evidence that makes the verdict auditable. Null only for `unknown`. */
+    evidence: text('evidence'),
+    oracleId: text('oracle_id').notNull(),
+    oracleVer: text('oracle_ver').notNull(),
+    costMillis: integer('cost_millis'),
+    observedAt: ts('observed_at').notNull().defaultNow(),
+  },
+  (table) => [index('observations_claim_idx').on(table.claimId, table.observedAt)],
+);
+
 export type PackageRow = typeof packages.$inferSelect;
 export type NewPackageRow = typeof packages.$inferInsert;
+export type EntityRow = typeof entities.$inferSelect;
+export type NewEntityRow = typeof entities.$inferInsert;
+export type EnvironmentRow = typeof environments.$inferSelect;
+export type ClaimRow = typeof claims.$inferSelect;
+export type ObservationRow = typeof observations.$inferSelect;
+export type NewObservationRow = typeof observations.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;
 export type SyncRunRow = typeof syncRuns.$inferSelect;
 export type DiscoveryQueueRow = typeof discoveryQueue.$inferSelect;

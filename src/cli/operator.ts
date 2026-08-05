@@ -38,6 +38,50 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('oracle')
+    .argument('<kind>', 'node kind to verify (mcp_server)')
+    .argument('<name>', 'entity name, e.g. an npm package that ships an MCP server')
+    .description('run the oracle for a node kind and record observations (v2 graph)')
+    .option('--version <v>', 'pin the entity version')
+    .option('--namespace <ns>', 'registry/authority (default npm)')
+    .option('--json', 'output the run result as JSON')
+    .action(
+      async (
+        kind: string,
+        name: string,
+        opts: { version?: string; namespace?: string; json?: boolean },
+      ) => {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { createDb } = await import('../db/client');
+        const { runOracle, ORACLES } = await import('../graph/run');
+        const { db, close } = createDb();
+        try {
+          if (!(kind in ORACLES)) {
+            throw new Error(
+              `No oracle for '${kind}'. Registered: ${Object.keys(ORACLES).join(', ')}`,
+            );
+          }
+          const result = await runOracle(db, {
+            kind: kind as keyof typeof ORACLES,
+            namespace: opts.namespace ?? 'npm',
+            name,
+            version: opts.version ?? null,
+          });
+          if (opts.json) {
+            console.log(JSON.stringify(result, null, 2));
+          } else {
+            console.log(
+              `${name}: ${result.verdicts.join(', ')} · ${result.discovered} tool(s) · ${result.costMillis}ms`,
+            );
+          }
+        } finally {
+          await close();
+        }
+      },
+    );
+
+  program
     .command('worker')
     .description('run the autonomous discovery loop (discover → ingest → mine → extract → rescore); Ctrl-C stops it cleanly (§4G)')
     .option('--interval <sec>', 'seconds between cycles (default 900)', (v) => parseInt(v, 10))
