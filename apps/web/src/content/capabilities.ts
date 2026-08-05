@@ -36,7 +36,7 @@ export const capabilities: Capability[] = [
     id: "verify",
     icon: ScanLine,
     title: "Verify",
-    body: "Check a package before your agent even installs it",
+    body: "Check a package before your agent even installs it.",
     lines: [
       { text: 'lurq verify "jsonwebtoken@8"', tone: "prompt" },
       { text: "✗ 2 open advisories · algorithm confusion", tone: "bad" },

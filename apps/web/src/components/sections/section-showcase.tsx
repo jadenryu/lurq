@@ -92,7 +92,7 @@ const PILLARS: Pillar[] = [
     command: "postgres · synced daily",
     blurb: "A live catalog of npm libraries.",
     detail:
-      "We pull public signals from npm, GitHub, and deps.dev every day, long after a model's frozen training data.",
+      "We pull public signals from npm, GitHub, and deps.dev every day, long after a model's training data froze.",
     chips: ["npm", "GitHub", "deps.dev", "OSV"],
   },
   {
@@ -104,7 +104,7 @@ const PILLARS: Pillar[] = [
     command: "semantic + keyword",
     blurb: "Ask for what you need, not just a package name.",
     detail:
-      "Describe the job in plain language and lurq finds the stack personalized for you",
+      "Describe the job in plain language and lurq finds the stack personalized for you.",
     chips: ["semantic", "keyword", "quality", "freshness"],
   },
   {
