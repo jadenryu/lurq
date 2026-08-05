@@ -31,6 +31,6 @@ export const faqs: Faq[] = [
   },
   {
     q: "Is it free?",
-    a: "Yes, free while we are in pre-alpha. You get the CLI, the agent connection, and the installable skill with a monthly allowance of hosted calls.",
+    a: "Yes, free to get started. Create an account, generate an API key, and you get the CLI, the agent connection, and the installable skill with a monthly allowance of hosted calls.",
   },
 ];
