@@ -13,19 +13,19 @@ export function SectionRoadmap() {
           <div className="grid gap-8 lg:grid-cols-2 lg:gap-16">
             {/* left: oversized title */}
             <h2 className="text-4xl font-medium lowercase leading-[1.04] tracking-tight md:text-5xl">
-              agents don&apos;t buy
+              a package can pass
               <br />
-              one thing at a time.
+              and the stack still break.
             </h2>
 
             {/* right: description */}
             <div className="lg:pt-1">
               <p className="text-lg leading-relaxed text-muted-foreground md:text-xl">
-                One prompt fills a whole cart.{" "}
-                <span className="font-mono text-foreground">lurq plan</span> sources
-                every slot at once, auth, validation, database, styling, and
-                checks the picks hold together. That is the unit of demand this
-                market is built around: not a lookup, a stack.
+                Describe the project once.{" "}
+                <span className="font-mono text-foreground">lurq plan</span> fills
+                every slot, auth, validation, database, styling, then co-installs
+                the set to prove the picks actually hold together. Six good
+                packages are not the same thing as a stack that runs.
               </p>
             </div>
           </div>

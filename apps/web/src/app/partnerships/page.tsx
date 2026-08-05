@@ -6,7 +6,7 @@ import { GradientBorder } from "@/components/common/gradient-border";
 export const metadata: Metadata = {
   title: "Partnerships | lurq",
   description:
-    "Partner with lurq: join the demand side, the supply side, or the signal layer of the marketplace agents buy dependencies through.",
+    "Partner with lurq: integrations, registries, and tooling for AI coding agents.",
 };
 
 const PARTNER_EMAIL = "contact@lurq.run";
@@ -14,18 +14,18 @@ const PARTNER_EMAIL = "contact@lurq.run";
 const tracks = [
   {
     icon: Bot,
-    title: "Demand side — agents & IDEs",
-    body: "Serve lurq's rankings natively inside your assistant. One MCP entry, and every dependency your users' agents pick is backed by live evidence instead of training data.",
+    title: "Agents & IDEs",
+    body: "Serve lurq's answers natively inside your assistant. One MCP entry, and every dependency your users' agents pick is backed by live evidence instead of training data.",
   },
   {
     icon: Database,
-    title: "Supply side — registries & maintainers",
-    body: "Every published package is already listed, ranked on public evidence, and never pay-to-rank. Contribute a signal source, or tell us where our evidence on your package is wrong.",
+    title: "Registries & data",
+    body: "Contribute a signal source, or tell us where our evidence on your package is wrong. We're expanding beyond npm toward the wider package world.",
   },
   {
     icon: Wrench,
     title: "Tooling & platforms",
-    body: "Embed verify/evaluate/compare into CI, code review, or dependency dashboards via the CLI and API, and resell the decision to your own users.",
+    body: "Embed verify/evaluate/compare into CI, code review, or dependency dashboards via the CLI and API.",
   },
 ];
 
@@ -34,7 +34,7 @@ export default function PartnershipsPage() {
     <PageShell
       eyebrow="Company"
       title="Partnerships"
-      lead="lurq is the market that sits between coding agents and the open-source ecosystem. If you build agents, run a registry, maintain packages, or ship developer tooling, there's a side of it to plug into."
+      lead="lurq sits between your coding agent and the open-source ecosystem. If you build agents, run a registry, maintain packages, or ship developer tooling, there's a natural place to plug in."
     >
       <div className="grid gap-4 sm:grid-cols-3">
         {tracks.map((t) => {

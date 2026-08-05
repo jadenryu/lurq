@@ -43,7 +43,7 @@ export function AuthShell({
             className="h-20 w-20 object-contain"
           />
           <p className="max-w-sm text-3xl font-semibold leading-snug tracking-tight text-white">
-            The marketplace layer for your coding agent.
+            Execution-verified answers for your coding agent.
           </p>
         </div>
       </div>

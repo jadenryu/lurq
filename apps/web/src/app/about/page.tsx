@@ -8,7 +8,7 @@ import { FlowDiagram } from "@/components/visuals/flow-diagram";
 export const metadata: Metadata = {
   title: "About | lurq",
   description:
-    "Why lurq exists: the evidence-ranked marketplace layer AI coding agents buy their dependencies through.",
+    "Why lurq exists: execution-verified answers about the packages AI coding agents choose.",
 };
 
 const principles = [
@@ -19,21 +19,21 @@ const principles = [
   },
   {
     icon: Eye,
-    title: "Never pay-to-rank",
-    body: "Placement is not for sale, at any price. Every ranking is reproducible from public evidence and carries a confidence and a dataAsOf timestamp.",
+    title: "Proof over opinion",
+    body: "Where a claim can be settled by running something, we run it. Install it in a sandbox, import it, co-install the set, and keep the evidence.",
   },
   {
     icon: RefreshCw,
     title: "Fresh, not frozen",
-    body: "Models recommend from training data that ages out. lurq re-syncs daily, then learns from what agents report back after the pick ships.",
+    body: "Models recommend from training data that ages out. lurq re-syncs daily, so your agent sees the ecosystem as it is today.",
   },
 ];
 
 const pipeline = [
   { title: "Public signals", sub: "npm · GitHub · deps.dev" },
-  { title: "Ranking engine", sub: "health, risk, efficiency" },
-  { title: "Evidence index", sub: "pgvector matching" },
-  { title: "Agent buys", sub: "over MCP · reports back" },
+  { title: "Scoring engine", sub: "health, risk, efficiency" },
+  { title: "Sandbox", sub: "install · import · co-install" },
+  { title: "Your agent", sub: "over MCP" },
 ];
 
 export default function AboutPage() {
@@ -41,56 +41,61 @@ export default function AboutPage() {
     <PageShell
       eyebrow="Company"
       title="About lurq"
-      lead="Software procurement is quietly moving from humans to agents. lurq is the marketplace layer that decision runs through: a live, evidence-ranked market of JS/TS packages, served to coding agents at the moment they choose."
+      lead="Coding agents choose most of the dependencies now, from a snapshot of the ecosystem frozen at training time. lurq is the layer they check first: live signals where metadata is enough, and a real sandbox where it isn't."
     >
       <Prose>
-        <h2>The shift</h2>
+        <h2>The problem</h2>
         <p>
           For twenty years a developer chose the dependency. Now an agent does,
-          hundreds of times a week, in seconds, from a snapshot of the ecosystem
-          frozen at training time and ranked by how often a name appeared in text
-          rather than by whether the package is healthy now.
+          in seconds, from a snapshot frozen at training time and ranked by how
+          often a name appeared in text rather than by whether the package is
+          healthy today.
         </p>
         <p>
-          The cost lands on the company: a dependency that looked fine in the
-          diff but hasn&apos;t shipped a release in three years, carries an open
-          advisory, or never existed at all. As the share of agent-written code
-          climbs, so does the value of being the layer that decision passes
-          through.
+          The cost lands on you: a dependency that looked fine in the diff but
+          hasn&apos;t shipped a release in three years, carries an open advisory,
+          or never existed at all. That last one is measurable — published
+          research puts hallucinated package names at over 5% of commercial-model
+          recommendations, and the same fake names recur across runs, which is
+          what makes them registrable by an attacker.
         </p>
 
-        <h2>The market</h2>
+        <h2>What lurq does</h2>
         <p>
-          lurq is two-sided by construction. On the <strong>demand side</strong>,
-          coding agents reach it through an <strong>MCP server</strong>, a{" "}
-          <strong>CLI</strong>, an <strong>HTTP API</strong>, and an installable{" "}
-          <strong>skill</strong> — free, instant, and inside tools teams already
-          run. On the <strong>supply side</strong>, every published package is
-          listed automatically and ranked on public signals from npm, GitHub, and{" "}
+          lurq ingests public signals from npm, GitHub, and{" "}
           <a href="https://deps.dev" target="_blank" rel="noopener noreferrer">
             deps.dev
-          </a>
-          . Maintainers never apply, and they never pay.
+          </a>{" "}
+          and scores each package on health and quality, then exposes the result
+          as an <strong>MCP server</strong>, a <strong>CLI</strong>, an{" "}
+          <strong>HTTP API</strong>, and an installable <strong>skill</strong>.
+          Your agent asks before it picks; lurq answers with something short,
+          scored, and checkable.
         </p>
 
-        <h2>The loop</h2>
+        <h2>Where the evidence comes from</h2>
         <p>
-          Public APIs feed a ranking engine; the engine writes to an index agents
-          query over MCP; agents report back what actually happened after the
-          pick shipped. Those outcomes re-rank the market, so every call makes
-          the next answer better — and that post-decision data is something only
-          the layer sitting inside the decision ever gets to see.
+          Most of what you can know about a package is readable: downloads,
+          release cadence, advisories, bundle size. Some of it is not. Whether a
+          package installs cleanly, whether it imports without throwing, whether
+          two versions can coexist in one tree — those are only knowable by
+          running them. So lurq runs them, in an isolated sandbox, and keeps the
+          result alongside the score.
+        </p>
+        <p>
+          That is also why <strong>plan</strong> exists. Six individually healthy
+          packages can still refuse to install together, and no amount of
+          per-package scoring catches it. Compatibility is mined from real
+          co-installs, so a stack is checked as a set rather than as a list.
         </p>
 
         <h2>Where this goes</h2>
         <p>
-          JS/TS packages are the beachhead: the largest registry, the fastest
-          churn, the most agent traffic. The same market structure extends to
-          every other slot an agent fills — other language ecosystems first, then
-          the paid infrastructure an agent increasingly selects on a
-          company&apos;s behalf: auth, payments, databases, email,
-          observability. The decision is the product; packages are where it
-          starts.
+          Packages are the beachhead: the largest registry, the fastest churn,
+          the most agent traffic. The same approach extends to everything else an
+          agent depends on and can be wrong about — MCP servers, HTTP APIs, CLI
+          tools — anywhere a claim can be settled by running something rather
+          than by asking around.
         </p>
       </Prose>
 
