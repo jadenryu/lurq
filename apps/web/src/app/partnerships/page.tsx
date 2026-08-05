@@ -15,12 +15,12 @@ const tracks = [
   {
     icon: Bot,
     title: "Agents & IDEs",
-    body: "Serve lurq's answers natively inside your assistant. One MCP entry, and every dependency your users' agents pick is backed by live evidence instead of training data.",
+    body: "Serve lurq's answers natively inside your assistant.",
   },
   {
     icon: Database,
     title: "Registries & data",
-    body: "Contribute a signal source, or tell us where our evidence on your package is wrong. We're expanding beyond npm toward the wider package world.",
+    body: "Contribute a signal source, or tell us where our evidence on your package is wrong. We're expanding beyond npm toward the wider package and tooling world.",
   },
   {
     icon: Wrench,

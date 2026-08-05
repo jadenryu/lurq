@@ -252,7 +252,7 @@ export function SectionComparison() {
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
               Without lurq, the model reaches for what it remembers. With lurq,
-              it checks evidence from actually running the thing.
+              it checks the evidence stored in our node-and-edge system.
             </p>
           </div>
         </Reveal>

@@ -24,8 +24,7 @@ export function SectionRoadmap() {
                 Describe the project once.{" "}
                 <span className="font-mono text-foreground">lurq plan</span> fills
                 every slot, auth, validation, database, styling, then co-installs
-                the set to prove the picks actually hold together. Six good
-                packages are not the same thing as a stack that runs.
+                the set to prove the picks actually run together.
               </p>
             </div>
           </div>

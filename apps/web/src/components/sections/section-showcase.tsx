@@ -44,7 +44,7 @@ const PILLARS: Pillar[] = [
     command: "claude mcp add lurq",
     blurb: "Connect lurq as a tool your coding agent can call.",
     detail:
-      "Claude Code, Cursor, Windsurf and others ask lurq the moment a dependency decision comes up. Short answers, sized for an agent's context window.",
+      "Claude Code, Cursor, Windsurf and others ask lurq the moment a dependency decision comes up. Short answers, optimized for an agent's context window.",
     chips: ["recommend", "evaluate", "compare", "verify"],
   },
   {
@@ -68,7 +68,7 @@ const PILLARS: Pillar[] = [
     command: "lurq serve-http",
     blurb: "Run lurq as a service for your own tools.",
     detail:
-      "Host it behind an API key and rate limits. Your clients never need database credentials.",
+      "Host it behind an API key and rate limits without any database credentials.",
     chips: ["/recommend", "/evaluate", "/compare", "/verify"],
   },
   {
@@ -80,7 +80,7 @@ const PILLARS: Pillar[] = [
     command: "npx lurqrun install-skill --agent claude-code",
     blurb: "Install it once. Your agent keeps it.",
     detail:
-      "A short installer finds your agent and wires lurq in, so it is ready the next time you open a project.",
+      "The installer finds your agent and wires lurq in, so it's ready the next time you open a project.",
     chips: ["Claude Code", "Cursor", "Windsurf", "Codex"],
   },
   {
@@ -90,9 +90,9 @@ const PILLARS: Pillar[] = [
     icon: Database,
     name: "Package index",
     command: "postgres · synced daily",
-    blurb: "A live catalog of JS and TS libraries.",
+    blurb: "A live catalog of npm libraries.",
     detail:
-      "We pull public signals from npm, GitHub, and deps.dev every day, long after a model's training data stops.",
+      "We pull public signals from npm, GitHub, and deps.dev every day, long after a model's frozen training data.",
     chips: ["npm", "GitHub", "deps.dev", "OSV"],
   },
   {
@@ -104,7 +104,7 @@ const PILLARS: Pillar[] = [
     command: "semantic + keyword",
     blurb: "Ask for what you need, not just a package name.",
     detail:
-      "Describe the job in plain language. lurq finds libraries that fit, ranked by quality and freshness.",
+      "Describe the job in plain language and lurq finds the stack personalized for you",
     chips: ["semantic", "keyword", "quality", "freshness"],
   },
   {

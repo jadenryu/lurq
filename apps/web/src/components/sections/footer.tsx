@@ -39,7 +39,7 @@ export function Footer() {
           <div>
             <Logo />
             <p className="mt-3 max-w-xs text-sm text-muted-foreground">
-              Execution-verified answers for AI coding agents. We install it,
+              Execution-verified answers for your AI agents. We install it,
               run it, and record what happened.
             </p>
           </div>
@@ -72,17 +72,6 @@ export function Footer() {
               </ul>
             </div>
           ))}
-        </div>
-
-        <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-border pt-8 font-mono text-xs text-muted-foreground/70 sm:flex-row sm:items-center">
-          <span className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="inline-block size-1.5 rounded-full bg-[#7dcea0] motion-safe:animate-pulse"
-            />
-            all systems operational
-          </span>
-          <span>© 2026 lurq · Apache-2.0</span>
         </div>
       </Container>
     </footer>

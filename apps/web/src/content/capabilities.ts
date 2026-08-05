@@ -36,7 +36,7 @@ export const capabilities: Capability[] = [
     id: "verify",
     icon: ScanLine,
     title: "Verify",
-    body: "Check a package before your agent installs it, not after the build breaks.",
+    body: "Check a package before your agent even installs it",
     lines: [
       { text: 'lurq verify "jsonwebtoken@8"', tone: "prompt" },
       { text: "✗ 2 open advisories · algorithm confusion", tone: "bad" },
@@ -48,7 +48,7 @@ export const capabilities: Capability[] = [
     id: "plan",
     icon: Boxes,
     title: "Plan",
-    body: "Fill every slot in the stack, and prove the pieces fit together.",
+    body: "Fill every slot in the stack and prove that it builds.",
     lines: [
       { text: 'lurq plan "typescript api server"', tone: "prompt" },
       { text: "6 slots resolved · coherence ok", tone: "dim" },
