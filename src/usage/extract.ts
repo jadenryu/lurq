@@ -10,17 +10,18 @@
  * signatures — the dominant drift class — without pulling the whole dep graph or
  * adding a `tar` dependency.
  *
- * ponytail: covers `types`/`typings`/`index.d.ts`, and only what that ONE file
- * declares or names. Two shapes still degrade to null → `usage` falls back to the
- * README:
- *   - no shipped types, types living in `@types/*` instead (react, express, semver)
- *   - a barrel entry that re-exports rather than declares — `export * from './lib'`
- *     (zod, drizzle-orm), since a single-file parse can't follow the specifier
- * Measured on a 12-package popular-library sample, 7 extract. This ceiling was
- * invisible while extraction was worker-only; now that a miss extracts on the
- * request path it bounds how often `usage` can answer at all. Upgrade paths, in
- * value order: follow `export *` a bounded number of hops, read the `exports`
- * types condition, then fall back to `@types/<name>`.
+ * The parse is per-file, but the walk is not: a barrel entry that only forwards
+ * (`export * from './lib'`) is followed a bounded number of hops and merged, so
+ * the entry's shape doesn't decide whether a package has a surface.
+ *
+ * ponytail: covers `types`/`typings`/`index.d.ts` and the barrels reachable from
+ * it. One shape still degrades to null → `usage` falls back to the README:
+ * packages shipping no types at all, with types in `@types/*` on DefinitelyTyped
+ * (react, express, semver). Measured on a 12-package popular-library sample,
+ * 9 extract. This ceiling was invisible while extraction was worker-only; now
+ * that a miss extracts on the request path it bounds how often `usage` can answer
+ * at all. Upgrade paths, in value order: read the `exports` types condition, then
+ * fall back to `@types/<name>`.
  *
  * The compiler is loaded LAZILY and non-fatally, and that is load-bearing for the
  * plane split (§4E): `typescript` is a devDependency, present in the operator
@@ -31,8 +32,9 @@
  * import to the first extraction keeps it out of the bundle's static graph, and a
  * compiler that won't load degrades to null exactly like an untyped package.
  */
+import { posix } from 'node:path';
 import type * as TSApi from 'typescript';
-import { httpRequest } from '../core/http';
+import { HttpError, httpRequest } from '../core/http';
 import { CACHE_TTL } from '../core/constants';
 import type { ExportKind, ExportSymbol } from '../core/types';
 
@@ -64,7 +66,16 @@ export function loadCompiler(): Promise<Compiler | null> {
   return compiler;
 }
 
-async function fetchText(url: string, opts: ExtractOptions): Promise<string | null> {
+interface FetchResult {
+  text: string | null;
+  /** True when the file's existence is unknown — a timeout, 5xx or network error
+   *  rather than a 404. A surface is only as trustworthy as the completeness of
+   *  the walk that built it, and the store is cache-forever, so this is what
+   *  keeps a transient CDN failure from being frozen in as a package's API. */
+  unknown: boolean;
+}
+
+async function fetchFile(url: string, opts: ExtractOptions): Promise<FetchResult> {
   try {
     const { data } = await httpRequest<string>(url, {
       host: CDN,
@@ -73,10 +84,17 @@ async function fetchText(url: string, opts: ExtractOptions): Promise<string | nu
       ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
       ...(opts.retries !== undefined ? { retries: opts.retries } : {}),
     });
-    return typeof data === 'string' ? data : null;
-  } catch {
-    return null;
+    return { text: typeof data === 'string' ? data : null, unknown: false };
+  } catch (err) {
+    // jsDelivr answers 404 for a path a package doesn't ship, which is a real
+    // answer: that candidate simply isn't the file.
+    const missing = err instanceof HttpError && err.status === 404;
+    return { text: null, unknown: !missing };
   }
+}
+
+async function fetchText(url: string, opts: ExtractOptions): Promise<string | null> {
+  return (await fetchFile(url, opts)).text;
 }
 
 /** Resolve the `.d.ts` entry path from the version's package.json `types`/`typings`. */
@@ -162,11 +180,24 @@ function declarationsIn(
   return [];
 }
 
+/** One parsed `.d.ts`: what it exports itself, plus the `export * from '…'`
+ *  specifiers whose exports it forwards without naming (see `collectSurface`). */
+export interface ParsedModule {
+  symbols: ExportSymbol[];
+  stars: string[];
+}
+
 /** Parse `.d.ts` text into a normalized, name-sorted export surface. The compiler
  *  is passed in (see `loadCompiler`) rather than imported at module scope. */
 export function parseSurface(source: string, ts: Compiler): ExportSymbol[] {
+  return parseModule(source, ts).symbols;
+}
+
+/** `parseSurface`, also reporting the star re-exports it could not resolve alone. */
+export function parseModule(source: string, ts: Compiler): ParsedModule {
   const src = ts.createSourceFile('surface.d.ts', source, ts.ScriptTarget.Latest, true);
   const out = new Map<string, ExportSymbol>();
+  const stars: string[] = [];
 
   const add = (name: string, kind: ExportKind, signature: string | null) => {
     if (!out.has(name)) out.set(name, { name, kind, signature });
@@ -209,7 +240,14 @@ export function parseSurface(source: string, ts: Compiler): ExportSymbol[] {
     // no modifiers at all and must be matched BEFORE the modifier gate below.
     if (ts.isExportDeclaration(node)) {
       const clause = node.exportClause;
-      if (!clause) continue; // `export * from './lib'` — nothing named here.
+      if (!clause) {
+        // `export * from './lib'` — this file names nothing; the exports are in
+        // the target, which only the caller can fetch.
+        if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+          stars.push(node.moduleSpecifier.text);
+        }
+        continue;
+      }
       if (ts.isNamespaceExport(clause)) {
         // `export * as ns from './x'` binds the whole module under one name.
         add(clause.name.text, 'namespace', null);
@@ -246,7 +284,98 @@ export function parseSurface(source: string, ts: Compiler): ExportSymbol[] {
     for (const [name, kind, signature] of declarationsIn(ts, node, src)) add(name, kind, signature);
   }
 
-  return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return { symbols: [...out.values()].sort((a, b) => a.name.localeCompare(b.name)), stars };
+}
+
+const DTS_EXT = /\.d\.[cm]?ts$/;
+const JS_EXT = /\.(m|c)?js$/;
+
+/**
+ * The `.d.ts` files a relative specifier could resolve to, most likely first.
+ * Empty for anything this parse has no business fetching: a bare specifier names
+ * another package, and a path climbing out of the version root isn't ours.
+ */
+export function dtsCandidates(fromFile: string, specifier: string): string[] {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return [];
+  const path = posix.normalize(posix.join(posix.dirname(fromFile), specifier));
+  if (path.startsWith('..')) return [];
+  if (DTS_EXT.test(path)) return [path];
+  // `export * from './table.js'` is the ESM `.d.ts` idiom (drizzle-orm): the
+  // types sit beside the JS under the matching declaration extension.
+  const js = JS_EXT.exec(path);
+  if (js) return [path.replace(JS_EXT, `.d.${js[1] ?? ''}ts`)];
+  // Extensionless (zod's `export * from './lib'`): a sibling, else a directory
+  // barrel. Ordered, not raced — the first almost always hits, so the second
+  // costs a round-trip only for real directories.
+  return [`${path}.d.ts`, `${path}/index.d.ts`];
+}
+
+/** How far a barrel chain is followed. zod needs all three hops: index.d.ts →
+ *  lib/index.d.ts → lib/external.d.ts → the leaves that actually declare things. */
+const MAX_HOPS = 3;
+
+/** Ceiling on files fetched per extraction, across all hops. Bounds a wide
+ *  barrel (drizzle-orm forwards 14 modules from its entry, each of which
+ *  forwards more) so a request-path extraction can't fan out without limit. */
+const MAX_FILES = 24;
+
+/**
+ * Merge a barrel's chain into one surface: parse `source`, then follow whatever
+ * `export * from` it defers to, breadth-first. Bounded on both axes — MAX_HOPS
+ * deep, MAX_FILES wide — because this runs on the `usage` read path under a
+ * wall-clock budget; each hop's fetches go out in parallel so the cost is hops,
+ * not files. Shallowest definition wins, so a barrel's own naming of a symbol
+ * beats one it forwards.
+ *
+ * `sound` is false if any followed file couldn't be fetched. Stopping at the
+ * caps is deliberate and deterministic — the same package always yields the same
+ * surface — but a timed-out hop yields an arbitrary subset, and the caller
+ * caches forever, so that one must not be mistaken for a package's API.
+ */
+async function collectSurface(
+  ts: Compiler,
+  root: string,
+  entry: string,
+  source: string,
+  opts: ExtractOptions,
+): Promise<{ symbols: ExportSymbol[]; sound: boolean }> {
+  const merged = new Map<string, ExportSymbol>();
+  const attempted = new Set<string>([entry]);
+  let budget = MAX_FILES;
+  let sound = true;
+
+  /** Absorb one file's exports; hand back the candidate lists it defers to. */
+  const absorb = (file: string, text: string): string[][] => {
+    const { symbols, stars } = parseModule(text, ts);
+    for (const s of symbols) if (!merged.has(s.name)) merged.set(s.name, s);
+    return stars.map((spec) => dtsCandidates(file, spec)).filter((c) => c.length > 0);
+  };
+
+  /** Fetch the first candidate that exists. These are alternatives for ONE
+   *  specifier, so they're tried in order rather than raced. `attempted` doubles
+   *  as the cycle guard: a barrel that re-exports its own ancestor stops here. */
+  const fetchFirst = async (candidates: string[]): Promise<[string, string] | null> => {
+    for (const file of candidates) {
+      if (attempted.has(file) || budget <= 0) continue;
+      attempted.add(file);
+      budget--;
+      const { text, unknown } = await fetchFile(`${root}/${file}`, opts);
+      if (text !== null) return [file, text];
+      if (unknown) {
+        sound = false;
+        return null; // Don't read a 404 into the next candidate; we never got one.
+      }
+    }
+    return null;
+  };
+
+  let frontier = absorb(entry, source);
+  for (let hop = 0; hop < MAX_HOPS && frontier.length > 0 && budget > 0; hop++) {
+    const fetched = await Promise.all(frontier.map(fetchFirst));
+    frontier = fetched.flatMap((hit) => (hit ? absorb(hit[0], hit[1]) : []));
+  }
+
+  return { symbols: [...merged.values()].sort((a, b) => a.name.localeCompare(b.name)), sound };
 }
 
 /**
@@ -265,8 +394,14 @@ export async function extractSurface(
   if (!ts) return null;
   const entry = await resolveTypesEntry(name, version, opts);
   if (!entry) return null;
-  const dts = await fetchText(`https://${CDN}/npm/${name}@${version}/${entry}`, opts);
+  const root = `https://${CDN}/npm/${name}@${version}`;
+  const dts = await fetchText(`${root}/${entry}`, opts);
   if (!dts) return null;
-  const surface = parseSurface(dts, ts);
-  return surface.length > 0 ? surface : null;
+  const { symbols, sound } = await collectSurface(ts, root, entry, dts, opts);
+  // An unsound walk degrades to null rather than to a partial surface: null
+  // means "fall back to the README" and is retried on the next request, while a
+  // stored surface is believed forever. Under the read path's tight fetch
+  // ceiling that is the likely outcome for a wide barrel on a cold CDN edge —
+  // the worker, with the default timeouts, extracts it in full later.
+  return sound && symbols.length > 0 ? symbols : null;
 }
