@@ -185,6 +185,7 @@ export function registerOperatorCommands(program: Command): void {
     .option('--cap <n>', 'candidates ingested per cycle', (v) => parseInt(v, 10))
     .option('--extract <n>', 'API surfaces extracted per cycle', (v) => parseInt(v, 10))
     .option('--compat-verify <n>', 'demand-driven compat-verify sets drained per cycle', (v) => parseInt(v, 10))
+    .option('--surface <n>', 'demand-driven surface extractions drained per cycle', (v) => parseInt(v, 10))
     .option('--once', 'run exactly one cycle and exit')
     .action(
       async (opts: {
@@ -192,6 +193,7 @@ export function registerOperatorCommands(program: Command): void {
         cap?: number;
         extract?: number;
         compatVerify?: number;
+        surface?: number;
         once?: boolean;
       }) => {
         const { requireConfig } = await import('../core/config');
@@ -202,6 +204,7 @@ export function registerOperatorCommands(program: Command): void {
           perRunCap: opts.cap,
           extractPerCycle: opts.extract,
           compatVerifyPerCycle: opts.compatVerify,
+          surfacePerCycle: opts.surface,
           once: opts.once,
         });
       },
