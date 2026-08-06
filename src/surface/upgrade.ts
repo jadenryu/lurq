@@ -20,6 +20,7 @@
  */
 import { fetchAndExtract } from './fetch';
 import { diffSurfaces } from './diff';
+import { SURFACE_CLAIM_KINDS } from './references';
 import type { PackageReferences, SymbolReference } from './references';
 import { runtimeSymbols } from './types';
 
@@ -75,10 +76,24 @@ export async function checkUpgradeOne(
   const diff = diffSurfaces(from.surface, to.surface);
   if (diff.inconclusive) return { unverified: diff.inconclusive };
 
-  // A default import binds the module itself; it survives as long as the package
-  // still exports anything, so it is not a per-symbol removal.
-  const referenced = new Set([...refs.symbols.keys()].filter((s) => s !== 'default'));
-  const stillExports = new Set(runtimeSymbols(to.surface).map((s) => s.path));
+  // Only symbols claimed against the MODULE'S export surface can be "removed".
+  // `chalk.bold` is a property of the default export's value — valid code that
+  // tier A cannot see. Blocking a PR on that is the false positive that gets a
+  // CI gate switched off inside two weeks (§12 M3 kill condition).
+  const toSurface = new Set(runtimeSymbols(to.surface).map((s) => s.path));
+  const bareValue = toSurface.size <= 1 && toSurface.has('default');
+  const referenced = new Set(
+    [...refs.symbols.entries()]
+      .filter(
+        ([sym, uses]) =>
+          sym !== 'default' &&
+          uses.some(
+            (r) => SURFACE_CLAIM_KINDS.includes(r.via) && !(bareValue && r.via === 'namespace'),
+          ),
+      )
+      .map(([sym]) => sym),
+  );
+  const stillExports = toSurface;
 
   const symbolsRemoved = diff.removed
     .filter((s) => referenced.has(s.path) && !stillExports.has(s.path))

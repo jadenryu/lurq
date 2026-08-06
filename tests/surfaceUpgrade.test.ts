@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { packageOfSpecifier, scanReferences } from '../src/surface/references';
+import { SURFACE_CLAIM_KINDS, packageOfSpecifier, scanReferences } from '../src/surface/references';
 import { formatUpgradeReport, type UpgradeReport } from '../src/surface/upgrade';
 
 let root: string;
@@ -77,6 +77,37 @@ describe('reference scanner', () => {
   });
 });
 
+describe('reference kind classification (miss-rate correction, 2026-08-06)', () => {
+  // `chalk.bold` is CORRECT chalk usage — bold is a property of the default
+  // export's value, not a module export. Scoring it against a tier-A surface
+  // reports a miss on working code, and in check_upgrade it would block a PR on
+  // valid code. That is the false positive that gets a CI gate switched off.
+  it('separates default-member access from real export claims', () => {
+    const refs = scanReferences(root);
+    const fg = refs.find((r) => r.package === 'fast-glob')!;
+    // `import { escapePath }` — a genuine claim about the module surface
+    expect(fg.symbols.get('escapePath')![0]!.via).toBe('named');
+    // `import fg from` then `fg.stream()` — a property of the default value
+    expect(fg.symbols.get('stream')![0]!.via).toBe('default-member');
+  });
+
+  it('treats namespace and CJS member reads as surface claims', () => {
+    const refs = scanReferences(root);
+    // `import * as pino` — the namespace object IS the module's exports
+    expect(refs.find((r) => r.package === 'pino')!.symbols.get('destination')![0]!.via).toBe(
+      'namespace',
+    );
+    const lodash = refs.find((r) => r.package === 'lodash')!;
+    expect(lodash.symbols.get('debounce')![0]!.via).toBe('destructured');
+    expect(lodash.symbols.get('throttle')![0]!.via).toBe('namespace');
+  });
+
+  it('exposes only surface-claim kinds for scoring', () => {
+    expect(SURFACE_CLAIM_KINDS).toEqual(['named', 'destructured', 'namespace']);
+    expect(SURFACE_CLAIM_KINDS).not.toContain('default-member');
+  });
+});
+
 describe('upgrade report formatting', () => {
   const report: UpgradeReport = {
     safe: false,
@@ -87,7 +118,7 @@ describe('upgrade report formatting', () => {
         toVersion: '3.4.0',
         severity: 'blocking',
         symbolsRemoved: [
-          { symbol: 'escapePath', refs: [{ symbol: 'escapePath', file: 'src/util/paths.ts', line: 14 }] },
+          { symbol: 'escapePath', refs: [{ symbol: 'escapePath', via: 'named' as const, file: 'src/util/paths.ts', line: 14 }] },
         ],
         arityChanged: [],
       },
@@ -97,7 +128,7 @@ describe('upgrade report formatting', () => {
         toVersion: '8.21.0',
         severity: 'warning',
         symbolsRemoved: [],
-        arityChanged: [{ symbol: 'child', from: 1, to: 2, refs: [{ symbol: 'child', file: 'src/log.ts', line: 31 }] }],
+        arityChanged: [{ symbol: 'child', from: 1, to: 2, refs: [{ symbol: 'child', via: 'named' as const, file: 'src/log.ts', line: 31 }] }],
       },
     ],
     ok: ['semver', 'zod'],

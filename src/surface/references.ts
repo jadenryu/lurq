@@ -21,12 +21,31 @@ import ts from 'typescript';
 const SOURCE_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', 'coverage']);
 
+/**
+ * How the symbol was reached — which decides whether it is a claim about the
+ * MODULE'S EXPORT SURFACE or about a property of an exported value.
+ *
+ *   named / destructured / namespace  → a real export claim; tier A can verify
+ *   default                           → the module itself
+ *   default-member                    → a property of the default export's VALUE
+ *
+ * The last one is the important distinction. `chalk.bold` is correct chalk usage
+ * but `bold` is not a module export, so scoring it against a tier-A surface
+ * reports a miss on working code. Doing that in check_upgrade would block a PR
+ * on valid code, which is how a CI gate gets switched off (§12 M3).
+ */
+export type ReferenceVia = 'named' | 'destructured' | 'namespace' | 'default' | 'default-member';
+
 export interface SymbolReference {
   /** Exported name used from the package. 'default' for a default import. */
   symbol: string;
+  via: ReferenceVia;
   file: string;
   line: number;
 }
+
+/** Kinds that assert something about the module's own export surface. */
+export const SURFACE_CLAIM_KINDS: ReferenceVia[] = ['named', 'destructured', 'namespace'];
 
 export interface PackageReferences {
   package: string;
@@ -79,11 +98,11 @@ export function listSourceFiles(dir: string, limit = 5000): string[] {
 export function scanReferences(rootDir: string, opts: { limit?: number } = {}): PackageReferences[] {
   const byPackage = new Map<string, Map<string, SymbolReference[]>>();
 
-  const record = (pkg: string, symbol: string, file: string, line: number) => {
+  const record = (pkg: string, symbol: string, via: ReferenceVia, file: string, line: number) => {
     let syms = byPackage.get(pkg);
     if (!syms) byPackage.set(pkg, (syms = new Map()));
     const list = syms.get(symbol);
-    const ref = { symbol, file, line };
+    const ref = { symbol, via, file, line };
     if (list) {
       if (!list.some((r) => r.file === file && r.line === line)) list.push(ref);
     } else {
@@ -102,8 +121,11 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
     const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
 
-    /** identifier bound to a whole package → package name, for member reads. */
-    const bindings = new Map<string, string>();
+    // Two binding maps, because member reads mean different things:
+    // a namespace/CJS binding IS the module's exports; a default binding is a
+    // VALUE that happens to have properties.
+    const nsBindings = new Map<string, string>();
+    const defaultBindings = new Map<string, string>();
 
     const visit = (node: ts.Node): void => {
       // ── ESM imports ──
@@ -112,15 +134,15 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         if (pkg) {
           const clause = node.importClause;
           if (clause?.name) {
-            record(pkg, 'default', rel, lineOf(clause.name));
-            bindings.set(clause.name.text, pkg);
+            record(pkg, 'default', 'default', rel, lineOf(clause.name));
+            defaultBindings.set(clause.name.text, pkg);
           }
           if (clause?.namedBindings) {
             if (ts.isNamespaceImport(clause.namedBindings)) {
-              bindings.set(clause.namedBindings.name.text, pkg);
+              nsBindings.set(clause.namedBindings.name.text, pkg);
             } else {
               for (const el of clause.namedBindings.elements) {
-                record(pkg, el.propertyName?.text ?? el.name.text, rel, lineOf(el));
+                record(pkg, el.propertyName?.text ?? el.name.text, 'named', rel, lineOf(el));
               }
             }
           }
@@ -140,24 +162,26 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         const pkg = packageOfSpecifier((node.initializer.arguments[0] as ts.StringLiteral).text);
         if (pkg) {
           if (ts.isIdentifier(node.name)) {
-            bindings.set(node.name.text, pkg);
-            record(pkg, 'default', rel, lineOf(node.name));
+            // In CJS the binding IS module.exports, so member reads are export
+            // claims — unless module.exports is a bare value, which the scorer
+            // detects from the surface shape rather than guessing here.
+            nsBindings.set(node.name.text, pkg);
+            record(pkg, 'default', 'default', rel, lineOf(node.name));
           } else if (ts.isObjectBindingPattern(node.name)) {
             for (const el of node.name.elements) {
               const name = el.propertyName ?? el.name;
-              if (ts.isIdentifier(name)) record(pkg, name.text, rel, lineOf(el));
+              if (ts.isIdentifier(name)) record(pkg, name.text, 'destructured', rel, lineOf(el));
             }
           }
         }
       }
 
       // ── member reads on a bound namespace/default ──
-      if (
-        ts.isPropertyAccessExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        bindings.has(node.expression.text)
-      ) {
-        record(bindings.get(node.expression.text)!, node.name.text, rel, lineOf(node));
+      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+        const ns = nsBindings.get(node.expression.text);
+        const def = defaultBindings.get(node.expression.text);
+        if (ns) record(ns, node.name.text, 'namespace', rel, lineOf(node));
+        else if (def) record(def, node.name.text, 'default-member', rel, lineOf(node));
       }
 
       ts.forEachChild(node, visit);
