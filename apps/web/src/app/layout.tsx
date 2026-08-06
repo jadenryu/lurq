@@ -8,6 +8,8 @@ import { geist, commitMono, robotoMono } from "@/lib/fonts";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 
+// Mirrors the home page h1 and lede (components/marketing/hero.tsx) so the
+// metadata and the page make the same claim.
 const TITLE = "lurq | your agent picks the packages, lurq knows what happens next";
 const DESCRIPTION =
   "An MCP server your coding agent calls before it installs anything. It reads the shipped types, checks whether a set of packages holds together, and confirms a name isn't a typosquat — from live data, with a timestamp on every answer.";

@@ -6,11 +6,11 @@ type FooterLink = { label: string; href: string; external?: boolean };
 
 const columns: { title: string; links: FooterLink[] }[] = [
   {
-    title: "Marketplace",
+    title: "Product",
     links: [
       { label: "How it works", href: "/#product" },
       { label: "Difference", href: "/#comparison" },
-      { label: "List a package", href: "/partnerships" },
+      { label: "Partnerships", href: "/partnerships" },
     ],
   },
   {
@@ -39,8 +39,8 @@ export function Footer() {
           <div>
             <Logo />
             <p className="mt-3 max-w-xs text-sm text-muted-foreground">
-              The marketplace layer for AI coding agents. Evidence-ranked,
-              refreshed daily, never pay-to-rank.
+              Execution-verified answers for your AI agents. We install it,
+              run it, and record what happened.
             </p>
           </div>
 
@@ -72,13 +72,6 @@ export function Footer() {
               </ul>
             </div>
           ))}
-        </div>
-
-        {/* No status light here. The home page has one wired to the hosted
-            server's own /healthz; a hardcoded green dot on a sub-page would be
-            claiming something nothing checked. */}
-        <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-border pt-8 font-mono text-xs text-muted-foreground/70 sm:flex-row sm:items-center">
-          <span>© 2026 lurq · Apache-2.0</span>
         </div>
       </Container>
     </footer>

@@ -17,6 +17,8 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import {
   DEFAULT_TARGET,
+  type ExecOptions,
+  type ExecResult,
   type ModuleSystem,
   type Sandbox,
   type SandboxPackage,
@@ -29,6 +31,7 @@ const execFileAsync = promisify(execFile);
 const INSTALL_TIMEOUT_MS = 120_000;
 const SMOKE_TIMEOUT_MS = 30_000;
 const ERROR_MAX = 500;
+const EXEC_MAX_BUFFER = 8 * 1024 * 1024;
 
 /** npm args for a throwaway install of one or more specs into the sandbox dir. */
 export function npmInstallArgs(specs: string[], opts: { allowScripts: boolean }): string[] {
@@ -137,6 +140,43 @@ export class LocalSandbox implements Sandbox {
       durationMs: Date.now() - started,
       error,
     };
+  }
+
+  async exec(command: string, opts: ExecOptions = {}): Promise<ExecResult> {
+    const dir = await mkdtemp(join(tmpdir(), 'lurq-exec-'));
+    try {
+      await writeFile(
+        join(dir, 'package.json'),
+        JSON.stringify({ name: 'lurq-sandbox', version: '0.0.0', private: true }),
+      );
+      if (opts.install?.length) {
+        await execFileAsync(
+          'npm',
+          npmInstallArgs(opts.install.map(toSpec), { allowScripts: opts.allowScripts ?? false }),
+          { cwd: dir, timeout: opts.timeoutMs ?? INSTALL_TIMEOUT_MS, signal: opts.signal },
+        );
+      }
+      const { stdout, stderr } = await execFileAsync('sh', ['-c', command], {
+        cwd: dir,
+        timeout: opts.timeoutMs ?? SMOKE_TIMEOUT_MS,
+        signal: opts.signal,
+        maxBuffer: EXEC_MAX_BUFFER,
+      });
+      return { exitCode: 0, stdout, stderr };
+    } catch (err) {
+      // A non-zero exit is a result the oracle interprets, not a thrown error.
+      const e = err as { code?: unknown; stdout?: unknown; stderr?: unknown };
+      if (typeof e?.code === 'number') {
+        return {
+          exitCode: e.code,
+          stdout: typeof e.stdout === 'string' ? e.stdout : '',
+          stderr: typeof e.stderr === 'string' ? e.stderr : stderrOf(err),
+        };
+      }
+      throw err; // timeout / spawn failure — infrastructure, not the subject
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 
   async getRuntimeInfo(): Promise<{ nodeVersion: string; npmVersion: string }> {

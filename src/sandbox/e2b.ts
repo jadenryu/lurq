@@ -13,6 +13,8 @@
 import { getConfig } from '../core/config';
 import {
   DEFAULT_TARGET,
+  type ExecOptions,
+  type ExecResult,
   type ModuleSystem,
   type Sandbox as SandboxDriver,
   type SandboxPackage,
@@ -151,6 +153,49 @@ export class E2BSandbox implements SandboxDriver {
       durationMs: Date.now() - started,
       error,
     };
+  }
+
+  async exec(command: string, opts: ExecOptions = {}): Promise<ExecResult> {
+    const config = getConfig();
+    const timeoutMs = opts.timeoutMs ?? SMOKE_TIMEOUT_MS;
+    // Build the install command first so a bad spec fails before we spend a VM.
+    const install = opts.install?.length
+      ? installCommand(opts.install.map(toSpec), opts.allowScripts ?? false)
+      : null;
+
+    const { default: Sandbox } = await import('e2b');
+    const createOpts = {
+      apiKey: config.E2B_API_KEY,
+      timeoutMs: (install ? INSTALL_TIMEOUT_MS : 0) + timeoutMs + 30_000,
+    };
+    const sandbox = config.E2B_TEMPLATE
+      ? await Sandbox.create(config.E2B_TEMPLATE, createOpts)
+      : await Sandbox.create(createOpts);
+
+    try {
+      await sandbox.files.write(
+        `${WORKDIR}/package.json`,
+        JSON.stringify({ name: 'lurq-sandbox', version: '0.0.0', private: true }),
+      );
+      if (install) {
+        await sandbox.commands.run(install, { cwd: WORKDIR, timeoutMs: INSTALL_TIMEOUT_MS });
+      }
+      const out = await sandbox.commands.run(command, { cwd: WORKDIR, timeoutMs });
+      return { exitCode: out.exitCode ?? 0, stdout: out.stdout ?? '', stderr: out.stderr ?? '' };
+    } catch (err) {
+      // A non-zero exit is a result the oracle interprets, not a thrown error.
+      const e = err as { exitCode?: unknown; stdout?: unknown; stderr?: unknown };
+      if (typeof e?.exitCode === 'number') {
+        return {
+          exitCode: e.exitCode,
+          stdout: typeof e.stdout === 'string' ? e.stdout : '',
+          stderr: typeof e.stderr === 'string' ? e.stderr : errText(err),
+        };
+      }
+      throw err; // VM/timeout failure — infrastructure, not the subject
+    } finally {
+      await sandbox.kill().catch(() => {});
+    }
   }
 
   async getRuntimeInfo(): Promise<{ nodeVersion: string; npmVersion: string }> {

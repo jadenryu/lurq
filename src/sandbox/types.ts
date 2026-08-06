@@ -65,9 +65,32 @@ export interface SandboxSetResult {
   error: string | null;
 }
 
+export interface ExecResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+export interface ExecOptions {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  /** Install these before running the command (same flags as a verify install). */
+  install?: SandboxPackage[];
+  allowScripts?: boolean;
+}
+
 export interface Sandbox {
   /** Provenance tag stored with each result. */
   readonly name: string;
+  /**
+   * Run an arbitrary command in a throwaway sandbox, optionally after installing
+   * packages. This is the generic escape hatch every non-npm oracle needs — an
+   * MCP handshake, a `--help` probe, a container smoke test. A non-zero exit is
+   * a RESULT, not an error: it resolves with the exit code so the oracle can
+   * decide whether that means `verified_false`. Only infrastructure failures
+   * (the sandbox itself dying) throw.
+   */
+  exec(command: string, opts?: ExecOptions): Promise<ExecResult>;
   verify(
     pkg: string,
     version: string | null,
