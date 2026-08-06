@@ -179,6 +179,28 @@ describe('tier-A extraction', () => {
   });
 });
 
+describe('tarball layout (found live, 2026-08-06)', () => {
+  // @types/* tarballs root at the TYPE NAME (`node/`), not `package/`. A
+  // hardcoded `package/` path fails extraction for all of DefinitelyTyped, and
+  // it fails as a thrown ENOENT — which the drain would have charged to our own
+  // infrastructure and retried forever. Guarded by strip-components + an
+  // UNDECLARED fallback in fetch.ts.
+  it('does not assume tarballs root at package/', async () => {
+    const src = await import('node:fs/promises').then((fs) =>
+      fs.readFile('src/surface/fetch.ts', 'utf8'),
+    );
+    expect(src).toContain('--strip-components=1');
+    expect(src).not.toMatch(/join\(dir, 'package'\)/);
+  });
+
+  it('treats an unreadable manifest as UNDECLARED, never as a thrown failure', async () => {
+    const src = await import('node:fs/promises').then((fs) =>
+      fs.readFile('src/surface/fetch.ts', 'utf8'),
+    );
+    expect(src).toContain('undeclaredReason');
+  });
+});
+
 describe('surface diff', () => {
   const surface = (over: Partial<ExtractedSurface>): ExtractedSurface => ({
     package: 'p',

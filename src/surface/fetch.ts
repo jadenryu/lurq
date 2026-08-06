@@ -13,7 +13,7 @@
  */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -77,12 +77,43 @@ export async function fetchAndExtract(
   const dir = await mkdtemp(join(tmpdir(), 'lurq-surface-'));
   try {
     const tgz = join(dir, 'pkg.tgz');
-    await (await import('node:fs/promises')).writeFile(tgz, buf);
+    const pkgDir = join(dir, 'pkg');
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(tgz, buf);
     // `tar` only unpacks; it never executes anything from the archive.
-    await execFileP('tar', ['xzf', tgz, '-C', dir], { timeout: FETCH_TIMEOUT_MS });
-    const pkgDir = join(dir, 'package');
-    // Sanity: npm tarballs always root at `package/`.
-    await readFile(join(pkgDir, 'package.json'), 'utf8');
+    //
+    // --strip-components=1 rather than assuming a `package/` root: npm tarballs
+    // USUALLY root there, but not always — @types/* roots at the type name
+    // (`node/`, not `package/`), so a hardcoded path fails extraction outright
+    // for all of DefinitelyTyped. Stripping the first component normalizes any
+    // root name.
+    await execFileP('tar', ['xzf', tgz, '--strip-components=1', '-C', pkgDir], {
+      timeout: FETCH_TIMEOUT_MS,
+    });
+
+    // A tarball with no readable manifest is a fact ABOUT THE PACKAGE, not an
+    // infrastructure failure — it must surface as UNDECLARED rather than throw,
+    // or the drain will treat a type-only package as our own outage and retry
+    // it forever (§4.2).
+    try {
+      await readFile(join(pkgDir, 'package.json'), 'utf8');
+    } catch {
+      return {
+        surface: {
+          package: name,
+          version: dist.version,
+          tier: 'shipped_js_ast',
+          entry: null,
+          symbols: [],
+          filesWalked: 0,
+          externalReExports: [],
+          undeclaredReason: 'tarball contains no readable package.json',
+        },
+        artifactHash,
+        resolvedVersion: dist.version,
+      };
+    }
+
     const surface = extractSurface(pkgDir);
     return {
       surface: { ...surface, package: name, version: dist.version },

@@ -12,7 +12,7 @@
  * also why the miss path has to be honest rather than optimistic.
  */
 import { createHash } from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { cached } from '../core/cache';
 import type { Database } from '../db/client';
 import { claims, entities, observations, symbols } from '../db/schema';
@@ -82,9 +82,26 @@ async function loadStored(
   version: string | null,
   tenantId = 0,
 ): Promise<StoredSurface | null> {
-  const key = canonicalKey(surfaceRef(pkg, version));
-  const ents = await db.select().from(entities).where(eq(entities.canonicalKey, key)).limit(2);
-  const entity = ents.find((e) => e.tenantId === tenantId);
+  // Surfaces are always STORED under a concrete resolved version, so a query
+  // with no version can never match by canonical key. An agent asking "what does
+  // zod export?" without pinning is the common call, so fall back to the most
+  // recently observed version of that package.
+  let entity;
+  if (version === null) {
+    const rows = await db
+      .select({ e: entities, at: observations.observedAt })
+      .from(entities)
+      .innerJoin(claims, eq(claims.subjectId, entities.id))
+      .innerJoin(observations, eq(observations.claimId, claims.id))
+      .where(and(eq(entities.kind, 'package_surface'), eq(entities.name, pkg)))
+      .orderBy(desc(observations.observedAt))
+      .limit(1);
+    entity = rows.find((r) => r.e.tenantId === tenantId)?.e;
+  } else {
+    const key = canonicalKey(surfaceRef(pkg, version));
+    const ents = await db.select().from(entities).where(eq(entities.canonicalKey, key)).limit(2);
+    entity = ents.find((e) => e.tenantId === tenantId);
+  }
   if (!entity) return null;
 
   const obs = await db
