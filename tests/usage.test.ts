@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseSurface } from '../src/usage/extract';
+import ts from 'typescript';
+import { loadCompiler, parseSurface } from '../src/usage/extract';
 import { diffSurface } from '../src/usage/diff';
 
 describe('parseSurface (§4D)', () => {
@@ -12,7 +13,7 @@ describe('parseSurface (§4D)', () => {
       export const VERSION: string;
       declare function internalOnly(): void;
     `;
-    const surface = parseSurface(dts);
+    const surface = parseSurface(dts, ts);
     const byName = Object.fromEntries(surface.map((s) => [s.name, s]));
     expect(byName.connect).toMatchObject({ kind: 'function', signature: '(url: string, opts?: Options): Client' });
     expect(byName.Client?.kind).toBe('class');
