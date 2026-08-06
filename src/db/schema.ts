@@ -48,7 +48,8 @@ import type {
   ScoreBreakdown,
   UsageGuide,
 } from '../core/types';
-import type { EntityKind, Verdict } from '../graph/types';
+import type { EntityKind, EvidenceClass, Verdict } from '../graph/types';
+import type { ExtractionTier, SymbolKind } from '../surface/types';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -439,12 +440,54 @@ export const entities = pgTable(
      * A non-null sentinel is the cheap fix that works on every PG version.
      */
     tenantId: bigint('tenant_id', { mode: 'number' }).notNull().default(0),
+    /** Tarball digest. THE extraction cache key: unchanged digest, no re-extraction.
+     *  This is what keeps cost sublinear as the index grows (§5, §6.5). */
+    artifactHash: text('artifact_hash'),
+    /** Dependent count. Drives sampling AND refresh priority — and note priority
+     *  is NOT popularity: the study found drift concentrates at LOW in-degree
+     *  (18.7% vs 8.3%), which is exactly where models have the weakest priors. */
+    inDegree: integer('in_degree'),
     firstSeen: ts('first_seen').notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('entities_canonical_idx').on(table.canonicalKey, table.tenantId),
     index('entities_kind_idx').on(table.kind, table.namespace, table.name),
+    index('entities_artifact_idx').on(table.artifactHash),
   ],
+);
+
+/**
+ * One row per exported symbol of a package version (§5).
+ *
+ * `origin` and `tier` are not decoration — each exists because of a defect that
+ * silently corrupted the drift study:
+ *   - `origin` (§6.4.1): a symbol re-exported from another package is not this
+ *     package's surface. Counting them made one package appear to delete 168
+ *     exports when the true figure was 0.
+ *   - `tier` (§6.4.3): surfaces extracted at different tiers are NOT comparable,
+ *     so the tier has to travel with every symbol or diffs go wrong quietly.
+ */
+export const symbols = pgTable(
+  'symbols',
+  {
+    id: serial('id').primaryKey(),
+    entityId: integer('entity_id')
+      .notNull()
+      .references(() => entities.id),
+    /** 'default', 'foo', 'foo.bar' */
+    path: text('path').notNull(),
+    /** function | class | object | primitive | type_only */
+    kind: text('kind').$type<SymbolKind>().notNull(),
+    /** `fn.length` equivalent; null when not statically determinable. */
+    arity: integer('arity'),
+    /** 'local' | 'external:<pkg>' */
+    origin: text('origin').notNull().default('local'),
+    deprecated: boolean('deprecated').notNull().default(false),
+    tier: text('tier').$type<ExtractionTier>().notNull(),
+    sourceFile: text('source_file'),
+    sourceLine: integer('source_line'),
+  },
+  (table) => [uniqueIndex('symbols_entity_path_idx').on(table.entityId, table.path)],
 );
 
 /** The runtime a verdict holds in. Never a node — always a dimension (§2). */
@@ -500,6 +543,11 @@ export const observations = pgTable(
       .notNull()
       .references(() => claims.id),
     verdict: text('verdict').$type<Verdict>().notNull(),
+    /** What KIND of evidence backs the verdict (§4.1) — orthogonal to the verdict
+     *  itself. A declared surface fact must never read as behavioural proof. */
+    class: text('class').$type<EvidenceClass>().notNull().default('executed'),
+    /** Which extraction tier produced it; null for executed claims. */
+    tier: text('tier').$type<ExtractionTier>(),
     /** Evidence that makes the verdict auditable. Null only for `unknown`. */
     evidence: text('evidence'),
     oracleId: text('oracle_id').notNull(),
@@ -517,6 +565,8 @@ export type NewEntityRow = typeof entities.$inferInsert;
 export type EnvironmentRow = typeof environments.$inferSelect;
 export type ClaimRow = typeof claims.$inferSelect;
 export type ObservationRow = typeof observations.$inferSelect;
+export type SymbolRow = typeof symbols.$inferSelect;
+export type NewSymbolRow = typeof symbols.$inferInsert;
 export type NewObservationRow = typeof observations.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;
 export type SyncRunRow = typeof syncRuns.$inferSelect;

@@ -120,6 +120,13 @@
       "when": 1785942996926,
       "tag": "0016_futuristic_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786050472697,
+      "tag": "0017_absent_grandmaster",
+      "breakpoints": true
     }
   ]
 }
