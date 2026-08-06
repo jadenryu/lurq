@@ -11,7 +11,9 @@
  * the worker fills it in. That is what keeps the p99 target reachable, and it is
  * also why the miss path has to be honest rather than optimistic.
  */
+import { createHash } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
+import { cached } from '../core/cache';
 import type { Database } from '../db/client';
 import { claims, entities, observations, symbols } from '../db/schema';
 import type { SymbolRow } from '../db/schema';
@@ -114,7 +116,29 @@ const MISS: Omit<SurfaceResponse, 'package' | 'version'> = {
   observedAt: null,
 };
 
+/** Short stable cache key. */
+function ckey(parts: unknown): string {
+  return createHash('sha1').update(JSON.stringify(parts)).digest('hex').slice(0, 24);
+}
+
+/**
+ * §8 requires p99 < 150 ms for cached reads, so the read path is cached — but a
+ * MISS is never cached. The worker is about to fill it in, and a cached UNKNOWN
+ * would keep answering "not extracted" long after it was.
+ */
 export async function handleResolveSurface(
+  db: Database,
+  input: ResolveSurfaceInput,
+): Promise<SurfaceResponse> {
+  return cached(
+    'resolve_surface',
+    ckey([input.package, input.version ?? null]),
+    () => resolveSurfaceUncached(db, input),
+    { skipCache: (v) => v.verdict === 'unknown' },
+  );
+}
+
+async function resolveSurfaceUncached(
   db: Database,
   input: ResolveSurfaceInput,
 ): Promise<SurfaceResponse> {
@@ -175,6 +199,15 @@ export interface DiffSurfaceInput {
 }
 
 export async function handleDiffSurface(db: Database, input: DiffSurfaceInput) {
+  return cached(
+    'diff_surface',
+    ckey([input.package, input.fromVersion, input.toVersion]),
+    () => diffSurfaceUncached(db, input),
+    { skipCache: (v) => v.verdict === 'unknown' },
+  );
+}
+
+async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
   const [a, b] = await Promise.all([
     loadStored(db, input.package, input.fromVersion),
     loadStored(db, input.package, input.toVersion),
