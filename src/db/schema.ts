@@ -420,6 +420,33 @@ export interface SyncError {
 // docs/lurq-v2-integration-plan.md §4 for why the migration is deferred.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Demand-driven surface-extraction queue (§6.1).
+ *
+ * A query for a package-version not in the graph IS a discovery event, and the
+ * spec ranks it the highest-priority queue input because it is revealed demand
+ * rather than a guess about what matters. Enqueueing is instant and off the
+ * query path: extraction never runs synchronously inside a request (§8), so a
+ * miss returns UNKNOWN and the worker fills it in.
+ *
+ * Same shape as compat_verify_queue, deliberately — that loop already works.
+ */
+export const surfaceQueue = pgTable(
+  'surface_queue',
+  {
+    id: serial('id').primaryKey(),
+    packageName: text('package_name').notNull(),
+    /** Null means "whatever latest resolves to at extraction time". */
+    version: text('version'),
+    /** Dedup key: `name@version`. */
+    specKey: text('spec_key').notNull().unique(),
+    /** Failed drains bump this; the worker drops a spec that keeps failing. */
+    attempts: integer('attempts').notNull().default(0),
+    requestedAt: ts('requested_at').notNull().defaultNow(),
+  },
+  (table) => [index('surface_queue_requested_idx').on(table.requestedAt)],
+);
+
 /** A node in the graph. Anything an agent depends on that an oracle can check. */
 export const entities = pgTable(
   'entities',
@@ -567,6 +594,7 @@ export type EnvironmentRow = typeof environments.$inferSelect;
 export type ClaimRow = typeof claims.$inferSelect;
 export type ObservationRow = typeof observations.$inferSelect;
 export type SymbolRow = typeof symbols.$inferSelect;
+export type SurfaceQueueRow = typeof surfaceQueue.$inferSelect;
 export type NewSymbolRow = typeof symbols.$inferInsert;
 export type NewObservationRow = typeof observations.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;

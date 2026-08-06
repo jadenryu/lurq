@@ -9,10 +9,10 @@
  *
  * Nothing here executes package code; extraction upstream is static (§9.2).
  */
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Database } from './client';
-import { entities, observations, symbols } from './schema';
-import type { SymbolRow } from './schema';
+import { entities, surfaceQueue, symbols } from './schema';
+import type { SurfaceQueueRow, SymbolRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
 import type { EntityRef } from '../graph/types';
 import type { ExtractedSurface } from '../surface/types';
@@ -128,4 +128,40 @@ export async function getStoredSymbols(
   const entity = rows.find((r) => r.tenantId === tenantId);
   if (!entity) return [];
   return db.select().from(symbols).where(eq(symbols.entityId, entity.id));
+}
+
+/** Dedup key for the extraction queue. */
+export function specKey(pkg: string, version: string | null): string {
+  return `${pkg}@${version ?? 'latest'}`;
+}
+
+/**
+ * Record a query miss (§6.1). Instant, deduped, and never blocking — the query
+ * path returns UNKNOWN and the worker does the work.
+ */
+export async function enqueueSurface(
+  db: Database,
+  pkg: string,
+  version: string | null,
+): Promise<void> {
+  await db
+    .insert(surfaceQueue)
+    .values({ packageName: pkg, version, specKey: specKey(pkg, version) })
+    .onConflictDoNothing();
+}
+
+/** Oldest pending specs, for the worker drain. */
+export async function getPendingSurfaces(db: Database, limit = 10): Promise<SurfaceQueueRow[]> {
+  return db.select().from(surfaceQueue).orderBy(surfaceQueue.requestedAt).limit(limit);
+}
+
+export async function dropSurfaceQueue(db: Database, id: number): Promise<void> {
+  await db.delete(surfaceQueue).where(eq(surfaceQueue.id, id));
+}
+
+export async function bumpSurfaceAttempt(db: Database, id: number): Promise<void> {
+  await db
+    .update(surfaceQueue)
+    .set({ attempts: sql`${surfaceQueue.attempts} + 1` })
+    .where(eq(surfaceQueue.id, id));
 }
