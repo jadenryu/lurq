@@ -190,11 +190,38 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
     });
   };
 
-  /** A re-export specifier: recurse if internal, record as external if not (§6.4.1). */
-  const reExport = (spec: string, names: string[] | null): void => {
+  /**
+   * A re-export specifier: recurse if internal, record as external if not
+   * (§6.4.1).
+   *
+   * `picks` carries the named subset for `export { a, b as c } from './x'`.
+   * Honouring it is not optional: `uuid` re-exports one `default` per internal
+   * file (`export { default as MAX } from './max.js'`), so merging the target's
+   * whole surface both INVENTS its internal helpers as package exports and LOSES
+   * the renamed ones. Measured at 3/10 baseline precision before this — the
+   * worst class of error we can make, since it claims symbols that do not exist.
+   */
+  const reExport = (
+    spec: string,
+    names: string[] | null,
+    picks?: { from: string; as: string }[],
+  ): void => {
     if (resolvesInsidePackage(spec)) {
       const target = resolveInternal(file, spec, ctx.pkgDir);
-      if (target) walk(target, ctx, out);
+      if (!target) return;
+      if (!picks) {
+        walk(target, ctx, out); // `export * from` — the whole surface is correct
+        return;
+      }
+      // Selective: resolve the target's surface separately, then take only what
+      // was asked for, under the name it was asked for.
+      const sub = new Map<string, SurfaceSymbol>();
+      walk(target, { ...ctx, visited: new Set(ctx.visited) }, sub);
+      for (const pick of picks) {
+        const found = sub.get(pick.from);
+        if (found) put(out, { ...found, path: pick.as });
+        else put(out, { path: pick.as, kind: 'object', arity: null, origin: 'local', deprecated: false, tier: TIER, sourceRef: { file: rel, line: 1 } });
+      }
       return;
     }
     ctx.external.add(spec);
@@ -222,7 +249,14 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
       if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
         const names = stmt.exportClause.elements.map((el) => el.name.text);
         if (spec) {
-          reExport(spec, names);
+          reExport(
+            spec,
+            names,
+            stmt.exportClause.elements.map((el) => ({
+              from: el.propertyName?.text ?? el.name.text,
+              as: el.name.text,
+            })),
+          );
         } else {
           for (const el of stmt.exportClause.elements) {
             const local = el.propertyName?.text ?? el.name.text;
