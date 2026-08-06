@@ -87,6 +87,61 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('check-upgrade')
+    .argument('<dir>', 'project directory to scan')
+    .description('§8.1 check_upgrade — do these upgrades remove symbols your code references?')
+    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. commander@11.1.0..12.1.0')
+    .option('--json', 'output the report as JSON')
+    .option('--exit-code', 'exit 1 when the report is not safe (for CI)')
+    .action(
+      async (dir: string, opts: { upgrade?: string[]; json?: boolean; exitCode?: boolean }) => {
+        const { scanReferences } = await import('../surface/references');
+        const { checkUpgrade, formatUpgradeReport } = await import('../surface/upgrade');
+
+        const specs = opts.upgrade ?? [];
+        if (!specs.length) {
+          console.error('give at least one --upgrade pkg@from..to');
+          process.exitCode = 1;
+          return;
+        }
+        const targets = specs.map((spec) => {
+          const at = spec.lastIndexOf('@');
+          const name = spec.slice(0, at);
+          const [fromVersion, toVersion] = spec.slice(at + 1).split('..');
+          if (!name || !fromVersion || !toVersion) {
+            throw new Error(`bad --upgrade '${spec}', expected pkg@from..to`);
+          }
+          return { package: name, fromVersion, toVersion };
+        });
+
+        const refs = scanReferences(dir);
+        const report = await checkUpgrade(targets, refs);
+        if (opts.json) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          console.log(formatUpgradeReport(report, `upgrade check on ${dir}`));
+        }
+        if (opts.exitCode && !report.safe) process.exitCode = 1;
+      },
+    );
+
+  program
+    .command('scan-references')
+    .argument('<dir>', 'project directory to scan')
+    .description('list the symbols this codebase uses from each dependency')
+    .option('--package <name>', 'only this package')
+    .action(async (dir: string, opts: { package?: string }) => {
+      const { scanReferences } = await import('../surface/references');
+      const refs = scanReferences(dir).filter((r) => !opts.package || r.package === opts.package);
+      for (const r of refs) {
+        console.log(`${r.package} (${r.symbols.size} symbol(s))`);
+        for (const [sym, uses] of r.symbols) {
+          console.log(`  ${sym}  ${uses.slice(0, 3).map((u) => `${u.file}:${u.line}`).join(', ')}`);
+        }
+      }
+    });
+
+  program
     .command('surface-validate')
     .description('run the §7 validation gates against a sample of packages')
     .option('--packages <list>', 'comma-separated package names (default: a seed sample)')
