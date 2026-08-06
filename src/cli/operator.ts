@@ -78,6 +78,33 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('surface-drain')
+    .description('service the demand-driven surface-extraction queue (§6.1)')
+    .option('--limit <n>', 'specs to drain this run (default 10)', (v) => parseInt(v, 10))
+    .option('--package <name>', 'extract one package directly, bypassing the queue')
+    .option('--package-version <v>', 'version for --package (default latest)')
+    .action(async (opts: { limit?: number; package?: string; packageVersion?: string }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { drainSurfaceQueue, extractAndStore } = await import('../pipeline/surface');
+      const { db, close } = createDb();
+      try {
+        if (opts.package) {
+          const outcome = await extractAndStore(db, opts.package, opts.packageVersion ?? null);
+          console.log(`${opts.package}@${opts.packageVersion ?? 'latest'}: ${outcome}`);
+        } else {
+          const s = await drainSurfaceQueue(db, { limit: opts.limit });
+          console.log(
+            `drained ${s.drained} · stored ${s.stored} · cached ${s.cached} · undeclared ${s.undeclared} · failed ${s.failed}`,
+          );
+        }
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('surface-diff')
     .argument('<dirA>', 'package directory at the FROM version')
     .argument('<dirB>', 'package directory at the TO version')
