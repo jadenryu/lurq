@@ -38,6 +38,76 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('surface')
+    .argument('<dir>', 'installed package directory (e.g. node_modules/express)')
+    .description('extract a package tier-A runtime surface (v1 §6.2); --store persists it')
+    .option('--store', 'persist to the graph (requires DATABASE_URL)')
+    .option('--json', 'output the full surface as JSON')
+    .action(async (dir: string, opts: { store?: boolean; json?: boolean }) => {
+      const { extractSurface } = await import('../surface/extract');
+      const { runtimeSymbols } = await import('../surface/types');
+      const surface = extractSurface(dir);
+      if (opts.json) {
+        console.log(JSON.stringify(surface, null, 2));
+      } else {
+        const rt = runtimeSymbols(surface);
+        console.log(
+          `${surface.package}@${surface.version ?? '?'} · entry ${surface.entry ?? '<none>'} · ${surface.filesWalked} file(s)`,
+        );
+        console.log(
+          `  ${rt.length} runtime symbol(s), ${surface.symbols.length - rt.length} excluded (type-only or external)`,
+        );
+        if (surface.externalReExports.length) {
+          console.log(`  external re-exports: ${surface.externalReExports.join(', ')}`);
+        }
+        if (surface.undeclaredReason) console.log(`  UNDECLARED: ${surface.undeclaredReason}`);
+      }
+      if (opts.store) {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { createDb } = await import('../db/client');
+        const { storeSurface } = await import('../db/surface');
+        const { db, close } = createDb();
+        try {
+          const res = await storeSurface(db, surface, { extractorVersion: '1' });
+          console.log(`  stored: ${res.symbolsWritten} symbol(s) · verdict ${res.verdict}`);
+        } finally {
+          await close();
+        }
+      }
+    });
+
+  program
+    .command('surface-diff')
+    .argument('<dirA>', 'package directory at the FROM version')
+    .argument('<dirB>', 'package directory at the TO version')
+    .description('diff two extracted surfaces (v1 §8.1 diff_surface)')
+    .option('--json', 'output the diff as JSON')
+    .action(async (dirA: string, dirB: string, opts: { json?: boolean }) => {
+      const { extractSurface } = await import('../surface/extract');
+      const { diffSurfaces } = await import('../surface/diff');
+      const diff = diffSurfaces(extractSurface(dirA), extractSurface(dirB));
+      if (opts.json) {
+        console.log(JSON.stringify(diff, null, 2));
+        return;
+      }
+      if (diff.inconclusive) {
+        console.log(`inconclusive: ${diff.inconclusive}`);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(`${diff.package} ${diff.fromVersion ?? '?'} → ${diff.toVersion ?? '?'} (tier ${diff.tier})`);
+      const line = (label: string, items: string[]) => {
+        if (items.length) console.log(`  ${label}: ${items.join(', ')}`);
+      };
+      line(`removed (${diff.removed.length})`, diff.removed.map((s) => s.path));
+      line(`arity changed`, diff.arityChanged.map((a) => `${a.path} ${a.from}→${a.to}`));
+      line(`type-only removed (breaks tsc, not node)`, diff.typeOnlyRemoved.map((s) => s.path));
+      line(`added (${diff.added.length})`, diff.added.map((s) => s.path));
+      if (!diff.removed.length && !diff.arityChanged.length) console.log('  no runtime breakage');
+    });
+
+  program
     .command('oracle')
     .argument('<kind>', 'node kind to verify (mcp_server)')
     .argument('<name>', 'entity name, e.g. an npm package that ships an MCP server')
