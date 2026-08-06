@@ -1,0 +1,67 @@
+{
+  "suite": "miss-rate-v1",
+  "schemaVersion": 1,
+  "description": "M0 controlled arm (v1 spec §12). Each case pins an EXACT version in the prompt and asks for code using that package. A referenced symbol absent from the pinned version's tier-A surface is a miss. Mixes packages whose surface moved across majors (uuid, chalk, commander) with stable controls (semver, ms) so the number is not an artifact of only picking churn.",
+  "cases": [
+    {
+      "id": "uuid-9-basic",
+      "package": "uuid",
+      "version": "9.0.1",
+      "task": "Generate a random UUID and validate that a given string is a well-formed UUID."
+    },
+    {
+      "id": "uuid-14-basic",
+      "package": "uuid",
+      "version": "14.0.1",
+      "task": "Generate a random UUID and validate that a given string is a well-formed UUID."
+    },
+    {
+      "id": "uuid-9-v6",
+      "package": "uuid",
+      "version": "9.0.1",
+      "task": "Generate a time-ordered UUID suitable for database keys, and convert it to and from the v1 layout."
+    },
+    {
+      "id": "commander-11-cli",
+      "package": "commander",
+      "version": "11.1.0",
+      "task": "Build a CLI with one subcommand 'build' that takes a --watch flag, using the factory helpers rather than constructors where available."
+    },
+    {
+      "id": "commander-12-cli",
+      "package": "commander",
+      "version": "12.1.0",
+      "task": "Build a CLI with one subcommand 'build' that takes a --watch flag, using the factory helpers rather than constructors where available."
+    },
+    {
+      "id": "chalk-4-color",
+      "package": "chalk",
+      "version": "4.1.2",
+      "task": "Print a bold red error line and a dim grey debug line to stdout."
+    },
+    {
+      "id": "chalk-5-color",
+      "package": "chalk",
+      "version": "5.3.0",
+      "task": "Print a bold red error line and a dim grey debug line to stdout, using the named exports the package provides."
+    },
+    {
+      "id": "semver-stable",
+      "package": "semver",
+      "version": "7.6.3",
+      "task": "Given two version strings, report whether the first satisfies a caret range built from the second, and return the greater of the two."
+    },
+    {
+      "id": "ms-stable",
+      "package": "ms",
+      "version": "2.1.3",
+      "task": "Convert a human duration string such as '2 days' into milliseconds and back again."
+    },
+    {
+      "id": "zod-3-validate",
+      "package": "zod",
+      "version": "3.23.8",
+      "task": "Define a schema for a user object with an email and an optional age, then safely parse unknown input against it."
+    }
+  ]
+}

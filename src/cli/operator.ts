@@ -87,6 +87,50 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('miss-rate')
+    .description('M0 controlled arm — how often does model-authored code reference absent symbols?')
+    .option('--model <name>', 'OpenAI model id (default gpt-4o-mini)')
+    .option('--suite <path>', 'case file (default tests/benchmark/miss-rate-v1.json)')
+    .option('--limit <n>', 'run only the first N cases (pilot)', (v) => parseInt(v, 10))
+    .option('--show-code', 'include the generated source in JSON output')
+    .option('--json', 'output the full report as JSON')
+    .action(
+      async (opts: { model?: string; suite?: string; limit?: number; showCode?: boolean; json?: boolean }) => {
+        const { readFileSync } = await import('node:fs');
+        const { runMissRate } = await import('../benchmark/missRate');
+        const path = opts.suite ?? 'tests/benchmark/miss-rate-v1.json';
+        const suite = JSON.parse(readFileSync(path, 'utf8')) as {
+          cases: { id: string; package: string; version: string; task: string }[];
+        };
+        const cases = opts.limit ? suite.cases.slice(0, opts.limit) : suite.cases;
+        const model = opts.model ?? 'gpt-4o-mini';
+
+        const report = await runMissRate(cases, model, { keepCode: opts.showCode });
+        if (opts.json) {
+          console.log(JSON.stringify(report, null, 2));
+          return;
+        }
+        console.log(`\nmodel: ${report.model} · ${report.scored}/${report.cases} scored · ${report.unverifiable} unverifiable\n`);
+        for (const r of report.results) {
+          if (r.unverifiable) {
+            console.log(`  —      ${r.id.padEnd(20)} unverifiable: ${r.unverifiable}`);
+          } else {
+            const mark = r.missing.length ? 'MISS  ' : 'ok    ';
+            console.log(
+              `  ${mark} ${r.id.padEnd(20)} ${r.referenced.length - r.missing.length}/${r.referenced.length} exist` +
+                (r.missing.length ? `  absent: ${r.missing.join(', ')}` : ''),
+            );
+          }
+        }
+        const pct = (n: number | null) => (n === null ? 'n/a' : `${(n * 100).toFixed(1)}%`);
+        console.log(`\n  symbol miss rate: ${pct(report.symbolMissRate)} (${report.totalMissing}/${report.totalReferenced})`);
+        console.log(`  case miss rate:   ${pct(report.caseMissRate)} — cases with >=1 absent symbol`);
+        console.log('\n  NOTE: no human baseline arm, so this measures magnitude and cannot');
+        console.log('        pass or fail M0 on its own (§12 kill condition).');
+      },
+    );
+
+  program
     .command('check-upgrade')
     .argument('<dir>', 'project directory to scan')
     .description('§8.1 check_upgrade — do these upgrades remove symbols your code references?')
