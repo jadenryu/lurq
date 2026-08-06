@@ -38,6 +38,9 @@ export interface SurfaceSymbol {
   origin: SymbolOrigin;
   deprecated: boolean;
   tier: ExtractionTier;
+  /** Full declaration text. Tier C only — tier A cannot see types, and an
+   *  overload set collapses to one symbol whose signature lists each overload. */
+  signature?: string;
   sourceRef?: { file: string; line: number };
 }
 

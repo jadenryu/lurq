@@ -23,6 +23,12 @@ export interface ArityChange {
   to: number | null;
 }
 
+export interface SignatureChange {
+  path: string;
+  from: string;
+  to: string;
+}
+
 export interface SurfaceDiff {
   package: string;
   fromVersion: string | null;
@@ -32,6 +38,9 @@ export interface SurfaceDiff {
   removed: SurfaceSymbol[];
   added: SurfaceSymbol[];
   arityChanged: ArityChange[];
+  /** Signature drift. Tier C only — tier A cannot see types at all, so an empty
+   *  list from a tier-A diff means "not measurable", not "nothing changed". */
+  signatureChanged: SignatureChange[];
   /** Type-level removals — break `tsc`, NOT `node`. Reported separately (§8.1). */
   typeOnlyRemoved: SurfaceSymbol[];
   deprecated: SurfaceSymbol[];
@@ -51,6 +60,7 @@ const empty = (
   removed: [],
   added: [],
   arityChanged: [],
+  signatureChanged: [],
   typeOnlyRemoved: [],
   deprecated: [],
   inconclusive: reason,
@@ -90,6 +100,19 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
   const toPaths = new Set(to.symbols.map((s) => s.path));
   const typeOnlyRemoved = typeOnlyFrom.filter((s) => !toPaths.has(s.path));
 
+  // Signatures exist only at tier C. Comparing them on a tier-A diff would
+  // report "no changes" for something never measured.
+  const signatureChanged: SignatureChange[] = [];
+  if (from.tier === 'bundled_dts') {
+    const fromAll = new Map(from.symbols.map((s) => [s.path, s]));
+    for (const b of to.symbols) {
+      const a = fromAll.get(b.path);
+      if (a?.signature && b.signature && a.signature !== b.signature) {
+        signatureChanged.push({ path: b.path, from: a.signature, to: b.signature });
+      }
+    }
+  }
+
   const deprecated = [...toRuntime.values()].filter(
     (s) => s.deprecated && !fromRuntime.get(s.path)?.deprecated,
   );
@@ -102,6 +125,7 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
     removed,
     added,
     arityChanged,
+    signatureChanged,
     typeOnlyRemoved,
     deprecated,
   };
