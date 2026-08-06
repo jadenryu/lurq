@@ -9,13 +9,13 @@
  *
  * Nothing here executes package code; extraction upstream is static (§9.2).
  */
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from './client';
 import { entities, surfaceQueue, symbols } from './schema';
 import type { SurfaceQueueRow, SymbolRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
 import type { EntityRef } from '../graph/types';
-import type { ExtractedSurface } from '../surface/types';
+import type { ExtractedSurface, ExtractionTier } from '../surface/types';
 
 /** The entity ref for a package version's surface. */
 export function surfaceRef(pkg: string, version: string | null): EntityRef {
@@ -30,6 +30,7 @@ export async function isExtractionCached(
   db: Database,
   ref: EntityRef,
   artifactHash: string,
+  tier: ExtractionTier = 'shipped_js_ast',
   tenantId = 0,
 ): Promise<boolean> {
   const row = await upsertEntity(db, ref, tenantId);
@@ -37,7 +38,7 @@ export async function isExtractionCached(
   const existing = await db
     .select({ id: symbols.id })
     .from(symbols)
-    .where(eq(symbols.entityId, row.id))
+    .where(and(eq(symbols.entityId, row.id), eq(symbols.tier, tier)))
     .limit(1);
   return existing.length > 0;
 }
@@ -91,9 +92,12 @@ export async function storeSurface(
 
   if (undeclared) return { entityId: entity.id, symbolsWritten: 0, verdict: 'undeclared' };
 
-  // Symbols are a snapshot of an immutable artifact, so replace rather than
-  // append — history lives in `observations`, which is never rewritten.
-  await db.delete(symbols).where(eq(symbols.entityId, entity.id));
+  // Replace only THIS tier's rows: a tier-C surface must never clear the tier-A
+  // one, since they answer different questions (§6.4.3). Symbols snapshot an
+  // immutable artifact; the history that matters lives in `observations`.
+  await db
+    .delete(symbols)
+    .where(and(eq(symbols.entityId, entity.id), eq(symbols.tier, surface.tier)));
   const rows = surface.symbols.map((s) => ({
     entityId: entity.id,
     path: s.path,
@@ -102,6 +106,7 @@ export async function storeSurface(
     origin: s.origin,
     deprecated: s.deprecated,
     tier: s.tier,
+    signature: s.signature ?? null,
     sourceFile: s.sourceRef?.file ?? null,
     sourceLine: s.sourceRef?.line ?? null,
   }));

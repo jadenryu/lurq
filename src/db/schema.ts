@@ -511,10 +511,16 @@ export const symbols = pgTable(
     origin: text('origin').notNull().default('local'),
     deprecated: boolean('deprecated').notNull().default(false),
     tier: text('tier').$type<ExtractionTier>().notNull(),
+    /** Full declaration text; tier C only (§6.2). */
+    signature: text('signature'),
     sourceFile: text('source_file'),
     sourceLine: integer('source_line'),
   },
-  (table) => [uniqueIndex('symbols_entity_path_idx').on(table.entityId, table.path)],
+  // Keyed by TIER as well as path: a package version has one surface per tier and
+  // they are not interchangeable (§6.4.3). Without the tier in the key, storing a
+  // tier-C surface would silently overwrite the tier-A one that answers runtime
+  // existence — replacing the authoritative answer with a type-level guess.
+  (table) => [uniqueIndex('symbols_entity_path_tier_idx').on(table.entityId, table.path, table.tier)],
 );
 
 /** The runtime a verdict holds in. Never a node — always a dimension (§2). */

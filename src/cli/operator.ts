@@ -40,13 +40,16 @@ export function registerOperatorCommands(program: Command): void {
   program
     .command('surface')
     .argument('<dir>', 'installed package directory (e.g. node_modules/express)')
-    .description('extract a package tier-A runtime surface (v1 §6.2); --store persists it')
+    .description('extract a package surface (v1 §6.2); --tier c reads .d.ts, --store persists')
     .option('--store', 'persist to the graph (requires DATABASE_URL)')
+    .option('--tier <a|c>', "extraction tier: 'a' = shipped JS (default), 'c' = .d.ts")
     .option('--json', 'output the full surface as JSON')
-    .action(async (dir: string, opts: { store?: boolean; json?: boolean }) => {
+    .action(async (dir: string, opts: { store?: boolean; tier?: string; json?: boolean }) => {
       const { extractSurface } = await import('../surface/extract');
+      const { extractTypeSurface } = await import('../surface/dts');
       const { runtimeSymbols } = await import('../surface/types');
-      const surface = extractSurface(dir);
+      const tierC = (opts.tier ?? 'a').toLowerCase() === 'c';
+      const surface = tierC ? extractTypeSurface(dir) : extractSurface(dir);
       if (opts.json) {
         console.log(JSON.stringify(surface, null, 2));
       } else {
@@ -59,6 +62,12 @@ export function registerOperatorCommands(program: Command): void {
         );
         if (surface.externalReExports.length) {
           console.log(`  external re-exports: ${surface.externalReExports.join(', ')}`);
+        }
+        if (tierC) {
+          const dep = surface.symbols.filter((x) => x.deprecated);
+          console.log(`  tier C · ${surface.symbols.length} declared symbol(s), ${dep.length} @deprecated`);
+          if (dep.length) console.log(`  deprecated: ${dep.map((x) => x.path).join(', ')}`);
+          console.log('  NOTE: type-level only — never evidence of runtime existence');
         }
         if (surface.undeclaredReason) console.log(`  UNDECLARED: ${surface.undeclaredReason}`);
       }

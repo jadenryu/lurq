@@ -141,6 +141,13 @@
       "when": 1786051098610,
       "tag": "0019_dashing_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786054284547,
+      "tag": "0020_normal_vulture",
+      "breakpoints": true
     }
   ]
 }
