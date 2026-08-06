@@ -11,16 +11,16 @@
  * adding a `tar` dependency.
  *
  * ponytail: covers `types`/`typings`/`index.d.ts`, and only what that ONE file
- * declares. Three shapes still degrade to null → `usage` falls back to the README:
+ * declares or names. Two shapes still degrade to null → `usage` falls back to the
+ * README:
  *   - no shipped types, types living in `@types/*` instead (react, express, semver)
- *   - types reachable only through an `exports` map (vite, helmet)
  *   - a barrel entry that re-exports rather than declares — `export * from './lib'`
  *     (zod, drizzle-orm), since a single-file parse can't follow the specifier
- * Measured on a 12-package popular-library sample, 5 extract. That was invisible
- * while extraction was worker-only; now that a miss extracts on the request path
- * it sets the ceiling on how often `usage` can answer. Upgrade paths, in value
- * order: follow `export *` one hop, read the `exports` types condition, then fall
- * back to `@types/<name>`.
+ * Measured on a 12-package popular-library sample, 7 extract. This ceiling was
+ * invisible while extraction was worker-only; now that a miss extracts on the
+ * request path it bounds how often `usage` can answer at all. Upgrade paths, in
+ * value order: follow `export *` a bounded number of hops, read the `exports`
+ * types condition, then fall back to `@types/<name>`.
  *
  * The compiler is loaded LAZILY and non-fatally, and that is load-bearing for the
  * plane split (§4E): `typescript` is a devDependency, present in the operator
@@ -59,7 +59,7 @@ let compiler: Promise<Compiler | null> | undefined;
  */
 export function loadCompiler(): Promise<Compiler | null> {
   compiler ??= import('typescript')
-    .then((m) => ((m as { default?: Compiler }).default ?? (m as unknown as Compiler)))
+    .then((m) => (m as { default?: Compiler }).default ?? (m as unknown as Compiler))
     .catch(() => null);
   return compiler;
 }
@@ -133,6 +133,35 @@ function hasExportModifier(ts: Compiler, node: TSApi.Node): boolean {
   );
 }
 
+/** What a statement declares, as `[localName, kind, signature]` tuples — a
+ *  `var`/`const` statement can declare several names, most statements one, and
+ *  anonymous ones none. Used both for the local index and for the exported
+ *  declarations themselves, so a name means the same thing either way. */
+function declarationsIn(
+  ts: Compiler,
+  node: TSApi.Node,
+  src: TSApi.SourceFile,
+): Array<[string, ExportKind, string | null]> {
+  if (ts.isVariableStatement(node)) {
+    const out: Array<[string, ExportKind, string | null]> = [];
+    for (const decl of node.declarationList.declarations) {
+      if (ts.isIdentifier(decl.name)) {
+        out.push([
+          decl.name.text,
+          'variable',
+          decl.type ? normalize(decl.type.getText(src)) : null,
+        ]);
+      }
+    }
+    return out;
+  }
+  const named = node as TSApi.DeclarationStatement;
+  if (named.name && ts.isIdentifier(named.name)) {
+    return [[named.name.text, kindOf(ts, node), signatureOf(ts, node, src)]];
+  }
+  return [];
+}
+
 /** Parse `.d.ts` text into a normalized, name-sorted export surface. The compiler
  *  is passed in (see `loadCompiler`) rather than imported at module scope. */
 export function parseSurface(source: string, ts: Compiler): ExportSymbol[] {
@@ -143,28 +172,78 @@ export function parseSurface(source: string, ts: Compiler): ExportSymbol[] {
     if (!out.has(name)) out.set(name, { name, kind, signature });
   };
 
+  // Index every top-level declaration by local name, exported or not. A `.d.ts`
+  // rolled up by rollup-plugin-dts or api-extractor (vite, helmet, and most
+  // bundled types) is a wall of bare `declare`s closed by ONE `export { … }`
+  // block, so the statement carrying a name's kind and signature is almost never
+  // the statement that exports it. Private declarations stay private: nothing
+  // reaches `out` unless an export form below names it.
+  const local = new Map<string, { kind: ExportKind; signature: string | null }>();
+  const namespaces = new Map<string, TSApi.ModuleDeclaration>();
   for (const node of src.statements) {
-    if (!hasExportModifier(ts, node)) continue;
+    for (const [name, kind, signature] of declarationsIn(ts, node, src)) {
+      if (!local.has(name)) local.set(name, { kind, signature });
+    }
+    if (
+      ts.isModuleDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      !namespaces.has(node.name.text)
+    ) {
+      namespaces.set(node.name.text, node);
+    }
+  }
 
-    if (ts.isVariableStatement(node)) {
-      for (const decl of node.declarationList.declarations) {
-        if (ts.isIdentifier(decl.name)) {
-          add(decl.name.text, 'variable', decl.type ? normalize(decl.type.getText(src)) : null);
-        }
+  /** Lift an ambient namespace's members to the top level. Members of a `declare
+   *  namespace` are all exported, with or without the keyword. */
+  const liftNamespace = (decl: TSApi.ModuleDeclaration) => {
+    if (!decl.body || !ts.isModuleBlock(decl.body)) return;
+    for (const stmt of decl.body.statements) {
+      for (const [name, kind, signature] of declarationsIn(ts, stmt, src))
+        add(name, kind, signature);
+    }
+  };
+
+  for (const node of src.statements) {
+    // `export { … }`, `export * from …`, `export = …`: the `export` keyword is
+    // part of these statements' own syntax rather than a modifier, so they carry
+    // no modifiers at all and must be matched BEFORE the modifier gate below.
+    if (ts.isExportDeclaration(node)) {
+      const clause = node.exportClause;
+      if (!clause) continue; // `export * from './lib'` — nothing named here.
+      if (ts.isNamespaceExport(clause)) {
+        // `export * as ns from './x'` binds the whole module under one name.
+        add(clause.name.text, 'namespace', null);
+        continue;
+      }
+      const reExport = node.moduleSpecifier !== undefined;
+      for (const el of clause.elements) {
+        // `export { Local as Public }` — the local binding holds the kind and
+        // signature. A re-export from another module has neither, since a
+        // single-file parse never sees that module's declarations.
+        const decl = reExport ? undefined : local.get((el.propertyName ?? el.name).text);
+        const typeOnly = node.isTypeOnly || el.isTypeOnly;
+        add(el.name.text, decl?.kind ?? (typeOnly ? 'type' : 'unknown'), decl?.signature ?? null);
       }
       continue;
     }
 
-    // export { a, b as c } — re-exports; record the exported (outer) name.
-    if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
-      for (const el of node.exportClause.elements) add(el.name.text, 'unknown', null);
+    if (ts.isExportAssignment(node) && ts.isIdentifier(node.expression)) {
+      const target = node.expression.text;
+      const decl = local.get(target);
+      // The exported value itself is `default`: that is the name an importing
+      // agent binds it to, for both `export default x` and `export = x` under
+      // esModuleInterop.
+      if (decl) add('default', decl.kind, decl.signature);
+      // `export = e` is the CommonJS shape (@types/express, @types/react): the
+      // module's whole surface lives in a namespace merged onto `e`, so the
+      // members ARE the public API, not properties of one exported symbol.
+      const ns = node.isExportEquals ? namespaces.get(target) : undefined;
+      if (ns) liftNamespace(ns);
       continue;
     }
 
-    const named = node as TSApi.DeclarationStatement;
-    if (named.name && ts.isIdentifier(named.name)) {
-      add(named.name.text, kindOf(ts, node), signatureOf(ts, node, src));
-    }
+    if (!hasExportModifier(ts, node)) continue;
+    for (const [name, kind, signature] of declarationsIn(ts, node, src)) add(name, kind, signature);
   }
 
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
