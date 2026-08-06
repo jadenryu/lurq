@@ -190,7 +190,7 @@ export const CLI_COMMANDS = [
   { cmd: "lurq compare <pkgs…>", does: "Side-by-side, ranked by health" },
   { cmd: "lurq verify <package>", does: "Safety check before installing" },
   { cmd: "lurq compat <pkgs…>", does: "Does this set form a coherent stack?" },
-  { cmd: "lurq usage <package>", does: "Version-exact API surface, with --known for the delta" },
+  { cmd: "lurq usage <package>", does: "Version-exact API surface (--target, --known for the delta)" },
   { cmd: "lurq versions <package>", does: "Stored version timeline" },
   { cmd: "lurq plan <file>", does: "Markdown spec → scored plan (--optimize, --html)" },
   { cmd: "lurq weights", does: "Show the scoring model" },
