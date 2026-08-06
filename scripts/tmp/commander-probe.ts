@@ -1,4 +1,4 @@
-import { Command, Option, Argument, InvalidArgumentError } from 'commander';
+import { Command, Option } from 'commander';
 
 const program = new Command();
 
