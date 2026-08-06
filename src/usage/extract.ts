@@ -14,14 +14,17 @@
  * (`export * from './lib'`) is followed a bounded number of hops and merged, so
  * the entry's shape doesn't decide whether a package has a surface.
  *
- * ponytail: covers `types`/`typings`, the `exports` map's root entry, and
- * `index.d.ts`, plus the barrels reachable from whichever resolves. One shape
- * still degrades to null → `usage` falls back to the README: packages shipping
- * no types at all, with types in `@types/*` on DefinitelyTyped (react, express,
- * semver). Measured on a 14-package popular-library sample, 11 extract. This
- * ceiling was invisible while extraction was worker-only; now that a miss
- * extracts on the request path it bounds how often `usage` can answer at all.
- * Upgrade path: fall back to `@types/<name>`.
+ * Entry resolution covers `types`/`typings`, the `exports` map's root entry and
+ * `index.d.ts`, then `@types/<name>` for packages that ship no types at all —
+ * the whole 14-package popular-library sample in scripts/surface-coverage.mts
+ * now extracts, where 5 did before. This matters more than it used to: while
+ * extraction was worker-only a miss was just a gap, but now that a miss extracts
+ * on the request path (usage/service) it bounds how often `usage` can answer at
+ * all. Run that script after changing anything here.
+ *
+ * ponytail: what still degrades to null is a package whose types are reachable
+ * only through a subpath (`pkg/submodule`) with no root entry, and one whose
+ * barrel chain runs deeper than MAX_HOPS. Both fall back to the README.
  *
  * The compiler is loaded LAZILY and non-fatally, and that is load-bearing for the
  * plane split (§4E): `typescript` is a devDependency, present in the operator
@@ -75,11 +78,17 @@ interface FetchResult {
   unknown: boolean;
 }
 
-async function fetchFile(url: string, opts: ExtractOptions): Promise<FetchResult> {
+async function fetchFile(
+  url: string,
+  opts: ExtractOptions,
+  // Versions are immutable, so a long TTL is safe. Callers resolving a floating
+  // range pass a shorter one.
+  ttlMs: number = CACHE_TTL.depsDev,
+): Promise<FetchResult> {
   try {
     const { data } = await httpRequest<string>(url, {
       host: CDN,
-      ttlMs: CACHE_TTL.depsDev, // versions are immutable; a long TTL is safe
+      ttlMs,
       accept: 'text',
       ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
       ...(opts.retries !== undefined ? { retries: opts.retries } : {}),
@@ -150,19 +159,13 @@ export function typesFromExports(exports: unknown, depth = 0): string | null {
 }
 
 /**
- * The `.d.ts` entry paths to try for a version, most authoritative first:
- * `types`/`typings`, then the `exports` map's root target, then the conventional
- * `index.d.ts`. Ordered rather than singular because a `types` field can point
- * at a file the package doesn't actually ship (or ships only under `exports`),
- * and a 404 there shouldn't end the extraction.
+ * The `.d.ts` entry paths to try, most authoritative first: `types`/`typings`,
+ * then the `exports` map's root target, then the conventional `index.d.ts`.
+ * Ordered rather than singular because a `types` field can point at a file the
+ * package doesn't actually ship (or ships only under `exports`), and a 404 there
+ * shouldn't end the extraction.
  */
-async function resolveTypesEntries(
-  name: string,
-  version: string,
-  opts: ExtractOptions,
-): Promise<string[]> {
-  const pkgJson = await fetchText(`https://${CDN}/npm/${name}@${version}/package.json`, opts);
-  if (!pkgJson) return [];
+function typesEntries(pkgJson: string): string[] {
   const entries: string[] = [];
   try {
     const manifest = JSON.parse(pkgJson);
@@ -436,6 +439,74 @@ async function collectSurface(
 }
 
 /**
+ * Walk one package version root: try its types entries in order, stopping at the
+ * first that yields a surface. Tried in order and only as far as needed, so a
+ * package whose `types` field resolves — the overwhelming majority — pays
+ * nothing for the fallbacks behind it.
+ */
+async function surfaceFrom(
+  ts: Compiler,
+  root: string,
+  pkgJson: string,
+  opts: ExtractOptions,
+): Promise<ExportSymbol[] | null> {
+  for (const entry of typesEntries(pkgJson)) {
+    const dts = await fetchText(`${root}/${entry}`, opts);
+    if (!dts) continue;
+    const { symbols, sound } = await collectSurface(ts, root, entry, dts, opts);
+    // An unsound walk degrades to null rather than to a partial surface: null
+    // means "fall back to the README" and is retried on the next request, while
+    // a stored surface is believed forever. Under the read path's tight fetch
+    // ceiling that is the likely outcome for a wide barrel on a cold CDN edge —
+    // the worker, with the default timeouts, extracts it in full later.
+    if (sound && symbols.length > 0) return symbols;
+  }
+  return null;
+}
+
+/** DefinitelyTyped's package name for a library: a scoped `@scope/name` mangles
+ *  to `@types/scope__name`, since npm scopes don't nest. */
+export function typesPackageName(name: string): string {
+  return name.startsWith('@') ? `@types/${name.slice(1).replace('/', '__')}` : `@types/${name}`;
+}
+
+/**
+ * The surface from DefinitelyTyped, for packages that ship no types of their own
+ * (react, express, semver). Pinned to the MATCHING MAJOR, never to `latest`:
+ * @types/react's latest types React 19, and storing that as react@18.3.1's API
+ * would be a confident wrong answer rather than a missing one. Within the major
+ * there is still skew — @types/semver@7.8.0 answers for semver@7.7.2 — which is
+ * the approximation DefinitelyTyped's own versioning offers.
+ */
+async function typesPackageSurface(
+  ts: Compiler,
+  name: string,
+  version: string,
+  opts: ExtractOptions,
+): Promise<ExportSymbol[] | null> {
+  const major = /^\d+/.exec(version)?.[0];
+  if (!major) return null;
+  const dt = typesPackageName(name);
+  // jsDelivr resolves the range and 404s when DefinitelyTyped has no matching
+  // major. The manifest reports which version answered, and the file fetches
+  // pin to it so a walk can't straddle two releases mid-flight.
+  const { text: pkgJson } = await fetchFile(
+    `https://${CDN}/npm/${dt}@${major}/package.json`,
+    opts,
+    CACHE_TTL.npmRegistry, // A floating range: don't hold it for a day.
+  );
+  if (!pkgJson) return null;
+  let resolved: unknown;
+  try {
+    resolved = JSON.parse(pkgJson).version;
+  } catch {
+    return null;
+  }
+  if (typeof resolved !== 'string') return null;
+  return surfaceFrom(ts, `https://${CDN}/npm/${dt}@${resolved}`, pkgJson, opts);
+}
+
+/**
  * Extract the public API surface for `name@version`, or null if types can't be
  * resolved. Deterministic and cache-forever (versions are immutable).
  *
@@ -450,19 +521,12 @@ export async function extractSurface(
   const ts = await loadCompiler();
   if (!ts) return null;
   const root = `https://${CDN}/npm/${name}@${version}`;
-  // Tried in order and only until one yields a surface, so a package whose
-  // `types` field resolves — the overwhelming majority — pays nothing for the
-  // fallbacks behind it.
-  for (const entry of await resolveTypesEntries(name, version, opts)) {
-    const dts = await fetchText(`${root}/${entry}`, opts);
-    if (!dts) continue;
-    const { symbols, sound } = await collectSurface(ts, root, entry, dts, opts);
-    // An unsound walk degrades to null rather than to a partial surface: null
-    // means "fall back to the README" and is retried on the next request, while
-    // a stored surface is believed forever. Under the read path's tight fetch
-    // ceiling that is the likely outcome for a wide barrel on a cold CDN edge —
-    // the worker, with the default timeouts, extracts it in full later.
-    if (sound && symbols.length > 0) return symbols;
-  }
-  return null;
+  const pkgJson = await fetchText(`${root}/package.json`, opts);
+  // No manifest means no answer either way. Falling through to @types here would
+  // turn an unreachable CDN into a surface attributed to a package we never
+  // established ships none of its own.
+  if (!pkgJson) return null;
+  return (
+    (await surfaceFrom(ts, root, pkgJson, opts)) ?? typesPackageSurface(ts, name, version, opts)
+  );
 }

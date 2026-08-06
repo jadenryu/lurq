@@ -10,10 +10,18 @@ vi.mock('../src/core/http', async () => {
   return { ...actual, httpRequest: vi.fn() };
 });
 
-import { dtsCandidates, extractSurface, typesFromExports } from '../src/usage/extract';
+import {
+  dtsCandidates,
+  extractSurface,
+  typesFromExports,
+  typesPackageName,
+} from '../src/usage/extract';
 import { HttpError, httpRequest } from '../src/core/http';
 
-const ROOT = 'https://cdn.jsdelivr.net/npm/pkg@1.0.0/';
+const CDN = 'https://cdn.jsdelivr.net/npm/';
+/** The package under test; paths under it are keyed root-relative for brevity,
+ *  anything else (an `@types/…` root) by its full `spec/path`. */
+const ROOT = `${CDN}pkg@1.0.0/`;
 
 /** Files the fake CDN serves. Anything else 404s, as jsDelivr does. */
 let files: Record<string, string>;
@@ -27,7 +35,7 @@ beforeEach(() => {
   unreachable = new Set();
   fetched = [];
   vi.mocked(httpRequest).mockImplementation(async (url: string) => {
-    const path = url.startsWith(ROOT) ? url.slice(ROOT.length) : url;
+    const path = url.startsWith(ROOT) ? url.slice(ROOT.length) : url.slice(CDN.length);
     fetched.push(path);
     if (unreachable.has(path)) throw new HttpError('gateway timeout', 504, url);
     const data = files[path];
@@ -266,6 +274,69 @@ describe('extractSurface — resolving the entry', () => {
   it('gives up when the manifest itself cannot be read', async () => {
     unreachable.add('package.json');
     expect(await extractSurface('pkg', '1.0.0')).toBeNull();
+  });
+});
+
+describe('extractSurface — @types fallback', () => {
+  /** A package with no types of its own, typed on DefinitelyTyped instead. */
+  const untypedWithDT = (dtVersion: string, symbol: string) => ({
+    'package.json': JSON.stringify({ name: 'pkg', version: '1.0.0', main: './index.js' }),
+    '@types/pkg@1/package.json': JSON.stringify({ version: dtVersion, types: 'index.d.ts' }),
+    [`@types/pkg@${dtVersion}/index.d.ts`]: `export declare function ${symbol}(): void;`,
+  });
+
+  it('reads the surface from DefinitelyTyped when the package ships none', async () => {
+    files = untypedWithDT('1.4.2', 'valid');
+
+    expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['valid']);
+  });
+
+  it('pins to the matching major rather than latest', async () => {
+    files = untypedWithDT('1.4.2', 'valid');
+
+    await extractSurface('pkg', '1.0.0');
+
+    // @types/react's latest types React 19; resolving `latest` for react@18
+    // would store a confidently wrong surface instead of a missing one.
+    expect(fetched).toContain('@types/pkg@1/package.json');
+    expect(fetched.some((p) => p.startsWith('@types/pkg/'))).toBe(false);
+    // The walk itself is pinned to the version the range resolved to.
+    expect(fetched).toContain('@types/pkg@1.4.2/index.d.ts');
+  });
+
+  it('mangles a scoped name into the DefinitelyTyped one', () => {
+    expect(typesPackageName('react')).toBe('@types/react');
+    expect(typesPackageName('@testing-library/react')).toBe('@types/testing-library__react');
+  });
+
+  it('never asks DefinitelyTyped when the package types itself', async () => {
+    files = {
+      ...untypedWithDT('1.4.2', 'fromDT'),
+      'package.json': manifest('./index.d.ts'),
+      'index.d.ts': `export declare function own(): void;`,
+    };
+
+    expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['own']);
+    expect(fetched.some((p) => p.startsWith('@types/'))).toBe(false);
+  });
+
+  it('degrades to null when DefinitelyTyped has no matching major', async () => {
+    files = {
+      'package.json': JSON.stringify({ name: 'pkg', version: '1.0.0', main: './index.js' }),
+      // Only a major 2 package exists; nothing answers for major 1.
+      '@types/pkg@2/package.json': JSON.stringify({ version: '2.0.0', types: 'index.d.ts' }),
+    };
+
+    expect(await extractSurface('pkg', '1.0.0')).toBeNull();
+  });
+
+  it('does not attribute a DefinitelyTyped surface to an unreadable manifest', async () => {
+    files = untypedWithDT('1.4.2', 'valid');
+    unreachable.add('package.json');
+
+    // The package may well ship its own types; we never established otherwise.
+    expect(await extractSurface('pkg', '1.0.0')).toBeNull();
+    expect(fetched.some((p) => p.startsWith('@types/'))).toBe(false);
   });
 });
 
