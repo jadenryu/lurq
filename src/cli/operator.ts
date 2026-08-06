@@ -78,6 +78,66 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('surface-validate')
+    .description('run the §7 validation gates against a sample of packages')
+    .option('--packages <list>', 'comma-separated package names (default: a seed sample)')
+    .option('--limit <n>', 'sample size when drawing from the seed list', (v) => parseInt(v, 10))
+    .option('--json', 'output the full report as JSON')
+    .action(async (opts: { packages?: string; limit?: number; json?: boolean }) => {
+      const { getSandbox } = await import('../sandbox');
+      const { runValidation } = await import('../surface/validate');
+      const sandbox = await getSandbox();
+      if (sandbox.name === 'local') {
+        console.warn(
+          '[warn] using the LOCAL sandbox: tier B imports execute package code on this machine.\n' +
+            '       Set E2B_API_KEY to validate untrusted packages under VM isolation.',
+        );
+      }
+
+      let names: string[];
+      if (opts.packages) {
+        names = opts.packages.split(',').map((s) => s.trim()).filter(Boolean);
+      } else {
+        // §6.4.7: never sample from search relevance — it is name-weighted and
+        // biases toward packages matching the seed terms. The curated seed list
+        // is a fixed frame; it skews popular, which biases coverage UP, and that
+        // must be stated alongside any number drawn from it.
+        const { readFileSync } = await import('node:fs');
+        const seed = JSON.parse(readFileSync('src/data/seed.json', 'utf8')) as
+          | string[]
+          | { name: string }[];
+        const all = seed.map((s) => (typeof s === 'string' ? s : s.name));
+        names = all.slice(0, opts.limit ?? 20);
+      }
+
+      const report = await runValidation(names.map((name) => ({ name })), { sandbox });
+      if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
+      console.log(
+        `\nsampled ${report.sampled} · covered ${report.covered} · undeclared ${report.undeclared} · unverifiable ${report.unverifiable}`,
+      );
+      console.log(`symbols: ${report.totalConfirmed}/${report.totalClaimed} confirmed at tier B\n`);
+      for (const g of report.gates) {
+        const mark = g.pass === null ? '—' : g.pass ? 'PASS' : 'FAIL';
+        console.log(`  [${mark}] ${g.name}: ${g.actual} (target ${g.target})`);
+      }
+      const bad = report.perPackage.filter((p) => p.precision !== null && p.precision < 1);
+      if (bad.length) {
+        console.log('\n  packages below 100% precision:');
+        for (const b of bad) {
+          console.log(`    ${b.package}@${b.version}: ${b.confirmed}/${b.claimed}`);
+        }
+      }
+      const unv = report.perPackage.filter((p) => p.unverifiable);
+      if (unv.length) {
+        console.log('\n  unverifiable (excluded from the gate, NOT counted as failures):');
+        for (const u of unv.slice(0, 10)) console.log(`    ${u.package}: ${u.unverifiable}`);
+      }
+    });
+
+  program
     .command('surface-drain')
     .description('service the demand-driven surface-extraction queue (§6.1)')
     .option('--limit <n>', 'specs to drain this run (default 10)', (v) => parseInt(v, 10))

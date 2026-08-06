@@ -97,6 +97,20 @@ beforeAll(() => {
   }, { main: undefined, exports: { '.': { require: './dist/main.js', default: './dist/main.js' } } });
 
   pkg('no-entry', {}, { main: './nope.js' });
+
+  // The `uuid` shape: one `default` re-exported per internal file, renamed.
+  // Merging the target's whole surface both invents its internal helpers and
+  // loses the renamed export. Measured at 3/10 precision before the fix.
+  pkg('selective-reexport', {
+    'index.js': `
+      export { default as MAX } from './max.js';
+      export { default as v1 } from './v1.js';
+      export { helper as renamedHelper } from './util.js';
+    `,
+    'max.js': `export default 268435455; export const internalMaxDetail = 1;`,
+    'v1.js': `export default function v1(a) {}; export function updateV1State(x) {}`,
+    'util.js': `export function helper() {}; export function alsoInternal() {}`,
+  });
 });
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -176,6 +190,28 @@ describe('tier-A extraction', () => {
 
   it('resolveEntry returns null when nothing resolves', () => {
     expect(resolveEntry(pkgs['no-entry']!)).toBeNull();
+  });
+});
+
+describe('selective re-export (§7 gate failure, 2026-08-06)', () => {
+  it('takes only the named subset, never the whole target surface', () => {
+    const s = extractSurface(pkgs['selective-reexport']!);
+    const names = paths(s);
+    // The internal helpers must NOT appear — claiming a symbol that does not
+    // exist is the worst error class available to us.
+    expect(names).not.toContain('internalMaxDetail');
+    expect(names).not.toContain('updateV1State');
+    expect(names).not.toContain('alsoInternal');
+  });
+
+  it('honours the rename, so `export { default as MAX }` exposes MAX', () => {
+    const s = extractSurface(pkgs['selective-reexport']!);
+    expect(paths(s)).toEqual(['MAX', 'renamedHelper', 'v1']);
+  });
+
+  it('still merges the whole surface for `export * from`', () => {
+    const s = extractSurface(pkgs['reexport-chain']!);
+    expect(paths(s)).toEqual(['alsoDeep', 'deep']);
   });
 });
 
