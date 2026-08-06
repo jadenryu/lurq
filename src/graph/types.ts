@@ -42,6 +42,24 @@ export type Verdict =
   | 'undeclared'
   | 'unverifiable';
 
+/**
+ * §4.1. Orthogonal to the verdict: a verdict says what we concluded, a class says
+ * what kind of evidence backs it.
+ *
+ * The rule that matters: a DERIVED claim inherits the WEAKEST class among its
+ * inputs, and a DECLARED surface fact must never be presented as behavioural
+ * evidence. "This symbol is exported" and "this symbol works" are different
+ * claims and conflating them is how an index starts lying.
+ */
+export type EvidenceClass = 'declared' | 'executed' | 'derived';
+
+/** Weakest-wins, for DERIVED claims computed from several inputs (§4.1). */
+export function weakestClass(classes: EvidenceClass[]): EvidenceClass {
+  if (classes.includes('derived')) return 'derived';
+  if (classes.includes('declared')) return 'declared';
+  return 'executed';
+}
+
 /** Identity of a node, before it has a database id. */
 export interface EntityRef {
   kind: EntityKind;
