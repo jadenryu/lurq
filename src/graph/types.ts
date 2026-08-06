@@ -16,11 +16,16 @@ import type { Sandbox } from '../sandbox/types';
 
 /** Node types. Extend only when the Oracle Rule is satisfiable for the new kind. */
 export type EntityKind =
+  /** P0 */
   | 'package_version'
+  /** P0 — the central node type: highest query volume, and what breaks (§2). */
+  | 'package_surface'
+  /** P1 */
   | 'mcp_server'
   | 'mcp_tool'
-  | 'cli_surface'
-  | 'http_endpoint';
+  /** P2 */
+  | 'api_spec'
+  | 'schema_provider';
 
 /**
  * §4.1. The distinction between `verified_false` and `unknown` is the most

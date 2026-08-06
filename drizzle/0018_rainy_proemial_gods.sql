@@ -1,0 +1,1 @@
+ALTER TABLE "claims" ALTER COLUMN "environment_id" DROP NOT NULL;

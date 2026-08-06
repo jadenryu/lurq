@@ -513,9 +513,10 @@ export const claims = pgTable(
     /** Null for unary claims ("does this install at all"). */
     objectId: integer('object_id').references(() => entities.id),
     relation: text('relation').notNull(),
-    environmentId: integer('environment_id')
-      .notNull()
-      .references(() => environments.id),
+    /** NULL for DECLARED claims: a shipped-JS surface reads the same on every
+     *  machine, so there is no environment to fingerprint. Executed claims
+     *  (co-install, conflict, behaviour) always carry one (§5). */
+    environmentId: integer('environment_id').references(() => environments.id),
     tenantId: bigint('tenant_id', { mode: 'number' }).notNull().default(0),
   },
   (table) => [
