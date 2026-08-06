@@ -23,8 +23,8 @@ import type {
 import { checkCompat } from '../compat/check';
 import type { Database } from '../db/client';
 import { getPackageByName, getTopPackageNames } from '../db/packages';
-import { getStoredSurface } from '../db/apiSurfaces';
 import { diffSurface } from '../usage/diff';
+import { getOrExtractSurface, USAGE_EXTRACT_BUDGET_MS } from '../usage/service';
 import { getLatestVerificationByName } from '../db/verification';
 import { recordOutcome } from '../db/outcomes';
 import { lookupSuccessor } from '../core/successors';
@@ -372,10 +372,20 @@ export interface UsageInput {
  * package's real contract, extracted from the shipped `.d.ts` — no prose lag, no
  * hallucination.
  *
- * Serves STORED surfaces only: extraction (which needs the TypeScript compiler)
- * is operator-side (the discovery worker, §4D/§4G), so the public read plane
- * never pulls `typescript` into its bundle. A version not yet extracted returns
- * `available:false` (fall back to the README), same as an untyped package.
+ * Read-through (§4A block-on-first-touch): a stored surface is served as-is, and
+ * a miss extracts from the CDN-hosted `.d.ts` within USAGE_EXTRACT_BUDGET_MS and
+ * stores it, so the first request for a package populates the cache instead of
+ * turning agents away. Past the budget the extraction keeps running in the
+ * background and the caller gets the README-fallback note — the same answer the
+ * stored-only path gave, so a slow or unreachable CDN only ever costs latency.
+ *
+ * The TypeScript compiler needed to parse the `.d.ts` is loaded lazily and
+ * non-fatally (see usage/extract), which is what lets the public plane call this
+ * without `typescript` in its dependency tree: where it isn't installed, every
+ * miss simply degrades to the note.
+ *
+ * `knownVersion` shares ONE deadline with the primary lookup rather than getting
+ * its own, so a two-version cold miss can't double the worst-case latency.
  */
 export async function handleUsage(db: Database, input: UsageInput): Promise<UsageOutput> {
   const version = await resolveVersion(db, input.package, input.version);
@@ -389,7 +399,10 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
     };
   }
 
-  const surface = await getStoredSurface(db, input.package, version);
+  const deadline = Date.now() + USAGE_EXTRACT_BUDGET_MS;
+  const surface = await getOrExtractSurface(db, input.package, version, {
+    budgetMs: USAGE_EXTRACT_BUDGET_MS,
+  });
   const out: UsageOutput = {
     package: input.package,
     version,
@@ -401,7 +414,12 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
   };
 
   if (input.knownVersion && input.knownVersion !== version && surface) {
-    const known = await getStoredSurface(db, input.package, input.knownVersion);
+    // Whatever the primary lookup left of the budget. Never below zero: a
+    // budgetMs of 0 means cache-only, which is the right call once we're out of
+    // time — the delta is an enrichment, not the answer.
+    const known = await getOrExtractSurface(db, input.package, input.knownVersion, {
+      budgetMs: Math.max(0, deadline - Date.now()),
+    });
     if (known) out.delta = { ...diffSurface(known, surface), fromVersion: input.knownVersion };
   }
   return out;
