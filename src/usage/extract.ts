@@ -14,14 +14,14 @@
  * (`export * from './lib'`) is followed a bounded number of hops and merged, so
  * the entry's shape doesn't decide whether a package has a surface.
  *
- * ponytail: covers `types`/`typings`/`index.d.ts` and the barrels reachable from
- * it. One shape still degrades to null → `usage` falls back to the README:
- * packages shipping no types at all, with types in `@types/*` on DefinitelyTyped
- * (react, express, semver). Measured on a 12-package popular-library sample,
- * 9 extract. This ceiling was invisible while extraction was worker-only; now
- * that a miss extracts on the request path it bounds how often `usage` can answer
- * at all. Upgrade paths, in value order: read the `exports` types condition, then
- * fall back to `@types/<name>`.
+ * ponytail: covers `types`/`typings`, the `exports` map's root entry, and
+ * `index.d.ts`, plus the barrels reachable from whichever resolves. One shape
+ * still degrades to null → `usage` falls back to the README: packages shipping
+ * no types at all, with types in `@types/*` on DefinitelyTyped (react, express,
+ * semver). Measured on a 14-package popular-library sample, 11 extract. This
+ * ceiling was invisible while extraction was worker-only; now that a miss
+ * extracts on the request path it bounds how often `usage` can answer at all.
+ * Upgrade path: fall back to `@types/<name>`.
  *
  * The compiler is loaded LAZILY and non-fatally, and that is load-bearing for the
  * plane split (§4E): `typescript` is a devDependency, present in the operator
@@ -97,22 +97,84 @@ async function fetchText(url: string, opts: ExtractOptions): Promise<string | nu
   return (await fetchFile(url, opts)).text;
 }
 
-/** Resolve the `.d.ts` entry path from the version's package.json `types`/`typings`. */
-async function resolveTypesEntry(
+const DTS_EXT = /\.d\.[cm]?ts$/;
+const JS_EXT = /\.(m|c)?js$/;
+
+/** The declaration file pairing with a path: itself if it already is one, else
+ *  the `.d.ts`/`.d.mts`/`.d.cts` sitting beside the JS. Null for anything else.
+ *  This is the "types next to the JS" rule TypeScript itself resolves by. */
+function declarationFor(path: string): string | null {
+  if (DTS_EXT.test(path)) return path;
+  const js = JS_EXT.exec(path);
+  return js ? path.replace(JS_EXT, `.d.${js[1] ?? ''}ts`) : null;
+}
+
+/** Strip the leading `./` a manifest path carries; CDN paths are root-relative. */
+function relativeToRoot(path: string): string {
+  return path.replace(/^\.?\//, '');
+}
+
+/** Conditions walked when reading the root entry out of an `exports` map, in
+ *  precedence order: an explicit types condition first (Node requires it to be
+ *  declared first for exactly this reason), then the runtime targets, whose
+ *  declaration siblings are the entry when no types condition exists at all. */
+const EXPORT_CONDITIONS = ['types', 'typings', 'node', 'import', 'require', 'default'];
+
+/**
+ * The root (`"."`) target of an `exports` map, as a declaration path. Packages
+ * that publish through `exports` alone (execa, ora) have no `types` field to
+ * read, and some (uuid) name no types condition either — there the JS target's
+ * declaration sibling is what TypeScript would resolve.
+ */
+export function typesFromExports(exports: unknown, depth = 0): string | null {
+  if (depth > 4) return null; // Pathological nesting isn't worth chasing.
+  if (typeof exports === 'string') return declarationFor(exports);
+  if (!exports || typeof exports !== 'object') return null;
+  if (Array.isArray(exports)) {
+    for (const alt of exports) {
+      const found = typesFromExports(alt, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  const map = exports as Record<string, unknown>;
+  // A subpath map: only the root entry describes the package's main surface.
+  if ('.' in map) return typesFromExports(map['.'], depth + 1);
+  if (Object.keys(map).some((k) => k.startsWith('.'))) return null;
+  for (const condition of EXPORT_CONDITIONS) {
+    if (!(condition in map)) continue;
+    const found = typesFromExports(map[condition], depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * The `.d.ts` entry paths to try for a version, most authoritative first:
+ * `types`/`typings`, then the `exports` map's root target, then the conventional
+ * `index.d.ts`. Ordered rather than singular because a `types` field can point
+ * at a file the package doesn't actually ship (or ships only under `exports`),
+ * and a 404 there shouldn't end the extraction.
+ */
+async function resolveTypesEntries(
   name: string,
   version: string,
   opts: ExtractOptions,
-): Promise<string | null> {
+): Promise<string[]> {
   const pkgJson = await fetchText(`https://${CDN}/npm/${name}@${version}/package.json`, opts);
-  if (!pkgJson) return null;
+  if (!pkgJson) return [];
+  const entries: string[] = [];
   try {
     const manifest = JSON.parse(pkgJson);
-    const entry: unknown = manifest.types ?? manifest.typings;
-    if (typeof entry === 'string') return entry.replace(/^\.?\//, '');
+    const declared: unknown = manifest.types ?? manifest.typings;
+    if (typeof declared === 'string') entries.push(relativeToRoot(declared));
+    const fromExports = typesFromExports(manifest.exports);
+    if (fromExports) entries.push(relativeToRoot(fromExports));
   } catch {
-    /* fall through to the default */
+    /* fall through to the conventional entry */
   }
-  return 'index.d.ts';
+  entries.push('index.d.ts');
+  return [...new Set(entries)];
 }
 
 function kindOf(ts: Compiler, node: TSApi.Node): ExportKind {
@@ -287,9 +349,6 @@ export function parseModule(source: string, ts: Compiler): ParsedModule {
   return { symbols: [...out.values()].sort((a, b) => a.name.localeCompare(b.name)), stars };
 }
 
-const DTS_EXT = /\.d\.[cm]?ts$/;
-const JS_EXT = /\.(m|c)?js$/;
-
 /**
  * The `.d.ts` files a relative specifier could resolve to, most likely first.
  * Empty for anything this parse has no business fetching: a bare specifier names
@@ -299,11 +358,9 @@ export function dtsCandidates(fromFile: string, specifier: string): string[] {
   if (!specifier.startsWith('./') && !specifier.startsWith('../')) return [];
   const path = posix.normalize(posix.join(posix.dirname(fromFile), specifier));
   if (path.startsWith('..')) return [];
-  if (DTS_EXT.test(path)) return [path];
-  // `export * from './table.js'` is the ESM `.d.ts` idiom (drizzle-orm): the
-  // types sit beside the JS under the matching declaration extension.
-  const js = JS_EXT.exec(path);
-  if (js) return [path.replace(JS_EXT, `.d.${js[1] ?? ''}ts`)];
+  // `export * from './table.js'` is the ESM `.d.ts` idiom (drizzle-orm).
+  const paired = declarationFor(path);
+  if (paired) return [paired];
   // Extensionless (zod's `export * from './lib'`): a sibling, else a directory
   // barrel. Ordered, not raced — the first almost always hits, so the second
   // costs a round-trip only for real directories.
@@ -392,16 +449,20 @@ export async function extractSurface(
 ): Promise<ExportSymbol[] | null> {
   const ts = await loadCompiler();
   if (!ts) return null;
-  const entry = await resolveTypesEntry(name, version, opts);
-  if (!entry) return null;
   const root = `https://${CDN}/npm/${name}@${version}`;
-  const dts = await fetchText(`${root}/${entry}`, opts);
-  if (!dts) return null;
-  const { symbols, sound } = await collectSurface(ts, root, entry, dts, opts);
-  // An unsound walk degrades to null rather than to a partial surface: null
-  // means "fall back to the README" and is retried on the next request, while a
-  // stored surface is believed forever. Under the read path's tight fetch
-  // ceiling that is the likely outcome for a wide barrel on a cold CDN edge —
-  // the worker, with the default timeouts, extracts it in full later.
-  return sound && symbols.length > 0 ? symbols : null;
+  // Tried in order and only until one yields a surface, so a package whose
+  // `types` field resolves — the overwhelming majority — pays nothing for the
+  // fallbacks behind it.
+  for (const entry of await resolveTypesEntries(name, version, opts)) {
+    const dts = await fetchText(`${root}/${entry}`, opts);
+    if (!dts) continue;
+    const { symbols, sound } = await collectSurface(ts, root, entry, dts, opts);
+    // An unsound walk degrades to null rather than to a partial surface: null
+    // means "fall back to the README" and is retried on the next request, while
+    // a stored surface is believed forever. Under the read path's tight fetch
+    // ceiling that is the likely outcome for a wide barrel on a cold CDN edge —
+    // the worker, with the default timeouts, extracts it in full later.
+    if (sound && symbols.length > 0) return symbols;
+  }
+  return null;
 }

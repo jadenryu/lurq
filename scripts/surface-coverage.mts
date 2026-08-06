@@ -17,6 +17,8 @@ const SAMPLE = [
   'drizzle-orm@0.44.2',
   'vite@6.3.5',
   'helmet@8.1.0',
+  'execa@9.5.2',
+  'ora@8.1.1',
   'react@18.3.1',
   'express@5.1.0',
   'semver@7.7.2',

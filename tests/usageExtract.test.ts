@@ -10,7 +10,7 @@ vi.mock('../src/core/http', async () => {
   return { ...actual, httpRequest: vi.fn() };
 });
 
-import { dtsCandidates, extractSurface } from '../src/usage/extract';
+import { dtsCandidates, extractSurface, typesFromExports } from '../src/usage/extract';
 import { HttpError, httpRequest } from '../src/core/http';
 
 const ROOT = 'https://cdn.jsdelivr.net/npm/pkg@1.0.0/';
@@ -38,6 +38,56 @@ beforeEach(() => {
 
 const manifest = (types: string) => JSON.stringify({ name: 'pkg', version: '1.0.0', types });
 const names = (surface: Awaited<ReturnType<typeof extractSurface>>) => surface?.map((s) => s.name);
+
+describe('typesFromExports', () => {
+  it('reads the types condition off the root entry', () => {
+    expect(
+      typesFromExports({
+        '.': {
+          import: { types: './dist/index.d.ts', default: './dist/index.js' },
+          require: { types: './dist/index.d.cts', default: './dist/index.cjs' },
+        },
+        './package.json': './package.json',
+      }),
+    ).toBe('./dist/index.d.ts');
+  });
+
+  it('reads a bare conditions map with no subpaths', () => {
+    expect(typesFromExports({ types: './index.d.cts', import: './index.mjs' })).toBe(
+      './index.d.cts',
+    );
+  });
+
+  it('falls back to the declaration beside the runtime target', () => {
+    // uuid's shape: an exports map that names no types condition at all.
+    expect(
+      typesFromExports({
+        '.': {
+          node: { import: './dist/esm/index.js', require: './dist/cjs/index.js' },
+          default: './dist/esm-browser/index.js',
+        },
+      }),
+    ).toBe('./dist/esm/index.d.ts');
+  });
+
+  it('prefers an explicit types condition over a runtime sibling', () => {
+    expect(typesFromExports({ '.': { import: './a.js', types: './real/entry.d.ts' } })).toBe(
+      './real/entry.d.ts',
+    );
+  });
+
+  it('has no root entry to offer for a subpath-only map', () => {
+    expect(typesFromExports({ './client': { types: './client.d.ts' } })).toBeNull();
+    expect(typesFromExports(undefined)).toBeNull();
+    expect(typesFromExports('./index.js')).toBe('./index.d.ts');
+  });
+
+  it('takes the first usable alternative of a fallback array', () => {
+    expect(typesFromExports({ '.': [{ types: null }, './dist/index.d.ts'] })).toBe(
+      './dist/index.d.ts',
+    );
+  });
+});
 
 describe('dtsCandidates', () => {
   it('resolves relative specifiers against the referencing file', () => {
@@ -159,6 +209,63 @@ describe('extractSurface — following barrels', () => {
 
     expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['connect']);
     expect(fetched).toEqual(['package.json', 'index.d.ts']);
+  });
+});
+
+describe('extractSurface — resolving the entry', () => {
+  it('uses the exports map when there is no types field', async () => {
+    files = {
+      'package.json': JSON.stringify({
+        name: 'pkg',
+        exports: { '.': { types: './index.d.ts', default: './index.js' } },
+      }),
+      'index.d.ts': `export declare function execa(): void;`,
+    };
+
+    expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['execa']);
+  });
+
+  it('falls past a types field pointing at a file the package does not ship', async () => {
+    files = {
+      'package.json': JSON.stringify({
+        name: 'pkg',
+        types: './missing.d.ts',
+        exports: { '.': { types: './dist/index.d.ts' } },
+      }),
+      'dist/index.d.ts': `export declare function real(): void;`,
+    };
+
+    expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['real']);
+    expect(fetched).toContain('missing.d.ts');
+  });
+
+  it('falls back to index.d.ts when the manifest declares nothing', async () => {
+    files = {
+      'package.json': JSON.stringify({ name: 'pkg', main: './index.js' }),
+      'index.d.ts': `export declare function conventional(): void;`,
+    };
+
+    expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['conventional']);
+  });
+
+  it('stops at the first entry that yields a surface', async () => {
+    files = {
+      'package.json': JSON.stringify({
+        name: 'pkg',
+        types: './index.d.ts',
+        exports: { '.': { types: './other.d.ts' } },
+      }),
+      'index.d.ts': `export declare function first(): void;`,
+      'other.d.ts': `export declare function second(): void;`,
+    };
+
+    expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['first']);
+    expect(fetched).not.toContain('other.d.ts');
+  });
+
+  it('gives up when the manifest itself cannot be read', async () => {
+    unreachable.add('package.json');
+    expect(await extractSurface('pkg', '1.0.0')).toBeNull();
   });
 });
 
