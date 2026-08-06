@@ -9,6 +9,7 @@ import { SERVER_NAME, VERSION } from '../core/constants';
 import { CATEGORIES, type Category } from '../core/types';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
+import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
 import {
   handleCompare,
   handleCompat,
@@ -230,6 +231,35 @@ export function buildMcpServer(
       },
     },
     async (args) => json(await run('plan', () => handlePlan(db, args, ctx.ownerId ?? null))),
+  );
+
+  server.registerTool(
+    'resolve_surface',
+    {
+      title: 'Version-exact runtime surface',
+      description:
+        "What a package version ACTUALLY exports at runtime, extracted from its shipped JavaScript rather than from documentation or the model's memory. Call before writing code against a package whose API may have moved. Runtime existence is what decides whether an import throws; a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction — UNKNOWN never means the symbol is absent.",
+      inputSchema: {
+        package: npmName.describe('npm package name'),
+        version: z.string().optional().describe('Exact version; omit for the latest extracted'),
+      },
+    },
+    async (args) => json(await run('resolve_surface', () => handleResolveSurface(db, args))),
+  );
+
+  server.registerTool(
+    'diff_surface',
+    {
+      title: 'Surface diff between two versions',
+      description:
+        'What changed in a package\'s runtime surface between two versions: symbols removed, added, and arity changes. Removals break `node`; type-only removals are returned separately because they break `tsc` instead. Answers "when did this stop working" from static comparison, with no install required. Use before an upgrade, and to explain a break after one.',
+      inputSchema: {
+        package: npmName.describe('npm package name'),
+        fromVersion: z.string().describe('Version you are on'),
+        toVersion: z.string().describe('Version you are moving to'),
+      },
+    },
+    async (args) => json(await run('diff_surface', () => handleDiffSurface(db, args))),
   );
 
   server.registerTool(
