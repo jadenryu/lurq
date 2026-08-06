@@ -5,7 +5,7 @@
  *
  * Every command supports `--json` for machine-readable output.
  */
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { SERVER_NAME, VERSION } from '../core/constants';
 
 export function buildProgram(): Command {
@@ -16,7 +16,13 @@ export function buildProgram(): Command {
     .description(
       'lurq - a fresh, objectively-scored index of JS/TS packages for AI coding agents.',
     )
-    .version(VERSION, '-v, --version', 'output the lurq version');
+    .version(VERSION, '-v, --version', 'output the lurq version')
+    // Confine program-level flags to the slot before the subcommand name.
+    // Without this, commander lets the program consume a `--version` written
+    // *after* a subcommand, so `lurq usage pkg --version 24.14.0` printed the
+    // lurq version and exited instead of running the command — shadowing the
+    // per-command version options on `usage` and (operator plane) `oracle`.
+    .enablePositionalOptions();
 
   program
     .command('serve')
@@ -81,13 +87,25 @@ export function buildProgram(): Command {
     .command('usage')
     .argument('<package>', 'npm package name')
     .description("version-exact API surface (exported symbols/signatures) + drift from a known version")
-    .option('--version <v>', 'target version (defaults to latest)')
+    .option('--target <v>', 'target version (defaults to latest)')
+    // Historical spelling of --target, kept working but out of the help text so
+    // only one spelling is advertised.
+    .addOption(new Option('--version <v>', 'alias for --target').hideHelp())
     .option('--known <v>', 'a version you know; shows the API delta to the target')
     .option('--json', 'output JSON')
-    .action(async (pkg: string, opts: { version?: string; known?: string; json?: boolean }) => {
-      const { runUsage } = await import('./commands');
-      await runUsage(pkg, opts);
-    });
+    .action(
+      async (
+        pkg: string,
+        opts: { target?: string; version?: string; known?: string; json?: boolean },
+      ) => {
+        const { runUsage } = await import('./commands');
+        await runUsage(pkg, {
+          version: opts.target ?? opts.version,
+          known: opts.known,
+          json: opts.json,
+        });
+      },
+    );
 
   program
     .command('versions')

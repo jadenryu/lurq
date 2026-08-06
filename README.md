@@ -54,7 +54,7 @@ lurq recommend "a form library for react"
 lurq verify jsonwebtoken
 lurq compare date-fns dayjs moment
 lurq compat next react react-dom          # do these install together?
-lurq usage zod --known 3.22.4             # what changed in the api since?
+lurq usage zod --known 3.22.4             # what changed in the api since? (--target pins a version)
 lurq plan ./project.md                    # a description in, a scored stack out
 lurq serve-http                           # run it as a rate-limited service of your own
 lurq weights                              # the exact ranking weights, printed
