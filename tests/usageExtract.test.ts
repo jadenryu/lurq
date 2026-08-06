@@ -381,6 +381,30 @@ describe('extractSurface — bounds', () => {
     expect(fetched.length).toBeLessThanOrEqual(2 + 24);
   });
 
+  it('stops starting fetches once the wall-clock deadline passes', async () => {
+    files = chain(4);
+    // Each fetch eats the whole deadline, so only the first can start.
+    const serve = vi.mocked(httpRequest).getMockImplementation()!;
+    vi.mocked(httpRequest).mockImplementation(async (url: string, opts) => {
+      const res = await serve(url, opts);
+      await new Promise((r) => setTimeout(r, 12));
+      return res;
+    });
+
+    // A per-fetch timeout would let a barrel walk run for hops × timeout; only
+    // the deadline bounds the walk as a whole.
+    const surface = await extractSurface('pkg', '1.0.0', { deadlineMs: 20 });
+
+    expect(surface).toBeNull(); // Truncated by time = unsound = not cacheable.
+    expect(fetched.length).toBeLessThan(6);
+  });
+
+  it('leaves the walk unbounded when no deadline is given, for the worker', async () => {
+    files = chain(2);
+
+    expect(names(await extractSurface('pkg', '1.0.0'))).toEqual(['at0', 'at1']);
+  });
+
   it('issues a hop’s fetches in parallel, so cost scales with depth not width', async () => {
     const wide: Record<string, string> = {
       'package.json': manifest('./index.d.ts'),

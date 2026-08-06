@@ -47,12 +47,32 @@ type Compiler = typeof TSApi;
 
 const CDN = 'cdn.jsdelivr.net';
 
-/** HTTP tuning for the two CDN fetches. The read path passes a tighter budget
- *  than the worker: on the serving path a slow CDN must not hold a request open
- *  for the default 15s × 4 attempts. */
+/** HTTP tuning for the CDN fetches. The read path passes a tighter budget than
+ *  the worker: on the serving path a slow CDN must not hold a request open for
+ *  the default 15s × 4 attempts. */
 export interface ExtractOptions {
   timeoutMs?: number;
   retries?: number;
+  /** Wall-clock ceiling on one extraction, after which no further fetches start.
+   *  `timeoutMs` bounds a single fetch, but a barrel walk issues up to MAX_FILES
+   *  of them across MAX_HOPS waves, so only this bounds the whole thing. Omitted
+   *  → unbounded, which is what the worker wants: a cold jsDelivr edge can take
+   *  a minute for a wide barrel, and that extraction is the one warming the cache
+   *  for everyone after. */
+  deadlineMs?: number;
+}
+
+/** One extraction's options with its deadline resolved to an absolute instant,
+ *  so every fetch in the walk measures against the same clock. */
+interface Walk extends ExtractOptions {
+  expiresAt: number;
+}
+
+function startWalk(opts: ExtractOptions): Walk {
+  return {
+    ...opts,
+    expiresAt: opts.deadlineMs === undefined ? Infinity : Date.now() + opts.deadlineMs,
+  };
 }
 
 let compiler: Promise<Compiler | null> | undefined;
@@ -80,11 +100,14 @@ interface FetchResult {
 
 async function fetchFile(
   url: string,
-  opts: ExtractOptions,
+  opts: Walk,
   // Versions are immutable, so a long TTL is safe. Callers resolving a floating
   // range pass a shorter one.
   ttlMs: number = CACHE_TTL.depsDev,
 ): Promise<FetchResult> {
+  // Out of time counts as unknown, not absent: the walk is then unsound and its
+  // partial result is discarded rather than cached as the package's API.
+  if (Date.now() >= opts.expiresAt) return { text: null, unknown: true };
   try {
     const { data } = await httpRequest<string>(url, {
       host: CDN,
@@ -102,7 +125,7 @@ async function fetchFile(
   }
 }
 
-async function fetchText(url: string, opts: ExtractOptions): Promise<string | null> {
+async function fetchText(url: string, opts: Walk): Promise<string | null> {
   return (await fetchFile(url, opts)).text;
 }
 
@@ -397,7 +420,7 @@ async function collectSurface(
   root: string,
   entry: string,
   source: string,
-  opts: ExtractOptions,
+  opts: Walk,
 ): Promise<{ symbols: ExportSymbol[]; sound: boolean }> {
   const merged = new Map<string, ExportSymbol>();
   const attempted = new Set<string>([entry]);
@@ -448,7 +471,7 @@ async function surfaceFrom(
   ts: Compiler,
   root: string,
   pkgJson: string,
-  opts: ExtractOptions,
+  opts: Walk,
 ): Promise<ExportSymbol[] | null> {
   for (const entry of typesEntries(pkgJson)) {
     const dts = await fetchText(`${root}/${entry}`, opts);
@@ -482,7 +505,7 @@ async function typesPackageSurface(
   ts: Compiler,
   name: string,
   version: string,
-  opts: ExtractOptions,
+  opts: Walk,
 ): Promise<ExportSymbol[] | null> {
   const major = /^\d+/.exec(version)?.[0];
   if (!major) return null;
@@ -520,13 +543,16 @@ export async function extractSurface(
 ): Promise<ExportSymbol[] | null> {
   const ts = await loadCompiler();
   if (!ts) return null;
+  // The deadline starts after the compiler load, not before: that cost is paid
+  // once per process and isn't what a per-extraction ceiling is guarding.
+  const walk = startWalk(opts);
   const root = `https://${CDN}/npm/${name}@${version}`;
-  const pkgJson = await fetchText(`${root}/package.json`, opts);
+  const pkgJson = await fetchText(`${root}/package.json`, walk);
   // No manifest means no answer either way. Falling through to @types here would
   // turn an unreachable CDN into a surface attributed to a package we never
   // established ships none of its own.
   if (!pkgJson) return null;
   return (
-    (await surfaceFrom(ts, root, pkgJson, opts)) ?? typesPackageSurface(ts, name, version, opts)
+    (await surfaceFrom(ts, root, pkgJson, walk)) ?? typesPackageSurface(ts, name, version, walk)
   );
 }

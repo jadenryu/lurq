@@ -14,8 +14,15 @@ export const USAGE_EXTRACT_BUDGET_MS = 4000;
 /** CDN fetch tuning for the read path. The http default (15s × 4 attempts) is
  *  sized for the worker; on a request path a stuck jsDelivr must not outlive the
  *  budget by minutes, since the abandoned extraction keeps holding one of the
- *  6 per-host connection slots. */
-const READ_PATH_FETCH: ExtractOptions = { timeoutMs: 3000, retries: 0 };
+ *  6 per-host connection slots.
+ *
+ *  `deadlineMs` is what actually bounds that, now that resolving a package can
+ *  mean walking a barrel over many files rather than fetching two: `timeoutMs`
+ *  only bounds one fetch. It sits well past USAGE_EXTRACT_BUDGET_MS on purpose —
+ *  an extraction the caller has already given up waiting for is still the one
+ *  warming the cache for the next request, and cutting it at the budget would
+ *  mean a slow package never gets extracted on this path at all. */
+const READ_PATH_FETCH: ExtractOptions = { timeoutMs: 3000, retries: 0, deadlineMs: 15_000 };
 
 /** A flood of distinct versions must not grow memory without limit (same reason
  *  ingestQueue caps its backlog). Past the cap a miss degrades to the note. */
