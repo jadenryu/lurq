@@ -98,6 +98,18 @@ beforeAll(() => {
 
   pkg('no-entry', {}, { main: './nope.js' });
 
+  // Babel's CJS output — and older tsc's. uuid@9 declares its ENTIRE surface
+  // this way, so without handling it every Babel-compiled package on npm
+  // extracts as zero exports and lands as UNDECLARED.
+  pkg('define-property-exports', {
+    'index.js': `
+      "use strict";
+      Object.defineProperty(exports, "__esModule", { value: true });
+      Object.defineProperty(exports, "NIL", { enumerable: true, get: function () { return _nil.default; } });
+      Object.defineProperty(exports, "parse", { enumerable: true, get: function () { return _parse.default; } });
+    `,
+  });
+
   // The `uuid` shape: one `default` re-exported per internal file, renamed.
   // Merging the target's whole surface both invents its internal helpers and
   // loses the renamed export. Measured at 3/10 precision before the fix.
@@ -190,6 +202,14 @@ describe('tier-A extraction', () => {
 
   it('resolveEntry returns null when nothing resolves', () => {
     expect(resolveEntry(pkgs['no-entry']!)).toBeNull();
+  });
+});
+
+describe('Object.defineProperty exports (found live, 2026-08-06)', () => {
+  it('extracts Babel-style CJS exports and skips __esModule', () => {
+    const s = extractSurface(pkgs['define-property-exports']!);
+    expect(paths(s)).toEqual(['NIL', 'parse']);
+    expect(paths(s)).not.toContain('__esModule');
   });
 });
 

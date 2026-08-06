@@ -325,6 +325,40 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
     if (ts.isExpressionStatement(stmt)) {
       const e = stmt.expression;
 
+      // Object.defineProperty(exports, "name", { get() {…} }) — Babel's CJS
+      // output, and older tsc's. Extremely common on npm: uuid@9 declares its
+      // entire surface this way, and without this branch every Babel-compiled
+      // package extracts as zero exports and lands as UNDECLARED.
+      if (
+        ts.isCallExpression(e) &&
+        ts.isPropertyAccessExpression(e.expression) &&
+        ts.isIdentifier(e.expression.expression) &&
+        e.expression.expression.text === 'Object' &&
+        e.expression.name.text === 'defineProperty' &&
+        e.arguments.length >= 2
+      ) {
+        const targetArg = e.arguments[0]!;
+        const isExportsTarget =
+          (ts.isIdentifier(targetArg) && targetArg.text === 'exports') ||
+          isModuleExports(targetArg as ts.Expression);
+        const nameArg = e.arguments[1]!;
+        if (isExportsTarget && ts.isStringLiteral(nameArg) && nameArg.text !== '__esModule') {
+          // The descriptor's getter usually forwards to another module
+          // (`return _nil.default`), so the VALUE is not statically known — but
+          // existence is, and existence is what tier A is for.
+          put(out, {
+            path: nameArg.text,
+            kind: 'object',
+            arity: null,
+            origin: 'local',
+            deprecated: hasDeprecatedTag(sf, stmt),
+            tier: TIER,
+            sourceRef: { file: rel, line: lineOf(sf, stmt) },
+          });
+          continue;
+        }
+      }
+
       // Object.assign(module.exports, X, …) / __exportStar(require('x'), …)
       if (ts.isCallExpression(e)) {
         const callee = e.expression;
