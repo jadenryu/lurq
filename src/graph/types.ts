@@ -36,6 +36,10 @@ export type Verdict =
   | 'verified_false'
   | 'unknown'
   | 'stale'
+  /** Entity ships no usable artifact for this claim. NOT the same as absence:
+   *  3.0% of study extractions resolved at no tier, and reporting those as
+   *  "no exports" would be a false removal. */
+  | 'undeclared'
   | 'unverifiable';
 
 /** Identity of a node, before it has a database id. */
