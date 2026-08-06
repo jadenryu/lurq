@@ -8,9 +8,9 @@ import { geist, commitMono, robotoMono } from "@/lib/fonts";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 
-const TITLE = "lurq | the marketplace layer for coding agents";
+const TITLE = "lurq | your agent picks the packages, lurq knows what happens next";
 const DESCRIPTION =
-  "AI agents now choose the software companies run on. lurq is the marketplace that decision runs through: a live, evidence-ranked index of JS/TS packages, served over MCP, CLI, and API. Merit-ranked, never pay-to-rank.";
+  "An MCP server your coding agent calls before it installs anything. It reads the shipped types, checks whether a set of packages holds together, and confirms a name isn't a typosquat — from live data, with a timestamp on every answer.";
 
 export const metadata: Metadata = {
   // Canonical base for resolving relative metadata URLs (canonical, OG images).

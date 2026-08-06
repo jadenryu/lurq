@@ -74,14 +74,10 @@ export function Footer() {
           ))}
         </div>
 
+        {/* No status light here. The home page has one wired to the hosted
+            server's own /healthz; a hardcoded green dot on a sub-page would be
+            claiming something nothing checked. */}
         <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-border pt-8 font-mono text-xs text-muted-foreground/70 sm:flex-row sm:items-center">
-          <span className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="inline-block size-1.5 rounded-full bg-[#7dcea0] motion-safe:animate-pulse"
-            />
-            all systems operational
-          </span>
           <span>© 2026 lurq · Apache-2.0</span>
         </div>
       </Container>

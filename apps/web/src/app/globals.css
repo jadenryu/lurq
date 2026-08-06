@@ -42,6 +42,30 @@
   --color-ok: var(--ok);
   --color-bad: var(--bad);
   --color-warn: var(--warn);
+  /* Marketing surface (see "light page, dark instrument" below). Fixed values,
+     not theme-dependent — the landing page reads as a document in daylight while
+     every product artifact sits on the dark viewport. */
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-viewport: var(--viewport);
+  --color-viewport-2: var(--viewport-2);
+  --color-viewport-3: var(--viewport-3);
+  --color-viewport-ink: var(--viewport-ink);
+  /* Verdicts — the only saturated colour on the marketing page. Used in the
+     graph, in verdict badges, in the diff markers, and nowhere else. The `-lift`
+     variants are the same hues raised for the dark surfaces. */
+  --color-verified: var(--verified);
+  --color-conflict: var(--conflict);
+  --color-declared: var(--declared);
+  --color-verified-lift: var(--verified-lift);
+  --color-conflict-lift: var(--conflict-lift);
+  --color-declared-lift: var(--declared-lift);
+  /* Interaction only. Never a verdict. */
+  --color-mark: var(--mark);
+  --color-mark-lift: var(--mark-lift);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -83,6 +107,51 @@
     transform: translateY(calc(-100% - var(--gap)));
     }
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Marketing surface: a proof sheet.
+
+   The page is about checking something before you commit to it, which is
+   proofing — printer's proofs, blueline prints, an editor's marks in the margin.
+   So: paper stock, ink, and marks made on top of it. Three dark moments (the
+   graph, the install band, the closing line) break the page up; everything else
+   is paper.
+
+   Three rules hold the palette together:
+     · the three verdict colours only ever mean a verdict — never a button,
+       never a heading, never decoration
+     · --mark is never a verdict. It is links, focus, hover, active tabs, the
+       copy-confirm state: the one colour on the page that isn't data
+     · deep pine and vermilion rather than CI green and red — darker, less
+       saturated, easier to separate with a red-green deficiency, and always
+       paired with a glyph or a word rather than carrying meaning alone
+   ───────────────────────────────────────────────────────────────────────────── */
+:root {
+  --paper: #f8f8f6; /* near-white with a trace of warmth */
+  --paper-2: #eeeeeb; /* inset bands, table stripes */
+  --ink: #1a1a18;
+  --ink-soft: #5c5c56;
+  --rule: #e0e0da;
+
+  --verified: #1b5e4a; /* deep pine — checked and held */
+  --conflict: #c1440e; /* vermilion — flagged */
+  --declared: #8a8a82; /* graphite — stated, not tested */
+  --mark: #2b4c7e; /* prussian blue — interaction only */
+
+  /* The dark surfaces are the same ink family, not a second palette: a press
+     plate rather than a screen. */
+  --viewport: #121210;
+  --viewport-2: #1e1e1b;
+  --viewport-3: #2e2e29;
+  --viewport-ink: #e8e8e4;
+
+  /* Same hues, lightness raised, for use on the dark surfaces only. Pine and
+     prussian at their paper values disappear against #121210. */
+  --verified-lift: #4e9e83;
+  --conflict-lift: #e07a4a;
+  --declared-lift: #9c9c93;
+  --mark-lift: #7ba0d8;
 }
 
 /* Light tokens kept as a fallback; the site is forced dark (see layout.tsx). */
@@ -200,184 +269,6 @@
   }
 }
 
-/* ---- Hero aurora background (subtle, monochrome, CSS-only) ---- */
-@keyframes aurora-drift-1 {
-  0%,
-  100% {
-    transform: translate(-8%, -6%) scale(1);
-  }
-  50% {
-    transform: translate(10%, 6%) scale(1.18);
-  }
-}
-@keyframes aurora-drift-2 {
-  0%,
-  100% {
-    transform: translate(8%, 2%) scale(1.1);
-  }
-  50% {
-    transform: translate(-8%, 8%) scale(0.95);
-  }
-}
-
-/* Autoplay progress fill for the carousel tabs (scaleX 0 -> 1 over the dwell). */
-@keyframes carousel-progress {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-
-.aurora-blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(90px);
-  will-change: transform;
-}
-.aurora-blob-1 {
-  top: -16%;
-  left: 18%;
-  width: 46rem;
-  height: 46rem;
-  opacity: 0.14;
-  background: radial-gradient(circle, #ffffff 0%, transparent 68%);
-  animation: aurora-drift-1 20s ease-in-out infinite;
-}
-.aurora-blob-2 {
-  top: -22%;
-  right: 8%;
-  width: 38rem;
-  height: 38rem;
-  opacity: 0.1;
-  background: radial-gradient(circle, #9ca3af 0%, transparent 68%);
-  animation: aurora-drift-2 26s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aurora-blob {
-    animation: none;
-  }
-}
-
-/* ---- Hero atmosphere (neutral grey, spans the whole section, CSS-only) ---- */
-@keyframes nebula-drift-1 {
-  0%,
-  100% {
-    transform: translate(-5%, -3%) scale(1);
-  }
-  50% {
-    transform: translate(7%, 5%) scale(1.15);
-  }
-}
-@keyframes nebula-drift-2 {
-  0%,
-  100% {
-    transform: translate(5%, 3%) scale(1.08);
-  }
-  50% {
-    transform: translate(-7%, -3%) scale(0.94);
-  }
-}
-@keyframes godray-rotate {
-  to {
-    transform: rotate(1turn);
-  }
-}
-
-.nebula-blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(110px);
-  will-change: transform;
-}
-/* left half */
-.nebula-blob-1 {
-  top: -14%;
-  left: 2%;
-  width: 52rem;
-  height: 52rem;
-  opacity: 0.1;
-  background: radial-gradient(circle, #d4d4d8 0%, transparent 68%);
-  animation: nebula-drift-1 24s ease-in-out infinite;
-}
-/* right half */
-.nebula-blob-2 {
-  top: -8%;
-  right: 2%;
-  width: 48rem;
-  height: 48rem;
-  opacity: 0.08;
-  background: radial-gradient(circle, #a1a1aa 0%, transparent 70%);
-  animation: nebula-drift-2 30s ease-in-out infinite;
-}
-
-/* faint grey god-rays sweeping across the whole section from top-centre */
-.hero-godrays {
-  position: absolute;
-  top: -60%;
-  left: 50%;
-  width: 90rem;
-  height: 90rem;
-  margin-left: -45rem;
-  opacity: 0.05;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    rgba(255, 255, 255, 0.9) 6deg,
-    transparent 12deg,
-    transparent 44deg,
-    rgba(228, 228, 231, 0.7) 50deg,
-    transparent 56deg,
-    transparent 96deg,
-    rgba(255, 255, 255, 0.6) 102deg,
-    transparent 110deg,
-    transparent 184deg,
-    rgba(228, 228, 231, 0.5) 192deg,
-    transparent 200deg,
-    transparent 360deg
-  );
-  -webkit-mask-image: radial-gradient(
-    ellipse 60% 60% at 50% 50%,
-    #000 0%,
-    transparent 72%
-  );
-  mask-image: radial-gradient(
-    ellipse 60% 60% at 50% 50%,
-    #000 0%,
-    transparent 72%
-  );
-  will-change: transform;
-  animation: godray-rotate 120s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nebula-blob,
-  .hero-godrays {
-    animation: none;
-  }
-}
-
-/* gentle float for the hero centerpiece image */
-@keyframes hero-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-14px);
-  }
-}
-.hero-float {
-  animation: hero-float 7s ease-in-out infinite;
-  will-change: transform;
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-float {
-    animation: none;
-  }
-}
 
 /* Soft top-light + depth for content panels. Hierarchy from lift, not glow. */
 .surface-glow {
@@ -431,13 +322,6 @@
   );
 }
 
-/* Inline emphasis for the payoff clause of a headline — monochrome: solid
-   white text with a subtle underline, no color box. */
-.brand-highlight {
-  color: var(--foreground);
-  box-shadow: inset 0 -0.09em 0 color-mix(in oklab, var(--foreground) 32%, transparent);
-}
-
 /* Faint greyscale grid; masked so it reads as ambient depth, not a hard cage. */
 .bg-grid {
   background-image:
@@ -464,31 +348,136 @@
   );
 }
 
-/* Slow greyscale shimmer for gradient borders (see GradientBorder). */
-@keyframes border-shimmer {
-  to {
-    transform: rotate(1turn);
-  }
-}
-
 /* Smooth in-page navigation for footer/navbar anchor links. Anchored sections
-   get a scroll offset so they clear the fixed navbar (h-16) + announcement
-   banner instead of hiding underneath it. */
+   get a scroll offset so they clear the sticky header instead of hiding
+   underneath it. */
 html {
   scroll-behavior: smooth;
 }
 :where(
-  [id="product"],
-  [id="plan"],
-  [id="comparison"],
-  [id="benchmark"],
+  [id="stack"],
+  [id="capabilities"],
+  [id="install"],
+  [id="limits"],
   [id="faq"],
   [id="contact"]
 ) {
-  scroll-margin-top: calc(var(--banner-h, 0px) + 6rem);
+  scroll-margin-top: 5rem;
 }
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Marketing page: type scale, rhythm, and the dark instrument surface.
+
+   Seven type sizes, no eighth. If something needs a size that isn't here it's
+   the wrong element. Headlines stay lowercase throughout — a real choice, kept
+   consistent, never broken for emphasis.
+   ───────────────────────────────────────────────────────────────────────────── */
+[data-surface="paper"] {
+  background: var(--paper);
+  color: var(--ink);
+  color-scheme: light;
+  --marketing-container: 1080px;
+  --marketing-breakout: 1280px;
+}
+
+/* The page background belongs to the html element (rubber-band scroll, mobile
+   overscroll), which the marketing route can't set from inside its own layout. */
+body:has([data-surface="paper"]) {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Type.
+
+   Headlines are Geist in sentence case. Monospace is reserved for the things that
+   are literally monospace — package names, versions, commands, and the data in an
+   artifact. Lowercase mono headings and FIG markers read as a paper rather than a
+   product, which is not what this is.
+
+   Six sizes. If something needs a seventh it's the wrong element.
+   ───────────────────────────────────────────────────────────────────────────── */
+.t-display {
+  font-family: var(--font-geist), sans-serif;
+  font-size: 3rem;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  font-weight: 500;
+}
+.t-h2 {
+  font-family: var(--font-geist), sans-serif;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+  font-weight: 500;
+}
+.t-h3 {
+  font-family: var(--font-geist), sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}
+.t-body {
+  font-family: var(--font-geist), sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  font-weight: 400;
+  max-width: 68ch;
+}
+.t-lead {
+  font-family: var(--font-geist), sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.55;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+/* The two monospace roles: data, and the small label above a block. */
+.t-data {
+  font-family: var(--font-commit-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+.t-label {
+  font-family: var(--font-commit-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .t-display {
+    font-size: 2.125rem;
+  }
+  .t-h2 {
+    font-size: 1.375rem;
+  }
+}
+
+/* One soft shadow, only under the dark panels, to seat them on the paper.
+   Nothing on a light surface casts a shadow. */
+.instrument {
+  background: var(--viewport);
+  color: var(--viewport-ink);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 3px rgba(20, 24, 27, 0.08),
+    0 12px 32px rgba(20, 24, 27, 0.06);
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────────
+   Nothing moves unless you touch it.
+
+   Scroll-driven reveals, counting numbers, pinned panels and looping flow dots
+   all went: every one of them was the page performing rather than responding, and
+   together they read as eager. What's left is 120ms colour and opacity on hover
+   and focus, which is feedback.
+   ─────────────────────────────────────────────────────────────────────────── */

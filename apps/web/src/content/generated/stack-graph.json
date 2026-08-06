@@ -1,0 +1,870 @@
+{
+  "generatedAt": "2026-08-06T14:00:30.503Z",
+  "source": "live",
+  "stackName": "a next.js app with auth, an orm, and tests",
+  "checkedAt": "2026-08-06T14:00:30.503Z",
+  "dataAsOf": "2026-08-06T13:45:30.231Z",
+  "nodes": [
+    {
+      "id": "typescript",
+      "version": "7.0.2",
+      "weeklyDownloads": 263394364,
+      "declaresPeers": 0,
+      "nodeEngine": ">=16.20.0",
+      "degree": 2,
+      "conflicts": 1
+    },
+    {
+      "id": "zod",
+      "version": "4.4.3",
+      "weeklyDownloads": 254304262,
+      "declaresPeers": 0,
+      "nodeEngine": null,
+      "degree": 0,
+      "conflicts": 0
+    },
+    {
+      "id": "vite",
+      "version": "8.2.0",
+      "weeklyDownloads": 163302198,
+      "declaresPeers": 12,
+      "nodeEngine": "^20.19.0 || >=22.12.0",
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "react",
+      "version": "19.2.8",
+      "weeklyDownloads": 163138787,
+      "declaresPeers": 0,
+      "nodeEngine": ">=0.10.0",
+      "degree": 6,
+      "conflicts": 0
+    },
+    {
+      "id": "eslint",
+      "version": "10.8.0",
+      "weeklyDownloads": 156159541,
+      "declaresPeers": 1,
+      "nodeEngine": "^20.19.0 || ^22.13.0 || >=24",
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "react-dom",
+      "version": "19.2.8",
+      "weeklyDownloads": 154134781,
+      "declaresPeers": 1,
+      "nodeEngine": null,
+      "degree": 4,
+      "conflicts": 0
+    },
+    {
+      "id": "@typescript-eslint/eslint-plugin",
+      "version": "8.66.0",
+      "weeklyDownloads": 135729141,
+      "declaresPeers": 3,
+      "nodeEngine": "^18.18.0 || ^20.9.0 || >=21.1.0",
+      "degree": 2,
+      "conflicts": 1
+    },
+    {
+      "id": "tailwindcss",
+      "version": "4.3.3",
+      "weeklyDownloads": 119577776,
+      "declaresPeers": 0,
+      "nodeEngine": null,
+      "degree": 0,
+      "conflicts": 0
+    },
+    {
+      "id": "vitest",
+      "version": "4.1.10",
+      "weeklyDownloads": 89357805,
+      "declaresPeers": 12,
+      "nodeEngine": "^20.0.0 || ^22.0.0 || >=24.0.0",
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "@tanstack/react-query",
+      "version": "5.101.4",
+      "weeklyDownloads": 63037969,
+      "declaresPeers": 1,
+      "nodeEngine": null,
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "react-hook-form",
+      "version": "7.84.0",
+      "weeklyDownloads": 58301035,
+      "declaresPeers": 1,
+      "nodeEngine": ">=18.0.0",
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "next",
+      "version": "16.3.0",
+      "weeklyDownloads": 54035511,
+      "declaresPeers": 6,
+      "nodeEngine": ">=20.9.0",
+      "degree": 4,
+      "conflicts": 0
+    },
+    {
+      "id": "@playwright/test",
+      "version": "1.62.1",
+      "weeklyDownloads": 52641670,
+      "declaresPeers": 0,
+      "nodeEngine": ">=20",
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "framer-motion",
+      "version": "13.0.0",
+      "weeklyDownloads": 42215967,
+      "declaresPeers": 2,
+      "nodeEngine": null,
+      "degree": 2,
+      "conflicts": 0
+    },
+    {
+      "id": "drizzle-orm",
+      "version": "0.45.2",
+      "weeklyDownloads": 18297294,
+      "declaresPeers": 28,
+      "nodeEngine": null,
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "prisma",
+      "version": "7.9.1",
+      "weeklyDownloads": 16021426,
+      "declaresPeers": 2,
+      "nodeEngine": "^20.19 || ^22.12 || >=24.0",
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "postgres",
+      "version": "3.4.9",
+      "weeklyDownloads": 13978488,
+      "declaresPeers": 0,
+      "nodeEngine": ">=12",
+      "degree": 1,
+      "conflicts": 0
+    },
+    {
+      "id": "next-auth",
+      "version": "4.24.15",
+      "weeklyDownloads": 5748815,
+      "declaresPeers": 5,
+      "nodeEngine": null,
+      "degree": 4,
+      "conflicts": 1
+    },
+    {
+      "id": "@auth/core",
+      "version": "0.41.3",
+      "weeklyDownloads": 4067265,
+      "declaresPeers": 3,
+      "nodeEngine": null,
+      "degree": 1,
+      "conflicts": 1
+    }
+  ],
+  "edges": [
+    {
+      "source": "prisma",
+      "target": "typescript",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "typescript",
+      "range": ">=5.4.0",
+      "optional": true,
+      "detail": "prisma@7.9.1 declares peer typescript@>=5.4.0; the stack's typescript@7.0.2 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat prisma typescript",
+      "coOccurrence": {
+        "witnesses": 16,
+        "drivers": [
+          "depsdev"
+        ]
+      }
+    },
+    {
+      "source": "framer-motion",
+      "target": "react",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react",
+      "range": "^18.0.0 || ^19.0.0",
+      "optional": true,
+      "detail": "framer-motion@13.0.0 declares peer react@^18.0.0 || ^19.0.0; the stack's react@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat framer-motion react",
+      "coOccurrence": null
+    },
+    {
+      "source": "framer-motion",
+      "target": "react-dom",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react-dom",
+      "range": "^18.0.0 || ^19.0.0",
+      "optional": true,
+      "detail": "framer-motion@13.0.0 declares peer react-dom@^18.0.0 || ^19.0.0; the stack's react-dom@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat framer-motion react-dom",
+      "coOccurrence": null
+    },
+    {
+      "source": "vitest",
+      "target": "vite",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "vite",
+      "range": "^6.0.0 || ^7.0.0 || ^8.0.0",
+      "optional": false,
+      "detail": "vitest@4.1.10 declares peer vite@^6.0.0 || ^7.0.0 || ^8.0.0; the stack's vite@8.2.0 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat vitest vite",
+      "coOccurrence": {
+        "witnesses": 31,
+        "drivers": [
+          "depsdev"
+        ]
+      }
+    },
+    {
+      "source": "@typescript-eslint/eslint-plugin",
+      "target": "eslint",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "eslint",
+      "range": "^8.57.0 || ^9.0.0 || ^10.0.0",
+      "optional": false,
+      "detail": "@typescript-eslint/eslint-plugin@8.66.0 declares peer eslint@^8.57.0 || ^9.0.0 || ^10.0.0; the stack's eslint@10.8.0 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat @typescript-eslint/eslint-plugin eslint",
+      "coOccurrence": {
+        "witnesses": 72,
+        "drivers": [
+          "depsdev"
+        ]
+      }
+    },
+    {
+      "source": "@typescript-eslint/eslint-plugin",
+      "target": "typescript",
+      "verdict": "conflict",
+      "provenance": "declared",
+      "peer": "typescript",
+      "range": ">=4.8.4 <6.1.0",
+      "optional": false,
+      "detail": "@typescript-eslint/eslint-plugin@8.66.0 needs peer typescript@>=4.8.4 <6.1.0, but the stack uses typescript@7.0.2.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat @typescript-eslint/eslint-plugin typescript",
+      "coOccurrence": {
+        "witnesses": 16,
+        "drivers": [
+          "depsdev"
+        ]
+      }
+    },
+    {
+      "source": "react-dom",
+      "target": "react",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react",
+      "range": "^19.2.8",
+      "optional": false,
+      "detail": "react-dom@19.2.8 declares peer react@^19.2.8; the stack's react@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat react-dom react",
+      "coOccurrence": {
+        "witnesses": 62,
+        "drivers": [
+          "depsdev",
+          "npm-resolve"
+        ]
+      }
+    },
+    {
+      "source": "next",
+      "target": "react",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react",
+      "range": "^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0",
+      "optional": false,
+      "detail": "next@16.3.0 declares peer react@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0; the stack's react@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat next react",
+      "coOccurrence": {
+        "witnesses": 3,
+        "drivers": [
+          "npm-resolve"
+        ]
+      }
+    },
+    {
+      "source": "next",
+      "target": "react-dom",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react-dom",
+      "range": "^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0",
+      "optional": false,
+      "detail": "next@16.3.0 declares peer react-dom@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0; the stack's react-dom@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat next react-dom",
+      "coOccurrence": {
+        "witnesses": 2,
+        "drivers": [
+          "npm-resolve"
+        ]
+      }
+    },
+    {
+      "source": "next",
+      "target": "@playwright/test",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "@playwright/test",
+      "range": "^1.51.1",
+      "optional": true,
+      "detail": "next@16.3.0 declares peer @playwright/test@^1.51.1; the stack's @playwright/test@1.62.1 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat next @playwright/test",
+      "coOccurrence": null
+    },
+    {
+      "source": "@tanstack/react-query",
+      "target": "react",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react",
+      "range": "^18 || ^19",
+      "optional": false,
+      "detail": "@tanstack/react-query@5.101.4 declares peer react@^18 || ^19; the stack's react@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat @tanstack/react-query react",
+      "coOccurrence": {
+        "witnesses": 1,
+        "drivers": [
+          "npm-resolve"
+        ]
+      }
+    },
+    {
+      "source": "next-auth",
+      "target": "next",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "next",
+      "range": "^12.2.5 || ^13 || ^14 || ^15 || ^16",
+      "optional": false,
+      "detail": "next-auth@4.24.15 declares peer next@^12.2.5 || ^13 || ^14 || ^15 || ^16; the stack's next@16.3.0 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat next-auth next",
+      "coOccurrence": {
+        "witnesses": 1,
+        "drivers": [
+          "npm-resolve"
+        ]
+      }
+    },
+    {
+      "source": "next-auth",
+      "target": "react",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react",
+      "range": "^17.0.2 || ^18 || ^19",
+      "optional": false,
+      "detail": "next-auth@4.24.15 declares peer react@^17.0.2 || ^18 || ^19; the stack's react@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat next-auth react",
+      "coOccurrence": {
+        "witnesses": 1,
+        "drivers": [
+          "npm-resolve"
+        ]
+      }
+    },
+    {
+      "source": "next-auth",
+      "target": "react-dom",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react-dom",
+      "range": "^17.0.2 || ^18 || ^19",
+      "optional": false,
+      "detail": "next-auth@4.24.15 declares peer react-dom@^17.0.2 || ^18 || ^19; the stack's react-dom@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat next-auth react-dom",
+      "coOccurrence": null
+    },
+    {
+      "source": "next-auth",
+      "target": "@auth/core",
+      "verdict": "conflict",
+      "provenance": "declared",
+      "peer": "@auth/core",
+      "range": "0.34.3",
+      "optional": true,
+      "detail": "next-auth@4.24.15 needs peer @auth/core@0.34.3, but the stack uses @auth/core@0.41.3.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat next-auth @auth/core",
+      "coOccurrence": null
+    },
+    {
+      "source": "react-hook-form",
+      "target": "react",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "react",
+      "range": "^16.8.0 || ^17 || ^18 || ^19",
+      "optional": false,
+      "detail": "react-hook-form@7.84.0 declares peer react@^16.8.0 || ^17 || ^18 || ^19; the stack's react@19.2.8 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat react-hook-form react",
+      "coOccurrence": null
+    },
+    {
+      "source": "drizzle-orm",
+      "target": "postgres",
+      "verdict": "declared",
+      "provenance": "declared",
+      "peer": "postgres",
+      "range": ">=3",
+      "optional": true,
+      "detail": "drizzle-orm@0.45.2 declares peer postgres@>=3; the stack's postgres@3.4.9 satisfies it.",
+      "checkedAt": "2026-08-06T14:00:30.503Z",
+      "reproduce": "npx lurqrun compat drizzle-orm postgres",
+      "coOccurrence": null
+    }
+  ],
+  "pairs": [
+    {
+      "a": "prisma",
+      "b": "@typescript-eslint/eslint-plugin",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat prisma @typescript-eslint/eslint-plugin"
+    },
+    {
+      "a": "prisma",
+      "b": "postgres",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat prisma postgres"
+    },
+    {
+      "a": "prisma",
+      "b": "react-dom",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat prisma react-dom"
+    },
+    {
+      "a": "prisma",
+      "b": "eslint",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat prisma eslint"
+    },
+    {
+      "a": "prisma",
+      "b": "react",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat prisma react"
+    },
+    {
+      "a": "prisma",
+      "b": "typescript",
+      "level": "declared",
+      "detail": "prisma@7.9.1 declares peer typescript@>=5.4.0; the stack's typescript@7.0.2 satisfies it.",
+      "witnesses": 16,
+      "reproduce": "npx lurqrun compat prisma typescript"
+    },
+    {
+      "a": "framer-motion",
+      "b": "react-dom",
+      "level": "declared",
+      "detail": "framer-motion@13.0.0 declares peer react-dom@^18.0.0 || ^19.0.0; the stack's react-dom@19.2.8 satisfies it.",
+      "witnesses": null,
+      "reproduce": "npx lurqrun compat framer-motion react-dom"
+    },
+    {
+      "a": "framer-motion",
+      "b": "react",
+      "level": "declared",
+      "detail": "framer-motion@13.0.0 declares peer react@^18.0.0 || ^19.0.0; the stack's react@19.2.8 satisfies it.",
+      "witnesses": null,
+      "reproduce": "npx lurqrun compat framer-motion react"
+    },
+    {
+      "a": "tailwindcss",
+      "b": "react-dom",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat tailwindcss react-dom"
+    },
+    {
+      "a": "tailwindcss",
+      "b": "next",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 2,
+      "reproduce": "npx lurqrun compat tailwindcss next"
+    },
+    {
+      "a": "tailwindcss",
+      "b": "zod",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat tailwindcss zod"
+    },
+    {
+      "a": "tailwindcss",
+      "b": "@tanstack/react-query",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat tailwindcss @tanstack/react-query"
+    },
+    {
+      "a": "tailwindcss",
+      "b": "next-auth",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat tailwindcss next-auth"
+    },
+    {
+      "a": "tailwindcss",
+      "b": "react",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 2,
+      "reproduce": "npx lurqrun compat tailwindcss react"
+    },
+    {
+      "a": "tailwindcss",
+      "b": "drizzle-orm",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 2,
+      "reproduce": "npx lurqrun compat tailwindcss drizzle-orm"
+    },
+    {
+      "a": "vitest",
+      "b": "vite",
+      "level": "declared",
+      "detail": "vitest@4.1.10 declares peer vite@^6.0.0 || ^7.0.0 || ^8.0.0; the stack's vite@8.2.0 satisfies it.",
+      "witnesses": 31,
+      "reproduce": "npx lurqrun compat vitest vite"
+    },
+    {
+      "a": "vite",
+      "b": "zod",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 44 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 44,
+      "reproduce": "npx lurqrun compat vite zod"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "react-dom",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat @typescript-eslint/eslint-plugin react-dom"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "eslint",
+      "level": "declared",
+      "detail": "@typescript-eslint/eslint-plugin@8.66.0 declares peer eslint@^8.57.0 || ^9.0.0 || ^10.0.0; the stack's eslint@10.8.0 satisfies it.",
+      "witnesses": 72,
+      "reproduce": "npx lurqrun compat @typescript-eslint/eslint-plugin eslint"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "react",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat @typescript-eslint/eslint-plugin react"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "typescript",
+      "level": "conflict",
+      "detail": "@typescript-eslint/eslint-plugin@8.66.0 needs peer typescript@>=4.8.4 <6.1.0, but the stack uses typescript@7.0.2.",
+      "witnesses": 16,
+      "reproduce": "npx lurqrun compat @typescript-eslint/eslint-plugin typescript"
+    },
+    {
+      "a": "postgres",
+      "b": "zod",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 9 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 9,
+      "reproduce": "npx lurqrun compat postgres zod"
+    },
+    {
+      "a": "drizzle-orm",
+      "b": "postgres",
+      "level": "declared",
+      "detail": "drizzle-orm@0.45.2 declares peer postgres@>=3; the stack's postgres@3.4.9 satisfies it.",
+      "witnesses": null,
+      "reproduce": "npx lurqrun compat drizzle-orm postgres"
+    },
+    {
+      "a": "next",
+      "b": "react-dom",
+      "level": "declared",
+      "detail": "next@16.3.0 declares peer react-dom@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0; the stack's react-dom@19.2.8 satisfies it.",
+      "witnesses": 2,
+      "reproduce": "npx lurqrun compat next react-dom"
+    },
+    {
+      "a": "react-dom",
+      "b": "zod",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat react-dom zod"
+    },
+    {
+      "a": "next-auth",
+      "b": "react-dom",
+      "level": "declared",
+      "detail": "next-auth@4.24.15 declares peer react-dom@^17.0.2 || ^18 || ^19; the stack's react-dom@19.2.8 satisfies it.",
+      "witnesses": null,
+      "reproduce": "npx lurqrun compat next-auth react-dom"
+    },
+    {
+      "a": "react-dom",
+      "b": "eslint",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat react-dom eslint"
+    },
+    {
+      "a": "react-dom",
+      "b": "react",
+      "level": "declared",
+      "detail": "react-dom@19.2.8 declares peer react@^19.2.8; the stack's react@19.2.8 satisfies it.",
+      "witnesses": 62,
+      "reproduce": "npx lurqrun compat react-dom react"
+    },
+    {
+      "a": "react-dom",
+      "b": "drizzle-orm",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat react-dom drizzle-orm"
+    },
+    {
+      "a": "react-dom",
+      "b": "typescript",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 28 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 28,
+      "reproduce": "npx lurqrun compat react-dom typescript"
+    },
+    {
+      "a": "next",
+      "b": "zod",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat next zod"
+    },
+    {
+      "a": "next",
+      "b": "@tanstack/react-query",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat next @tanstack/react-query"
+    },
+    {
+      "a": "next-auth",
+      "b": "next",
+      "level": "declared",
+      "detail": "next-auth@4.24.15 declares peer next@^12.2.5 || ^13 || ^14 || ^15 || ^16; the stack's next@16.3.0 satisfies it.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat next-auth next"
+    },
+    {
+      "a": "next",
+      "b": "react",
+      "level": "declared",
+      "detail": "next@16.3.0 declares peer react@^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0; the stack's react@19.2.8 satisfies it.",
+      "witnesses": 3,
+      "reproduce": "npx lurqrun compat next react"
+    },
+    {
+      "a": "next",
+      "b": "@playwright/test",
+      "level": "declared",
+      "detail": "next@16.3.0 declares peer @playwright/test@^1.51.1; the stack's @playwright/test@1.62.1 satisfies it.",
+      "witnesses": null,
+      "reproduce": "npx lurqrun compat next @playwright/test"
+    },
+    {
+      "a": "next",
+      "b": "drizzle-orm",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 2,
+      "reproduce": "npx lurqrun compat next drizzle-orm"
+    },
+    {
+      "a": "zod",
+      "b": "react",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 35 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 35,
+      "reproduce": "npx lurqrun compat zod react"
+    },
+    {
+      "a": "zod",
+      "b": "drizzle-orm",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 2,
+      "reproduce": "npx lurqrun compat zod drizzle-orm"
+    },
+    {
+      "a": "zod",
+      "b": "typescript",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 8 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 8,
+      "reproduce": "npx lurqrun compat zod typescript"
+    },
+    {
+      "a": "@tanstack/react-query",
+      "b": "next-auth",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat @tanstack/react-query next-auth"
+    },
+    {
+      "a": "@tanstack/react-query",
+      "b": "react",
+      "level": "declared",
+      "detail": "@tanstack/react-query@5.101.4 declares peer react@^18 || ^19; the stack's react@19.2.8 satisfies it.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat @tanstack/react-query react"
+    },
+    {
+      "a": "@tanstack/react-query",
+      "b": "drizzle-orm",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat @tanstack/react-query drizzle-orm"
+    },
+    {
+      "a": "next-auth",
+      "b": "react",
+      "level": "declared",
+      "detail": "next-auth@4.24.15 declares peer react@^17.0.2 || ^18 || ^19; the stack's react@19.2.8 satisfies it.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat next-auth react"
+    },
+    {
+      "a": "next-auth",
+      "b": "drizzle-orm",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 1,
+      "reproduce": "npx lurqrun compat next-auth drizzle-orm"
+    },
+    {
+      "a": "next-auth",
+      "b": "@auth/core",
+      "level": "conflict",
+      "detail": "next-auth@4.24.15 needs peer @auth/core@0.34.3, but the stack uses @auth/core@0.41.3.",
+      "witnesses": null,
+      "reproduce": "npx lurqrun compat next-auth @auth/core"
+    },
+    {
+      "a": "eslint",
+      "b": "react",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 36 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 36,
+      "reproduce": "npx lurqrun compat eslint react"
+    },
+    {
+      "a": "eslint",
+      "b": "typescript",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 16 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 16,
+      "reproduce": "npx lurqrun compat eslint typescript"
+    },
+    {
+      "a": "react-hook-form",
+      "b": "react",
+      "level": "declared",
+      "detail": "react-hook-form@7.84.0 declares peer react@^16.8.0 || ^17 || ^18 || ^19; the stack's react@19.2.8 satisfies it.",
+      "witnesses": null,
+      "reproduce": "npx lurqrun compat react-hook-form react"
+    },
+    {
+      "a": "react",
+      "b": "drizzle-orm",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 2,
+      "reproduce": "npx lurqrun compat react drizzle-orm"
+    },
+    {
+      "a": "react",
+      "b": "typescript",
+      "level": "co-occurs",
+      "detail": "Neither package declares the other. 28 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "witnesses": 28,
+      "reproduce": "npx lurqrun compat react typescript"
+    }
+  ],
+  "counts": {
+    "nodes": 19,
+    "edges": 17,
+    "declared": 15,
+    "conflict": 2,
+    "verified": 0,
+    "isolated": [
+      "zod",
+      "tailwindcss"
+    ],
+    "possiblePairs": 171,
+    "coOccurs": 33,
+    "known": 50
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "generatedAt": "2026-08-06T14:00:30.503Z",
+  "source": "live",
+  "sources": [
+    {
+      "name": "npm registry",
+      "host": "registry.npmjs.org",
+      "short": "versions, peer ranges, engines",
+      "contributes": "versions, deprecations, peer ranges, engines, licence"
+    },
+    {
+      "name": "npm downloads",
+      "host": "api.npmjs.org",
+      "short": "weekly downloads, 90-day trend",
+      "contributes": "weekly downloads and 90-day trend"
+    },
+    {
+      "name": "npm search",
+      "host": "registry.npmjs.org/-/v1/search",
+      "short": "discovery candidates",
+      "contributes": "discovery candidates per category"
+    },
+    {
+      "name": "GitHub API",
+      "host": "api.github.com",
+      "short": "stars, issues, last release",
+      "contributes": "stars, issues, last release, archived flag"
+    },
+    {
+      "name": "GitHub raw",
+      "host": "raw.githubusercontent.com",
+      "short": "README text",
+      "contributes": "README text for the usage guide"
+    },
+    {
+      "name": "deps.dev",
+      "host": "api.deps.dev",
+      "short": "dependency graphs",
+      "contributes": "dependency graphs and version metadata"
+    },
+    {
+      "name": "OpenSSF Scorecard",
+      "host": "api.deps.dev/v3/projects",
+      "short": "supply-chain review",
+      "contributes": "supply-chain review, branch protection, CI checks"
+    },
+    {
+      "name": "OSV advisories",
+      "host": "api.deps.dev/v3/advisories",
+      "short": "open vulnerabilities",
+      "contributes": "open vulnerabilities per version"
+    },
+    {
+      "name": "Bundlephobia",
+      "host": "bundlephobia.com",
+      "short": "min+gzip install cost",
+      "contributes": "min+gzip install cost"
+    },
+    {
+      "name": "jsDelivr",
+      "host": "cdn.jsdelivr.net",
+      "short": "the shipped .d.ts",
+      "contributes": "the shipped .d.ts the usage axis parses"
+    }
+  ],
+  "dataAsOf": "2026-08-06T13:45:30.231Z",
+  "versionsTracked": 767884,
+  "coOccurrencePairs": 1293237,
+  "apiSurfaces": 94,
+  "syncDays": 21,
+  "firstSyncAt": "2026-07-15T06:01:10.236Z",
+  "lastSync": {
+    "finishedAt": "2026-08-06T06:16:50.071Z",
+    "packagesSeen": 295,
+    "status": "partial"
+  }
+}

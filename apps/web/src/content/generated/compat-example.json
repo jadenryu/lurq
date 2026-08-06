@@ -1,0 +1,307 @@
+{
+  "generatedAt": "2026-08-06T14:00:30.503Z",
+  "source": "live",
+  "result": {
+    "packages": [
+      "next",
+      "react",
+      "react-dom",
+      "typescript",
+      "eslint",
+      "@typescript-eslint/eslint-plugin",
+      "next-auth",
+      "@auth/core"
+    ],
+    "overall": "conflict",
+    "conflicts": [
+      {
+        "source": "peer-deps",
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "typescript"
+        ],
+        "detail": "@typescript-eslint/eslint-plugin needs peer typescript@>=4.8.4 <6.1.0, but the stack uses typescript@7.0.2"
+      },
+      {
+        "source": "peer-deps",
+        "packages": [
+          "next-auth",
+          "@auth/core"
+        ],
+        "detail": "next-auth needs peer @auth/core@0.34.3, but the stack uses @auth/core@0.41.3"
+      }
+    ],
+    "unverified": [],
+    "checked": [
+      {
+        "name": "next",
+        "version": "16.3.0"
+      },
+      {
+        "name": "react",
+        "version": "19.2.8"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.2.8"
+      },
+      {
+        "name": "typescript",
+        "version": "7.0.2"
+      },
+      {
+        "name": "eslint",
+        "version": "10.8.0"
+      },
+      {
+        "name": "@typescript-eslint/eslint-plugin",
+        "version": "8.66.0"
+      },
+      {
+        "name": "next-auth",
+        "version": "4.24.15"
+      },
+      {
+        "name": "@auth/core",
+        "version": "0.41.3"
+      }
+    ],
+    "evidence": [
+      {
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "eslint"
+        ],
+        "versions": [
+          "5.62.0",
+          "7.32.0"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 36
+      },
+      {
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "eslint"
+        ],
+        "versions": [
+          "8.19.1",
+          "8.57.1"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 36
+      },
+      {
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "react"
+        ],
+        "versions": [
+          "8.19.1",
+          "18.3.1"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 36
+      },
+      {
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "react-dom"
+        ],
+        "versions": [
+          "8.19.1",
+          "18.3.1"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 36
+      },
+      {
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "typescript"
+        ],
+        "versions": [
+          "8.19.1",
+          "5.6.2"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 16
+      },
+      {
+        "packages": [
+          "eslint",
+          "react"
+        ],
+        "versions": [
+          "8.57.1",
+          "18.3.1"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 36
+      },
+      {
+        "packages": [
+          "eslint",
+          "react-dom"
+        ],
+        "versions": [
+          "8.57.1",
+          "18.3.1"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 36
+      },
+      {
+        "packages": [
+          "eslint",
+          "typescript"
+        ],
+        "versions": [
+          "8.57.1",
+          "5.6.2"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 16
+      },
+      {
+        "packages": [
+          "next",
+          "next-auth"
+        ],
+        "versions": [
+          "16.2.12",
+          "4.24.15"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 1
+      },
+      {
+        "packages": [
+          "next",
+          "react"
+        ],
+        "versions": [
+          "16.2.12",
+          "19.2.8"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 1
+      },
+      {
+        "packages": [
+          "next",
+          "react"
+        ],
+        "versions": [
+          "16.3.0",
+          "19.2.8"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 2
+      },
+      {
+        "packages": [
+          "next",
+          "react-dom"
+        ],
+        "versions": [
+          "16.3.0",
+          "19.2.8"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 2
+      },
+      {
+        "packages": [
+          "next-auth",
+          "react"
+        ],
+        "versions": [
+          "4.24.15",
+          "19.2.8"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 1
+      },
+      {
+        "packages": [
+          "react",
+          "react-dom"
+        ],
+        "versions": [
+          "18.3.1",
+          "18.3.1"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 50
+      },
+      {
+        "packages": [
+          "react",
+          "typescript"
+        ],
+        "versions": [
+          "18.3.1",
+          "5.6.2"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 28
+      },
+      {
+        "packages": [
+          "react",
+          "react-dom"
+        ],
+        "versions": [
+          "19.2.7",
+          "19.2.7"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 10
+      },
+      {
+        "packages": [
+          "react",
+          "react-dom"
+        ],
+        "versions": [
+          "19.2.8",
+          "19.2.8"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 2
+      },
+      {
+        "packages": [
+          "react-dom",
+          "typescript"
+        ],
+        "versions": [
+          "18.3.1",
+          "5.6.2"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 28
+      }
+    ]
+  },
+  "reproduce": "npx lurqrun compat next react react-dom typescript eslint @typescript-eslint/eslint-plugin next-auth @auth/core"
+}

@@ -1,0 +1,1287 @@
+{
+  "generatedAt": "2026-08-06T14:00:30.503Z",
+  "source": "live",
+  "package": "puppeteer",
+  "fromVersion": "21.11.0",
+  "toVersion": "24.14.0",
+  "surfaceSize": {
+    "from": 163,
+    "to": 177
+  },
+  "delta": {
+    "added": [
+      {
+        "kind": "enum",
+        "name": "BrowserContextEvent",
+        "signature": null
+      },
+      {
+        "kind": "enum",
+        "name": "BrowserEvent",
+        "signature": null
+      },
+      {
+        "kind": "class",
+        "name": "BrowserLauncher",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "ChromeHeadlessShellSettings",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "ChromeSettings",
+        "signature": null
+      },
+      {
+        "kind": "function",
+        "name": "convertCookiesPartitionKeyFromPuppeteerToCdp",
+        "signature": "(partitionKey: CookiePartitionKey | string | undefined): Protocol.Network.CookiePartitionKey | undefined"
+      },
+      {
+        "kind": "interface",
+        "name": "Cookie",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "CookieData",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "CookieParam",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "CookiePartitionKey",
+        "signature": null
+      },
+      {
+        "kind": "type",
+        "name": "CookiePriority",
+        "signature": "'Low' | 'Medium' | 'High'"
+      },
+      {
+        "kind": "type",
+        "name": "CookieSameSite",
+        "signature": "'Strict' | 'Lax' | 'None'"
+      },
+      {
+        "kind": "type",
+        "name": "CookieSourceScheme",
+        "signature": "'Unset' | 'NonSecure' | 'Secure'"
+      },
+      {
+        "kind": "interface",
+        "name": "DeleteCookiesRequest",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "DownloadBehavior",
+        "signature": null
+      },
+      {
+        "kind": "type",
+        "name": "DownloadPolicy",
+        "signature": "'deny' | 'allow' | 'allowAndName' | 'default'"
+      },
+      {
+        "kind": "class",
+        "name": "ExtensionTransport",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "FirefoxSettings",
+        "signature": null
+      },
+      {
+        "kind": "type",
+        "name": "ImageFormat",
+        "signature": "'png' | 'jpeg' | 'webp'"
+      },
+      {
+        "kind": "enum",
+        "name": "LocatorEvent",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "LocatorEvents",
+        "signature": null
+      },
+      {
+        "kind": "enum",
+        "name": "PageEvent",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "PageEvents",
+        "signature": null
+      },
+      {
+        "kind": "class",
+        "name": "PuppeteerError",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "QueryOptions",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "SupportedWebDriverCapabilities",
+        "signature": null
+      },
+      {
+        "kind": "type",
+        "name": "SupportedWebDriverCapability",
+        "signature": "Exclude<Session.CapabilityRequest, 'unhandledPromptBehavior' | 'acceptInsecureCerts'>"
+      },
+      {
+        "kind": "class",
+        "name": "TouchError",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "TouchHandle",
+        "signature": null
+      },
+      {
+        "kind": "type",
+        "name": "VideoFormat",
+        "signature": "'webm' | 'gif' | 'mp4'"
+      }
+    ],
+    "removed": [
+      {
+        "kind": "interface",
+        "name": "BrowserConnectOptions",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "BrowserLaunchArgumentOptions",
+        "signature": null
+      },
+      {
+        "kind": "function",
+        "name": "clearCustomQueryHandlers",
+        "signature": "(): void"
+      },
+      {
+        "kind": "class",
+        "name": "CustomError",
+        "signature": null
+      },
+      {
+        "kind": "function",
+        "name": "customQueryHandlerNames",
+        "signature": "(): string[]"
+      },
+      {
+        "kind": "variable",
+        "name": "devices",
+        "signature": "Readonly<Record<\"Blackberry PlayBook\" | \"Blackberry PlayBook landscape\" | \"BlackBerry Z30\" | \"BlackBerry Z30 landscape\" | \"Galaxy Note 3\" | \"Galaxy Note 3 landscape\" | \"Galaxy Note II\" | \"Galaxy Note II landscape\" | \"Galaxy S III\" | \"Galaxy S III landscape\" | \"Galaxy S5\" | \"Galaxy S5 landscape\" | \"Galaxy S8\" | \"Galaxy S8 landscape\" | \"Galaxy S9+\" | \"Galaxy S9+ landscape\" | \"Galaxy Tab S4\" | \"Galaxy Tab S4 landscape\" | \"iPad\" | \"iPad landscape\" | \"iPad (gen 6)\" | \"iPad (gen 6) landscape\" | \"iPad (gen 7)\" | \"iPad (gen 7) landscape\" | \"iPad Mini\" | \"iPad Mini landscape\" | \"iPad Pro\" | \"iPad Pro landscape\" | \"iPad Pro 11\" | \"iPad Pro 11 landscape\" | \"iPhone 4\" | \"iPhone 4 landscape\" | \"iPhone 5\" | \"iPhone 5 landscape\" | \"iPhone 6\" | \"iPhone 6 landscape\" | \"iPhone 6 Plus\" | \"iPhone 6 Plus landscape\" | \"iPhone 7\" | \"iPhone 7 landscape\" | \"iPhone 7 Plus\" | \"iPhone 7 Plus landscape\" | \"iPhone 8\" | \"iPhone 8 landscape\" | \"iPhone 8 Plus\" | \"iPhone 8 Plus landscape\" | \"iPhone SE\" | \"iPhone SE landscape\" | \"iPhone X\" | \"iPhone X landscape\" | \"iPhone XR\" | \"iPhone XR landscape\" | \"iPhone 11\" | \"iPhone 11 landscape\" | \"iPhone 11 Pro\" | \"iPhone 11 Pro landscape\" | \"iPhone 11 Pro Max\" | \"iPhone 11 Pro Max landscape\" | \"iPhone 12\" | \"iPhone 12 landscape\" | \"iPhone 12 Pro\" | \"iPhone 12 Pro landscape\" | \"iPhone 12 Pro Max\" | \"iPhone 12 Pro Max landscape\" | \"iPhone 12 Mini\" | \"iPhone 12 Mini landscape\" | \"iPhone 13\" | \"iPhone 13 landscape\" | \"iPhone 13 Pro\" | \"iPhone 13 Pro landscape\" | \"iPhone 13 Pro Max\" | \"iPhone 13 Pro Max landscape\" | \"iPhone 13 Mini\" | \"iPhone 13 Mini landscape\" | \"JioPhone 2\" | \"JioPhone 2 landscape\" | \"Kindle Fire HDX\" | \"Kindle Fire HDX landscape\" | \"LG Optimus L70\" | \"LG Optimus L70 landscape\" | \"Microsoft Lumia 550\" | \"Microsoft Lumia 950\" | \"Microsoft Lumia 950 landscape\" | \"Nexus 10\" | \"Nexus 10 landscape\" | \"Nexus 4\" | \"Nexus 4 landscape\" | \"Nexus 5\" | \"Nexus 5 landscape\" | \"Nexus 5X\" | \"Nexus 5X landscape\" | \"Nexus 6\" | \"Nexus 6 landscape\" | \"Nexus 6P\" | \"Nexus 6P landscape\" | \"Nexus 7\" | \"Nexus 7 landscape\" | \"Nokia Lumia 520\" | \"Nokia Lumia 520 landscape\" | \"Nokia N9\" | \"Nokia N9 landscape\" | \"Pixel 2\" | \"Pixel 2 landscape\" | \"Pixel 2 XL\" | \"Pixel 2 XL landscape\" | \"Pixel 3\" | \"Pixel 3 landscape\" | \"Pixel 4\" | \"Pixel 4 landscape\" | \"Pixel 4a (5G)\" | \"Pixel 4a (5G) landscape\" | \"Pixel 5\" | \"Pixel 5 landscape\" | \"Moto G4\" | \"Moto G4 landscape\", Device>>"
+      },
+      {
+        "kind": "variable",
+        "name": "errors",
+        "signature": "PuppeteerErrors"
+      },
+      {
+        "kind": "type",
+        "name": "InterceptResolutionStrategy",
+        "signature": "InterceptResolutionAction"
+      },
+      {
+        "kind": "interface",
+        "name": "LocatorOptions",
+        "signature": null
+      },
+      {
+        "kind": "variable",
+        "name": "networkConditions",
+        "signature": "Readonly<{ 'Slow 3G': NetworkConditions; 'Fast 3G': NetworkConditions; }>"
+      },
+      {
+        "kind": "class",
+        "name": "ProductLauncher",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "PuppeteerErrors",
+        "signature": null
+      },
+      {
+        "kind": "interface",
+        "name": "PuppeteerLaunchOptions",
+        "signature": null
+      },
+      {
+        "kind": "type",
+        "name": "PuppeteerNodeLaunchOptions",
+        "signature": "BrowserLaunchArgumentOptions & LaunchOptions & BrowserConnectOptions"
+      },
+      {
+        "kind": "function",
+        "name": "registerCustomQueryHandler",
+        "signature": "(name: string, handler: CustomQueryHandler): void"
+      },
+      {
+        "kind": "function",
+        "name": "unregisterCustomQueryHandler",
+        "signature": "(name: string): void"
+      }
+    ],
+    "renamed": [
+      {
+        "from": {
+          "kind": "type",
+          "name": "Product",
+          "signature": "'chrome' | 'firefox'"
+        },
+        "to": {
+          "kind": "type",
+          "name": "SupportedBrowser",
+          "signature": "'chrome' | 'firefox'"
+        }
+      }
+    ],
+    "changed": [
+      {
+        "name": "connect",
+        "before": "(options: ConnectOptions) => Promise<Browser>",
+        "after": "(options: PuppeteerCore.ConnectOptions) => Promise<PuppeteerCore.Browser>"
+      },
+      {
+        "name": "ConsoleMessageType",
+        "before": "'log' | 'debug' | 'info' | 'error' | 'warning' | 'dir' | 'dirxml' | 'table' | 'trace' | 'clear' | 'startGroup' | 'startGroupCollapsed' | 'endGroup' | 'assert' | 'profile' | 'profileEnd' | 'count' | 'timeEnd' | 'verbose'",
+        "after": "'log' | 'debug' | 'info' | 'error' | 'warn' | 'dir' | 'dirxml' | 'table' | 'trace' | 'clear' | 'startGroup' | 'startGroupCollapsed' | 'endGroup' | 'assert' | 'profile' | 'profileEnd' | 'count' | 'timeEnd' | 'verbose'"
+      },
+      {
+        "name": "defaultArgs",
+        "before": "(options?: BrowserLaunchArgumentOptions | undefined) => string[]",
+        "after": "(options?: PuppeteerCore.LaunchOptions) => string[]"
+      },
+      {
+        "name": "executablePath",
+        "before": "(channel?: ChromeReleaseChannel | undefined) => string",
+        "after": "{ (channel: PuppeteerCore.ChromeReleaseChannel): string; (options: PuppeteerCore.LaunchOptions): string; (): string; }"
+      },
+      {
+        "name": "KnownDevices",
+        "before": "Readonly<Record<\"Blackberry PlayBook\" | \"Blackberry PlayBook landscape\" | \"BlackBerry Z30\" | \"BlackBerry Z30 landscape\" | \"Galaxy Note 3\" | \"Galaxy Note 3 landscape\" | \"Galaxy Note II\" | \"Galaxy Note II landscape\" | \"Galaxy S III\" | \"Galaxy S III landscape\" | \"Galaxy S5\" | \"Galaxy S5 landscape\" | \"Galaxy S8\" | \"Galaxy S8 landscape\" | \"Galaxy S9+\" | \"Galaxy S9+ landscape\" | \"Galaxy Tab S4\" | \"Galaxy Tab S4 landscape\" | \"iPad\" | \"iPad landscape\" | \"iPad (gen 6)\" | \"iPad (gen 6) landscape\" | \"iPad (gen 7)\" | \"iPad (gen 7) landscape\" | \"iPad Mini\" | \"iPad Mini landscape\" | \"iPad Pro\" | \"iPad Pro landscape\" | \"iPad Pro 11\" | \"iPad Pro 11 landscape\" | \"iPhone 4\" | \"iPhone 4 landscape\" | \"iPhone 5\" | \"iPhone 5 landscape\" | \"iPhone 6\" | \"iPhone 6 landscape\" | \"iPhone 6 Plus\" | \"iPhone 6 Plus landscape\" | \"iPhone 7\" | \"iPhone 7 landscape\" | \"iPhone 7 Plus\" | \"iPhone 7 Plus landscape\" | \"iPhone 8\" | \"iPhone 8 landscape\" | \"iPhone 8 Plus\" | \"iPhone 8 Plus landscape\" | \"iPhone SE\" | \"iPhone SE landscape\" | \"iPhone X\" | \"iPhone X landscape\" | \"iPhone XR\" | \"iPhone XR landscape\" | \"iPhone 11\" | \"iPhone 11 landscape\" | \"iPhone 11 Pro\" | \"iPhone 11 Pro landscape\" | \"iPhone 11 Pro Max\" | \"iPhone 11 Pro Max landscape\" | \"iPhone 12\" | \"iPhone 12 landscape\" | \"iPhone 12 Pro\" | \"iPhone 12 Pro landscape\" | \"iPhone 12 Pro Max\" | \"iPhone 12 Pro Max landscape\" | \"iPhone 12 Mini\" | \"iPhone 12 Mini landscape\" | \"iPhone 13\" | \"iPhone 13 landscape\" | \"iPhone 13 Pro\" | \"iPhone 13 Pro landscape\" | \"iPhone 13 Pro Max\" | \"iPhone 13 Pro Max landscape\" | \"iPhone 13 Mini\" | \"iPhone 13 Mini landscape\" | \"JioPhone 2\" | \"JioPhone 2 landscape\" | \"Kindle Fire HDX\" | \"Kindle Fire HDX landscape\" | \"LG Optimus L70\" | \"LG Optimus L70 landscape\" | \"Microsoft Lumia 550\" | \"Microsoft Lumia 950\" | \"Microsoft Lumia 950 landscape\" | \"Nexus 10\" | \"Nexus 10 landscape\" | \"Nexus 4\" | \"Nexus 4 landscape\" | \"Nexus 5\" | \"Nexus 5 landscape\" | \"Nexus 5X\" | \"Nexus 5X landscape\" | \"Nexus 6\" | \"Nexus 6 landscape\" | \"Nexus 6P\" | \"Nexus 6P landscape\" | \"Nexus 7\" | \"Nexus 7 landscape\" | \"Nokia Lumia 520\" | \"Nokia Lumia 520 landscape\" | \"Nokia N9\" | \"Nokia N9 landscape\" | \"Pixel 2\" | \"Pixel 2 landscape\" | \"Pixel 2 XL\" | \"Pixel 2 XL landscape\" | \"Pixel 3\" | \"Pixel 3 landscape\" | \"Pixel 4\" | \"Pixel 4 landscape\" | \"Pixel 4a (5G)\" | \"Pixel 4a (5G) landscape\" | \"Pixel 5\" | \"Pixel 5 landscape\" | \"Moto G4\" | \"Moto G4 landscape\", Device>>",
+        "after": "Readonly<Record<\"Blackberry PlayBook\" | \"Blackberry PlayBook landscape\" | \"BlackBerry Z30\" | \"BlackBerry Z30 landscape\" | \"Galaxy Note 3\" | \"Galaxy Note 3 landscape\" | \"Galaxy Note II\" | \"Galaxy Note II landscape\" | \"Galaxy S III\" | \"Galaxy S III landscape\" | \"Galaxy S5\" | \"Galaxy S5 landscape\" | \"Galaxy S8\" | \"Galaxy S8 landscape\" | \"Galaxy S9+\" | \"Galaxy S9+ landscape\" | \"Galaxy Tab S4\" | \"Galaxy Tab S4 landscape\" | \"iPad\" | \"iPad landscape\" | \"iPad (gen 6)\" | \"iPad (gen 6) landscape\" | \"iPad (gen 7)\" | \"iPad (gen 7) landscape\" | \"iPad Mini\" | \"iPad Mini landscape\" | \"iPad Pro\" | \"iPad Pro landscape\" | \"iPad Pro 11\" | \"iPad Pro 11 landscape\" | \"iPhone 4\" | \"iPhone 4 landscape\" | \"iPhone 5\" | \"iPhone 5 landscape\" | \"iPhone 6\" | \"iPhone 6 landscape\" | \"iPhone 6 Plus\" | \"iPhone 6 Plus landscape\" | \"iPhone 7\" | \"iPhone 7 landscape\" | \"iPhone 7 Plus\" | \"iPhone 7 Plus landscape\" | \"iPhone 8\" | \"iPhone 8 landscape\" | \"iPhone 8 Plus\" | \"iPhone 8 Plus landscape\" | \"iPhone SE\" | \"iPhone SE landscape\" | \"iPhone X\" | \"iPhone X landscape\" | \"iPhone XR\" | \"iPhone XR landscape\" | \"iPhone 11\" | \"iPhone 11 landscape\" | \"iPhone 11 Pro\" | \"iPhone 11 Pro landscape\" | \"iPhone 11 Pro Max\" | \"iPhone 11 Pro Max landscape\" | \"iPhone 12\" | \"iPhone 12 landscape\" | \"iPhone 12 Pro\" | \"iPhone 12 Pro landscape\" | \"iPhone 12 Pro Max\" | \"iPhone 12 Pro Max landscape\" | \"iPhone 12 Mini\" | \"iPhone 12 Mini landscape\" | \"iPhone 13\" | \"iPhone 13 landscape\" | \"iPhone 13 Pro\" | \"iPhone 13 Pro landscape\" | \"iPhone 13 Pro Max\" | \"iPhone 13 Pro Max landscape\" | \"iPhone 13 Mini\" | \"iPhone 13 Mini landscape\" | \"iPhone 14\" | \"iPhone 14 landscape\" | \"iPhone 14 Plus\" | \"iPhone 14 Plus landscape\" | \"iPhone 14 Pro\" | \"iPhone 14 Pro landscape\" | \"iPhone 14 Pro Max\" | \"iPhone 14 Pro Max landscape\" | \"iPhone 15\" | \"iPhone 15 landscape\" | \"iPhone 15 Plus\" | \"iPhone 15 Plus landscape\" | \"iPhone 15 Pro\" | \"iPhone 15 Pro landscape\" | \"iPhone 15 Pro Max\" | \"iPhone 15 Pro Max landscape\" | \"JioPhone 2\" | \"JioPhone 2 landscape\" | \"Kindle Fire HDX\" | \"Kindle Fire HDX landscape\" | \"LG Optimus L70\" | \"LG Optimus L70 landscape\" | \"Microsoft Lumia 550\" | \"Microsoft Lumia 950\" | \"Microsoft Lumia 950 landscape\" | \"Nexus 10\" | \"Nexus 10 landscape\" | \"Nexus 4\" | \"Nexus 4 landscape\" | \"Nexus 5\" | \"Nexus 5 landscape\" | \"Nexus 5X\" | \"Nexus 5X landscape\" | \"Nexus 6\" | \"Nexus 6 landscape\" | \"Nexus 6P\" | \"Nexus 6P landscape\" | \"Nexus 7\" | \"Nexus 7 landscape\" | \"Nokia Lumia 520\" | \"Nokia Lumia 520 landscape\" | \"Nokia N9\" | \"Nokia N9 landscape\" | \"Pixel 2\" | \"Pixel 2 landscape\" | \"Pixel 2 XL\" | \"Pixel 2 XL landscape\" | \"Pixel 3\" | \"Pixel 3 landscape\" | \"Pixel 4\" | \"Pixel 4 landscape\" | \"Pixel 4a (5G)\" | \"Pixel 4a (5G) landscape\" | \"Pixel 5\" | \"Pixel 5 landscape\" | \"Moto G4\" | \"Moto G4 landscape\", Device>>"
+      },
+      {
+        "name": "launch",
+        "before": "(options?: PuppeteerLaunchOptions | undefined) => Promise<Browser>",
+        "after": "(options?: PuppeteerCore.LaunchOptions) => Promise<PuppeteerCore.Browser>"
+      },
+      {
+        "name": "NodeFor",
+        "before": "TypeSelectorOfComplexSelector<ComplexSelector> extends infer TypeSelector ? TypeSelector extends keyof HTMLElementTagNameMap | keyof SVGElementTagNameMap ? ElementFor<TypeSelector> : Element : never",
+        "after": "ParseSelector<ComplexSelector>"
+      },
+      {
+        "name": "Permission",
+        "before": "'geolocation' | 'midi' | 'notifications' | 'camera' | 'microphone' | 'background-sync' | 'ambient-light-sensor' | 'accelerometer' | 'gyroscope' | 'magnetometer' | 'accessibility-events' | 'clipboard-read' | 'clipboard-write' | 'clipboard-sanitized-write' | 'payment-handler' | 'persistent-storage' | 'idle-detection' | 'midi-sysex'",
+        "after": "'accelerometer' | 'ambient-light-sensor' | 'background-sync' | 'camera' | 'clipboard-read' | 'clipboard-sanitized-write' | 'clipboard-write' | 'geolocation' | 'gyroscope' | 'idle-detection' | 'keyboard-lock' | 'magnetometer' | 'microphone' | 'midi-sysex' | 'midi' | 'notifications' | 'payment-handler' | 'persistent-storage' | 'pointer-lock'"
+      },
+      {
+        "name": "PredefinedNetworkConditions",
+        "before": "Readonly<{ 'Slow 3G': NetworkConditions; 'Fast 3G': NetworkConditions; }>",
+        "after": "Readonly<{ 'Slow 3G': NetworkConditions; 'Fast 3G': NetworkConditions; 'Slow 4G': NetworkConditions; 'Fast 4G': NetworkConditions; }>"
+      }
+    ],
+    "fromVersion": "21.11.0"
+  },
+  "cells": [
+    {
+      "name": "Accessibility",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "ActionOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ActionResult",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "AutofillData",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Awaitable",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "AwaitableIterable",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "AwaitablePredicate",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "AwaitedLocator",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "BoundingBox",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "BoxModel",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Browser",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "BrowserConnectOptions",
+      "kind": "interface",
+      "status": "removed"
+    },
+    {
+      "name": "BrowserContext",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "BrowserContextEvents",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "BrowserContextOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "BrowserEvents",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "BrowserLaunchArgumentOptions",
+      "kind": "interface",
+      "status": "removed"
+    },
+    {
+      "name": "CDPEvents",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "CDPSession",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "CDPSessionEvent",
+      "kind": "namespace",
+      "status": "unchanged"
+    },
+    {
+      "name": "CDPSessionEvents",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ChromeReleaseChannel",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "clearCustomQueryHandlers",
+      "kind": "function",
+      "status": "removed"
+    },
+    {
+      "name": "ClickOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "CommandOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "CommonEventEmitter",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Configuration",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "connect",
+      "kind": "variable",
+      "status": "changed"
+    },
+    {
+      "name": "Connection",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "ConnectionTransport",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ConnectOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ConsoleMessage",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "ConsoleMessageLocation",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ConsoleMessageType",
+      "kind": "type",
+      "status": "changed"
+    },
+    {
+      "name": "ContinueRequestOverrides",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Coverage",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "CoverageEntry",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Credentials",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "CSSCoverage",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "CSSCoverageOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "CustomError",
+      "kind": "class",
+      "status": "removed"
+    },
+    {
+      "name": "CustomQueryHandler",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "customQueryHandlerNames",
+      "kind": "function",
+      "status": "removed"
+    },
+    {
+      "name": "DebugInfo",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "DEFAULT_INTERCEPT_RESOLUTION_PRIORITY",
+      "kind": "variable",
+      "status": "unchanged"
+    },
+    {
+      "name": "defaultArgs",
+      "kind": "variable",
+      "status": "changed"
+    },
+    {
+      "name": "Device",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "DeviceRequestPrompt",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "DeviceRequestPromptDevice",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "devices",
+      "kind": "variable",
+      "status": "removed"
+    },
+    {
+      "name": "Dialog",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "ElementFor",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "ElementHandle",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "ElementScreenshotOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ErrorCode",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "errors",
+      "kind": "variable",
+      "status": "removed"
+    },
+    {
+      "name": "EvaluateFunc",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "EvaluateFuncWith",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "EventEmitter",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "EventsWithWildcard",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "EventType",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "executablePath",
+      "kind": "variable",
+      "status": "changed"
+    },
+    {
+      "name": "ExperimentsConfiguration",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "FileChooser",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "FlattenHandle",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "Frame",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "FrameAddScriptTagOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "FrameAddStyleTagOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "FrameEvents",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "FrameWaitForFunctionOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "GeolocationOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "GoToOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "HandleFor",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "HandleOr",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "Handler",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "HTTPRequest",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "HTTPResponse",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "InnerParams",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "InterceptResolutionAction",
+      "kind": "enum",
+      "status": "unchanged"
+    },
+    {
+      "name": "InterceptResolutionState",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "InterceptResolutionStrategy",
+      "kind": "type",
+      "status": "removed"
+    },
+    {
+      "name": "InternalNetworkConditions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "JSCoverage",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "JSCoverageEntry",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "JSCoverageOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "JSHandle",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "Keyboard",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "KeyboardTypeOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "KeyDownOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "KeyInput",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "KeyPressOptions",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "KnownDevices",
+      "kind": "variable",
+      "status": "changed"
+    },
+    {
+      "name": "launch",
+      "kind": "variable",
+      "status": "changed"
+    },
+    {
+      "name": "LaunchOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Locator",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "LocatorClickOptions",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "LocatorOptions",
+      "kind": "interface",
+      "status": "removed"
+    },
+    {
+      "name": "LocatorScrollOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "LowerCasePaperFormat",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "Mapper",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "MediaFeature",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Metrics",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Mouse",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "MouseButton",
+      "kind": "variable",
+      "status": "unchanged"
+    },
+    {
+      "name": "MouseClickOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "MouseMoveOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "MouseOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "MouseWheelOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Moveable",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "networkConditions",
+      "kind": "variable",
+      "status": "removed"
+    },
+    {
+      "name": "NetworkConditions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "NewDocumentScriptEvaluation",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "NodeFor",
+      "kind": "type",
+      "status": "changed"
+    },
+    {
+      "name": "Offset",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Page",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "PaperFormat",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "PDFMargin",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "PDFOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Permission",
+      "kind": "type",
+      "status": "changed"
+    },
+    {
+      "name": "Point",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "PredefinedNetworkConditions",
+      "kind": "variable",
+      "status": "changed"
+    },
+    {
+      "name": "Predicate",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "Product",
+      "kind": "type",
+      "status": "renamed"
+    },
+    {
+      "name": "ProductLauncher",
+      "kind": "class",
+      "status": "removed"
+    },
+    {
+      "name": "ProtocolError",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "ProtocolLifeCycleEvent",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "ProtocolType",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "Puppeteer",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "PuppeteerErrors",
+      "kind": "interface",
+      "status": "removed"
+    },
+    {
+      "name": "PuppeteerLaunchOptions",
+      "kind": "interface",
+      "status": "removed"
+    },
+    {
+      "name": "PuppeteerLifeCycleEvent",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "PuppeteerNode",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "PuppeteerNodeLaunchOptions",
+      "kind": "type",
+      "status": "removed"
+    },
+    {
+      "name": "Quad",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "registerCustomQueryHandler",
+      "kind": "function",
+      "status": "removed"
+    },
+    {
+      "name": "RemoteAddress",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ResourceType",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "ResponseForRequest",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ScreencastOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ScreenRecorder",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "ScreenshotClip",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "ScreenshotOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "SecurityDetails",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "SerializedAXNode",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "SnapshotOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "Target",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "TargetFilterCallback",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "TargetType",
+      "kind": "enum",
+      "status": "unchanged"
+    },
+    {
+      "name": "TimeoutError",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "Touchscreen",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "Tracing",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "TracingOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "trimCache",
+      "kind": "variable",
+      "status": "unchanged"
+    },
+    {
+      "name": "unregisterCustomQueryHandler",
+      "kind": "function",
+      "status": "removed"
+    },
+    {
+      "name": "UnsupportedOperation",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "Viewport",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "VisibilityOption",
+      "kind": "type",
+      "status": "unchanged"
+    },
+    {
+      "name": "WaitForNetworkIdleOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "WaitForOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "WaitForSelectorOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "WaitForTargetOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "WaitTimeoutOptions",
+      "kind": "interface",
+      "status": "unchanged"
+    },
+    {
+      "name": "WebWorker",
+      "kind": "class",
+      "status": "unchanged"
+    },
+    {
+      "name": "BrowserContextEvent",
+      "kind": "enum",
+      "status": "added"
+    },
+    {
+      "name": "BrowserEvent",
+      "kind": "enum",
+      "status": "added"
+    },
+    {
+      "name": "BrowserLauncher",
+      "kind": "class",
+      "status": "added"
+    },
+    {
+      "name": "ChromeHeadlessShellSettings",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "ChromeSettings",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "convertCookiesPartitionKeyFromPuppeteerToCdp",
+      "kind": "function",
+      "status": "added"
+    },
+    {
+      "name": "Cookie",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "CookieData",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "CookieParam",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "CookiePartitionKey",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "CookiePriority",
+      "kind": "type",
+      "status": "added"
+    },
+    {
+      "name": "CookieSameSite",
+      "kind": "type",
+      "status": "added"
+    },
+    {
+      "name": "CookieSourceScheme",
+      "kind": "type",
+      "status": "added"
+    },
+    {
+      "name": "DeleteCookiesRequest",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "DownloadBehavior",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "DownloadPolicy",
+      "kind": "type",
+      "status": "added"
+    },
+    {
+      "name": "ExtensionTransport",
+      "kind": "class",
+      "status": "added"
+    },
+    {
+      "name": "FirefoxSettings",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "ImageFormat",
+      "kind": "type",
+      "status": "added"
+    },
+    {
+      "name": "LocatorEvent",
+      "kind": "enum",
+      "status": "added"
+    },
+    {
+      "name": "LocatorEvents",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "PageEvent",
+      "kind": "enum",
+      "status": "added"
+    },
+    {
+      "name": "PageEvents",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "PuppeteerError",
+      "kind": "class",
+      "status": "added"
+    },
+    {
+      "name": "QueryOptions",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "SupportedWebDriverCapabilities",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "SupportedWebDriverCapability",
+      "kind": "type",
+      "status": "added"
+    },
+    {
+      "name": "TouchError",
+      "kind": "class",
+      "status": "added"
+    },
+    {
+      "name": "TouchHandle",
+      "kind": "interface",
+      "status": "added"
+    },
+    {
+      "name": "VideoFormat",
+      "kind": "type",
+      "status": "added"
+    }
+  ],
+  "renamedTo": {
+    "Product": "SupportedBrowser"
+  },
+  "unchanged": 137,
+  "counts": {
+    "removed": 16,
+    "added": 30,
+    "renamed": 1,
+    "changed": 9
+  },
+  "reproduce": "npx lurqrun usage puppeteer --known 21.11.0"
+}
