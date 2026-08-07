@@ -34,18 +34,36 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.nex
  * reports a miss on working code. Doing that in check_upgrade would block a PR
  * on valid code, which is how a CI gate gets switched off (§12 M3).
  */
-export type ReferenceVia = 'named' | 'destructured' | 'namespace' | 'default' | 'default-member';
+export type ReferenceVia =
+  | 'named'
+  | 'destructured'
+  | 'namespace'
+  | 'default'
+  | 'default-member'
+  /** Erased by TypeScript before runtime — never a runtime-surface claim. */
+  | 'type-only';
 
 export interface SymbolReference {
   /** Exported name used from the package. 'default' for a default import. */
   symbol: string;
   via: ReferenceVia;
+  /**
+   * The full import specifier. A subpath (`drizzle-orm/pg-core`) has its OWN
+   * entry point and its own surface — scoring its symbols against the package
+   * ROOT reports every one of them missing, on correct code.
+   */
+  specifier: string;
   file: string;
   line: number;
 }
 
 /** Kinds that assert something about the module's own export surface. */
 export const SURFACE_CLAIM_KINDS: ReferenceVia[] = ['named', 'destructured', 'namespace'];
+
+/** True when the reference is against the package root rather than a subpath. */
+export function isRootSpecifier(ref: SymbolReference, pkg: string): boolean {
+  return ref.specifier === pkg;
+}
 
 export interface PackageReferences {
   package: string;
@@ -95,14 +113,56 @@ export function listSourceFiles(dir: string, limit = 5000): string[] {
  * right package: `import fg from 'fast-glob'` + `fg.escapePath` records
  * `escapePath`, which is what makes the §9.0 report able to name a line.
  */
+
+/**
+ * Identifiers that appear in VALUE position.
+ *
+ * TypeScript erases imports used only as types, so a named import that never
+ * appears in a value position asserts nothing about the runtime surface. This
+ * is a syntactic approximation — no type checker — which is the right bias:
+ * treating a genuine value use as type-only would UNDER-report, and a missed
+ * detection is far cheaper than a false "this symbol does not exist".
+ */
+function collectValueIdentifiers(sf: ts.SourceFile): Set<string> {
+  const out = new Set<string>();
+  const visit = (node: ts.Node, inType: boolean): void => {
+    const nowInType = inType || ts.isTypeNode(node) || ts.isTypeQueryNode(node);
+    if (
+      !nowInType &&
+      ts.isIdentifier(node) &&
+      node.parent &&
+      !ts.isImportSpecifier(node.parent) &&
+      !ts.isImportClause(node.parent) &&
+      !ts.isNamespaceImport(node.parent) &&
+      !ts.isPropertyAccessExpression(node.parent)
+    ) {
+      out.add(node.text);
+    }
+    // A property access still uses its OBJECT in value position.
+    if (!nowInType && ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      out.add(node.expression.text);
+    }
+    ts.forEachChild(node, (c) => visit(c, nowInType));
+  };
+  visit(sf, false);
+  return out;
+}
+
 export function scanReferences(rootDir: string, opts: { limit?: number } = {}): PackageReferences[] {
   const byPackage = new Map<string, Map<string, SymbolReference[]>>();
 
-  const record = (pkg: string, symbol: string, via: ReferenceVia, file: string, line: number) => {
+  const record = (
+    pkg: string,
+    symbol: string,
+    via: ReferenceVia,
+    specifier: string,
+    file: string,
+    line: number,
+  ) => {
     let syms = byPackage.get(pkg);
     if (!syms) byPackage.set(pkg, (syms = new Map()));
     const list = syms.get(symbol);
-    const ref = { symbol, via, file, line };
+    const ref = { symbol, via, specifier, file, line };
     if (list) {
       if (!list.some((r) => r.file === file && r.line === line)) list.push(ref);
     } else {
@@ -124,8 +184,15 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     // Two binding maps, because member reads mean different things:
     // a namespace/CJS binding IS the module's exports; a default binding is a
     // VALUE that happens to have properties.
-    const nsBindings = new Map<string, string>();
-    const defaultBindings = new Map<string, string>();
+    const nsBindings = new Map<string, { pkg: string; spec: string }>();
+    const defaultBindings = new Map<string, { pkg: string; spec: string }>();
+
+    // Identifiers used in VALUE position. A named import used only in type
+    // position (`(req: Request) => …`) is erased by TypeScript and never
+    // reaches runtime, so it asserts nothing about the runtime surface.
+    // `import express, { Request, Response } from 'express'` is correct code;
+    // counting Request/Response as runtime symbols reports a miss on it.
+    const valueUsed = collectValueIdentifiers(sf);
 
     const visit = (node: ts.Node): void => {
       // ── ESM imports ──
@@ -134,15 +201,25 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         if (pkg) {
           const clause = node.importClause;
           if (clause?.name) {
-            record(pkg, 'default', 'default', rel, lineOf(clause.name));
-            defaultBindings.set(clause.name.text, pkg);
+            record(pkg, 'default', 'default', node.moduleSpecifier.text, rel, lineOf(clause.name));
+            defaultBindings.set(clause.name.text, { pkg, spec: node.moduleSpecifier.text });
           }
           if (clause?.namedBindings) {
             if (ts.isNamespaceImport(clause.namedBindings)) {
-              nsBindings.set(clause.namedBindings.name.text, pkg);
+              nsBindings.set(clause.namedBindings.name.text, { pkg, spec: node.moduleSpecifier.text });
             } else {
               for (const el of clause.namedBindings.elements) {
-                record(pkg, el.propertyName?.text ?? el.name.text, 'named', rel, lineOf(el));
+                const local = el.name.text;
+                const exported = el.propertyName?.text ?? local;
+                const typeOnly = clause.isTypeOnly || el.isTypeOnly || !valueUsed.has(local);
+                record(
+                  pkg,
+                  exported,
+                  typeOnly ? 'type-only' : 'named',
+                  node.moduleSpecifier.text,
+                  rel,
+                  lineOf(el),
+                );
               }
             }
           }
@@ -159,18 +236,19 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         node.initializer.arguments.length === 1 &&
         ts.isStringLiteral(node.initializer.arguments[0]!)
       ) {
-        const pkg = packageOfSpecifier((node.initializer.arguments[0] as ts.StringLiteral).text);
+        const spec = (node.initializer.arguments[0] as ts.StringLiteral).text;
+        const pkg = packageOfSpecifier(spec);
         if (pkg) {
           if (ts.isIdentifier(node.name)) {
             // In CJS the binding IS module.exports, so member reads are export
             // claims — unless module.exports is a bare value, which the scorer
             // detects from the surface shape rather than guessing here.
-            nsBindings.set(node.name.text, pkg);
-            record(pkg, 'default', 'default', rel, lineOf(node.name));
+            nsBindings.set(node.name.text, { pkg, spec });
+            record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
           } else if (ts.isObjectBindingPattern(node.name)) {
             for (const el of node.name.elements) {
               const name = el.propertyName ?? el.name;
-              if (ts.isIdentifier(name)) record(pkg, name.text, 'destructured', rel, lineOf(el));
+              if (ts.isIdentifier(name)) record(pkg, name.text, 'destructured', spec, rel, lineOf(el));
             }
           }
         }
@@ -180,8 +258,8 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
       if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
         const ns = nsBindings.get(node.expression.text);
         const def = defaultBindings.get(node.expression.text);
-        if (ns) record(ns, node.name.text, 'namespace', rel, lineOf(node));
-        else if (def) record(def, node.name.text, 'default-member', rel, lineOf(node));
+        if (ns) record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node));
+        else if (def) record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node));
       }
 
       ts.forEachChild(node, visit);

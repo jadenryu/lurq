@@ -25,17 +25,31 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getConfig } from '../core/config';
 import { fetchAndExtract } from '../surface/fetch';
-import { SURFACE_CLAIM_KINDS, scanReferences } from '../surface/references';
+import { SURFACE_CLAIM_KINDS, isRootSpecifier, scanReferences } from '../surface/references';
 import { runtimeSymbols } from '../surface/types';
 
 export interface MissRateCase {
   id: string;
-  /** The package the generated code must use. */
-  package: string;
+  /** The package the generated code must use. Single-package form. */
+  package?: string;
   /** The EXACT version pinned in the prompt. */
-  version: string;
+  version?: string;
+  /**
+   * Multi-package form — a realistic stack. Production code is written against
+   * many packages at once, and that is what changes the number that matters:
+   * the per-symbol miss rate is a property of the model, but the odds that a
+   * PROJECT contains at least one break compound with every package it touches.
+   */
+  packages?: { name: string; version: string }[];
   /** What the code should do. */
   task: string;
+}
+
+/** Normalize either form to a package list. */
+export function casePackages(c: MissRateCase): { name: string; version: string }[] {
+  if (c.packages?.length) return c.packages;
+  if (c.package) return [{ name: c.package, version: c.version ?? 'latest' }];
+  return [];
 }
 
 export interface CaseResult {
@@ -43,6 +57,8 @@ export interface CaseResult {
   package: string;
   version: string;
   model: string;
+  /** Per-package breakdown; length 1 for single-package cases. */
+  perPackage?: { package: string; version: string; referenced: string[]; missing: string[] }[];
   referenced: string[];
   missing: string[];
   missRate: number | null;
@@ -62,20 +78,37 @@ export interface MissRateReport {
   totalMissing: number;
   /** Pooled over symbols, not a mean of per-case rates. */
   symbolMissRate: number | null;
-  /** Share of cases with at least one missing symbol — the "would break" rate. */
+  /**
+   * Share of cases with at least one missing symbol — the "would break" rate.
+   *
+   * THIS is the number that rises with stack size, not `symbolMissRate`. The
+   * per-symbol rate is a property of the model and does not change when a
+   * project adds dependencies; what changes is exposure. If each referenced
+   * symbol is wrong with probability p and a project references N of them,
+   * P(at least one break) = 1 - (1-p)^N, which saturates fast.
+   */
   caseMissRate: number | null;
+  /** Mean module-surface symbols referenced per scored sample. The N above. */
+  symbolsPerCase: number | null;
+  /** 1-(1-p)^N at the measured p and N — the compounded project-level risk. */
+  projectedBreakRate: number | null;
   results: CaseResult[];
 }
 
-const PROMPT = (c: MissRateCase) =>
-  `Write a single TypeScript module that does the following:
+const PROMPT = (c: MissRateCase) => {
+  const pkgs = casePackages(c);
+  const list = pkgs.map((p) => `  - ${p.name}@${p.version}`).join('\n');
+  return `Write a single TypeScript module that does the following:
 
 ${c.task}
 
 Requirements:
-- Use the npm package "${c.package}" at version ${c.version}. That exact version is already installed.
-- Import only from "${c.package}" and Node built-ins.
+- Use these npm packages at these EXACT versions. They are already installed:
+${list}
+- Import only from those packages and Node built-ins.
+- Use each listed package at least once.
 - Output ONLY the TypeScript source. No markdown fences, no commentary.`;
+};
 
 /** Provider inferred from the model id, matching the existing participants. */
 export type Provider = 'openai' | 'anthropic' | 'gemini';
@@ -185,15 +218,18 @@ export async function scoreCase(
   model: string,
   opts: { code?: string; keepCode?: boolean } = {},
 ): Promise<CaseResult> {
+  const pkgs = casePackages(c);
+  const label = pkgs.map((x) => x.name).join('+');
   const base: CaseResult = {
     id: c.id,
-    package: c.package,
-    version: c.version,
+    package: label,
+    version: pkgs.map((x) => x.version).join(','),
     model,
     referenced: [],
     missing: [],
     missRate: null,
   };
+  if (!pkgs.length) return { ...base, unverifiable: 'case names no packages' };
 
   let code: string;
   try {
@@ -203,46 +239,69 @@ export async function scoreCase(
   }
   if (!code.trim()) return { ...base, unverifiable: 'model returned no code' };
 
-  // Surface first: if we cannot read the package at this version, the case
-  // yields no verdict. Scoring against an absent surface would mark every
-  // referenced symbol a miss — the §6.4.2 failure, one layer up.
-  const fetched = await fetchAndExtract(c.package, c.version);
-  if (!fetched || fetched.surface.undeclaredReason) {
+  // Surfaces first: scoring against an absent surface would mark every
+  // referenced symbol a miss — the §6.4.2 failure, one layer up. A package we
+  // cannot read is skipped, not counted against the model.
+  const surfaces = new Map<string, Set<string>>();
+  const unreadable: string[] = [];
+  for (const pkg of pkgs) {
+    const fetched = await fetchAndExtract(pkg.name, pkg.version);
+    if (!fetched || fetched.surface.undeclaredReason) {
+      unreadable.push(pkg.name);
+      continue;
+    }
+    surfaces.set(pkg.name, new Set(runtimeSymbols(fetched.surface).map((x) => x.path)));
+  }
+  if (!surfaces.size) {
     return {
       ...base,
-      unverifiable: `no readable surface for ${c.package}@${c.version}` +
-        (fetched?.surface.undeclaredReason ? `: ${fetched.surface.undeclaredReason}` : ''),
+      unverifiable: `no readable surface for ${unreadable.join(', ')}`,
       ...(opts.keepCode ? { code } : {}),
     };
   }
-  const exported = new Set(runtimeSymbols(fetched.surface).map((s) => s.path));
 
   const dir = await mkdtemp(join(tmpdir(), 'lurq-missrate-'));
   try {
     await writeFile(join(dir, 'generated.ts'), code);
-    const refs = scanReferences(dir).find((r) => r.package === c.package);
-    if (!refs || refs.symbols.size === 0) {
-      return { ...base, unverifiable: 'generated code imports nothing from the target package', ...(opts.keepCode ? { code } : {}) };
+    const allRefs = scanReferences(dir);
+
+    const perPackage: NonNullable<CaseResult['perPackage']> = [];
+    for (const pkg of pkgs) {
+      const exported = surfaces.get(pkg.name);
+      if (!exported) continue;
+      const refs = allRefs.find((r) => r.package === pkg.name);
+      if (!refs || refs.symbols.size === 0) continue;
+
+      // Only score claims about the MODULE'S export surface. `chalk.bold` is a
+      // property of the default export's value — correct usage tier A cannot
+      // see, so counting it inflates the miss rate on working code. And when a
+      // package exports only a bare value (module.exports = fn, e.g. `ms`),
+      // even CJS member reads are properties of that value, not exports.
+      const bareValue = exported.size <= 1 && exported.has('default');
+      const referenced = [...refs.symbols.entries()]
+        .filter(([sym, uses]) => {
+          if (sym === 'default') return false;
+          return uses.some(
+            (u) =>
+              SURFACE_CLAIM_KINDS.includes(u.via) &&
+              // A subpath import has its own entry point and its own surface;
+              // scoring it against the root reports every symbol missing.
+              isRootSpecifier(u, pkg.name) &&
+              !(bareValue && u.via === 'namespace'),
+          );
+        })
+        .map(([sym]) => sym)
+        .sort();
+      if (!referenced.length) continue;
+      perPackage.push({
+        package: pkg.name,
+        version: pkg.version,
+        referenced,
+        missing: referenced.filter((x) => !exported.has(x)),
+      });
     }
 
-    // Only score claims about the MODULE'S export surface. `chalk.bold` is a
-    // property of the default export's value — correct usage that tier A cannot
-    // see, so counting it inflates the miss rate on working code. And when the
-    // package exports only a bare value (module.exports = fn, e.g. `ms`), even
-    // CJS member reads are properties of that value rather than exports.
-    const surfaceIsBareValue = exported.size <= 1 && exported.has('default');
-    const referenced = [...refs.symbols.entries()]
-      .filter(([sym, uses]) => {
-        if (sym === 'default') return false;
-        return uses.some(
-          (u) =>
-            SURFACE_CLAIM_KINDS.includes(u.via) &&
-            !(surfaceIsBareValue && u.via === 'namespace'),
-        );
-      })
-      .map(([sym]) => sym)
-      .sort();
-    if (!referenced.length) {
+    if (!perPackage.length) {
       return {
         ...base,
         unverifiable:
@@ -250,9 +309,12 @@ export async function scoreCase(
         ...(opts.keepCode ? { code } : {}),
       };
     }
-    const missing = referenced.filter((s) => !exported.has(s));
+
+    const referenced = perPackage.flatMap((x) => x.referenced);
+    const missing = perPackage.flatMap((x) => x.missing);
     return {
       ...base,
+      perPackage,
       referenced,
       missing,
       missRate: missing.length / referenced.length,
@@ -288,6 +350,8 @@ export async function runMissRate(
   const scored = results.filter((r) => r.missRate !== null);
   const totalReferenced = scored.reduce((a, r) => a + r.referenced.length, 0);
   const totalMissing = scored.reduce((a, r) => a + r.missing.length, 0);
+  const p = totalReferenced ? totalMissing / totalReferenced : null;
+  const symbolsPerCase = scored.length ? totalReferenced / scored.length : null;
   return {
     model,
     samples,
@@ -297,7 +361,12 @@ export async function runMissRate(
     totalReferenced,
     totalMissing,
     symbolMissRate: totalReferenced ? totalMissing / totalReferenced : null,
-    caseMissRate: scored.length ? scored.filter((r) => r.missing.length > 0).length / scored.length : null,
+    caseMissRate: scored.length
+      ? scored.filter((r) => r.missing.length > 0).length / scored.length
+      : null,
+    symbolsPerCase,
+    projectedBreakRate:
+      p !== null && symbolsPerCase ? 1 - Math.pow(1 - p, symbolsPerCase) : null,
     results,
   };
 }

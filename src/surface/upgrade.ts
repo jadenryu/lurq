@@ -20,7 +20,7 @@
  */
 import { fetchAndExtract } from './fetch';
 import { diffSurfaces } from './diff';
-import { SURFACE_CLAIM_KINDS } from './references';
+import { SURFACE_CLAIM_KINDS, isRootSpecifier } from './references';
 import type { PackageReferences, SymbolReference } from './references';
 import { runtimeSymbols } from './types';
 
@@ -88,7 +88,10 @@ export async function checkUpgradeOne(
         ([sym, uses]) =>
           sym !== 'default' &&
           uses.some(
-            (r) => SURFACE_CLAIM_KINDS.includes(r.via) && !(bareValue && r.via === 'namespace'),
+            (r) =>
+              SURFACE_CLAIM_KINDS.includes(r.via) &&
+              isRootSpecifier(r, target.package) &&
+              !(bareValue && r.via === 'namespace'),
           ),
       )
       .map(([sym]) => sym),

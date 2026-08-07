@@ -2,7 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SURFACE_CLAIM_KINDS, packageOfSpecifier, scanReferences } from '../src/surface/references';
+import {
+  SURFACE_CLAIM_KINDS,
+  isRootSpecifier,
+  packageOfSpecifier,
+  scanReferences,
+} from '../src/surface/references';
 import { formatUpgradeReport, type UpgradeReport } from '../src/surface/upgrade';
 
 let root: string;
@@ -102,6 +107,61 @@ describe('reference kind classification (miss-rate correction, 2026-08-06)', () 
     expect(lodash.symbols.get('throttle')![0]!.via).toBe('namespace');
   });
 
+  // `import express, { Request, Response } from 'express'` is correct TS —
+  // Request/Response are TYPES, erased before runtime. Counting them as runtime
+  // symbols reported a miss on idiomatic code (measured: 40% -> 22.7%).
+  it('treats imports used only in type position as type-only', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-typeonly-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/t.ts'),
+        `import express, { Request, Response } from 'express';
+         import { z } from 'zod';
+         import type { Options } from 'ora';
+         export const app = express();
+         export const h = (req: Request, res: Response) => res.end();
+         export const s = z.string();
+         export type O = Options;`,
+      );
+      const refs = scanReferences(dir);
+      const ex = refs.find((r) => r.package === 'express')!;
+      expect(ex.symbols.get('Request')![0]!.via).toBe('type-only');
+      expect(ex.symbols.get('Response')![0]!.via).toBe('type-only');
+      // z IS used as a value — still a real runtime claim
+      expect(refs.find((r) => r.package === 'zod')!.symbols.get('z')![0]!.via).toBe('named');
+      // explicit `import type` is type-only regardless of usage
+      expect(refs.find((r) => r.package === 'ora')!.symbols.get('Options')![0]!.via).toBe(
+        'type-only',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // `drizzle-orm/pg-core` has its own entry point and its own surface. Scoring
+  // its symbols against the drizzle-orm ROOT reported all of them missing.
+  it('records the full specifier so subpath imports are not scored against the root', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-subpath-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/db.ts'),
+        `import { pgTable, varchar } from 'drizzle-orm/pg-core';
+         import { eq } from 'drizzle-orm';
+         export const t = pgTable('u', { a: varchar('a') });
+         export const w = eq;`,
+      );
+      const refs = scanReferences(dir).find((r) => r.package === 'drizzle-orm')!;
+      expect(refs.symbols.get('pgTable')![0]!.specifier).toBe('drizzle-orm/pg-core');
+      expect(refs.symbols.get('eq')![0]!.specifier).toBe('drizzle-orm');
+      expect(isRootSpecifier(refs.symbols.get('pgTable')![0]!, 'drizzle-orm')).toBe(false);
+      expect(isRootSpecifier(refs.symbols.get('eq')![0]!, 'drizzle-orm')).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('exposes only surface-claim kinds for scoring', () => {
     expect(SURFACE_CLAIM_KINDS).toEqual(['named', 'destructured', 'namespace']);
     expect(SURFACE_CLAIM_KINDS).not.toContain('default-member');
@@ -118,7 +178,7 @@ describe('upgrade report formatting', () => {
         toVersion: '3.4.0',
         severity: 'blocking',
         symbolsRemoved: [
-          { symbol: 'escapePath', refs: [{ symbol: 'escapePath', via: 'named' as const, file: 'src/util/paths.ts', line: 14 }] },
+          { symbol: 'escapePath', refs: [{ symbol: 'escapePath', via: 'named' as const, specifier: 'fast-glob', file: 'src/util/paths.ts', line: 14 }] },
         ],
         arityChanged: [],
       },
@@ -128,7 +188,7 @@ describe('upgrade report formatting', () => {
         toVersion: '8.21.0',
         severity: 'warning',
         symbolsRemoved: [],
-        arityChanged: [{ symbol: 'child', from: 1, to: 2, refs: [{ symbol: 'child', via: 'named' as const, file: 'src/log.ts', line: 31 }] }],
+        arityChanged: [{ symbol: 'child', from: 1, to: 2, refs: [{ symbol: 'child', via: 'named' as const, specifier: 'pino', file: 'src/log.ts', line: 31 }] }],
       },
     ],
     ok: ['semver', 'zod'],

@@ -137,7 +137,13 @@ export function registerOperatorCommands(program: Command): void {
         }
         const pct = (n: number | null) => (n === null ? 'n/a' : `${(n * 100).toFixed(1)}%`);
         console.log(`\n  symbol miss rate: ${pct(report.symbolMissRate)} (${report.totalMissing}/${report.totalReferenced})`);
-        console.log(`  case miss rate:   ${pct(report.caseMissRate)} — cases with >=1 absent symbol`);
+        console.log(`  case miss rate:   ${pct(report.caseMissRate)} — samples with >=1 absent symbol`);
+        console.log(
+          `  symbols/sample:   ${report.symbolsPerCase?.toFixed(1) ?? 'n/a'} referenced (the exposure N)`,
+        );
+        console.log(
+          `  projected break:  ${pct(report.projectedBreakRate)} = 1-(1-p)^N at this p and N`,
+        );
         console.log('\n  NOTE: no human baseline arm, so this measures magnitude and cannot');
         console.log('        pass or fail M0 on its own (§12 kill condition).');
       },
