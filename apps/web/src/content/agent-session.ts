@@ -207,22 +207,22 @@ export const SESSION_NOTES = [
     index: "01",
     title: "It answers from memory",
     body:
-      "Upgrading the compiler is the obvious move, and the model makes it without hesitating. " +
-      "Nothing in the editor knows which of your other tools have caught up yet.",
+      "Upgrading the compiler should be an obvious move for models. The problem is nothing " +
+      "in the editor knows if the other tools have caught up.",
   },
   {
     index: "02",
     title: "lurq reads what is true today",
     body:
-      `One call, ${SESSION_PACKAGES.length} packages, resolved against the registry and checked ` +
-      "against the versions each one currently admits to supporting.",
+      "One call resolves the versions each package currently supports, with retrieved info " +
+      "refreshed on published upgrades.",
   },
   {
     index: "03",
     title: "You find out now, not at install",
     body:
       `${SESSION_PACKAGES[2]} still declares support for ${CONFLICT.requirement.range}, so npm ` +
-      `refuses to put it next to ${CONFLICT.requirement.resolved}. You get the held version ` +
-      "instead of a failed install and twenty minutes of working out why.",
+      `refuses to put it next to ${CONFLICT.requirement.resolved}. You get the version ` +
+      "compatible with your stack instead of wasting thirty minutes figuring out why.",
   },
 ] as const;
