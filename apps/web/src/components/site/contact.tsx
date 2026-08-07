@@ -33,14 +33,22 @@ const SITE_KEY =
 type Status = "idle" | "sending" | "sent" | "error";
 
 /**
- * Underline fields, not boxes. The sections either side of this one are built
- * from nothing but hairlines and type: the FAQ separates rows with `border-t`, the
- * footer closes the page on full-bleed rules. A stack of rounded, filled inputs
- * was the only thing on the route wearing a card, which is what made it read as
- * borrowed from a different site.
+ * Boxed fields, on the same hairline the rest of the route is built from. A bare
+ * underline left the input's extent to guesswork, so the target you click was
+ * invisible until focus. The box is `border-edge` and unfilled, the same token and
+ * weight as the FAQ's row rules and the channel list below, so it reads as this
+ * page rather than a card borrowed from the dashboard. Focus lights all four sides.
+ *
+ * 4px on the fields, well under the submit button's `rounded-md`, so the filled
+ * control stays the roundest thing here and the outlined ones sit just inside it.
+ *
+ * A literal `rounded-[4px]` and not `rounded-sm`, because globals.css remaps the
+ * whole scale off `--radius: 0.75rem`: `rounded-sm` is 7.2px here and `rounded-md`
+ * is 9.6px, not Tailwind's stock 4px and 6px. Set explicitly either way, since
+ * Safari picks its own radius for inputs and textareas.
  */
 const field =
-  "w-full border-0 border-b border-edge bg-transparent py-2.5 text-[14px] text-ink placeholder:text-ink-3 transition-[border-color] focus:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark";
+  "w-full rounded-[4px] border border-edge bg-transparent px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-3 transition-[border-color] focus:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark";
 const label = "block font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3";
 
 /** One reachable channel. Never a phone number and never an office we do not have. */
@@ -117,7 +125,7 @@ export function Contact() {
               The form is off in this environment. Mail{" "}
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
-                className="text-ink underline decoration-edge-lit underline-offset-4 transition-[color,text-decoration-color] hover:text-mark hover:decoration-mark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                className="text-ink underline decoration-edge-lit underline-offset-4 transition-[color,text-decoration-color] hover:decoration-ink-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
                 style={{ transitionDuration: "var(--dur-hover)" }}
               >
                 {CONTACT_EMAIL}

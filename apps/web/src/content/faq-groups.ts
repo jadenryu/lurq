@@ -23,6 +23,10 @@ const GROUPING: { id: string; title: string; questions: string[] }[] = [
       "What is lurq?",
       "How is it different from just asking my model?",
       "Which tools does it work with?",
+      /* The hero's qualifier line points at this. It sits in the first group,
+         not buried in the last one, because a limits answer a reader has to hunt
+         for is not really a disclosure. */
+      "What doesn't work yet?",
     ],
   },
   {

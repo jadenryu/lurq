@@ -9,14 +9,12 @@ import {
   HEADLINE_LINE_2,
   INSTALL_COMMAND,
   LEAD,
-  NOTE_BEFORE_LINK,
-  NOTE_LINK,
   NPM_PACKAGE_URL,
 } from "@/content/copy";
 import { DOCS_URL } from "@/lib/site-links";
 
 /**
- * Type, marks, and the video slot.
+ * Type on a gradient field. Nothing else.
  *
  * The spacing here is the design. An earlier pass took ~1,400px to get from the
  * nav to the artifact and every gap was 30 to 40% too large; these values are
@@ -27,6 +25,19 @@ import { DOCS_URL } from "@/lib/site-links";
  *
  * The background is the two blurred clip-path gradient blobs from hero-1.tsx,
  * one off the top edge and one off the bottom.
+ *
+ * TWO THINGS THAT USED TO BE HERE.
+ *
+ * The four L-shaped registration marks, 24px inside the section edges. They read
+ * as stray brackets floating in the corners of the viewport rather than as a
+ * crop frame, which is what they were for. Deleted, along with the matching set
+ * inside every capability figure.
+ *
+ * The product video slot, a dashed 16:9 box captioned PRODUCT VIDEO. It has
+ * moved to (marketing)/page.tsx, commented out, where the middle of the page is.
+ * Uncomment that block when the video exists. With it gone the hero is type on a
+ * field, so the section carries its own bottom padding now instead of borrowing
+ * the video's top margin.
  */
 
 /** The two blooms, one off the top edge and one off the bottom. */
@@ -45,37 +56,37 @@ function GradientField() {
   );
 }
 
-/** Four 13px L-marks, 24px inside the hero box. Opacity only, and last. */
-function RegistrationMarks() {
-  const corner = "absolute size-[13px] border-edge";
-  return (
-    <div
-      aria-hidden
-      data-reveal="opacity"
-      style={{ ["--reveal-at" as string]: "1200ms" }}
-      className="pointer-events-none absolute inset-6 z-10 hidden min-[620px]:block"
-    >
-      <span className={`${corner} left-0 top-0 border-l border-t`} />
-      <span className={`${corner} right-0 top-0 border-r border-t`} />
-      <span className={`${corner} bottom-0 left-0 border-b border-l`} />
-      <span className={`${corner} bottom-0 right-0 border-b border-r`} />
-    </div>
-  );
-}
-
 export function Hero() {
   return (
-    <section className="relative w-full">
+    // NO min-height, AND NOT THE GENERIC SECTION RHYTHM. Both were tried here
+    // and both were wrong, for the same underlying reason.
+    //
+    // `min-h-[calc(100svh-68px)]` with `items-center` centred the type, but the
+    // leftover height became dead space *below* the CTA that then stacked on top
+    // of this section's pb and the marquee's pt: ~100px of centring slack + 128
+    // + 128, so about 350px of nothing between the install button and the logo
+    // band. Centred, and visibly broken.
+    //
+    // py-24/py-32, the rhythm every other section uses, is also wrong at this one
+    // seam. The hero and the band under it are one composition, not two sections
+    // that happen to be adjacent, so the gap between them has to be smaller than
+    // the gap between real sections. ide-marquee carries the matching tighter
+    // pt for the same reason.
+    //
+    // The top pad is a clamp rather than a fixed 76px so the type sits lower in
+    // the fold on a tall window, which is the "more centred" part, without ever
+    // pushing the CTA off a short one.
+    <section className="relative w-full pb-16 pt-[clamp(88px,13vh,168px)] min-[900px]:pb-20">
       <GradientField />
-      <RegistrationMarks />
 
       <div className="relative z-10 mx-auto w-full max-w-[1080px] px-4 min-[768px]:px-6">
         <div className="flex flex-col items-center text-center">
-          {/* nav bottom → eyebrow: 76px.
+          {/* No top margin any more: the section centres the whole block, so a
+              76px offset here would push it off centre by exactly that much.
               One chip rather than a rule with text floating in the gap. The
               whole thing is the proof link: the version it states is checkable
               in one click, which is the only reason to print a version here. */}
-          <div data-reveal style={{ ["--reveal-at" as string]: "200ms" }} className="mt-[76px]">
+          <div data-reveal style={{ ["--reveal-at" as string]: "200ms" }}>
             <a
               href={NPM_PACKAGE_URL}
               target="_blank"
@@ -161,32 +172,6 @@ export function Hero() {
             </a>
           </div>
 
-          {/* The qualifier, above the fold. Small, but not hidden. */}
-          <p
-            data-reveal
-            style={{ ["--reveal-at" as string]: "830ms" }}
-            className="mt-[14px] font-mono text-[12px] text-ink-3"
-          >
-            {NOTE_BEFORE_LINK}
-            <a
-              href="#limits"
-              className="underline decoration-edge-lit underline-offset-4 transition-[color,text-decoration-color] hover:text-mark hover:decoration-mark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
-              style={{ transitionDuration: "var(--dur-hover)" }}
-            >
-              {NOTE_LINK}
-            </a>
-          </p>
-        </div>
-      </div>
-
-      {/* Reserved for the product video. Deliberately a labelled empty box and
-          not a placeholder image: nothing here should look finished until the
-          real thing lands. Delete the dashes and drop the player straight in. */}
-      <div className="relative z-10 mt-[clamp(56px,8vh,96px)] px-4 min-[768px]:px-6">
-        <div className="mx-auto flex aspect-video w-full max-w-[1000px] items-center justify-center rounded-2xl border border-dashed border-edge">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-            Product video
-          </p>
         </div>
       </div>
     </section>

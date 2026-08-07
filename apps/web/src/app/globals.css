@@ -376,14 +376,14 @@
 html {
   scroll-behavior: smooth;
 }
-:where(
-  [id="stack"],
-  [id="capabilities"],
-  [id="install"],
-  [id="limits"],
-  [id="faq"],
-  [id="contact"]
-) {
+/* Every anchored section, rather than a list of ids kept in step by hand.
+   That list had gone stale: it named #stack, #capabilities and #install, none of
+   which exist, while the ids the page actually uses (#installs, #verify, #tools,
+   #sources, #drift, #use) were all missing, so a deep link to any of them landed
+   underneath the fixed nav. Matching the element instead of the name means a
+   renamed or added section cannot fall out of this again. Scoped to `section`
+   so form-field and heading ids are not caught by it. */
+:where(section[id]) {
   scroll-margin-top: 5rem;
 }
 @media (prefers-reduced-motion: reduce) {

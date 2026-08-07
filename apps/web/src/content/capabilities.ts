@@ -12,8 +12,7 @@
  * the thing to re-check before editing a card: if a capability ever stops being
  * live, the card is a lie regardless of how it is worded.
  */
-import type { ComponentType, SVGProps } from "react";
-import { Activity, Blocks, Braces, Cpu, Layers, ShieldCheck } from "lucide-react";
+import type { FigureName } from "@/components/site/capability-figures";
 
 export type Capability = {
   /** The question, in the words a developer would ask it. */
@@ -21,49 +20,68 @@ export type Capability = {
   body: string;
   /** The tool(s) that answer it today. Rendered, not just documented. */
   backedBy: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  /**
+   * Which figure draws this check. Not an icon: see capability-figures.tsx for
+   * why a padlock and a chip were the wrong furniture for this page.
+   */
+  figure: FigureName;
 };
 
+/**
+ * Bodies rewritten for rhythm, not for content: every claim is the one that was
+ * here before. Four of the five closed on a "not X, only Y" clause, which is a
+ * shape that stops registering by the third card, and all five ran to the same
+ * two-sentence length. They now vary, and the one short body is deliberate.
+ */
 export const CAPABILITIES: Capability[] = [
   {
     title: "Is it real, and is it healthy?",
-    body: "Whether the package exists at all, and what its downloads, release cadence, advisories and deprecations say. The guard against a name a model produced fluently and never checked.",
+    body: "Downloads, release cadence, open advisories, deprecation flags. Mostly this catches the package that does not exist: a name the model produced fluently, spelled the way a real one would be spelled.",
     backedBy: "verify · evaluate",
-    icon: ShieldCheck,
+    figure: "health",
   },
   {
     title: "Will these install together?",
-    body: "Every pair in the set graded from declared peer ranges and from co-installs already recorded in the index, so you get the denominator too, not only the failures.",
+    body: "Every pair in the set, graded against declared peer ranges and against co-installs already sitting in the index. You get the denominator with the failures, so a clean result means something.",
     backedBy: "compat",
-    icon: Blocks,
+    figure: "pairs",
   },
   {
     title: "Does it run on your Node?",
-    body: "Each package's declared engines range against the runtime you actually deploy on. A stack that resolves cleanly still breaks if one member never supported the Node you ship.",
+    body: "Each declared engines range, checked against the runtime you actually deploy on. A stack can resolve perfectly and still die on boot because one member never supported the Node you ship.",
     backedBy: "compat · usage",
-    icon: Cpu,
+    figure: "engines",
   },
   {
     title: "What is the API, exactly?",
-    body: "The exported symbols and signatures read out of the version's own shipped .d.ts. Pass the version your model remembers and get the delta: what moved, what went, what is new.",
+    body: "Exported symbols and signatures, read out of the version's own shipped .d.ts. Hand it the version your model remembers and it returns the delta: what moved, what went, what is new.",
     backedBy: "usage · resolve_surface · diff_surface",
-    icon: Braces,
+    figure: "surface",
   },
   {
     title: "What should the whole stack be?",
-    body: "Describe the project and get every slot sourced at once, checked across slots rather than one package at a time, so the pieces are chosen against each other.",
+    body: "Describe the project, get every slot filled at once. The pieces are picked against each other rather than one at a time, which is the only way the set holds.",
     backedBy: "recommend · plan",
-    icon: Layers,
-  },
-  {
-    title: "What happened after it shipped?",
-    body: "Whether the pick installed clean, broke the build, or resolved the task. That signal exists nowhere but inside the decision, so it feeds back into the scoring.",
-    backedBy: "report_outcome",
-    icon: Activity,
+    figure: "stack",
   },
 ];
 
-export const CAPABILITIES_LABEL = "What your agent can ask";
+/**
+ * `report_outcome` had a sixth card and lost it. Five is the lineup that was
+ * actually asked for, and the bento wants five: two wide, three narrow. A sixth
+ * forced a uniform 3x2, which is the grid this section is moving away from.
+ * The tool is still live and still in the docs; it just isn't a headline.
+ */
+
+/**
+ * A label and one sentence, and that is the whole introduction.
+ *
+ * This section used to open with an eyebrow, a two-line headline and a
+ * three-line paragraph, which is more preamble than the five cards underneath
+ * it need — each one already states its own question. The paragraph in
+ * particular was explaining what the cards then demonstrate.
+ */
+export const CAPABILITIES_LABEL = "The tools";
 
 /**
  * The count is read off the list rather than typed, so a card added or dropped
@@ -73,7 +91,10 @@ const COUNT = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "E
   CAPABILITIES.length
 ] ?? String(CAPABILITIES.length);
 
-export const CAPABILITIES_HEAD_1 = `${COUNT} questions your agent`;
-export const CAPABILITIES_HEAD_2 = "cannot answer on its own.";
-export const CAPABILITIES_BODY =
-  "Every answer is read at request time from the index, the registry, or the package's own shipped types. Where lurq cannot answer, it says so rather than filling the gap.";
+/**
+ * "A model", not "your agent". The hero has already spent that word twice and
+ * every section between here and it was reaching for it again. The cause is the
+ * training cutoff anyway, which belongs to the model rather than to the tool
+ * calling it.
+ */
+export const CAPABILITIES_HEAD = `${COUNT} questions a model cannot answer from memory.`;

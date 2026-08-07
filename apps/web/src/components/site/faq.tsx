@@ -53,7 +53,7 @@ export function Faq() {
             {FAQ_CONTACT_BEFORE}{" "}
             <Link
               href="/book-demo"
-              className="text-ink underline decoration-edge-lit underline-offset-4 transition-[color,text-decoration-color] hover:text-mark hover:decoration-mark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+              className="text-ink underline decoration-edge-lit underline-offset-4 transition-[color,text-decoration-color] hover:decoration-ink-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
               style={{ transitionDuration: "var(--dur-hover)" }}
             >
               {FAQ_CONTACT_LINK}

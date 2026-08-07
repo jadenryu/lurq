@@ -32,6 +32,13 @@
   /* interaction: never a verdict */
   --mark: #6e96d4;
 
+  /* The bloom, defined once. GradientBlob paints it as weather behind the hero
+     and the footer; the condensed nav picks the same two stops up as a rim, so
+     the bar reads as catching the light rather than as its own accent. Anything
+     that wants a third colour is starting a second design. */
+  --bloom-from: oklch(0.646 0.222 41.116);
+  --bloom-to: oklch(0.488 0.243 264.376);
+
   /* Package tile palette: decorative identity, never a verdict. Currently
      unused: the letter tiles these coloured went out with the row list when the
      plate replaced it. Kept because §2 of the spec still declares them and the
@@ -57,6 +64,26 @@
   --ease-ui: cubic-bezier(0.4, 0, 0.2, 1);
   --dur: 240ms;
   --dur-hover: 120ms;
+  /* The on-view reveal, deliberately longer than --dur, and on its own curve.
+     --ease is expo-out, which is right for a box changing size and wrong for a
+     fade: it reaches 0.78 opacity in the first 80ms, so at any duration the fade
+     is over before the eye catches it and the rest of the window is an invisible
+     crawl from 0.9 to 1. Measured on the hero headline, +80ms of 600 was 0.78 on
+     expo against 0.20 here. This curve spends the fade across the whole window and
+     still eases out at the end.
+
+     The stagger in --reveal-at is unchanged, so a longer step also means
+     neighbouring steps overlap, which is what turns a sequence of pops into one
+     movement. */
+  --dur-reveal: 1000ms;
+  --ease-reveal: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  /* Stretches the whole schedule from one place. Every --reveal-at is a literal in
+     the component (hero.tsx runs 200ms to 1200ms), so the sequence used to be
+     spread by numbers in seven different JSX files. Multiplying here means the
+     gaps and the fades scale together: raising --dur-reveal alone only makes each
+     step longer while the sequence still finishes just as early, which is why the
+     hero kept reading as arriving all at once. */
+  --reveal-scale: 1.8;
 }
 
 /* Every numeral, so the nav's latency readout doesn't reflow on each poll. */
@@ -376,7 +403,13 @@ body:has([data-surface="room"]) {
   display: flex;
   width: 100%;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 12%,
+    #000 88%,
+    transparent 100%
+  );
   mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
 }
 
@@ -457,52 +490,110 @@ li:hover > .room-ide-label {
   color: var(--ink-2);
 }
 
-/* ── Capability grid ─────────────────────────────────────────────────────────
-   Dashed interior rules drawn with borders on the cards themselves rather than
-   `divide-*`, because the divide utilities skip the first item in each row and
-   the row length changes at every breakpoint. Each card draws its own top and
-   left rule and the container's border closes the outside.
+/* ── Capability bento ────────────────────────────────────────────────────────
+   Five tiles, two wide over three narrow. Each is mostly figure, with the words
+   on a blurred plate pulled up over the foot of it.
+
+   The tiles are opaque with a hairline ring rather than dashed dividers: the
+   figure inside each one needs its own ground to be read against, and a shared
+   dashed lattice made five charts look like one table.
    ─────────────────────────────────────────────────────────────────────────── */
+/* Hairline ring and a neutral inner lift. The lift was the bloom's indigo,
+   which tinted the foot of every tile blue against a near-black page; the tiles
+   are panels, and panels on this route are --surface with a lit edge. */
+/* --cap-ground is the tile's ground, and the scrim and the plate below both mix
+   from it rather than from --surface directly. That indirection is what lets
+   hover move the whole tile at once: change the ground in one place and the
+   figure's fade and the glass over the words follow it. Setting only the card's
+   own background left a darker patch wherever the scrim still mixed --surface. */
 .room-cap-card {
-  border-top: 1px dashed var(--edge);
-  border-left: 1px dashed var(--edge);
+  --cap-ground: var(--surface);
+  background: var(--cap-ground);
+  box-shadow:
+    inset 0 0 0 1px var(--edge),
+    inset 0 -20px 80px -20px color-mix(in oklab, var(--ink) 4%, transparent);
+  transition:
+    background-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
 
-/* The first row and the first column have the container's border already. */
-.room-cap-grid > .room-cap-card:first-child {
-  border-top-color: transparent;
+/* One step up the neutral ramp, --surface to --surface-2, plus a brighter ring.
+   The previous hover moved a 1px hairline and nothing else, which on a tile this
+   large is indistinguishable from no hover at all. Hue stays out of it: on this
+   page colour is a verdict, and pointing at a card is not a verdict. */
+.room-cap-card:hover {
+  --cap-ground: var(--surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--edge-lit),
+    inset 0 -20px 80px -20px color-mix(in oklab, var(--ink) 8%, transparent);
 }
 
-@media (max-width: 559px) {
-  .room-cap-card {
-    border-left-color: transparent;
-  }
+/* The picture rests a little under and resolves on hover, so a card answers
+   when you point at it rather than announcing itself all the time. */
+.room-cap-art {
+  opacity: 0.9;
+  transition: opacity var(--dur) var(--ease);
 }
 
-@media (min-width: 560px) {
-  .room-cap-grid > .room-cap-card:nth-child(-n + 2) {
-    border-top-color: transparent;
-  }
-  .room-cap-grid > .room-cap-card:nth-child(2n + 1) {
-    border-left-color: transparent;
-  }
+.room-cap-card:hover .room-cap-art {
+  opacity: 1;
 }
 
-@media (min-width: 900px) {
-  .room-cap-grid > .room-cap-card:nth-child(-n + 3) {
-    border-top-color: transparent;
-  }
-  .room-cap-grid > .room-cap-card:nth-child(2n + 1) {
-    border-left-color: var(--edge);
-  }
-  .room-cap-grid > .room-cap-card:nth-child(3n + 1) {
-    border-left-color: transparent;
+/* The figure sinks into the tile before the words start. Without this the
+   matrix cells and the range bars run at full strength straight through the
+   body copy: blur alone does not fix contrast, it only softens the edges of
+   whatever is competing with the text. The reference grid had a `fade` prop
+   doing exactly this job and it was the piece worth keeping. */
+.room-cap-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Spent by 84%, which is where the plate's top edge lands — the plate is pulled
+     up 34px over a 216px figure, so it covers the last 16% whatever the tile's
+     width. The old last stop was at 100%, i.e. below the cut, so a strong mark
+     (the orange cell on the compat tile) was still at half strength under the
+     hairline and came through the blur as a smear. The figure has to be spent
+     before the cut, not across it. Move the plate's -mt and this moves with it.
+
+     Starting the fade any earlier than half costs more than it buys: at 40% the
+     health dial lost its bottom arc and the compat matrix stopped reading as a
+     triangle, which is a worse fault than the smear this stop exists to fix. */
+  background: linear-gradient(
+    to bottom,
+    transparent 52%,
+    color-mix(in oklab, var(--cap-ground) 58%, transparent) 76%,
+    color-mix(in oklab, var(--cap-ground) 96%, transparent) 86%
+  );
+}
+
+/* The plate. Blurred rather than filled, so the figure carries on behind the
+   words: a solid panel here cuts the tile in half and the picture stops being
+   the card. The top edge is feathered for the same reason — a hard line would
+   read as two stacked boxes. */
+.room-cap-plate {
+  background: color-mix(in oklab, var(--cap-ground) 88%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  /* A drawn edge, not a dissolve. The feathered version read as the figure
+     going out of focus, which is the opposite of the register this page is in:
+     the drift panel and the session panel both cut their header off with a
+     hairline, and this is the same cut. Glass, but with a line on it. */
+  border-top: 1px solid var(--edge);
+}
+
+/* Where backdrop-filter is unsupported the plate is merely translucent, and the
+   figure shows through the type. Opaque is the safe fallback. */
+@supports not (backdrop-filter: blur(1px)) {
+  .room-cap-plate {
+    background: color-mix(in oklab, var(--cap-ground) 92%, transparent);
   }
 }
 
 .room-cap-grid [data-card] {
   opacity: 0;
-  animation: room-reveal var(--dur) var(--ease) var(--reveal-at, 0ms) both;
+  animation: room-reveal var(--dur-reveal) var(--ease-reveal)
+    calc(var(--reveal-at, 0ms) * var(--reveal-scale)) both;
   animation-play-state: paused;
 }
 
@@ -511,9 +602,191 @@ li:hover > .room-ide-label {
 }
 
 /* Nothing sets data-playing without script, and a grid stuck on its first frame
-   is six empty boxes. */
+   is five empty boxes. */
 @media (scripting: none) {
   .room-cap-grid [data-card] {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── Surface switch ──────────────────────────────────────────────────────────
+   The rail and the terminal it drives. See components/site/surface-switch.tsx.
+
+   The only animation is the panel's own stagger, and it is not on a timer or an
+   observer: surface-switch.tsx keys the body by the selected index, so React
+   remounts it on every switch and the schedule below simply runs again. A tab
+   the reader has just clicked does not need to wait for anything.
+   ─────────────────────────────────────────────────────────────────────────── */
+/* The spine. Four bordered boxes in a column read as four of the same thing;
+   a line with four stops on it reads as an order, which is what this is: the
+   guided install is how nearly everyone gets in, and 04 is for someone running
+   the endpoint themselves. It fades out at the bottom rather than stopping
+   square, so the rail does not draw a hard edge under the last row. */
+.room-surface-rail {
+  position: relative;
+  padding-left: 1.75rem;
+}
+
+.room-surface-rail::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1.35rem;
+  bottom: 1.75rem;
+  width: 1px;
+  background: linear-gradient(to bottom, var(--edge-lit), var(--edge) 55%, transparent);
+}
+
+.room-surface-tab {
+  position: relative;
+  display: block;
+  width: 100%;
+  /* Transparent rather than absent: a border that appears on hover moves the
+     text by a pixel, and four rows twitching under the cursor is the kind of
+     thing you feel before you can name it. */
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 0.75rem 1rem 0.875rem;
+  text-align: left;
+  background: transparent;
+  transition:
+    background-color var(--dur-hover) var(--ease-ui),
+    border-color var(--dur-hover) var(--ease-ui);
+}
+
+/* The stop on the line. Filled with --ground so the spine passes behind it
+   rather than through it. */
+.room-surface-tab::before {
+  content: "";
+  position: absolute;
+  left: -1.375rem;
+  top: 1.15rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  border: 1px solid var(--edge-lit);
+  background: var(--ground);
+  transition:
+    background-color var(--dur-hover) var(--ease-ui),
+    border-color var(--dur-hover) var(--ease-ui),
+    box-shadow var(--dur-hover) var(--ease-ui);
+}
+
+.room-surface-tab:hover {
+  border-color: var(--edge);
+  background: var(--surface);
+}
+
+/* --mark, the same way .room-drift-chip[data-on] marks its selection. --held
+   and --conflict are verdicts everywhere else on this page and a chosen tab is
+   not a verdict about anything. */
+.room-surface-tab[data-on] {
+  border-color: var(--edge-lit);
+  background: var(--surface-2);
+}
+
+.room-surface-tab[data-on]::before {
+  border-color: var(--mark);
+  background: var(--mark);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--mark) 20%, transparent);
+}
+
+.room-surface-tab:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+}
+
+.room-surface-index {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+
+.room-surface-tab[data-on] .room-surface-index {
+  color: var(--mark);
+}
+
+/* Three dots, drawn rather than typed: a window control that is really the
+   glyph "●●●" gets read out as three bullets and copied with the transcript. */
+.room-surface-dots {
+  width: 34px;
+  height: 8px;
+  background-image: radial-gradient(circle 4px at 4px 4px, var(--edge-lit) 100%, transparent 0);
+  background-size: 13px 8px;
+  background-repeat: repeat-x;
+}
+
+/* Output waits for the command to finish typing. Paused rather than unmounted,
+   so the panel's height is settled from the first frame and nothing below the
+   run moves as the lines land. */
+.room-surface-lines > p + p {
+  opacity: 0;
+  animation: room-reveal 260ms var(--ease-reveal) var(--reveal-at, 0ms) both;
+  animation-play-state: paused;
+}
+
+.room-surface-lines[data-done] > p + p {
+  animation-play-state: running;
+}
+
+/* The trailing prompt comes last, after every line of output. */
+.room-surface-lines > p[data-tail] {
+  --reveal-at: 520ms;
+}
+
+/* Present, transparent, and holding its space: see the note in
+   surface-switch.tsx. Not `visibility: hidden`, which would take it out of the
+   accessibility tree, and not a slice, which would let the line reflow under
+   the caret one character at a time. */
+.room-surface-untyped {
+  opacity: 0;
+}
+
+/* Nothing types and nothing sets data-done without script. A panel showing an
+   empty prompt and no output is a panel that looks like it failed. */
+@media (scripting: none) {
+  .room-surface-untyped {
+    opacity: 1;
+  }
+
+  .room-surface-lines > p + p {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.room-surface-lines > p[data-kind="cmd"] {
+  color: var(--ink);
+}
+
+.room-surface-lines > p[data-kind="ok"] {
+  color: var(--held);
+}
+
+.room-surface-lines > p[data-kind="out"] {
+  color: var(--ink-2);
+}
+
+.room-surface-lines > p[data-kind="note"],
+.room-surface-lines > p[data-kind="next"] {
+  color: var(--ink-3);
+}
+
+/* A note is a remark about the run, not a line the run printed, so it sits off
+   the output with a rule rather than in the column with it. */
+.room-surface-lines > p[data-kind="note"] {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--edge);
+  font-size: 11.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-surface-lines > p + p {
     animation: none;
     opacity: 1;
   }
@@ -530,10 +803,29 @@ li:hover > .room-ide-label {
    element holds the `from` frame, so a step that has not run yet is invisible
    rather than flashing in and back out.
    ─────────────────────────────────────────────────────────────────────────── */
+/* --session-hold buys the panel its own entrance. data-playing and data-open
+   flip on the same frame, so without it the first line of the exchange starts
+   revealing while the panel is still fading up underneath it, and the two
+   movements cancel out into mush. One offset here rather than 400ms added to
+   nine inline --reveal-at values. */
+.room-session {
+  --session-hold: 180ms;
+  /* The page-wide 1.8 stretch is right for sections you scroll past and read at
+     your own pace. This one has a reader waiting on it, so it runs at half the
+     schedule written into the markup: nine steps at their literal --reveal-at
+     took 3.4s to land after the window opened, which is long enough that the
+     last three arrive after you have finished reading the first six.
+     Everything here is scaled by this, including the "checking" beat below, so
+     the whole exchange retimes from one number. */
+  --reveal-scale: 0.5;
+  --dur-reveal: 380ms;
+}
+
 .room-session [data-step],
 .room-session-verdicts li {
   opacity: 0;
-  animation: room-reveal var(--dur) var(--ease) var(--reveal-at, 0ms) both;
+  animation: room-reveal var(--dur-reveal) var(--ease-reveal)
+    calc(var(--reveal-at, 0ms) * var(--reveal-scale) + var(--session-hold)) both;
   animation-play-state: paused;
 }
 
@@ -556,6 +848,393 @@ li:hover > .room-ide-label {
   }
 }
 
+/* ── Composer ────────────────────────────────────────────────────────────────
+   The beam is `.room-chip`'s conic border at a larger radius: a mostly --edge
+   ring with one arc of --bloom in it, rotated by an @property angle so it costs
+   one composited layer and never touches layout.
+
+   It only spins while lurq is actually being called. A border that runs
+   continuously is jewellery; one that runs for 1.1s and stops is a progress
+   indicator, and this one is indicating the only thing on the page that is
+   doing work.
+   ─────────────────────────────────────────────────────────────────────────── */
+@property --beam-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes room-beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+/* The ring is a pseudo-element, not the element's own background.
+
+   It has to be, because of the burst. Painted on .room-beam itself, the only way
+   to remove the ring is to fade .room-beam — and opacity on a parent takes every
+   child with it, so the pieces were already invisible before they had travelled
+   anywhere. On ::before the ring is its own box and can leave on its own clock
+   while the pieces are still in the air.
+
+   Same padded-box-with-its-middle-masked-out trick as .room-nav-bar::after. */
+.room-beam {
+  position: relative;
+  padding: 1px;
+  border-radius: 20px;
+}
+
+.room-beam::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--beam-angle),
+    var(--edge) 0deg,
+    var(--edge) 195deg,
+    var(--bloom-from) 268deg,
+    var(--bloom-to) 312deg,
+    var(--edge) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  transition:
+    opacity 260ms linear,
+    transform 260ms cubic-bezier(0.3, 0, 0.7, 0.2);
+}
+
+/* Above the ring, so the shell's own --surface fill is what you see inside it. */
+.room-beam > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* One turn per 0.45s, which is the floor under the call: the ring completes its
+   lap rather than stopping part-way round. */
+.room-beam[data-beam="true"]::before {
+  animation: room-beam-spin 0.45s linear infinite;
+}
+
+/* ── Burst ───────────────────────────────────────────────────────────────────
+   The composer comes apart into the boxes it is already made of. Each piece
+   carries its own --bx/--by/--br/--bd from prompt-bar.tsx, so the direction data
+   sits next to the markup it throws rather than in a pile of nth-child rules
+   here.
+
+   An earlier version threw the composer's own parts — the chip, the selects, the
+   send button — on the theory that using the real boxes beat overlaying an
+   effect. It was wrong twice. It read as a UI sliding apart rather than as
+   something breaking, and five large boxes cannot scatter without crossing the
+   space the panel is about to occupy.
+
+   White circles do the breaking; the composer just collapses under them.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Contract and go, faster than the sparks but not instantly: the box has to be
+   still visible for the first beat of the burst, or the debris comes off
+   nothing. Gone by ~260ms, while the longest spark is still travelling. */
+.room-composer-shell {
+  transition:
+    transform 260ms cubic-bezier(0.4, 0, 1, 0.6),
+    opacity 230ms linear;
+}
+
+.room-composer[data-burst="true"] .room-composer-shell {
+  transform: scale(0.92);
+  opacity: 0;
+}
+
+.room-composer[data-burst="true"]::before {
+  transform: scale(0.94);
+  opacity: 0;
+}
+
+/* Outside the shell's rounding and above it, so a spark can pass the corner. */
+.room-sparks {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Mounted always, invisible until asked. The translate is what moves, so each
+   one is a single composited layer for the length of its flight and nothing
+   here touches layout. */
+.room-spark {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--ink);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* Fast out of the box and decelerating, which is how debris actually behaves and
+   the opposite of the curve the boxes used. The pop to full size at 14% is the
+   break itself: before that the spark does not exist, after it the spark is
+   already leaving. */
+@keyframes room-spark-fly {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.2);
+  }
+  14% {
+    opacity: 1;
+    transform: translate3d(calc(var(--sk-dx) * 0.14), calc(var(--sk-dy) * 0.14), 0) scale(1);
+  }
+  /* Opacity only: the transform still interpolates 14% to 100% on its own curve.
+     A piece that starts fading the instant it appears spends its whole flight
+     translucent, which is what made this read as noise over the composer rather
+     than as the composer coming apart. It stays lit for two thirds of the way
+     out and then goes. */
+  62% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--sk-dx), var(--sk-dy), 0) scale(0.28);
+  }
+}
+
+.room-composer[data-burst="true"] .room-spark {
+  animation: room-spark-fly var(--sk-dur) cubic-bezier(0.12, 0.62, 0.3, 1) var(--sk-delay) both;
+}
+
+/* Sized off the text it follows so it tracks the font, and inline-block so the
+   line does not reflow on the frame it disappears. */
+@keyframes room-caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.room-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1.05em;
+  margin-left: 2px;
+  transform: translateY(0.18em);
+  background: var(--ink-2);
+  animation: room-caret-blink 1s steps(1, end) infinite;
+}
+
+/* Height is held from the first frame; only opacity changes. This line sits
+   directly above a ~500px panel and anything that grows here shoves the panel
+   down mid sequence. */
+.room-session-calling {
+  height: 20px;
+  margin-block: 14px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 20px;
+  color: var(--ink-3);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.room-session-calling[data-on="true"] {
+  opacity: 1;
+}
+
+/* ── The hold ────────────────────────────────────────────────────────────────
+   The window sticks to the middle of the screen and the page stops advancing
+   until the sequence has played. That is the point of it: the scroll is the
+   transport, and a transport you can drive straight past is not one.
+
+   The track is the window's own height plus a --pin-span spacer under it, so the
+   stuck element travels exactly --pin-span before it lets go. agent-session.tsx
+   reads its progress as a fraction of that distance and never names the number,
+   which means the length of the hold is a stylesheet decision and retunes here
+   alone.
+
+   The spacer is a real element and not padding on the track. A sticky element is
+   constrained by its containing block, which is its parent's *content* box:
+   padding adds nothing it can travel through, so padding-bottom here produces a
+   taller section that never sticks at all.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-session-pin {
+  /* The longest the hold can possibly be, not how long it is. agent-session.tsx
+     cuts the track to length the moment the answer is on screen, so this only
+     has to be long enough that someone flicking a trackpad at ~1000px/s is still
+     held until the sequence finishes. Everyone slower gets the track cut well
+     inside it and never sees this number. */
+  --pin-span: 1500px;
+}
+
+.room-session-run {
+  height: var(--pin-span);
+}
+
+.room-session-sticky {
+  position: sticky;
+  /* Roughly centred: half the viewport less half the held block, which is the
+     heading plus the window and comes to ~560px on a desktop width. The floor
+     keeps the label clear of the nav on short screens, where centring would
+     otherwise tuck it under the bar. */
+  top: max(96px, calc(50dvh - 280px));
+}
+
+@media (max-width: 899.98px) {
+  .room-session-pin {
+    /* A thumb flick carries much further than a wheel, but a phone screen is
+       also where a hold that overstays reads as the page having jammed. The cut
+       does the work; this is only the ceiling. */
+    --pin-span: 1100px;
+  }
+  .room-session-sticky {
+    /* The exchange wraps to ~580px down here, and the heading takes two or three
+       lines on top of that. */
+    top: max(64px, calc(50dvh - 380px));
+  }
+}
+
+/* Too short to hold anything. The held block is the heading and the window, and
+   below about 620px of viewport there is no arrangement of it that both centres
+   and clears the nav, so the section goes back to being a section you scroll
+   past. agent-session.tsx reads the track's height rather than re-deriving this,
+   so a track of zero is the signal to show the finished exchange and stop. */
+@media (max-height: 620px) {
+  .room-session-run {
+    display: none;
+  }
+  .room-session-sticky {
+    position: static;
+  }
+}
+
+/* Nothing is being driven, so nothing may be held. Under reduce and with
+   scripting off the sequence is already finished on the first frame, and a
+   screen of scrolling that buys you a window you can already read in full is
+   just a page that will not move. */
+@media (prefers-reduced-motion: reduce), (scripting: none) {
+  .room-session-run {
+    display: none;
+  }
+  .room-session-sticky {
+    position: static;
+  }
+}
+
+/* One cell, two occupants, inside the window. The composer and the exchange are
+   stacked rather than sequential, so the handover is a crossfade in place: the
+   request comes apart exactly where the answer is about to be.
+
+   Height comes from the exchange, which is in the layout from the first frame at
+   zero opacity. That is what keeps the rest of the page still. */
+.room-session-stage {
+  display: grid;
+}
+
+.room-session-stage > * {
+  grid-area: 1 / 1;
+}
+
+/* Middle of the cell. The composer used to be aligned to the top of the space
+   the panel would fill, on the reasoning that starting at the same y as the
+   title bar made the handover read as one box turning into another. That held
+   while the panel was invisible until it opened; now that the window is drawn
+   from the first frame, the composer is a request sitting in it and belongs in
+   the middle of it. */
+.room-session-composer {
+  align-self: center;
+  justify-self: stretch;
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+/* No opacity here. The pieces have already taken the composer away by the time
+   this flips, and fading the wrapper on top of them was the second half of why
+   the burst was invisible: two nested fades, the outer one finishing first. All
+   this does now is stop a fully transparent box from catching a pointer. */
+.room-session-composer[data-gone="true"] {
+  pointer-events: none;
+}
+
+/* The window itself never fades: border, fill and title bar are painted from the
+   first frame. What arrives is what is inside it.
+
+   It used to be the whole panel that faded up from zero, which is why the
+   section opened as a small composer floating over ~400px of page background
+   with another ~220px of held-open space for the notes under that. The reserved
+   height has not changed by a pixel; it just is not black any more.
+
+   On the reveal curve rather than --ease. --ease is expo-out, which spends its
+   fade in the first fifth of the window: at any duration the contents would
+   appear to snap in and then crawl the last 10%. --ease-reveal spreads it across
+   the whole window, which is what "arriving" looks like. */
+.room-session-body {
+  opacity: 0;
+  transform: translateY(16px);
+  /* Literal, not var(--dur-reveal): that is the per-step duration for the lines
+     inside, and this is the one movement here that should take its time. */
+  transition:
+    opacity 560ms var(--ease-reveal),
+    transform 560ms var(--ease-reveal);
+}
+
+.room-session-body[data-open="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── The reading ─────────────────────────────────────────────────────────────
+   Three columns under the panel, revealed after it has finished. Numbered
+   rather than bulleted because they are an order, not a set. */
+.room-session-notes {
+  margin-top: 44px;
+  display: grid;
+  gap: 30px;
+}
+
+@media (min-width: 860px) {
+  .room-session-notes {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+  }
+}
+
+/* The rule sits above the index rather than around the column: a boxed card
+   would make three panels out of what is one continuous reading. */
+.room-session-note-index {
+  display: block;
+  padding-top: 14px;
+  border-top: 1px solid var(--edge);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+
+/* Scripting off: nothing sets data-open or data-playing, so the exchange would
+   sit at zero opacity and the notes would never arrive. Show the finished
+   state. */
+@media (scripting: none) {
+  .room-session-body {
+    opacity: 1;
+    transform: none;
+  }
+  .room-session-composer,
+  .room-session-calling {
+    display: none;
+  }
+}
+
 /* The human's line, marked as a prompt rather than by colour alone. Decorative,
    so it lives in CSS and stays out of the accessible name. */
 .room-session-request::before {
@@ -573,6 +1252,16 @@ li:hover > .room-ide-label {
   background: var(--surface-2);
 }
 
+/* Same 6px dot the verdicts use, in --mark rather than a verdict colour: this
+   one says a call happened, not how it went. */
+.room-session-tool-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--mark);
+}
+
 @keyframes room-session-out {
   from {
     opacity: 1;
@@ -584,13 +1273,19 @@ li:hover > .room-ide-label {
 
 /* Sits over the verdicts rather than above them, so the answer replaces the
    waiting in place and the panel never changes height mid-sequence. Positioned
-   to the parent's padding box (px-3.5 py-3). */
+   to the parent's padding box (px-3.5 py-3).
+
+   The delay is on the same scale and hold as every [data-step], so it clears
+   exactly as the first verdict (--reveal-at: 1680ms) arrives. It used to be a
+   flat 1620ms while the steps around it were scaled and offset, so the label
+   left ~360ms before anything replaced it and the row sat empty. */
 .room-session-pending {
   position: absolute;
   left: 14px;
   right: 14px;
   top: 12px;
-  animation: room-session-out 240ms var(--ease) 1620ms both;
+  animation: room-session-out 240ms var(--ease)
+    calc(1620ms * var(--reveal-scale) + var(--session-hold)) both;
   animation-play-state: paused;
 }
 
@@ -620,6 +1315,331 @@ li:hover > .room-ide-label {
   .room-drift-scroll {
     -webkit-mask-image: linear-gradient(to right, #000 86%, transparent 100%);
     mask-image: linear-gradient(to right, #000 86%, transparent 100%);
+  }
+}
+
+/* The board draws itself once, when it first comes into view. Rows fade up on a
+   40ms ladder and each bar wipes out to its share behind its own row, so what
+   you watch is a chart being plotted rather than a panel being animated. It
+   fires once and never replays: a leaderboard that re-animates every time it
+   crosses the viewport is a toy. */
+.room-drift-row {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 420ms var(--ease) var(--row-at, 0ms),
+    transform 420ms var(--ease) var(--row-at, 0ms),
+    background-color var(--dur-hover) var(--ease-ui);
+}
+
+[data-shown="true"] .room-drift-row {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── The lane ────────────────────────────────────────────────────────────────
+   One time axis shared by every row: the reference date at the left edge, the
+   last sync at the right. Green runs from the left to the day the new major
+   shipped — the stretch where the model's answer still held. Orange runs from
+   there to now. The dot is the day it happened.
+
+   This replaced a bar chart of weekly installs, which was drawing the one
+   number on the board that is not the argument. The argument is how long each
+   answer has been wrong, and it was the only thing the table did not show.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-drift-track {
+  position: relative;
+  display: block;
+  height: 14px;
+  min-width: 96px;
+  flex: 1;
+}
+
+.room-drift-held,
+.room-drift-wrong {
+  position: absolute;
+  top: 50%;
+  height: 1px;
+  margin-top: -0.5px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 700ms var(--ease) var(--row-at, 0ms);
+}
+
+.room-drift-held {
+  left: 0;
+  width: var(--at);
+  background: var(--held);
+  opacity: 0.45;
+}
+
+.room-drift-wrong {
+  left: var(--at);
+  right: 0;
+  background: var(--conflict);
+  opacity: 0.55;
+  transition:
+    transform 700ms var(--ease) var(--row-at, 0ms),
+    opacity var(--dur-hover) var(--ease-ui);
+}
+
+[data-shown="true"] .room-drift-held,
+[data-shown="true"] .room-drift-wrong {
+  transform: scaleX(1);
+}
+
+/* Lands after its own lane has drawn, so the marker reads as the event the line
+   was travelling toward rather than as another thing fading in. */
+.room-drift-dot {
+  position: absolute;
+  top: 50%;
+  left: var(--at);
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 999px;
+  background: var(--conflict);
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 240ms var(--ease) calc(var(--row-at, 0ms) + 420ms),
+    transform 240ms var(--ease) calc(var(--row-at, 0ms) + 420ms);
+}
+
+/* More than one major since the cutoff: a ring, so the count is carried by
+   shape and not only by the +N in the column beside it. */
+.room-drift-dot[data-multi="true"] {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: transparent;
+  border: 1.5px solid var(--conflict);
+}
+
+[data-shown="true"] .room-drift-dot {
+  opacity: 1;
+  transform: none;
+}
+
+.room-drift-row:hover .room-drift-wrong {
+  opacity: 0.85;
+}
+
+.room-drift-row:hover .room-drift-dot {
+  transform: scale(1.35);
+  transition-delay: 0ms;
+}
+
+/* Hover is a selection, not a highlight: a --mark rule butts against the row's
+   leading edge, the rank it belongs to comes up to full ink, and the bar takes
+   the same lift. --mark because this is interaction; --held and --conflict are
+   spoken for and mean a verdict. */
+.room-drift-row td:first-child {
+  box-shadow: inset 2px 0 0 transparent;
+  transition: box-shadow var(--dur-hover) var(--ease-ui);
+}
+
+.room-drift-row:hover td:first-child {
+  box-shadow: inset 2px 0 0 var(--mark);
+}
+
+.room-drift-rank {
+  transition: color var(--dur-hover) var(--ease-ui);
+}
+
+.room-drift-row:hover .room-drift-rank {
+  color: var(--ink);
+}
+
+/* The caret holds its space whether or not the column is the sorted one, so
+   clicking a header never nudges the row of labels sideways. */
+.room-drift-caret {
+  opacity: 0;
+  transition:
+    opacity var(--dur-hover) var(--ease-ui),
+    transform var(--dur-hover) var(--ease-ui);
+}
+
+.room-drift-sort:hover .room-drift-caret {
+  opacity: 0.5;
+}
+
+.room-drift-sort[data-active="true"] .room-drift-caret {
+  opacity: 1;
+}
+
+.room-drift-sort[data-dir="asc"] .room-drift-caret {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Plotted already. Every lane is at full extent and every marker is on its
+     date; they just do not travel there. */
+  .room-drift-row {
+    opacity: 1;
+    transform: none;
+    transition: background-color var(--dur-hover) var(--ease-ui);
+  }
+  .room-drift-held,
+  .room-drift-wrong {
+    transform: scaleX(1);
+    transition: opacity var(--dur-hover) var(--ease-ui);
+  }
+  .room-drift-dot {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ── Drift: claim in front, evidence behind ──────────────────────────────────
+   Two layers making two different kinds of statement. The card is the claim: a
+   model, the date its vendor says its knowledge stops, and the share of the
+   index that has broken since. The panel is the evidence. Layering them says
+   which is which without a heading having to.
+
+   Below 1100px they stack in flow, because an overlap that narrow would cover
+   data. At and above it the card's lower edge crosses the panel's title bar and
+   nothing else, so no row is ever obscured. Obscuring the data to make the data
+   look good is the one move this section cannot make.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-drift-claim {
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.55);
+}
+
+.room-drift-panel {
+  position: relative;
+  z-index: 1;
+}
+
+/* The bloom that reads as depth behind the card. No blur filter and no negative
+   offsets on purpose: a blurred box bleeding past this wrapper is what dragged
+   the whole document sideways once already, and a radial gradient is soft
+   without help. Capped at 100% width so it can never exceed the wrapper. */
+.room-drift-bloom {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: 0;
+  width: min(900px, 100%);
+  height: 300px;
+  pointer-events: none;
+  /* Centred to the right of the card rather than under it, because the ground it
+     has to do something with is the patch beside the card, not behind it. */
+  background: radial-gradient(
+    44% 58% at 54% 42%,
+    color-mix(in srgb, var(--mark) 26%, transparent),
+    transparent 72%
+  );
+}
+
+@media (min-width: 1100px) {
+  .room-drift-claim {
+    /* Wide enough for all six chips on one line. At 620px the last one wrapped
+       alone onto a second row, which read as an overflow rather than a set. */
+    max-width: 700px;
+    /* The panel rises under the card by roughly the title bar's own height, so
+       the overlap lands on chrome and stops there. */
+    margin-bottom: -34px;
+  }
+  /* The card is the title now. visibility rather than display, so the bar keeps
+     its height and the synced pill stays on its own baseline. */
+  .room-drift-title {
+    visibility: hidden;
+  }
+}
+
+/* ── The picker ───────────────────────────────────────────────────────────────
+   One chip per model, each carrying its vendor's own mark. This started as a
+   native <select>, which was less code and correct on a phone, and lost to one
+   thing: a dropdown hides every logo until it is opened, and the logos are the
+   reason a visitor stops here. Recognising your own model is the hook.
+
+   The control underneath is still a radio group, so arrow keys move between
+   options and the set announces itself as a group with no ARIA of our own.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-drift-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--dur-hover) var(--ease-ui),
+    border-color var(--dur-hover) var(--ease-ui),
+    background-color var(--dur-hover) var(--ease-ui);
+}
+
+.room-drift-chip:hover {
+  border-color: var(--edge-lit);
+  color: var(--ink-2);
+}
+
+/* --mark, because this is a selection and not a verdict. --held and --conflict
+   are spoken for on this board and mean something about a version. */
+.room-drift-chip[data-on="true"] {
+  border-color: var(--mark);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* The input itself is sr-only, so the ring has to be drawn on the label. */
+.room-drift-chip:has(input:focus-visible) {
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+}
+
+/* The vendor glyph. Same mask idiom as .room-ide-mark, but the paint is a
+   variable rather than always --ink, which is what lets one file carry the
+   brand: terracotta for Claude, plain ink for OpenAI's monochrome mark, and
+   Google's actual gradient for Gemini. A gradient cannot be a `color`, so this
+   has to be `background` and a mask rather than a fill. */
+.room-vendor-mark {
+  display: block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--mark-paint, var(--ink));
+  -webkit-mask-image: var(--mark-src);
+  mask-image: var(--mark-src);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* Unselected chips sit their marks back so the selected one reads as chosen,
+   without the row turning into a strip of competing brand colours. */
+.room-drift-chip .room-vendor-mark {
+  opacity: 0.55;
+  transition: opacity var(--dur-hover) var(--ease-ui);
+}
+
+.room-drift-chip:hover .room-vendor-mark,
+.room-drift-chip[data-on="true"] .room-vendor-mark {
+  opacity: 1;
+}
+
+/* Switching models replaces every row. Without this the table changes contents
+   with no acknowledgement, which reads as a glitch rather than as an answer. */
+.room-drift-swap {
+  animation: room-reveal-opacity 240ms var(--ease-ui) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-drift-swap {
+    animation: none;
   }
 }
 
@@ -705,9 +1725,18 @@ li:hover > .room-ide-label {
    narrow enough to look deliberate rather than arbitrary.
 
    The bar is fixed in both states; the <header> is a 68px spacer holding its
-   place in flow. No backdrop-filter: the background is opaque enough on its own.
-   It started at .94, where hero type ghosted through the pill at 1440; .97 is
-   where that stops without the pill reading as a solid slab.
+   place in flow. No backdrop-filter: the background is fully opaque instead.
+
+   Fully opaque and not the .97 it carried for a while. The bar is fixed over
+   scrolling content, so any alpha at all lets whatever passes underneath read
+   through it, and at 3% a white heading still ghosted clearly across the pill on
+   every section of the page. .94 was worse and .97 only made it subtle enough to
+   argue about. Nothing here needs translucency: the pill is separated from the
+   ground by its border and its shadow, not by showing what it covers.
+
+   It sits on --surface-2 rather than --surface, and its shadow is a short 2px/10px
+   lift rather than the 8px/28px it started with. At 28px the falloff was wide
+   enough to read as a blur behind the bar instead of a bar with an edge.
    ─────────────────────────────────────────────────────────────────────────── */
 
 .room-nav {
@@ -735,10 +1764,9 @@ li:hover > .room-ide-label {
   border: 1px solid transparent;
   border-radius: 0;
   background-color: transparent;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0);
   transition-property:
-    max-width, height, top, border-radius, background-color, border-color,
-    box-shadow;
+    max-width, height, top, border-radius, background-color, border-color, box-shadow;
   transition-duration: 280ms;
   transition-timing-function: var(--ease-ui);
 }
@@ -749,6 +1777,37 @@ li:hover > .room-ide-label {
   will-change: max-width;
 }
 
+/* The rim the pill picks up on landing.
+
+   A 1px ring of --bloom, drawn as a padded box with its own centre masked out,
+   so only the border shows. It rides on a pseudo-element rather than on the bar
+   because the bar is already animating background-color and border-color: a
+   gradient cannot tween to a flat colour, and putting it here means the accent
+   fades in on plain opacity while the two flat properties keep animating
+   normally underneath.
+
+   Under the bar's own border, so the --edge hairline still draws the shape and
+   the bloom only tints it. */
+.room-nav-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background-image: linear-gradient(100deg, var(--bloom-from), var(--bloom-to));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms var(--ease-ui);
+}
+
 @media (min-width: 720px) {
   .room-nav-bar[data-condensed="true"] {
     top: 10px;
@@ -756,8 +1815,14 @@ li:hover > .room-ide-label {
     height: 56px;
     border-radius: 16px;
     border-color: var(--edge);
-    background-color: rgba(16, 16, 19, 0.97);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    background-color: var(--surface-2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  }
+
+  /* Low, because this is a 1px line on a 56px bar sitting over body copy. At
+     full strength it is a lit tube and it wins every time you scroll past it. */
+  .room-nav-bar[data-condensed="true"]::after {
+    opacity: 0.45;
   }
 }
 
@@ -771,7 +1836,23 @@ li:hover > .room-ide-label {
 @media (max-width: 719.98px) {
   .room-nav-bar[data-condensed="true"] {
     border-bottom-color: var(--edge);
-    background-color: rgba(16, 16, 19, 0.97);
+    background-color: var(--surface-2);
+  }
+
+  /* No pill here, so no rim: a ring around a full-bleed bar draws a line down
+     the screen edges and another along the very top, which reads as a rendering
+     fault. The accent becomes the bottom hairline instead, which is the only
+     edge this state actually has. */
+  .room-nav-bar::after {
+    top: auto;
+    height: 1px;
+    padding: 0;
+    -webkit-mask: none;
+    mask: none;
+  }
+
+  .room-nav-bar[data-condensed="true"]::after {
+    opacity: 0.5;
   }
 }
 
@@ -826,9 +1907,9 @@ li:hover > .room-ide-label {
    that is exactly --ink.
    ─────────────────────────────────────────────────────────────────────────── */
 /* ── Motion ──────────────────────────────────────────────────────────────────
-   One sequence, on load, once. Each step is a 16px rise and a fade over --dur.
-   No blur, no per-character stagger, nothing loops. Timing is passed per element
-   as --reveal-at so the schedule reads in source order.
+   One sequence, on load, once. Each step is a 16px rise and a fade over
+   --dur-reveal. No blur, no per-character stagger, nothing loops. Timing is passed
+   per element as --reveal-at so the schedule reads in source order.
    ─────────────────────────────────────────────────────────────────────────── */
 @keyframes room-reveal {
   from {
@@ -866,7 +1947,8 @@ li:hover > .room-ide-label {
 
 [data-reveal] {
   opacity: 0;
-  animation: room-reveal var(--dur) var(--ease) var(--reveal-at, 0ms) both;
+  animation: room-reveal var(--dur-reveal) var(--ease-reveal)
+    calc(var(--reveal-at, 0ms) * var(--reveal-scale)) both;
 }
 
 [data-reveal="opacity"] {
@@ -875,6 +1957,45 @@ li:hover > .room-ide-label {
 
 [data-reveal="panel"] {
   animation-name: room-reveal-panel;
+}
+
+/* ── Provenance orbit ────────────────────────────────────────────────────────
+   Two keyframes, not four. --orbit-dir is +1 or -1 per ring, so one pair covers
+   both directions; the reference block this came from shipped cw/ccw copies of
+   each.
+
+   The base transform is not decoration. It repeats the animation's `from` state
+   so that killing the animation, under reduce or if a ring is ever paused,
+   leaves every chip at its own start angle instead of collapsing all of them
+   onto 12 o'clock.
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes room-orbit {
+  from {
+    transform: rotate(var(--start-angle));
+  }
+  to {
+    transform: rotate(calc(var(--start-angle) + var(--orbit-dir, 1) * 360deg));
+  }
+}
+
+/* Equal and opposite, so a chip travels the ring without tumbling. */
+@keyframes room-orbit-counter {
+  from {
+    transform: rotate(calc(-1 * var(--start-angle)));
+  }
+  to {
+    transform: rotate(calc(-1 * var(--start-angle) - var(--orbit-dir, 1) * 360deg));
+  }
+}
+
+.room-orbit-arm {
+  transform: rotate(var(--start-angle));
+  animation: room-orbit var(--orbit-dur) linear infinite;
+}
+
+.room-orbit-chip {
+  transform: rotate(calc(-1 * var(--start-angle)));
+  animation: room-orbit-counter var(--orbit-dur) linear infinite;
 }
 
 /* One pulse per successful poll. The element is remounted on a new key, which
@@ -904,6 +2025,32 @@ li:hover > .room-ide-label {
   }
   .room-beat {
     animation: none;
+  }
+  /* agent-session.tsx already jumps its whole sequence to `open` under reduce,
+     so none of these should ever be armed. Declared anyway: the CSS is what
+     actually guarantees it, and the composer's ring should hold still even if a
+     future stage sets data-beam by another path. */
+  .room-beam::before,
+  .room-caret {
+    animation: none;
+  }
+  /* Nothing breaks and nothing flies. The stage jumps straight to `open` under
+     reduce, so the composer is never on screen to come apart. */
+  .room-spark {
+    animation: none;
+    display: none;
+  }
+  .room-composer,
+  .room-composer-shell {
+    transition: none;
+  }
+  .room-caret {
+    display: none;
+  }
+  .room-session-body,
+  .room-session-composer,
+  .room-session-calling {
+    transition: none;
   }
   /* The nav still changes state on scroll: it just arrives there rather than
      travelling. Condensing is layout, not decoration. */
@@ -952,6 +2099,14 @@ li:hover > .room-ide-label {
   }
   .room-session-verdicts {
     position: static;
+  }
+  /* The rings stop turning and keep their arrangement: every chip holds the
+     start angle its base transform already sets, so the orbit reads as a
+     diagram. Nothing here is load-bearing motion: the section's content is the
+     ten names, and they are all on screen either way. */
+  .room-orbit-arm,
+  .room-orbit-chip {
+    animation: none;
   }
   /* The cards are simply already there. */
   .room-cap-grid [data-card] {

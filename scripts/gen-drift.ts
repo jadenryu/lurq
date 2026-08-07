@@ -1,41 +1,35 @@
 /**
- * Generates apps/web/src/content/generated/drift.json: the packages that shipped
- * a new major version after a reference date, ranked by how many installs a week
- * they get.
+ * Generates apps/web/src/content/generated/drift.json: for each model cutoff the
+ * board can be set to, the packages that shipped a new major version after that
+ * date, ranked by how many installs a week they get.
  *
  *   npx tsx scripts/gen-drift.ts
  *
  * The point of the page section this feeds is that a model's answer about a
  * package is a memory with a date on it. This is the measurable form of that: at
- * the reference date these packages were on one major, and today they are on a
- * different one. Anything trained on or before that date will answer with the
- * old number, confidently.
+ * the model's cutoff these packages were on one major, and today they are on a
+ * different one. A model trained up to that date answers with the old number,
+ * confidently, and has no way to know it is stale.
  *
- * READ ONLY. The query below is a single SELECT. Nothing in this script writes to
- * the database, enqueues work, or touches the registry, so it is safe to run
- * against production. It is still worth pointing LURQ_ENV_FILE at a non-production
- * env if one is available.
+ * One bucket per distinct date in MODEL_CUTOFFS, which is the single source of
+ * truth for those dates and carries a vendor URL for every one of them. Two
+ * models on the same cutoff are the same query, so they share a bucket and the
+ * picker just points at it.
  *
- * On the reference date: there is no API that publishes training cutoffs, and
- * guessing per-model dates would put a claim on the page that nobody can check.
- * So the section names a single date, says plainly that it is an approximation of
- * where current coding models sit, and lets every number under it be exact.
+ * READ ONLY. Every query below is a SELECT. Nothing in this script writes to the
+ * database, enqueues work, or touches the registry, so it is safe to run against
+ * production. It is still worth pointing LURQ_ENV_FILE at a non-production env if
+ * one is available.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { sql } from 'drizzle-orm';
 import { createDb } from '../src/db/client';
+import { CUTOFF_DATES } from '../apps/web/src/content/model-cutoffs';
 
 const OUT = path.join(process.cwd(), 'apps/web/src/content/generated/drift.json');
 
-/**
- * Roughly where the coding models in common use today stop. Deliberately a round
- * date rather than a specific model's published cutoff: the page says "around
- * here", and the honesty is in not pretending to more precision than exists.
- */
-const CUTOFF = '2025-03-01';
-
-/** How many rows the board shows. */
+/** How many rows each board shows. */
 const LIMIT = 8;
 
 interface Row {
@@ -49,10 +43,16 @@ interface Row {
   weekly_downloads: number | null;
 }
 
-async function main(): Promise<void> {
-  const { db, close } = createDb({ max: 1 });
-  try {
-    const result = await db.execute(sql`
+interface Bucket {
+  totals: { drifted: number; tracked: number };
+  rows: Row[];
+}
+
+type Db = ReturnType<typeof createDb>['db'];
+
+/** One board: the top drifted packages as of `cutoff`, plus the totals behind them. */
+async function buildBucket(db: Db, cutoff: string): Promise<Bucket> {
+  const result = await db.execute(sql`
       with stable as (
         select
           package_name,
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
         select distinct on (package_name)
           package_name, major as major_then, version as version_then
         from stable
-        where published_at < ${CUTOFF}::timestamptz
+        where published_at < ${cutoff}::timestamptz
         order by package_name, major desc, published_at desc
       ),
       -- Where it stands now.
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
           s.package_name,
           min(s.published_at) filter (where s.major = n.major_now) as bumped_at,
           count(distinct s.major) filter (
-            where s.published_at >= ${CUTOFF}::timestamptz and s.major > t.major_then
+            where s.published_at >= ${cutoff}::timestamptz and s.major > t.major_then
           ) as majors_since
         from stable s
         join now_state n on n.package_name = s.package_name
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
       join bump b      on b.package_name = t.package_name
       join packages p  on p.name = t.package_name
       where n.major_now > t.major_then
-        and b.bumped_at >= ${CUTOFF}::timestamptz
+        and b.bumped_at >= ${cutoff}::timestamptz
         and p.weekly_downloads is not null
         and p.deprecated = false
       order by p.weekly_downloads desc
@@ -128,9 +128,9 @@ async function main(): Promise<void> {
         weekly_downloads: r.weekly_downloads == null ? null : Number(r.weekly_downloads),
       }),
     );
-    if (!rows.length) {
-      throw new Error('drift query returned no rows. Nothing written.');
-    }
+  if (!rows.length) {
+    throw new Error(`drift query returned no rows for cutoff ${cutoff}. Nothing written.`);
+  }
 
     // A total across the whole index, so the board's rows read as a sample of
     // something rather than as the whole story.
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
       ),
       then_state as (
         select package_name, max(major) as major_then from stable
-        where published_at < ${CUTOFF}::timestamptz group by package_name
+        where published_at < ${cutoff}::timestamptz group by package_name
       ),
       now_state as (
         select package_name, max(major) as major_now from stable group by package_name
@@ -153,33 +153,45 @@ async function main(): Promise<void> {
       from then_state t join now_state n using (package_name)
       where n.major_now > t.major_then
     `);
-    const rawTotals = (((totalResult as { rows?: unknown[] }).rows ?? totalResult) as Record<
-      string,
-      unknown
-    >[])[0]!;
-    const totals = {
+  const rawTotals = (((totalResult as { rows?: unknown[] }).rows ?? totalResult) as Record<
+    string,
+    unknown
+  >[])[0]!;
+
+  return {
+    totals: {
       drifted: Number(rawTotals.drifted),
       tracked: Number(rawTotals.tracked),
-    };
+    },
+    rows,
+  };
+}
+
+async function main(): Promise<void> {
+  const { db, close } = createDb({ max: 1 });
+  try {
+    // Sequentially, on one connection. Six cutoffs against a Neon instance that
+    // is already near its size limit is not the place to open a pool and fan out.
+    const buckets: Record<string, Bucket> = {};
+    for (const cutoff of CUTOFF_DATES) {
+      buckets[cutoff] = await buildBucket(db, cutoff);
+      const { drifted, tracked } = buckets[cutoff]!.totals;
+      console.error(`  ${cutoff}: ${drifted} of ${tracked} drifted`);
+    }
 
     const payload = {
       generatedAt: new Date().toISOString(),
       source: 'lurq index: package_versions joined to packages',
       /** Re-runnable by anyone with database access. */
       reproduce: 'npx tsx scripts/gen-drift.ts',
-      cutoff: CUTOFF,
-      totals,
-      rows,
+      /** Newest first, matching the picker. Keys of `buckets`. */
+      cutoffs: CUTOFF_DATES,
+      buckets,
     };
 
     await mkdir(path.dirname(OUT), { recursive: true });
     await writeFile(OUT, `${JSON.stringify(payload, null, 2)}\n`);
-    console.error(
-      `wrote ${path.relative(process.cwd(), OUT)}\n` +
-        `  cutoff:  ${CUTOFF}\n` +
-        `  drifted: ${totals.drifted} of ${totals.tracked} tracked packages\n` +
-        `  rows:    ${rows.length}`,
-    );
+    console.error(`wrote ${path.relative(process.cwd(), OUT)} (${CUTOFF_DATES.length} buckets)`);
   } finally {
     await close();
   }

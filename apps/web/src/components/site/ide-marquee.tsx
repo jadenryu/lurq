@@ -49,7 +49,15 @@ function Track({ hidden }: { hidden?: boolean }) {
 
 export function IdeMarquee() {
   return (
-    <section id="installs" className="w-full py-24">
+    // ASYMMETRIC, and deliberately not the page's py-24/py-32.
+    //
+    // The top is tight because this band belongs to the hero above it: it answers
+    // the first question the headline raises, and a full section gap at that seam
+    // reads as the hero having run out rather than as a new section starting. The
+    // bottom is the standard pad, so the normal rhythm resumes into #verify.
+    //
+    // Set here and in hero.tsx together. Change one and the seam goes lopsided.
+    <section id="installs" className="w-full pb-24 pt-14 min-[900px]:pb-32 min-[900px]:pt-16">
       <h2 className="px-4 text-center font-sans text-[20px] font-medium text-ink">
         {IDE_HEADING}
       </h2>

@@ -2,107 +2,81 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { FIGURES } from "@/components/site/capability-figures";
 import {
   CAPABILITIES,
-  CAPABILITIES_BODY,
-  CAPABILITIES_HEAD_1,
-  CAPABILITIES_HEAD_2,
+  CAPABILITIES_HEAD,
   CAPABILITIES_LABEL,
   type Capability,
 } from "@/content/capabilities";
 
 /**
- * The tool surface, as the questions it answers.
+ * The tool surface as a bento: five cards, two wide over three narrow.
  *
- * Two things about the reference grid did not survive contact with this app and
- * both were load-bearing:
+ * The card is mostly picture. Its figure fills the whole tile and the words sit
+ * over the bottom of it on a blurred plate, which is the arrangement that makes
+ * the section read as a set of instruments rather than as a table of features.
+ * The previous pass had this inverted — a small diagram above four lines of
+ * prose — and no amount of tuning the diagram fixes a card that is 90% text.
  *
- *  1. It seeded each card's pattern with Math.random() *during render*. Under
- *     SSR that draws one set of squares on the server and a different set on the
- *     client, which is a hydration mismatch on every paint. The offsets are
- *     derived from the card's index here instead: same input, same output, both
- *     sides.
+ * The outer corners are rounded and the inner ones are not, so the five tiles
+ * read as one slab that has been cut, rather than as five floating cards.
  *
- *  2. It reached for an animation library to fade the grid in. This page already
- *     reveals on scroll (see agent-session.tsx) with an IntersectionObserver and
- *     a CSS schedule, so that is what this uses. No dependency was added.
- *
- * Colours come from the page's own tokens rather than the shadcn defaults the
- * reference used, so the cards sit on --surface with --edge rules instead of
- * importing a second palette.
+ * Reveal is the page's own: one IntersectionObserver, a CSS schedule in
+ * --reveal-at, no animation library. framer-motion and clsx, which the
+ * reference used, would both have been new dependencies for a fade and a
+ * class join that `cn` already does.
  */
+
+type Span = { grid: string; corner: string };
 
 /**
- * Deterministic stand-in for the reference's Math.random(). A cheap integer hash
- * of (card, square) folded into the same ranges it used: x in 7..10, y in 1..6.
- * It only has to look unpatterned, not be unpredictable.
+ * Placement lives here rather than in the content file: which tile is wide is a
+ * layout decision, and content should not have to know the column count.
+ * Order is the reading order — real, together, node, api, stack.
  */
-function squaresFor(card: number): [number, number][] {
-  return Array.from({ length: 5 }, (_, i) => {
-    const h = Math.imul(card * 73 + i * 149 + 17, 2654435761) >>> 0;
-    return [7 + ((h >>> 4) % 4), 1 + ((h >>> 12) % 6)] as [number, number];
-  });
-}
-
-function CardPattern({ card }: { card: number }) {
-  // useId would be stable too, but the index already is, and it keeps the
-  // pattern id readable in the DOM.
-  const id = `cap-grid-${card}`;
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(farthest-side_at_top_right,white,transparent)]"
-    >
-      <svg className="absolute inset-0 h-full w-full">
-        <defs>
-          <pattern id={id} width={20} height={20} patternUnits="userSpaceOnUse" x="-12" y="4">
-            <path d="M.5 20V.5H20" fill="none" stroke="var(--edge-lit)" strokeOpacity="0.5" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" strokeWidth={0} fill={`url(#${id})`} />
-        <svg x="-12" y="4" className="overflow-visible">
-          {squaresFor(card).map(([x, y], i) => (
-            <rect
-              key={i}
-              strokeWidth={0}
-              width={21}
-              height={21}
-              x={x * 20}
-              y={y * 20}
-              fill="var(--ink)"
-              fillOpacity="0.04"
-            />
-          ))}
-        </svg>
-      </svg>
-    </div>
-  );
-}
+const SPANS: Span[] = [
+  { grid: "min-[900px]:col-span-3", corner: "min-[900px]:rounded-tl-[16px]" },
+  { grid: "min-[900px]:col-span-3", corner: "min-[900px]:rounded-tr-[16px]" },
+  { grid: "min-[900px]:col-span-2", corner: "min-[900px]:rounded-bl-[16px]" },
+  { grid: "min-[900px]:col-span-2", corner: "" },
+  { grid: "min-[900px]:col-span-2", corner: "min-[900px]:rounded-br-[16px]" },
+];
 
 function CapabilityCard({ feature, index }: { feature: Capability; index: number }) {
+  const Figure = FIGURES[feature.figure];
+  const span = SPANS[index] ?? { grid: "", corner: "" };
+
   return (
-    <div
+    <article
       data-card
-      style={{ ["--reveal-at" as string]: `${140 + index * 90}ms` }}
-      className="room-cap-card relative overflow-hidden p-6 min-[720px]:p-7"
+      style={{ ["--reveal-at" as string]: `${120 + index * 80}ms` }}
+      className={[
+        "room-cap-card group relative isolate flex flex-col overflow-hidden",
+        "rounded-[10px]",
+        span.grid,
+        span.corner,
+      ].join(" ")}
     >
-      <CardPattern card={index} />
+      {/* The picture. Sliced rather than stretched, so a wide tile crops the
+          figure instead of distorting its stroke weights. */}
+      <div className="room-cap-art relative h-[180px] shrink-0 min-[900px]:h-[216px]">
+        <Figure id={`cap-${feature.figure}`} />
+      </div>
 
-      <feature.icon
-        aria-hidden
-        strokeWidth={1}
-        className="relative z-10 size-6 text-ink-3 transition-colors group-hover:text-ink-2"
-      />
-
-      <h3 className="relative z-10 mt-10 font-sans text-[15px] font-medium text-ink">
-        {feature.title}
-      </h3>
-      <p className="relative z-10 mt-2.5 text-[13px] leading-[1.65] text-ink-2">{feature.body}</p>
-
-      {/* The receipt. Every name here is callable today, which is what lets the
-          card above it be worded as a plain statement. */}
-      <p className="relative z-10 mt-4 font-mono text-[11px] text-ink-3">{feature.backedBy}</p>
-    </div>
+      {/* The plate. Pulled up over the foot of the figure and blurred, so the
+          picture continues behind the words instead of stopping above them. */}
+      {/* -mt is 16% of the 216px figure, and the scrim in tokens.css is spent at
+          84% to match. Deepen the overlap and the figure is still at strength
+          under the hairline, which comes through the blur as a smear. */}
+      <div className="room-cap-plate relative z-10 -mt-[34px] flex-1 px-5 pb-4 pt-4 min-[720px]:px-6 min-[720px]:pb-5">
+        <p className="font-mono text-[11px] text-ink-3">{feature.backedBy}</p>
+        <h3 className="mt-2 font-sans text-[17px] font-medium leading-snug text-ink">
+          {feature.title}
+        </h3>
+        <p className="mt-2 max-w-[46ch] text-[13px] leading-[1.6] text-ink-2">{feature.body}</p>
+      </div>
+    </article>
   );
 }
 
@@ -120,40 +94,37 @@ export function CapabilityGrid() {
           io.disconnect();
         }
       },
-      { threshold: 0.15 },
+      { threshold: 0.12 },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
   return (
+    // py-24/py-32 is the page's section rhythm; see (marketing)/page.tsx. This
+    // was py-16/py-20 and sat visibly tighter than the sections either side.
     <section id="tools" className="w-full px-4 py-24 min-[768px]:px-6 min-[900px]:py-32">
-      <div className="mx-auto w-full max-w-[1100px]">
-        <div className="mx-auto max-w-[62ch] text-center">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-            {CAPABILITIES_LABEL}
-          </p>
-          <h2
-            className="mt-5 font-sans font-medium text-ink"
-            style={{
-              fontSize: "clamp(1.75rem, 3.4vw, 2.5rem)",
-              lineHeight: 1.1,
-              letterSpacing: "-0.028em",
-            }}
-          >
-            <span className="block">{CAPABILITIES_HEAD_1}</span>
-            <span className="block text-ink-3">{CAPABILITIES_HEAD_2}</span>
-          </h2>
-          <p className="mt-6 text-[15px] leading-[1.65] text-ink-2">{CAPABILITIES_BODY}</p>
-        </div>
+      <div className="mx-auto w-full max-w-[1180px]">
+        {/* A label and one sentence. The cards state their own questions, so
+            anything more here is explaining what is about to be shown. */}
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
+          {CAPABILITIES_LABEL}
+        </p>
+        <h2
+          className="mt-4 max-w-[24ch] font-sans font-medium text-ink"
+          style={{
+            fontSize: "clamp(1.6rem, 3vw, 2.25rem)",
+            lineHeight: 1.12,
+            letterSpacing: "-0.028em",
+          }}
+        >
+          {CAPABILITIES_HEAD}
+        </h2>
 
-        {/* Dashed rules rather than solid: this is a set of related answers, not
-            six separate panels. Six cards divide evenly at 1, 2 and 3 columns,
-            so no breakpoint leaves a hole in the grid. */}
         <div
           ref={ref}
           data-playing={playing ? "true" : undefined}
-          className="room-cap-grid mt-14 grid grid-cols-1 border border-dashed border-edge min-[560px]:grid-cols-2 min-[900px]:grid-cols-3"
+          className="room-cap-grid mt-8 grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 min-[900px]:grid-cols-6"
         >
           {CAPABILITIES.map((feature, i) => (
             <CapabilityCard key={feature.title} feature={feature} index={i} />

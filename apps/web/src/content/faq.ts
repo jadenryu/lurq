@@ -1,3 +1,5 @@
+import stats from "@/content/generated/stats.json";
+
 export type Faq = { q: string; a: string };
 
 export const faqs: Faq[] = [
@@ -11,7 +13,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "What do you mean by execution-verified?",
-    a: "Most of what you can know about a package comes from reading metadata: downloads, release dates, advisories. Some things you can only learn by running it. lurq installs packages in an isolated sandbox and records what happened — did the install succeed, does it import, do these two versions coexist. Those facts appear in no changelog and no model's training data.",
+    a: "Most of what you can know about a package comes from reading metadata: downloads, release dates, advisories. Some things you only learn by running it. lurq installs packages in an isolated sandbox and records what happened. Did the install succeed, does it import, do these two versions coexist. Those facts appear in no changelog and in no model's training data.",
   },
   {
     q: "Why does a whole stack need checking, not just each package?",
@@ -23,11 +25,32 @@ export const faqs: Faq[] = [
   },
   {
     q: "Where does the data come from?",
-    a: "Public sources for the signals: npm, GitHub, deps.dev, and bundle size data, refreshed daily. Everything else comes from our own sandbox runs. Scores are computed from real signals, never hand-picked, and the exact weights are public — run `lurq weights` to print them.",
+    a: "Public sources for the signals: npm, GitHub, deps.dev, and bundle size data. Everything else comes from our own sandbox runs. Scores are computed from real signals, never hand-picked, and the exact weights are public. Run `lurq weights` to print them.",
   },
   {
+    /**
+     * REWRITTEN, because the old answer opened "The index refreshes daily" and
+     * nothing backs that. stats.json reports the last sync as `partial`, having
+     * seen 295 of 3,315 packages. The per-answer timestamp was always the
+     * stronger claim: it is checkable per call, where a cadence is a promise.
+     */
     q: "How current is it?",
-    a: "The index refreshes daily, and every answer carries a dataAsOf timestamp so you know how fresh it is. Where an answer comes from a sandbox run rather than metadata, it carries the evidence too.",
+    a: "Every answer carries a dataAsOf timestamp, so you can see exactly how old the reading is instead of trusting a refresh schedule. Popular packages get re-read most often. A long-tail package can be weeks stale, and the timestamp will say so rather than hide it.",
+  },
+  {
+    /**
+     * The coverage figure is read from stats.json, not typed here, for the same
+     * reason the version eyebrow and every provenance stat are: a number in
+     * prose is the one number nobody re-checks when the pipeline moves.
+     *
+     * It also says "package versions", not "packages". `apiSurfaces` counts rows
+     * in api_surfaces, whose unique index is (package_name, version), so one
+     * package with two extracted versions contributes two. Stating it as a
+     * package count against the 3,315 package total compared two different units
+     * and overstated coverage.
+     */
+    q: "What doesn't work yet?",
+    a: `Three things, honestly. The API surface index covers ${stats.apiSurfaces} package versions so far, so for most packages the exact-signature answer is not there yet. Sandbox verification runs on a queue rather than on demand, which means a brand new pair may not have been executed when you ask. And the whole index is JS/TS only, with no plans for other ecosystems until this one is solid.`,
   },
   {
     q: "Is it free?",
