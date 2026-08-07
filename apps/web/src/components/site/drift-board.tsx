@@ -94,6 +94,19 @@ function staleMonths(iso: string): number {
   return Math.max(0, Math.round((T1 - Date.parse(iso)) / AVG_MONTH));
 }
 
+/**
+ * The same figure as a phrase, for the row's screen-reader line.
+ *
+ * The visible column says "1 mo", which is an abbreviation and is correctly
+ * invariant. The spoken line was built as `${n} months` and read "wrong for 1
+ * months" on every package whose major shipped inside the last six weeks, which
+ * is four of the eight rows on the default board.
+ */
+function staleSpoken(iso: string): string {
+  const n = staleMonths(iso);
+  return `${n} ${n === 1 ? "month" : "months"}`;
+}
+
 function downloads(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
@@ -113,7 +126,18 @@ function month(iso: string): string {
 }
 
 
-const cell = "px-3 py-3.5 font-mono text-[13px] whitespace-nowrap";
+/**
+ * Rows are Geist, not Commit Mono.
+ *
+ * `tabular-nums` is what makes that safe. The argument for monospacing this
+ * table was never the letterforms, it was the digits: `25.6.0` over `26.1.1`
+ * over `382M` has to align on the column or the eye cannot compare down it.
+ * Geist carries tabular figures, which buys exactly that alignment without
+ * setting the package names in a face built for code editors. A proportional
+ * name column also reads faster, which matters most for the one thing every
+ * visitor scans for, which is whether they recognise anything on the list.
+ */
+const cell = "px-3 py-3.5 font-sans text-[13px] tabular-nums whitespace-nowrap";
 /**
  * Headers are the page's sans at a size a person reads, not 10px mono capitals
  * on a 0.14em track. The cells below are monospaced because their contents are
@@ -646,7 +670,7 @@ export function DriftBoard() {
                           </span>
                         </span>
                         <span className="sr-only">
-                          shipped {month(r.bumped_at)}, wrong for {staleMonths(r.bumped_at)} months
+                          shipped {month(r.bumped_at)}, wrong for {staleSpoken(r.bumped_at)}
                         </span>
                       </td>
                       <td className={`${cell} pr-5 text-right text-ink-2`}>
