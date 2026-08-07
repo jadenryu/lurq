@@ -87,6 +87,50 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('replay')
+    .argument('<dirs...>', 'repository checkouts to replay')
+    .description('M0 human baseline — do real repos reference symbols their pinned versions lack?')
+    .option('--include-dev', 'also score devDependencies')
+    .option('--fetch-missing', 'fetch uninstalled deps from the registry')
+    .option('--json', 'output the full report as JSON')
+    .action(
+      async (dirs: string[], opts: { includeDev?: boolean; fetchMissing?: boolean; json?: boolean }) => {
+        const { replayRepo } = await import('../benchmark/replay');
+        const reports = [];
+        for (const dir of dirs) {
+          try {
+            reports.push(await replayRepo(dir, opts));
+          } catch (err) {
+            console.error(`  ! ${dir}: ${String(err).slice(0, 140)}`);
+          }
+        }
+        if (opts.json) {
+          console.log(JSON.stringify(reports, null, 2));
+          return;
+        }
+        let ref = 0;
+        let miss = 0;
+        for (const r of reports) {
+          ref += r.totalReferenced;
+          miss += r.totalMissing;
+          const pct = r.missRate === null ? 'n/a' : `${(r.missRate * 100).toFixed(1)}%`;
+          console.log(
+            `\n${r.repo}\n  ${r.packagesReferenced} pkg(s) scored · ${r.totalReferenced} symbol(s) referenced · ${r.totalMissing} absent (${pct})`,
+          );
+          for (const p of r.packages.filter((x) => x.missing.length)) {
+            console.log(`    MISS ${p.package}@${p.version}: ${p.missing.join(', ')}`);
+          }
+          if (r.skipped.length) {
+            console.log(`    skipped: ${r.skipped.map((x) => x.package).join(', ')}`);
+          }
+        }
+        const overall = ref ? ((miss / ref) * 100).toFixed(1) : 'n/a';
+        console.log(`\n  HUMAN BASELINE: ${overall}% symbol miss rate (${miss}/${ref}) over ${reports.length} repo(s)`);
+        console.log('  Compare against the agent arm from `miss-rate` — that comparison is M0.');
+      },
+    );
+
+  program
     .command('miss-rate')
     .description('M0 controlled arm — how often does model-authored code reference absent symbols?')
     .option('--model <name>', 'model id — gpt-* | claude-* | gemini-* (default gpt-4o-mini)')
