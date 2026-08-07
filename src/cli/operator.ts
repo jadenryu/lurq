@@ -89,13 +89,21 @@ export function registerOperatorCommands(program: Command): void {
   program
     .command('miss-rate')
     .description('M0 controlled arm — how often does model-authored code reference absent symbols?')
-    .option('--model <name>', 'OpenAI model id (default gpt-4o-mini)')
+    .option('--model <name>', 'model id — gpt-* | claude-* | gemini-* (default gpt-4o-mini)')
+    .option('--samples <n>', 'samples per case; >1 is required for a meaningful number', (v) => parseInt(v, 10))
     .option('--suite <path>', 'case file (default tests/benchmark/miss-rate-v1.json)')
     .option('--limit <n>', 'run only the first N cases (pilot)', (v) => parseInt(v, 10))
     .option('--show-code', 'include the generated source in JSON output')
     .option('--json', 'output the full report as JSON')
     .action(
-      async (opts: { model?: string; suite?: string; limit?: number; showCode?: boolean; json?: boolean }) => {
+      async (opts: {
+        model?: string;
+        suite?: string;
+        limit?: number;
+        samples?: number;
+        showCode?: boolean;
+        json?: boolean;
+      }) => {
         const { readFileSync } = await import('node:fs');
         const { runMissRate } = await import('../benchmark/missRate');
         const path = opts.suite ?? 'tests/benchmark/miss-rate-v1.json';
@@ -105,12 +113,17 @@ export function registerOperatorCommands(program: Command): void {
         const cases = opts.limit ? suite.cases.slice(0, opts.limit) : suite.cases;
         const model = opts.model ?? 'gpt-4o-mini';
 
-        const report = await runMissRate(cases, model, { keepCode: opts.showCode });
+        const report = await runMissRate(cases, model, {
+          keepCode: opts.showCode,
+          samples: opts.samples,
+        });
         if (opts.json) {
           console.log(JSON.stringify(report, null, 2));
           return;
         }
-        console.log(`\nmodel: ${report.model} · ${report.scored}/${report.cases} scored · ${report.unverifiable} unverifiable\n`);
+        console.log(
+          `\nmodel: ${report.model} · ${report.samples} sample(s)/case · ${report.scored}/${report.cases} scored · ${report.unverifiable} unverifiable\n`,
+        );
         for (const r of report.results) {
           if (r.unverifiable) {
             console.log(`  —      ${r.id.padEnd(20)} unverifiable: ${r.unverifiable}`);

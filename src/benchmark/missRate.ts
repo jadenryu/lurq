@@ -53,6 +53,8 @@ export interface CaseResult {
 
 export interface MissRateReport {
   model: string;
+  /** Samples drawn per case. >1 is required for the number to mean anything. */
+  samples: number;
   cases: number;
   scored: number;
   unverifiable: number;
@@ -75,11 +77,39 @@ Requirements:
 - Import only from "${c.package}" and Node built-ins.
 - Output ONLY the TypeScript source. No markdown fences, no commentary.`;
 
-/** Minimal chat call; mirrors the existing OpenAI participant's shape. */
+/** Provider inferred from the model id, matching the existing participants. */
+export type Provider = 'openai' | 'anthropic' | 'gemini';
+
+export function providerOf(model: string): Provider {
+  if (model.startsWith('claude-')) return 'anthropic';
+  if (model.startsWith('gemini-')) return 'gemini';
+  return 'openai';
+}
+
+/** Strip markdown fences models add despite instructions. */
+function unfence(text: string): string {
+  return text.replace(/^```[a-z]*\n?/gim, '').replace(/```$/gm, '').trim();
+}
+
+/**
+ * One chat call per provider, over raw HTTP.
+ *
+ * Deliberately matches the existing participants (openai.ts / anthropic.ts /
+ * gemini.ts) rather than pulling in a vendor SDK: this package publishes to npm,
+ * all three arms of the comparison should differ only in the model, and three
+ * SDKs for three ~20-line calls is a dependency cost with no payoff here.
+ */
 async function generate(model: string, prompt: string): Promise<string> {
+  const provider = providerOf(model);
+  if (provider === 'anthropic') return generateAnthropic(model, prompt);
+  if (provider === 'gemini') return generateGemini(model, prompt);
+  return generateOpenAI(model, prompt);
+}
+
+async function generateOpenAI(model: string, prompt: string): Promise<string> {
   const config = getConfig();
   const key = config.SUMMARY_API_KEY || config.EMBEDDING_API_KEY;
-  if (!key) throw new Error('miss-rate run requires SUMMARY_API_KEY or EMBEDDING_API_KEY');
+  if (!key) throw new Error('OpenAI arm requires SUMMARY_API_KEY or EMBEDDING_API_KEY');
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -90,9 +120,64 @@ async function generate(model: string, prompt: string): Promise<string> {
     throw new Error(`OpenAI API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
   }
   const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = body.choices?.[0]?.message?.content ?? '';
-  // Models add fences despite instructions; strip rather than fail the case.
-  return text.replace(/^```[a-z]*\n?/gim, '').replace(/```$/gm, '').trim();
+  return unfence(body.choices?.[0]?.message?.content ?? '');
+}
+
+/**
+ * Messages API. Note there is deliberately no `temperature`: it was removed on
+ * Opus 4.7 and later and returns a 400 there, so sending it would break exactly
+ * the models we most want to measure.
+ */
+async function generateAnthropic(model: string, prompt: string): Promise<string> {
+  const key = process.env.CLAUDE_API_KEY;
+  if (!key) throw new Error('Anthropic arm requires CLAUDE_API_KEY in .env');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Anthropic API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+  }
+  const body = (await res.json()) as {
+    content?: { type: string; text?: string }[];
+    stop_reason?: string;
+  };
+  // A safety decline returns HTTP 200 with stop_reason 'refusal' and no text —
+  // that is not a model failure to measure, so surface it as unverifiable.
+  if (body.stop_reason === 'refusal') throw new Error('anthropic declined the request (refusal)');
+  const text = body.content?.find((c) => c.type === 'text')?.text ?? '';
+  return unfence(text);
+}
+
+async function generateGemini(model: string, prompt: string): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('Gemini arm requires GEMINI_API_KEY in .env');
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Gemini API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+  }
+  const body = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  return unfence(body.candidates?.[0]?.content?.parts?.[0]?.text ?? '');
 }
 
 export async function scoreCase(
@@ -178,19 +263,34 @@ export async function scoreCase(
   }
 }
 
+/**
+ * Run the suite, sampling each case `samples` times.
+ *
+ * Repeated sampling is not optional rigour — it is the fix for the defect that
+ * made the first pilot uninterpretable. At temperature 1 each case is ONE draw
+ * from a distribution, and two runs of the same 10 cases gave 30% then 23%.
+ * A single-sample number is noise dressed as a measurement.
+ */
 export async function runMissRate(
   cases: MissRateCase[],
   model: string,
-  opts: { keepCode?: boolean } = {},
+  opts: { keepCode?: boolean; samples?: number } = {},
 ): Promise<MissRateReport> {
+  const samples = Math.max(1, opts.samples ?? 1);
   const results: CaseResult[] = [];
-  for (const c of cases) results.push(await scoreCase(c, model, opts));
+  for (const c of cases) {
+    for (let i = 0; i < samples; i++) {
+      const r = await scoreCase(c, model, opts);
+      results.push(samples > 1 ? { ...r, id: `${c.id}#${i + 1}` } : r);
+    }
+  }
 
   const scored = results.filter((r) => r.missRate !== null);
   const totalReferenced = scored.reduce((a, r) => a + r.referenced.length, 0);
   const totalMissing = scored.reduce((a, r) => a + r.missing.length, 0);
   return {
     model,
+    samples,
     cases: results.length,
     scored: scored.length,
     unverifiable: results.length - scored.length,
