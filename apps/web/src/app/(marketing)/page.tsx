@@ -2,6 +2,7 @@ import { SiteNav } from "@/components/site/nav";
 import { Hero } from "@/components/site/hero";
 import { IdeMarquee } from "@/components/site/ide-marquee";
 import { AgentSession } from "@/components/site/agent-session";
+import { CapabilityGrid } from "@/components/site/capability-grid";
 import { DriftBoard } from "@/components/site/drift-board";
 import { SiteFooter } from "@/components/site/footer";
 import { ScaffoldSection } from "@/components/site/scaffold-section";
@@ -31,6 +32,10 @@ export default function Home() {
             everywhere, and "so what does it do once it is there" is the next
             question a reader has. */}
         <AgentSession />
+        {/* The session shows one call; this shows the whole surface. Reads as
+            the expansion of what just happened, which is why it sits here
+            rather than after the drift board. */}
+        <CapabilityGrid />
         <DriftBoard />
         {/* Scaffolding: see components/site/scaffold-section.tsx. Delete this
             and its component once the section lands. */}
