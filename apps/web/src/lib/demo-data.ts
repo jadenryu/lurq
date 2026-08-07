@@ -19,6 +19,7 @@ import type {
   DashboardOutcome,
   DashboardRepo,
   DashboardUsage,
+  RepoBrief,
 } from "@/lib/lurq-issuer";
 
 const DEFAULT_DEMO_EMAILS = ["me.shivansh007@gmail.com"];
@@ -290,4 +291,95 @@ export function demoRepoDeps(): DashboardDep[] {
     deprecated,
     advisories,
   }));
+}
+
+/**
+ * Migration brief for the demo repo. Symbol names are real removals from those
+ * majors — a brief full of `foo`/`bar` teaches a viewer nothing about whether
+ * the product would catch anything in their own codebase.
+ */
+export function demoRepoBrief(): RepoBrief {
+  return {
+    omitted: 19,
+    pending: 1,
+    upgrades: [
+      {
+        package: "react-router",
+        fromVersion: "6.9.2",
+        toVersion: "8.1.0",
+        majorsBehind: 2,
+        advisories: 0,
+        deprecated: false,
+        verdict: "removes-exports",
+        removed: [
+          "useHistory",
+          "Switch",
+          "Redirect",
+          "withRouter",
+          "useRouteMatch",
+          "StaticRouter",
+        ],
+        arityChanged: [{ path: "createBrowserRouter", from: 2, to: 3 }],
+        typeOnlyRemoved: ["RouteComponentProps", "match"],
+        newlyDeprecated: ["json", "defer"],
+      },
+      {
+        package: "node-fetch",
+        fromVersion: "2.7.0",
+        toVersion: "4.0.1",
+        majorsBehind: 2,
+        advisories: 1,
+        deprecated: false,
+        verdict: "removes-exports",
+        removed: ["FetchError", "isRedirect"],
+        arityChanged: [],
+        typeOnlyRemoved: ["RequestInit"],
+        newlyDeprecated: [],
+      },
+      {
+        package: "express",
+        fromVersion: "4.21.2",
+        toVersion: "5.2.1",
+        majorsBehind: 1,
+        advisories: 0,
+        deprecated: false,
+        verdict: "arity-changed",
+        removed: [],
+        arityChanged: [
+          { path: "Router", from: 1, to: 2 },
+          { path: "static", from: 2, to: 3 },
+        ],
+        typeOnlyRemoved: [],
+        newlyDeprecated: ["query"],
+      },
+      {
+        package: "date-fns",
+        fromVersion: "2.30.0",
+        toVersion: "4.1.0",
+        majorsBehind: 2,
+        advisories: 0,
+        deprecated: false,
+        verdict: "unknown",
+        removed: [],
+        arityChanged: [],
+        typeOnlyRemoved: [],
+        newlyDeprecated: [],
+        inconclusive:
+          "no extracted surface for 4.1.0 — queued; retry shortly. NOT evidence that symbols were removed.",
+      },
+      {
+        package: "zod",
+        fromVersion: "3.25.76",
+        toVersion: "4.1.5",
+        majorsBehind: 1,
+        advisories: 0,
+        deprecated: false,
+        verdict: "clean",
+        removed: [],
+        arityChanged: [],
+        typeOnlyRemoved: [],
+        newlyDeprecated: [],
+      },
+    ],
+  };
 }

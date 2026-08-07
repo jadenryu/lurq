@@ -30,6 +30,7 @@ import { deleteRepo, getRepo, listRepos, setRepoPolicy, upsertRepos } from '../d
 import { getUsageByTool, getUsageSummary } from '../db/usage';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
+import { briefRepo } from '../github/brief';
 import { listInstallationRepos } from '../github/manifests';
 import type { RepoPolicy } from '../github/types';
 import { scanOwnerRepos, scanRepo } from '../pipeline/repoScan';
@@ -477,6 +478,26 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('repo read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read repo.' });
+    }
+  });
+
+  app.get('/repos/:id/brief', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const id = Number(req.params.id);
+    if (!ownerId || !Number.isInteger(id)) {
+      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
+      return;
+    }
+    try {
+      const row = await getRepo(db, ownerId, id);
+      if (!row) {
+        res.status(404).json({ error: 'Repo not found.' });
+        return;
+      }
+      res.status(200).json(await briefRepo(db, row.drift ?? null));
+    } catch (err) {
+      logger.error('repo brief failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not build the migration brief.' });
     }
   });
 

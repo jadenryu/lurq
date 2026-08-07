@@ -210,6 +210,36 @@ export async function fetchRepo(
   return data.repo ?? null;
 }
 
+export type UpgradeVerdict = "removes-exports" | "arity-changed" | "clean" | "unknown";
+
+export interface UpgradeBrief {
+  package: string;
+  fromVersion: string;
+  toVersion: string;
+  majorsBehind: number;
+  advisories: number;
+  deprecated: boolean;
+  verdict: UpgradeVerdict;
+  removed: string[];
+  arityChanged: { path: string; from: number | null; to: number | null }[];
+  typeOnlyRemoved: string[];
+  newlyDeprecated: string[];
+  inconclusive?: string;
+}
+
+export interface RepoBrief {
+  upgrades: UpgradeBrief[];
+  omitted: number;
+  pending: number;
+}
+
+export async function fetchRepoBrief(ownerId: string, id: number): Promise<RepoBrief> {
+  const res = await issuerFetch(`/repos/${id}/brief?ownerId=${encodeURIComponent(ownerId)}`);
+  assertRepoOk(res, "Could not build the migration brief.");
+  const data = (await res.json()) as Partial<RepoBrief>;
+  return { upgrades: data.upgrades ?? [], omitted: data.omitted ?? 0, pending: data.pending ?? 0 };
+}
+
 export async function connectInstallation(
   ownerId: string,
   installationId: number,

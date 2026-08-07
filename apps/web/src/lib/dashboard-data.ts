@@ -23,6 +23,7 @@ import {
   demoContributions,
   demoKeys,
   demoOutcomes,
+  demoRepoBrief,
   demoRepoDeps,
   demoRepos,
   demoUsage,
@@ -33,6 +34,7 @@ import {
   fetchKeys,
   fetchOutcomes,
   fetchRepo,
+  fetchRepoBrief,
   fetchRepos,
   fetchUsage,
   GithubNotConfiguredError,
@@ -42,6 +44,7 @@ import {
   type DashboardOutcome,
   type DashboardRepo,
   type DashboardUsage,
+  type RepoBrief,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -143,6 +146,28 @@ export async function loadRepos(): Promise<Loaded<ReposData>> {
       err instanceof Error ? err.message : String(err),
     );
     return { data: { repos: [], configured: true }, demo: false, failed: true };
+  }
+}
+
+const EMPTY_BRIEF: RepoBrief = { upgrades: [], omitted: 0, pending: 0 };
+
+/**
+ * The migration brief. Loaded separately from the repo itself so the page can
+ * stream: drift numbers render immediately while the brief — which fans out to
+ * one surface diff per upgrade — resolves behind a boundary.
+ */
+export async function loadRepoBrief(id: number): Promise<Loaded<RepoBrief>> {
+  const { userId, demo } = await context();
+  if (!userId) return { data: EMPTY_BRIEF, demo: false, failed: false };
+  if (demo) return { data: demoRepoBrief(), demo: true, failed: false };
+  try {
+    return { data: await fetchRepoBrief(userId, id), demo: false, failed: false };
+  } catch (err) {
+    console.warn(
+      "[lurq] migration brief read failed.",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { data: EMPTY_BRIEF, demo: false, failed: true };
   }
 }
 

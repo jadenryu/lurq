@@ -1,13 +1,35 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MigrationBrief } from "@/components/dashboard/migration-brief";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { InlineError } from "@/components/dashboard/panel";
+import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { buttonVariants } from "@/components/ui/button";
-import { loadRepo } from "@/lib/dashboard-data";
+import { loadRepo, loadRepoBrief } from "@/lib/dashboard-data";
 import { relativeTime } from "@/lib/format";
+
+async function Brief({ id }: { id: number }) {
+  const { data, failed } = await loadRepoBrief(id);
+  return <MigrationBrief brief={data} failed={failed} />;
+}
+
+function BriefSkeleton() {
+  return (
+    <div className="space-y-4">
+      <PanelHeader title="migration brief" />
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <Panel key={i} padding="tight">
+            <div className="h-5 w-2/5 animate-pulse rounded bg-muted" />
+          </Panel>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default async function RepoDetailPage({
   params,
@@ -59,6 +81,12 @@ export default async function RepoDetailPage({
             <StatTile label="deprecated" value={drift.deprecated} />
           </div>
         )}
+
+        {/* The brief fans out to one surface diff per upgrade, so it streams in
+            behind the drift numbers rather than holding the whole page. */}
+        <Suspense fallback={<BriefSkeleton />}>
+          <Brief id={repo.id} />
+        </Suspense>
 
         <RepoPolicyPanel repoId={repo.id} policy={repo.policy} demo={demo} />
 

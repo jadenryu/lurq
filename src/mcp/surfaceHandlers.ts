@@ -245,6 +245,9 @@ async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
       added: [],
       arityChanged: [],
       typeOnlyRemoved: [],
+      // Present-but-empty like every other list above, so a miss and a hit have
+      // the same shape and callers never have to branch on which one they got.
+      deprecated: [],
       observedAt: null,
     };
   }
