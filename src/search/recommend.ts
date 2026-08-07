@@ -7,7 +7,7 @@
  * that, and RRF avoids having to normalize two incomparable score scales.
  */
 import { and, cosineDistance, eq, inArray, isNotNull, lte, sql } from 'drizzle-orm';
-import type { Candidate, Category, Confidence, Runtime } from '../core/types';
+import type { Candidate, Category, Confidence } from '../core/types';
 import type { Database } from '../db/client';
 import { packages } from '../db/schema';
 import { computeComposite } from '../scoring';
@@ -16,7 +16,6 @@ import { inferCategory } from './categoryInference';
 import { createEmbeddingProvider, type EmbeddingProvider } from './embeddings';
 
 export interface RecommendConstraints {
-  runtime?: Runtime;
   license?: string;
   maxBundleKb?: number;
   minConfidence?: Confidence;

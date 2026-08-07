@@ -40,9 +40,12 @@ export const npmName = z
   .max(214)
   .regex(/^(?:@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/i, 'Invalid npm package name');
 
+// No `runtime` filter: lurq stores no per-package runtime signal, so the field
+// was accepted and silently ignored — an agent asking for browser-only packages
+// got the unfiltered list back. Restore it when ingestion records the manifest's
+// `browser` field / `exports` browser condition, not before.
 const constraintsSchema = z
   .object({
-    runtime: z.enum(['browser', 'node', 'both']).optional(),
     license: z.string().optional(),
     maxBundleKb: z.number().positive().optional(),
     minConfidence: confidenceEnum.optional(),
@@ -168,7 +171,7 @@ export function buildMcpServer(
     {
       title: 'Version-exact API surface + drift',
       description:
-        "Get a package version's real public API — the exported symbols and signatures extracted from its shipped .d.ts, exact to the version, none of it in the model's training data. Pass knownVersion (e.g. the version you were trained on) to get the precise delta: what was added, removed, renamed, or changed. Use before writing code against a package whose API may have moved. For framework file/convention changes (not exported symbols), consult the official migration guide / Context7 instead.",
+        "Get a package version's real public API — the exported symbols and signatures extracted from its shipped .d.ts, exact to the version, none of it in the model's training data. Pass knownVersion (e.g. the version you were trained on) to get the precise delta: what was added, removed, renamed, or changed. Also returns the version's declared engines (Node/runtime floor) so you don't write code against a version the target runtime cannot install. Use before writing code against a package whose API may have moved. For framework file/convention changes (not exported symbols), consult the official migration guide / Context7 instead.",
       inputSchema: {
         package: npmName.describe('npm package name'),
         version: z.string().optional().describe('Target version (defaults to latest)'),

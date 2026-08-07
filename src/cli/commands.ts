@@ -461,6 +461,10 @@ export async function runUsage(
     if (opts.json) return console.log(JSON.stringify(res, null, 2));
 
     console.log(`${bold(res.package)}${res.version ? `@${res.version}` : ''}`);
+    if (res.engines) {
+      const reqs = Object.entries(res.engines).map(([k, v]) => `${k} ${v}`).join(', ');
+      if (reqs) console.log(dim(`requires: ${reqs}`));
+    }
     if (!res.available) return console.log(dim(res.note ?? 'no API surface available'));
 
     console.log(

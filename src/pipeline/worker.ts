@@ -18,7 +18,6 @@ import { runDiscovery } from './discovery';
 import { drainCompatVerifyQueue } from './compat';
 import { drainSurfaceQueue } from './surface';
 import { runRescore } from './rescore';
-import { getOrExtractSurface } from '../usage/service';
 
 export interface WorkerOptions {
   /** Seconds between cycles (default 900 = 15 min). */
@@ -41,6 +40,9 @@ async function extractSurfacesPass(limit: number): Promise<number> {
   try {
     const missing = await getPackagesMissingSurface(handle.db, limit);
     if (missing.length === 0) return 0;
+    // Kept off the module graph: extraction needs the TypeScript compiler, and
+    // a static import made every operator command require it at boot.
+    const { getOrExtractSurface } = await import('../usage/service');
     const results = await pMap(
       missing,
       (p) => getOrExtractSurface(handle.db, p.name, p.version).then((s) => (s ? 1 : 0)),

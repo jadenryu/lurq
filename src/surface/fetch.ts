@@ -18,7 +18,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { encodeNpmName } from '../ingestion/sources/npmRegistry';
-import { extractSurface } from './extract';
 import type { ExtractedSurface } from './types';
 
 const execFileP = promisify(execFile);
@@ -114,6 +113,11 @@ export async function fetchAndExtract(
       };
     }
 
+    // Loaded here, not at module scope: `extractSurface` pulls in the TypeScript
+    // compiler, which is an operator-only dependency. A static edge put it in
+    // every bundle chunk that reaches this file, so `sync` (which never
+    // extracts) refused to boot without it.
+    const { extractSurface } = await import('./extract');
     const surface = extractSurface(pkgDir);
     return {
       surface: { ...surface, package: name, version: dist.version },

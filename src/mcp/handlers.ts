@@ -30,7 +30,12 @@ import { recordOutcome } from '../db/outcomes';
 import { lookupSuccessor } from '../core/successors';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
-import { fetchNpmRegistry, fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
+import {
+  fetchNpmCompatAtVersion,
+  fetchNpmRegistry,
+  fetchWeeklyDownloads,
+  npmPackageExists,
+} from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
@@ -385,16 +390,21 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
       version: null,
       surface: null,
       available: false,
+      engines: null,
       note: `Could not resolve a version for "${input.package}" on npm.`,
     };
   }
 
-  const surface = await getStoredSurface(db, input.package, version);
+  const [surface, compat] = await Promise.all([
+    getStoredSurface(db, input.package, version),
+    fetchNpmCompatAtVersion(input.package, version).catch(() => null),
+  ]);
   const out: UsageOutput = {
     package: input.package,
     version,
     surface,
     available: surface !== null,
+    engines: compat?.engines ?? null,
     note: surface
       ? undefined
       : 'No extracted API surface for this version yet; fall back to the README.',
