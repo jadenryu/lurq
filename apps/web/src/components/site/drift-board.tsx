@@ -121,8 +121,20 @@ const cell = "px-3 py-3.5 font-mono text-[13px] whitespace-nowrap";
  * to align on the digit. A header is a sentence fragment in English and gets no
  * such benefit; setting it in the same face as the data was what made the whole
  * board read as one undifferentiated block of terminal output.
+ *
+ * --ink-2 rather than --ink-3, and 13px rather than 12. A header row dimmer and
+ * smaller than the rows beneath it reads as quieter data; the job of this one is
+ * to sit a layer above the data and say what each column is. Tracking is pulled
+ * very slightly negative because Geist at 13px medium sets a touch loose for a
+ * label, which is the opposite of the 0.14em track this replaced.
+ *
+ * No third font family. Inter was the obvious candidate and was measured
+ * against Geist at this size: same neo-grotesque lineage, near-identical
+ * texture, ~40kB for a difference nobody could name. Weight, size and value are
+ * the levers that carry at 13px, and none of them cost a download.
  */
-const head = "px-3 py-3 text-[12px] font-medium text-ink-3 whitespace-nowrap";
+const head =
+  "px-3 py-3 text-[13px] font-medium tracking-[-0.01em] text-ink-2 whitespace-nowrap";
 
 /** The four columns worth ordering by. Version strings are not among them: "10.0.0" sorts before "9.0.0" as text and comparing them properly is a semver dependency for a control nobody asked for. */
 type SortKey = "name" | "majors_since" | "bumped_at" | "weekly_downloads";
