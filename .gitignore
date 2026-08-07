@@ -188,8 +188,13 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# mkdocs documentation
-/site
+# (A stock Python `.gitignore` block for mkdocs used to ignore `/site` here.
+#  This repo has never used mkdocs, and the entry was not free: Tailwind's
+#  automatic source detection reads .gitignore and applies its patterns per
+#  directory rather than anchored to the repo root, so `/site` matched
+#  apps/web/src/components/site and every class used only in the landing page
+#  silently failed to compile. Git tracked the files; the stylesheet did not
+#  know they existed.)
 
 # mypy
 .mypy_cache/
