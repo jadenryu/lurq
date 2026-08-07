@@ -1,13 +1,27 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Logo } from "@/components/common/logo";
-// Static import → Next generates a blurDataURL for an instant placeholder and
-// serves an optimized webp (source is a compressed 1466×2200 backdrop).
-import larp from "../../../public/logos/larp.jpg";
+import { GradientBlob } from "@/components/site/gradient-blob";
+import { HEADLINE_LINE_1, HEADLINE_LINE_2 } from "@/content/copy";
 
-// Split auth layout (Neon-style): a 50% photo panel on the left carrying the
-// lurq mark + tagline over a low-exposure backdrop, and a 50% form column on
-// the right with a centered, borderless Clerk element.
+/**
+ * Split auth layout: the brand panel on the left, the form column on the right.
+ *
+ * THE LEFT PANEL USED TO BE A PHOTOGRAPH. A 1466x2200 mountain range at
+ * brightness .4 under a three-stop black gradient, with the mark and a tagline
+ * over it. It was the only surface in the product still built that way, and once
+ * the marketing page moved to the gradient field it read as a different company's
+ * login page.
+ *
+ * Now it is the hero's own background: the same GradientBlob component at the
+ * same opacity, on --ground, with the same two-line headline the home page
+ * leads with. One theme, and the panel costs no image bytes at all.
+ *
+ * The tagline went with the photo. It read "Execution-verified answers for your
+ * coding agent", which was a third distinct pitch after the hero's and the
+ * footer's, and it made a verification claim the marketing page is careful not
+ * to make.
+ */
 export function AuthShell({
   children,
   eyebrow,
@@ -21,30 +35,41 @@ export function AuthShell({
 }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
-      <div className="relative hidden items-center justify-center overflow-hidden bg-black lg:flex">
-        <Image
-          src={larp}
-          alt=""
-          fill
-          priority
-          placeholder="blur"
-          sizes="50vw"
-          className="object-cover object-center brightness-[0.4]"
+      <div className="relative hidden items-center justify-center overflow-hidden bg-ground lg:flex">
+        {/* The hero's two blooms, placed for a half-width tall panel rather than
+            a full-bleed section: one off the top edge, one off the bottom, both
+            pulled to the panel's own centre line. */}
+        <GradientBlob
+          outer="inset-x-0 -top-40 min-h-screen"
+          inner="left-[calc(50%-8rem)] min-h-screen rotate-[30deg]"
         />
-        {/* darken toward the edges so the overlaid mark + tagline stay legible */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/45" />
-        <div className="relative z-10 flex flex-col items-center gap-6 px-10 text-center">
+        <GradientBlob
+          outer="inset-x-0 top-[calc(100%-20rem)] min-h-screen"
+          inner="left-[calc(50%+6rem)] min-h-screen"
+        />
+
+        <div className="relative z-10 flex flex-col items-center gap-7 px-10 text-center">
           <Image
             src="/logos/lq.png"
             alt="lurq"
             width={96}
             height={96}
             priority
-            className="h-20 w-20 object-contain"
+            className="h-16 w-16 object-contain"
           />
-          <p className="max-w-sm text-3xl font-semibold leading-snug tracking-tight text-white">
-            Execution-verified answers for your coding agent.
-          </p>
+          {/* The home page headline, broken on the same two lines, at the same
+              weight and tracking. Not a second pitch written for this route. */}
+          <h2
+            className="max-w-[22ch] font-sans font-medium text-ink"
+            style={{
+              fontSize: "clamp(1.75rem, 2.6vw, 2.4rem)",
+              lineHeight: 1.08,
+              letterSpacing: "-0.03em",
+            }}
+          >
+            <span className="block">{HEADLINE_LINE_1}</span>
+            <span className="block">{HEADLINE_LINE_2}</span>
+          </h2>
         </div>
       </div>
 

@@ -245,6 +245,10 @@ __marimo__/
 # not the published Fumadocs site in apps/docs
 /docs/
 
+# throwaway probes / one-off QA scripts (kept on disk under docs/scratch, not
+# tracked) — nothing in the app may import from here
+/scripts/tmp/
+
 # local Claude Code settings (kept on disk, not tracked)
 .claude/
 

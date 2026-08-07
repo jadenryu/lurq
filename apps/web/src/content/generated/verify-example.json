@@ -1,0 +1,47 @@
+{
+  "generatedAt": "2026-08-06T14:00:30.503Z",
+  "source": "live",
+  "checks": [
+    {
+      "package": "momnet",
+      "result": {
+        "exists": true,
+        "tracked": true,
+        "deprecated": false,
+        "archived": false,
+        "latestVersion": "0.0.1-security",
+        "weeklyDownloads": 29,
+        "riskFlags": [
+          "possible-typosquat-of:moment",
+          "low-downloads",
+          "has-known-advisory"
+        ],
+        "risk": "high",
+        "typosquatOf": "moment",
+        "confidence": "unproven",
+        "advisoryCount": 1
+      },
+      "reproduce": "npx lurqrun verify momnet"
+    },
+    {
+      "package": "request",
+      "result": {
+        "exists": true,
+        "tracked": true,
+        "deprecated": true,
+        "archived": false,
+        "latestVersion": "2.88.2",
+        "weeklyDownloads": 14580123,
+        "riskFlags": [
+          "has-known-advisory",
+          "deprecated"
+        ],
+        "risk": "medium",
+        "typosquatOf": null,
+        "confidence": "unproven",
+        "advisoryCount": 1
+      },
+      "reproduce": "npx lurqrun verify request"
+    }
+  ]
+}

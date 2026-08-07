@@ -1,74 +1,100 @@
-import { Search, ScanLine, Boxes, GitCompare, type LucideIcon } from "lucide-react";
-
-// The four lurq commands, shown as auto-advancing tabs with a terminal clip
-// each. NOTE: the values in the clips are illustrative placeholders; swap for
-// real CLI/MCP output before launch so the section stays verifiable.
-
-export type ClipLine = {
-  text: string;
-  tone?: "prompt" | "dim" | "ok" | "bad" | "accent";
-};
+/**
+ * What an agent can ask lurq, as questions rather than as tool names.
+ *
+ * WHY QUESTIONS. The tool lineup is mid-change: verify, evaluate and compat are
+ * being merged, and the engines check is being promoted out of compat into a
+ * tool of its own. Naming the cards after tools would put two names on the page
+ * that an agent cannot call yet, on a page whose hero says "Three of the four
+ * checks work today". Naming them after the question each one answers is true
+ * now, stays true through the merge, and needs no "planned" badge.
+ *
+ * Every `backedBy` below runs today. It is the receipt for the card above it and
+ * the thing to re-check before editing a card: if a capability ever stops being
+ * live, the card is a lie regardless of how it is worded.
+ */
+import type { FigureName } from "@/components/site/capability-figures";
 
 export type Capability = {
-  id: string;
-  icon: LucideIcon;
+  /** The question, in the words a developer would ask it. */
   title: string;
   body: string;
-  lines: ClipLine[];
+  /** The tool(s) that answer it today. Rendered, not just documented. */
+  backedBy: string;
+  /**
+   * Which figure draws this check. Not an icon: see capability-figures.tsx for
+   * why a padlock and a chip were the wrong furniture for this page.
+   */
+  figure: FigureName;
 };
 
-export const capabilities: Capability[] = [
+/**
+ * Bodies rewritten for rhythm, not for content: every claim is the one that was
+ * here before. Four of the five closed on a "not X, only Y" clause, which is a
+ * shape that stops registering by the third card, and all five ran to the same
+ * two-sentence length. They now vary, and the one short body is deliberate.
+ */
+export const CAPABILITIES: Capability[] = [
   {
-    id: "recommend",
-    icon: Search,
-    title: "Recommend",
-    body: "Ask in plain language. Get a short ranked list, scored from live signals.",
-    lines: [
-      { text: 'lurq recommend "a form library for react"', tone: "prompt" },
-      { text: "3 candidates · scored from npm · github · deps.dev", tone: "dim" },
-      { text: "1  react-hook-form   94  proven" },
-      { text: "2  @tanstack/form    81  emerging" },
-      { text: "3  formik            76  proven" },
-      { text: "→ pick: react-hook-form", tone: "accent" },
-    ],
+    title: "Is it real, and is it healthy?",
+    body: "Downloads, release cadence, open advisories, deprecation flags. Mostly this catches the package that does not exist: a name the model produced fluently, spelled the way a real one would be spelled.",
+    backedBy: "verify · evaluate",
+    figure: "health",
   },
   {
-    id: "verify",
-    icon: ScanLine,
-    title: "Verify",
-    body: "Check a package before your agent even installs it.",
-    lines: [
-      { text: 'lurq verify "jsonwebtoken@8"', tone: "prompt" },
-      { text: "✗ 2 open advisories · algorithm confusion", tone: "bad" },
-      { text: "✗ last publish 2 years ago", tone: "bad" },
-      { text: "→ use jose instead · 0 advisories", tone: "ok" },
-    ],
+    title: "Will these install together?",
+    body: "Every pair in the set, graded against declared peer ranges and against co-installs already sitting in the index. You get the denominator with the failures, so a clean result means something.",
+    backedBy: "compat",
+    figure: "pairs",
   },
   {
-    id: "plan",
-    icon: Boxes,
-    title: "Plan",
-    body: "Fill every slot in the stack and prove that it builds.",
-    lines: [
-      { text: 'lurq plan "typescript api server"', tone: "prompt" },
-      { text: "6 slots resolved · coherence ok", tone: "dim" },
-      { text: "auth        jose         97" },
-      { text: "validation  zod          99" },
-      { text: "orm         drizzle-orm  91" },
-      { text: "→ 3 more · stack health 96", tone: "accent" },
-    ],
+    title: "Does it run on your Node?",
+    body: "Each declared engines range, checked against the runtime you actually deploy on. A stack can resolve perfectly and still die on boot because one member never supported the Node you ship.",
+    backedBy: "compat · usage",
+    figure: "engines",
   },
   {
-    id: "compare",
-    icon: GitCompare,
-    title: "Compare",
-    body: "Put the options side by side on what actually matters.",
-    lines: [
-      { text: "lurq compare date-fns dayjs moment", tone: "prompt" },
-      { text: "date-fns  94  active · 3 KB" },
-      { text: "dayjs     88  active · 2 KB" },
-      { text: "moment    61  maintenance · 4.2 MB", tone: "bad" },
-      { text: "→ winner: date-fns", tone: "accent" },
-    ],
+    title: "What is the API, exactly?",
+    body: "Exported symbols and signatures, read out of the version's own shipped .d.ts. Hand it the version your model remembers and it returns the delta: what moved, what went, what is new.",
+    backedBy: "usage · resolve_surface · diff_surface",
+    figure: "surface",
+  },
+  {
+    title: "What should the whole stack be?",
+    body: "Describe the project, get every slot filled at once. The pieces are picked against each other rather than one at a time, which is the only way the set holds.",
+    backedBy: "recommend · plan",
+    figure: "stack",
   },
 ];
+
+/**
+ * `report_outcome` had a sixth card and lost it. Five is the lineup that was
+ * actually asked for, and the bento wants five: two wide, three narrow. A sixth
+ * forced a uniform 3x2, which is the grid this section is moving away from.
+ * The tool is still live and still in the docs; it just isn't a headline.
+ */
+
+/**
+ * A label and one sentence, and that is the whole introduction.
+ *
+ * This section used to open with an eyebrow, a two-line headline and a
+ * three-line paragraph, which is more preamble than the five cards underneath
+ * it need — each one already states its own question. The paragraph in
+ * particular was explaining what the cards then demonstrate.
+ */
+export const CAPABILITIES_LABEL = "The tools";
+
+/**
+ * The count is read off the list rather than typed, so a card added or dropped
+ * cannot leave the headline claiming the old number.
+ */
+const COUNT = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"][
+  CAPABILITIES.length
+] ?? String(CAPABILITIES.length);
+
+/**
+ * "A model", not "your agent". The hero has already spent that word twice and
+ * every section between here and it was reaching for it again. The cause is the
+ * training cutoff anyway, which belongs to the model rather than to the tool
+ * calling it.
+ */
+export const CAPABILITIES_HEAD = `${COUNT} questions a model cannot answer from memory.`;

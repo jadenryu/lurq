@@ -6,15 +6,56 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
-// Cloudflare's "always passes" test key renders the widget locally; set the real
-// NEXT_PUBLIC_TURNSTILE_SITE_KEY (and TURNSTILE_SECRET_KEY on the server) in prod.
+/**
+ * Cloudflare's "always passes" test key, for local development only.
+ *
+ * It renders a widget stamped "For testing only. If seen, report to site owner",
+ * and the server verifier fails closed without TURNSTILE_SECRET_KEY — so falling
+ * back to it in production shipped a form that looked broken *and* couldn't send.
+ * In production with no key configured we show the contact address instead, which
+ * at least works.
+ */
+const TURNSTILE_TEST_KEY = "1x00000000000000000000AA";
 const TURNSTILE_SITE_KEY =
-  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "1x00000000000000000000AA";
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ??
+  (process.env.NODE_ENV === "production" ? null : TURNSTILE_TEST_KEY);
+
+const CONTACT_EMAIL = "contact@lurq.run";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
-export function ContactForm() {
+export function ContactForm({ tone = "dark" }: { tone?: "dark" | "paper" }) {
+  if (!TURNSTILE_SITE_KEY) return <ContactFallback tone={tone} />;
+  return <ContactFormInner tone={tone} />;
+}
+
+/** No spam protection configured: send them somewhere that works. */
+function ContactFallback({ tone }: { tone: "dark" | "paper" }) {
+  const muted = tone === "paper" ? "text-ink-soft" : "text-muted-foreground";
+  const strong = tone === "paper" ? "text-ink" : "text-foreground";
+  return (
+    <div className={cn("font-mono text-[0.8125rem] leading-relaxed", muted)}>
+      <p>
+        The form needs a Turnstile site key, which this deployment doesn&apos;t have.
+        Email works:
+      </p>
+      <a
+        href={`mailto:${CONTACT_EMAIL}`}
+        className={cn(
+          "mt-3 inline-block underline underline-offset-4 transition-colors duration-[120ms]",
+          strong,
+          tone === "paper" ? "decoration-rule hover:text-mark" : "decoration-border",
+        )}
+      >
+        {CONTACT_EMAIL}
+      </a>
+    </div>
+  );
+}
+
+function ContactFormInner({ tone }: { tone: "dark" | "paper" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -46,8 +87,8 @@ export function ContactForm() {
       if (widgetIdRef.current) return; // already rendered
       setToken("");
       widgetIdRef.current = window.turnstile.render(el, {
-        sitekey: TURNSTILE_SITE_KEY,
-        theme: "dark",
+        sitekey: TURNSTILE_SITE_KEY!,
+        theme: tone === "paper" ? "light" : "dark",
         callback: (t) => setToken(t),
         "error-callback": () => setToken(""),
         "expired-callback": () => setToken(""),
@@ -67,7 +108,7 @@ export function ContactForm() {
       }
       widgetIdRef.current = null;
     };
-  }, [showForm]);
+  }, [showForm, tone]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -107,17 +148,46 @@ export function ContactForm() {
     }
   }
 
+  // The marketing footer is paper now, so the shadcn dark tokens have to be
+  // overridden per-field rather than inherited.
+  const paper = tone === "paper";
+  const field = paper
+    ? "border-rule bg-paper text-ink placeholder:text-ink-soft/55 focus-visible:border-mark focus-visible:ring-mark/25"
+    : undefined;
+  const label = paper
+    ? "font-mono text-[0.6875rem] tracking-[0.08em] text-ink-soft"
+    : undefined;
+
   if (status === "success") {
     return (
-      <div className="rounded-lg border border-border bg-card/60 p-6 text-center">
-        <p className="font-medium text-foreground">Thanks, message sent.</p>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <div
+        className={cn(
+          "rounded p-6 text-center",
+          paper
+            ? "border border-rule bg-paper"
+            : "rounded-lg border border-border bg-card/60",
+        )}
+      >
+        <p className={cn("font-medium", paper ? "text-ink" : "text-foreground")}>
+          Thanks, message sent.
+        </p>
+        <p
+          className={cn(
+            "mt-1 text-sm",
+            paper ? "text-ink-soft" : "text-muted-foreground",
+          )}
+        >
           We&apos;ll reply to your email shortly.
         </p>
         <button
           type="button"
           onClick={() => setStatus("idle")}
-          className="mt-4 text-sm text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+          className={cn(
+            "mt-4 text-sm underline underline-offset-2 transition-colors duration-[120ms]",
+            paper
+              ? "text-ink-soft hover:text-mark"
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
           Send another
         </button>
@@ -127,24 +197,25 @@ export function ContactForm() {
 
   return (
     <>
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        async
-        defer
-      />
+      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="contact-name">Name</Label>
+          <Label htmlFor="contact-name" className={label}>
+            Name
+          </Label>
           <Input
             id="contact-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ada Lovelace"
             autoComplete="name"
+            className={field}
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="contact-email">Email</Label>
+          <Label htmlFor="contact-email" className={label}>
+            Email
+          </Label>
           <Input
             id="contact-email"
             type="email"
@@ -153,10 +224,13 @@ export function ContactForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@company.com"
             autoComplete="email"
+            className={field}
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="contact-message">Message</Label>
+          <Label htmlFor="contact-message" className={label}>
+            Message
+          </Label>
           <Textarea
             id="contact-message"
             required
@@ -164,6 +238,7 @@ export function ContactForm() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Tell us what you're building or asking about…"
+            className={field}
           />
         </div>
 
@@ -182,12 +257,26 @@ export function ContactForm() {
         {/* Cloudflare Turnstile, rendered explicitly into this container */}
         <div ref={widgetRef} />
 
-        <Button type="submit" disabled={status === "submitting"} className="mt-1 w-full">
+        <Button
+          type="submit"
+          disabled={status === "submitting"}
+          className={cn(
+            "mt-1 w-full",
+            paper && "bg-ink text-paper hover:bg-ink/85 focus-visible:ring-mark/40",
+          )}
+        >
           {status === "submitting" ? "Sending…" : "Send message"}
         </Button>
 
         {status === "error" && (
-          <p className="text-center text-xs text-destructive">{errorMsg}</p>
+          <p
+            className={cn(
+              "text-center text-xs",
+              paper ? "text-conflict" : "text-destructive",
+            )}
+          >
+            {errorMsg}
+          </p>
         )}
       </form>
     </>

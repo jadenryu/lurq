@@ -1,0 +1,244 @@
+{
+  "generatedAt": "2026-08-06T22:43:49.727Z",
+  "source": "lurq compat next @auth/core next-auth typescript @typescript-eslint/eslint-plugin",
+  "invocation": "npx tsx src/bin/lurq.ts compat next @auth/core next-auth typescript @typescript-eslint/eslint-plugin --json",
+  "packages": [
+    {
+      "name": "next",
+      "version": "16.3.0"
+    },
+    {
+      "name": "@auth/core",
+      "version": "0.41.3"
+    },
+    {
+      "name": "next-auth",
+      "version": "4.24.15"
+    },
+    {
+      "name": "typescript",
+      "version": "7.0.2"
+    },
+    {
+      "name": "@typescript-eslint/eslint-plugin",
+      "version": "8.66.0"
+    }
+  ],
+  "pairs": [
+    {
+      "a": "@auth/core",
+      "b": "next",
+      "status": "held"
+    },
+    {
+      "a": "next-auth",
+      "b": "next",
+      "status": "held"
+    },
+    {
+      "a": "next-auth",
+      "b": "@auth/core",
+      "status": "conflict",
+      "detail": "next-auth needs peer @auth/core@0.34.3, but the stack uses @auth/core@0.41.3",
+      "requirement": {
+        "peer": "@auth/core",
+        "range": "0.34.3",
+        "resolved": "0.41.3"
+      }
+    },
+    {
+      "a": "typescript",
+      "b": "next",
+      "status": "held"
+    },
+    {
+      "a": "typescript",
+      "b": "@auth/core",
+      "status": "held"
+    },
+    {
+      "a": "typescript",
+      "b": "next-auth",
+      "status": "held"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "next",
+      "status": "held"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "@auth/core",
+      "status": "held"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "next-auth",
+      "status": "held"
+    },
+    {
+      "a": "@typescript-eslint/eslint-plugin",
+      "b": "typescript",
+      "status": "conflict",
+      "detail": "@typescript-eslint/eslint-plugin needs peer typescript@>=4.8.4 <6.1.0, but the stack uses typescript@7.0.2",
+      "requirement": {
+        "peer": "typescript",
+        "range": ">=4.8.4 <6.1.0",
+        "resolved": "7.0.2"
+      }
+    }
+  ],
+  "result": {
+    "packages": [
+      "next",
+      "@auth/core",
+      "next-auth",
+      "typescript",
+      "@typescript-eslint/eslint-plugin"
+    ],
+    "overall": "conflict",
+    "conflicts": [
+      {
+        "source": "peer-deps",
+        "packages": [
+          "next-auth",
+          "@auth/core"
+        ],
+        "detail": "next-auth needs peer @auth/core@0.34.3, but the stack uses @auth/core@0.41.3",
+        "requirement": {
+          "peer": "@auth/core",
+          "range": "0.34.3",
+          "resolved": "0.41.3"
+        }
+      },
+      {
+        "source": "peer-deps",
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "typescript"
+        ],
+        "detail": "@typescript-eslint/eslint-plugin needs peer typescript@>=4.8.4 <6.1.0, but the stack uses typescript@7.0.2",
+        "requirement": {
+          "peer": "typescript",
+          "range": ">=4.8.4 <6.1.0",
+          "resolved": "7.0.2"
+        }
+      }
+    ],
+    "unverified": [],
+    "checked": [
+      {
+        "name": "next",
+        "version": "16.3.0"
+      },
+      {
+        "name": "@auth/core",
+        "version": "0.41.3"
+      },
+      {
+        "name": "next-auth",
+        "version": "4.24.15"
+      },
+      {
+        "name": "typescript",
+        "version": "7.0.2"
+      },
+      {
+        "name": "@typescript-eslint/eslint-plugin",
+        "version": "8.66.0"
+      }
+    ],
+    "evidence": [
+      {
+        "packages": [
+          "@typescript-eslint/eslint-plugin",
+          "typescript"
+        ],
+        "versions": [
+          "8.19.1",
+          "5.6.2"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 16
+      },
+      {
+        "packages": [
+          "next",
+          "next-auth"
+        ],
+        "versions": [
+          "16.2.12",
+          "4.24.15"
+        ],
+        "status": "compatible",
+        "provenance": "observed",
+        "witnessCount": 1
+      }
+    ],
+    "pairs": [
+      {
+        "a": "@auth/core",
+        "b": "next",
+        "status": "held"
+      },
+      {
+        "a": "next-auth",
+        "b": "next",
+        "status": "held"
+      },
+      {
+        "a": "next-auth",
+        "b": "@auth/core",
+        "status": "conflict",
+        "detail": "next-auth needs peer @auth/core@0.34.3, but the stack uses @auth/core@0.41.3",
+        "requirement": {
+          "peer": "@auth/core",
+          "range": "0.34.3",
+          "resolved": "0.41.3"
+        }
+      },
+      {
+        "a": "typescript",
+        "b": "next",
+        "status": "held"
+      },
+      {
+        "a": "typescript",
+        "b": "@auth/core",
+        "status": "held"
+      },
+      {
+        "a": "typescript",
+        "b": "next-auth",
+        "status": "held"
+      },
+      {
+        "a": "@typescript-eslint/eslint-plugin",
+        "b": "next",
+        "status": "held"
+      },
+      {
+        "a": "@typescript-eslint/eslint-plugin",
+        "b": "@auth/core",
+        "status": "held"
+      },
+      {
+        "a": "@typescript-eslint/eslint-plugin",
+        "b": "next-auth",
+        "status": "held"
+      },
+      {
+        "a": "@typescript-eslint/eslint-plugin",
+        "b": "typescript",
+        "status": "conflict",
+        "detail": "@typescript-eslint/eslint-plugin needs peer typescript@>=4.8.4 <6.1.0, but the stack uses typescript@7.0.2",
+        "requirement": {
+          "peer": "typescript",
+          "range": ">=4.8.4 <6.1.0",
+          "resolved": "7.0.2"
+        }
+      }
+    ]
+  }
+}

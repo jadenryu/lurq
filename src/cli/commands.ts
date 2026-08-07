@@ -3,6 +3,7 @@
  * against a DB connection, then renders a compact table/detail view — or raw
  * JSON with `--json`.
  */
+import semver from 'semver';
 import { requireConfig } from '../core/config';
 import { isCategory, type Category, type Confidence } from '../core/types';
 import { createDb } from '../db/client';
@@ -515,11 +516,41 @@ export async function runCompatBackfill(opts: {
   });
 }
 
+/**
+ * `--pin next=15.5.4` → `{ next: '15.5.4' }`.
+ *
+ * Exact versions only, and that restriction is load-bearing rather than lazy.
+ * `fetchNpmCompatAtVersion` resolves a pin by exact key against the packument
+ * and falls back to `latest` when the key is absent (see
+ * ingestion/sources/npmRegistry.ts) — so `--pin next=15` would quietly check
+ * next@16 and report it as the pinned answer. Refusing a range here is the
+ * difference between "no result" and "a confident wrong result".
+ */
+function parsePins(pins: string[] | undefined): Record<string, string> | undefined {
+  if (!pins?.length) return undefined;
+  const out: Record<string, string> = {};
+  for (const raw of pins) {
+    const at = raw.indexOf('=');
+    const name = at === -1 ? '' : raw.slice(0, at).trim();
+    const version = at === -1 ? '' : raw.slice(at + 1).trim();
+    if (!name || !version) throw new Error(`--pin expects name=version, got "${raw}"`);
+    if (!semver.valid(version)) {
+      throw new Error(
+        `--pin needs an exact published version, got "${name}=${version}". ` +
+          `A range resolves to latest instead of erroring, which would report the wrong version as pinned.`,
+      );
+    }
+    out[name] = version;
+  }
+  return out;
+}
+
 /** Read (or, with --run, sandbox-verify then read) pairwise package compatibility. */
 export async function runCompat(
   pkgs: string[],
-  opts: { run?: boolean; json?: boolean },
+  opts: { run?: boolean; json?: boolean; pin?: string[] },
 ): Promise<void> {
+  const versions = parsePins(opts.pin);
   await withDb(async (db) => {
     if (opts.run) {
       console.error(
@@ -529,7 +560,7 @@ export async function runCompat(
       await verifyCompatibility(db, pkgs);
     }
     const { handleCompat } = await import('../mcp/handlers');
-    const res = await handleCompat(db, { packages: pkgs });
+    const res = await handleCompat(db, { packages: pkgs, versions });
     if (opts.json) return console.log(JSON.stringify(res, null, 2));
     const color = res.overall === 'compatible' ? green : res.overall === 'conflict' ? red : dim;
     console.log(`${bold(res.packages.join(' + '))}  ${color(res.overall)}`);

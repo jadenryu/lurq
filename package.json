@@ -1,7 +1,7 @@
 {
   "name": "lurqrun",
   "version": "0.0.6",
-  "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
+  "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill \u2014 so AI coding assistants get fresh, objective dependency recommendations.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "jadenryu",
@@ -56,11 +56,13 @@
     "db:migrate": "tsx src/bin/operator.ts db migrate",
     "operator": "tsx src/bin/operator.ts",
     "operator:prod": "LURQ_ENV_FILE=.env.production tsx src/bin/operator.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "content:drift": "tsx scripts/gen-drift.ts"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "chalk": "^6.0.0",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
@@ -82,6 +84,9 @@
     "drizzle-kit": "^0.31.10",
     "e2b": "^2.31.0",
     "eslint": "^9.9.0",
+    "marked": "^18.0.9",
+    "pdfjs-dist": "^6.2.108",
+    "playwright": "^1.62.1",
     "prettier": "^3.3.3",
     "tsup": "^8.2.4",
     "tsx": "^4.19.0",

@@ -7,10 +7,16 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { geist, commitMono, robotoMono } from "@/lib/fonts";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
+// After globals.css on purpose: the dark-room palette re-declares --ink,
+// --conflict, --declared and --mark for a near-black ground, and the later
+// declaration is the one that wins.
+import "./styles/tokens.css";
 
-const TITLE = "lurq | execution-verified answers for coding agents";
+// Mirrors the home page h1 and lede (components/marketing/hero.tsx) so the
+// metadata and the page make the same claim.
+const TITLE = "lurq | your agent picks the packages, lurq knows what happens next";
 const DESCRIPTION =
-  "Coding agents pick dependencies from training data that is a year stale. lurq installs and runs them in a clean sandbox first, and serves what actually happened over MCP, CLI, and API.";
+  "An MCP server your coding agent calls before it installs anything. It reads the shipped types, checks whether a set of packages holds together, and confirms a name isn't a typosquat — from live data, with a timestamp on every answer.";
 
 export const metadata: Metadata = {
   // Canonical base for resolving relative metadata URLs (canonical, OG images).

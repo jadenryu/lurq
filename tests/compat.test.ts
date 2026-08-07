@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalPair, compatSetKey } from '../src/db/compat';
-import { gradeOverall } from '../src/compat/check';
+import { enumeratePairs, gradeOverall } from '../src/compat/check';
 import { deriveCompatEdges, fullyCovered, pairKey } from '../src/pipeline/compat';
 import type { SandboxSetResult } from '../src/sandbox/types';
 
@@ -118,5 +118,55 @@ describe('deriveCompatEdges', () => {
       }),
     );
     expect(edges).toEqual([]);
+  });
+});
+
+describe('enumeratePairs (a verdict belongs to a pair, not a package)', () => {
+  const names = ['next', '@auth/core', 'next-auth', 'typescript'];
+
+  it('emits exactly n(n-1)/2 pairs, every one graded', () => {
+    const pairs = enumeratePairs(names, []);
+    expect(pairs).toHaveLength((names.length * (names.length - 1)) / 2);
+    expect(pairs.every((p) => p.status === 'held')).toBe(true);
+  });
+
+  it('grades only the pair a conflict names, leaving its members ungraded', () => {
+    const pairs = enumeratePairs(names, [
+      {
+        source: 'peer-deps',
+        packages: ['next-auth', '@auth/core'],
+        detail: 'next-auth needs peer @auth/core@0.34.3, but the stack uses @auth/core@0.41.3',
+        requirement: { peer: '@auth/core', range: '0.34.3', resolved: '0.41.3' },
+      },
+    ]);
+    const conflicted = pairs.filter((p) => p.status === 'conflict');
+    expect(conflicted).toHaveLength(1);
+    expect(conflicted[0]!.requirement?.resolved).toBe('0.41.3');
+    // @auth/core is in a conflicting pair, but its pair with `next` still holds —
+    // which is the whole reason verdicts can't live on packages.
+    const withNext = pairs.find(
+      (p) => pairKey(p.a, p.b) === pairKey('next', '@auth/core'),
+    );
+    expect(withNext!.status).toBe('held');
+  });
+
+  it('orients a conflicting pair the way the conflict states it', () => {
+    const pairs = enumeratePairs(['@auth/core', 'next-auth'], [
+      {
+        source: 'peer-deps',
+        packages: ['next-auth', '@auth/core'],
+        detail: 'x',
+      },
+    ]);
+    // Argument order puts @auth/core first; the requirer still leads.
+    expect(pairs[0]!.a).toBe('next-auth');
+    expect(pairs[0]!.b).toBe('@auth/core');
+  });
+
+  it('does not double-count two conflicts over the same pair', () => {
+    const c = { source: 'peer-deps' as const, packages: ['a', 'b'], detail: 'first' };
+    const pairs = enumeratePairs(['a', 'b'], [c, { ...c, detail: 'second' }]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.detail).toBe('first');
   });
 });
