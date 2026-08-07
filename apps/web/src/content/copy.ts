@@ -155,6 +155,30 @@ const READ_ON = new Date(stats.dataAsOf).toLocaleDateString("en-GB", {
   timeZone: "UTC",
 });
 
+/**
+ * The board's title bar: how big the last sync was, and when.
+ *
+ * It used to say only "synced <date>", which is a timestamp pretending to be a
+ * status. A date alone cannot distinguish a run that read the whole index from
+ * one that read nothing, and this panel's whole job is to be checkable. The
+ * count is the part that can be wrong in a way a reader would want to know
+ * about, so it goes first.
+ *
+ * Both halves are read out of the same `lastSync` record, so the number and the
+ * day it belongs to are the same run by construction. Locale and time zone are
+ * pinned for the same reason every other formatted number on this page is: the
+ * board is a client component and an unpinned format is rendered once with the
+ * server's locale and again with the visitor's.
+ */
+const SYNC_ON = new Date(stats.lastSync.startedAt).toLocaleDateString("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+export const SYNC_SUMMARY = `${stats.lastSync.packagesUpdated.toLocaleString("en-US")} packages synced ${SYNC_ON.toLowerCase()}`;
+
 export const driftNote = (model: string, vendor: string, since: string) =>
   `Read from lurq's own index on ${READ_ON}. The ${since} cutoff is ${vendor}'s published figure for ${model}. Totals count only packages the index already tracked by that date, and every number here is measured against it.`;
 

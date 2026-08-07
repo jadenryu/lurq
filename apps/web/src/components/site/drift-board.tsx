@@ -17,6 +17,7 @@ import {
   DRIFT_HEAD_1,
   DRIFT_HEAD_2,
   DRIFT_PICKER_LABEL,
+  SYNC_SUMMARY,
   driftStatShare,
   DRIFT_STAT_TRACKED,
   driftClaim,
@@ -111,18 +112,6 @@ function month(iso: string): string {
     .toLowerCase();
 }
 
-function synced(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "unknown";
-  return d
-    .toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      timeZone: "UTC",
-    })
-    .toLowerCase();
-}
 
 const cell = "px-3 py-3.5 font-mono text-[13px] whitespace-nowrap";
 /**
@@ -490,9 +479,14 @@ export function DriftBoard() {
                 </span>
                 <span className="font-mono text-[12px] text-ink">version drift</span>
               </span>
+              {/* The size of the last sync, not just its date. "synced 6 aug"
+                  is a timestamp and says nothing about whether the sync did
+                  anything; a reader checking how live this board is wants the
+                  volume. Both halves come out of the same record in stats.json,
+                  so the count and the day it belongs to cannot drift apart. */}
               <span className="ml-auto flex items-center gap-2 font-mono text-[11px] text-ink-3">
                 <span aria-hidden className="room-wire-beat size-1.5 rounded-full" />
-                synced {synced(drift.generatedAt)}
+                {SYNC_SUMMARY}
               </span>
             </div>
 
