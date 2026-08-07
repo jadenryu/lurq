@@ -22,9 +22,10 @@ import { auth } from "@clerk/nextjs/server";
 import {
   demoContributions,
   demoKeys,
+  demoImpact,
   demoOutcomes,
   demoRepoBrief,
-  demoRepoDeps,
+  demoRepoDetail,
   demoRepos,
   demoUsage,
   isDemoUser,
@@ -39,12 +40,15 @@ import {
   fetchUsage,
   GithubNotConfiguredError,
   type DashboardContribution,
-  type DashboardDep,
   type DashboardKey,
   type DashboardOutcome,
   type DashboardRepo,
   type DashboardUsage,
   type RepoBrief,
+  type RepoDetailPayload,
+  type UpgradeImpact,
+  EMPTY_IMPACT,
+  fetchImpact,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -171,7 +175,7 @@ export async function loadRepoBrief(id: number): Promise<Loaded<RepoBrief>> {
   }
 }
 
-export type RepoDetail = DashboardRepo & { deps: DashboardDep[] };
+export type RepoDetail = RepoDetailPayload;
 
 export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
   const { userId, demo } = await context();
@@ -179,7 +183,7 @@ export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
   if (demo) {
     const repo = demoRepos().find((r) => r.id === id);
     return {
-      data: repo ? { ...repo, deps: demoRepoDeps() } : null,
+      data: repo ? { ...repo, ...demoRepoDetail(repo.fullName) } : null,
       demo: true,
       failed: false,
     };
@@ -193,6 +197,12 @@ export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
     );
     return { data: null, demo: false, failed: true };
   }
+}
+
+/** Autopilot impact. Zeroes on failure — this sits beside real numbers, so an
+ *  error must not render as an alarming figure. */
+export async function loadImpact(days = 30): Promise<Loaded<UpgradeImpact>> {
+  return load((userId) => fetchImpact(userId, days), demoImpact, EMPTY_IMPACT);
 }
 
 export interface OverviewData {

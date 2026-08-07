@@ -49,7 +49,13 @@ import type {
   UsageGuide,
 } from '../core/types';
 import type { EntityKind, EvidenceClass, Verdict } from '../graph/types';
-import type { RepoDrift, RepoManifest, RepoPolicy } from '../github/types';
+import type {
+  RepoDrift,
+  RepoManifest,
+  RepoPolicy,
+  UpgradeRunStatus,
+  UpgradeSeverity,
+} from '../github/types';
 import type { ExtractionTier, SymbolKind } from '../surface/types';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -429,6 +435,9 @@ export const repos = pgTable(
     isPrivate: boolean('is_private').notNull().default(false),
     policy: jsonb('policy').$type<RepoPolicy>().notNull(),
     manifests: jsonb('manifests').$type<RepoManifest[]>(),
+    /** Install command detected from the lockfile at scan time, so the generated
+     *  workflow uses the repo's actual package manager instead of assuming npm. */
+    installCommand: text('install_command'),
     drift: jsonb('drift').$type<RepoDrift>(),
     lastScanAt: ts('last_scan_at'),
     /** Last scan failure, surfaced in the dashboard. Null once a scan succeeds —
@@ -439,6 +448,71 @@ export const repos = pgTable(
   (table) => [
     uniqueIndex('repos_owner_full_name_idx').on(table.ownerId, table.fullName),
     index('repos_installation_idx').on(table.installationId),
+  ],
+);
+
+/**
+ * One row per upgrade the CI loop considered — the observability spine of the
+ * autopilot, and what the dashboard's impact figures are computed from.
+ *
+ * Written by the user's own workflow through an API key, so everything here is
+ * caller-supplied and validated at the boundary. Deliberately narrow: symbol
+ * names and counts, never file contents. `callSites` is a count and always
+ * safe to send; `callSiteFiles` carries paths and is only populated when the
+ * repo's policy opts in, because a file path is information about someone's
+ * codebase even though it is not source.
+ */
+export const upgradeRuns = pgTable(
+  'upgrade_runs',
+  {
+    id: serial('id').primaryKey(),
+    /** Resolved server-side from the authenticated API key. Never caller-supplied. */
+    ownerId: text('owner_id').notNull(),
+    /** Links to `repos` when the repo is also connected. Null when the workflow
+     *  runs somewhere lurq has no GitHub App installation — the CLI works
+     *  standalone, and losing those runs would bias every impact figure. */
+    repoId: integer('repo_id'),
+    /** `owner/name` from GITHUB_REPOSITORY. */
+    repoFullName: text('repo_full_name').notNull(),
+    packageName: text('package_name').notNull(),
+    fromVersion: text('from_version').notNull(),
+    toVersion: text('to_version').notNull(),
+    severity: text('severity').$type<UpgradeSeverity>().notNull(),
+    status: text('status').$type<UpgradeRunStatus>().notNull(),
+    /** Referenced symbols the upgrade removes or re-shapes. */
+    symbolsAffected: jsonb('symbols_affected').$type<string[]>().notNull().default([]),
+    /** How many references those symbols have in the repo. */
+    callSites: integer('call_sites').notNull().default(0),
+    /** Distinct files containing them. Opt-in per repo policy. */
+    callSiteFiles: jsonb('call_site_files').$type<string[]>(),
+    filesChanged: integer('files_changed'),
+    /** Null when the repo has no test script — distinct from `false`, which
+     *  means the suite ran and failed. */
+    testsPassed: boolean('tests_passed'),
+    prUrl: text('pr_url'),
+    /**
+     * The GitHub Actions run, so a dashboard row links back to real logs.
+     * NOT NULL with an empty-string default rather than nullable: it is part of
+     * the dedup key below, and Postgres treats NULLs as distinct — a nullable
+     * column there would silently let every re-post insert a duplicate. Empty
+     * means "posted outside Actions" (a local CLI run), which then dedups to one
+     * row per package+target and updates in place.
+     */
+    runUrl: text('run_url').notNull().default(''),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('upgrade_runs_owner_created_idx').on(table.ownerId, table.createdAt),
+    index('upgrade_runs_repo_idx').on(table.repoId),
+    // One row per package per Actions run: a re-post of the same run must update
+    // rather than duplicate, or a retried job would double every impact figure.
+    uniqueIndex('upgrade_runs_dedup_idx').on(
+      table.ownerId,
+      table.repoFullName,
+      table.packageName,
+      table.toVersion,
+      table.runUrl,
+    ),
   ],
 );
 
@@ -661,3 +735,5 @@ export type OwnerUsageDailyRow = typeof ownerUsageDaily.$inferSelect;
 export type NewOwnerUsageDailyRow = typeof ownerUsageDaily.$inferInsert;
 export type RepoRow = typeof repos.$inferSelect;
 export type NewRepoRow = typeof repos.$inferInsert;
+export type UpgradeRunRow = typeof upgradeRuns.$inferSelect;
+export type NewUpgradeRunRow = typeof upgradeRuns.$inferInsert;

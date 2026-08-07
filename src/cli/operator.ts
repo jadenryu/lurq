@@ -193,44 +193,10 @@ export function registerOperatorCommands(program: Command): void {
       },
     );
 
-  program
-    .command('check-upgrade')
-    .argument('<dir>', 'project directory to scan')
-    .description('§8.1 check_upgrade — do these upgrades remove symbols your code references?')
-    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. commander@11.1.0..12.1.0')
-    .option('--json', 'output the report as JSON')
-    .option('--exit-code', 'exit 1 when the report is not safe (for CI)')
-    .action(
-      async (dir: string, opts: { upgrade?: string[]; json?: boolean; exitCode?: boolean }) => {
-        const { scanReferences } = await import('../surface/references');
-        const { checkUpgrade, formatUpgradeReport } = await import('../surface/upgrade');
-
-        const specs = opts.upgrade ?? [];
-        if (!specs.length) {
-          console.error('give at least one --upgrade pkg@from..to');
-          process.exitCode = 1;
-          return;
-        }
-        const targets = specs.map((spec) => {
-          const at = spec.lastIndexOf('@');
-          const name = spec.slice(0, at);
-          const [fromVersion, toVersion] = spec.slice(at + 1).split('..');
-          if (!name || !fromVersion || !toVersion) {
-            throw new Error(`bad --upgrade '${spec}', expected pkg@from..to`);
-          }
-          return { package: name, fromVersion, toVersion };
-        });
-
-        const refs = scanReferences(dir);
-        const report = await checkUpgrade(targets, refs);
-        if (opts.json) {
-          console.log(JSON.stringify(report, null, 2));
-        } else {
-          console.log(formatUpgradeReport(report, `upgrade check on ${dir}`));
-        }
-        if (opts.exitCode && !report.safe) process.exitCode = 1;
-      },
-    );
+  // `check-upgrade` used to live here. It is now a public command
+  // (src/cli/index.ts) because CI runs it through `npx lurqrun`, and the
+  // operator plane registers onto the same program — a copy here would collide
+  // outright, and two copies would eventually disagree about what "safe" means.
 
   program
     .command('scan-references')

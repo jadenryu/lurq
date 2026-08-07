@@ -1,11 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
-import { EmptyState, InlineError } from "@/components/dashboard/panel";
+import { EmptyState, InlineError, eyebrow } from "@/components/dashboard/panel";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { ReposPanel } from "@/components/dashboard/repos-panel";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
-import { loadRepos } from "@/lib/dashboard-data";
+import { loadImpact, loadRepos } from "@/lib/dashboard-data";
 import { installUrl } from "@/lib/github-connect";
+
+const IMPACT_DAYS = 30;
 
 /** Redirect statuses set by /api/github/callback. */
 const CONNECT_MESSAGES: Record<string, string> = {
@@ -21,7 +23,10 @@ export default async function ReposPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { userId } = await auth();
-  const { data, demo, failed } = await loadRepos();
+  const [{ data, demo, failed }, { data: impact }] = await Promise.all([
+    loadRepos(),
+    loadImpact(IMPACT_DAYS),
+  ]);
   const connect = (await searchParams).connect;
   const message = typeof connect === "string" ? CONNECT_MESSAGES[connect] : undefined;
 
@@ -75,6 +80,38 @@ export default async function ReposPage({
           </InlineError>
         ) : (
           <>
+            {impact.analysed > 0 && (
+              <div>
+                <p className={eyebrow}>last {IMPACT_DAYS} days</p>
+                <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <StatTile
+                    label="breakages caught"
+                    value={impact.blocking}
+                    hint={`${impact.callSites} call sites that would have failed`}
+                  />
+                  <StatTile
+                    label="upgrades analysed"
+                    value={impact.analysed}
+                    hint={
+                      impact.unverified > 0
+                        ? `${impact.unverified} could not be verified`
+                        : "all conclusively checked"
+                    }
+                  />
+                  <StatTile label="pull requests" value={impact.prsOpened} />
+                  <StatTile
+                    label="merged"
+                    value={impact.merged}
+                    hint={
+                      impact.prsOpened > 0
+                        ? `${Math.round((impact.merged / impact.prsOpened) * 100)}% of PRs opened`
+                        : undefined
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
             {data.repos.length > 0 && (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <StatTile label="repositories" value={data.repos.length} />

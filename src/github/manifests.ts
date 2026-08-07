@@ -3,11 +3,13 @@
  *
  * Everything here reads exactly two things from a repository: the list of repos
  * the installation covers, and the dependency blocks of its `package.json`
- * files. No source, no lockfiles, no history. That is not a limitation we plan
- * to lift server-side — the code-reading half of the product runs in the user's
- * own CI (docs/lurq-autopilot.md).
+ * files. File *names* come along in the tree listing — that is how the package
+ * manager is detected — but no lockfile, source file, or history is ever read.
+ * That is not a limitation we plan to lift server-side: the code-reading half of
+ * the product runs in the user's own CI.
  */
 import { installationGet } from './app';
+import { detectInstallCommand } from './workflow';
 import { REPO_MANIFEST_CAP, type RepoManifest } from './types';
 import { logger } from '../core/logger';
 
@@ -105,6 +107,8 @@ export function parseManifest(path: string, json: unknown): RepoManifest | null 
 
 export interface ManifestScan {
   manifests: RepoManifest[];
+  /** Install command for the repo's actual package manager, from its lockfile. */
+  installCommand: string;
   /** True when the repo has more manifests than we read, or GitHub truncated the
    *  tree. The dashboard says "partial" rather than reporting a low count as
    *  complete — an undercount that looks authoritative is worse than a caveat. */
@@ -121,7 +125,11 @@ export async function fetchManifests(
     installationId,
     `/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
   );
-  const allPaths = manifestPaths(tree.tree ?? []);
+  const nodes = tree.tree ?? [];
+  const allPaths = manifestPaths(nodes);
+  // Root-level lockfiles only: a nested one belongs to a workspace, not to the
+  // command that installs the whole repo.
+  const lockfiles = nodes.filter((n) => !n.path.includes('/')).map((n) => n.path);
   const paths = allPaths.slice(0, REPO_MANIFEST_CAP);
 
   const manifests: RepoManifest[] = [];
@@ -146,6 +154,7 @@ export async function fetchManifests(
 
   return {
     manifests,
+    installCommand: detectInstallCommand(lockfiles),
     partial: Boolean(tree.truncated) || allPaths.length > paths.length,
   };
 }

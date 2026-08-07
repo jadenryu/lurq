@@ -80,6 +80,40 @@ export const DEFAULT_REPO_POLICY: RepoPolicy = {
   autoMerge: false,
 };
 
+/**
+ * What the CI check concluded about one upgrade, straight from `checkUpgrade`.
+ * `unverified` is a first-class outcome and is never rolled into `ok` — a check
+ * that could not run is not a check that passed.
+ */
+export type UpgradeSeverity = 'blocking' | 'warning' | 'ok' | 'unverified';
+
+/**
+ * How far one upgrade got through the loop.
+ *   checked  — analysed only (comment mode, or the agent step was not armed)
+ *   skipped  — policy excluded it
+ *   edited   — the agent changed code but the run stopped before a PR
+ *   pr_open  — a pull request exists
+ *   merged   — that PR landed
+ *   failed   — the edit or the repo's own checks failed
+ */
+export type UpgradeRunStatus =
+  | 'checked'
+  | 'skipped'
+  | 'edited'
+  | 'pr_open'
+  | 'merged'
+  | 'failed';
+
+export const UPGRADE_SEVERITIES: UpgradeSeverity[] = ['blocking', 'warning', 'ok', 'unverified'];
+export const UPGRADE_RUN_STATUSES: UpgradeRunStatus[] = [
+  'checked',
+  'skipped',
+  'edited',
+  'pr_open',
+  'merged',
+  'failed',
+];
+
 /** Manifests scanned per repo. A monorepo with more workspaces than this reports
  *  partial coverage rather than silently truncating — see scanRepo. */
 export const REPO_MANIFEST_CAP = 25;

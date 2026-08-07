@@ -175,6 +175,43 @@ export function buildProgram(): Command {
       await runCompat(pkgs, opts);
     });
 
+  // ── Upgrade autopilot ─────────────────────────────────────────────────────
+  // These two run where the code is (a laptop or a CI runner), not against a
+  // local database. `upgrade-plan` asks the index what changed between versions;
+  // `check-upgrade` narrows that to what this codebase references, using nothing
+  // but the two npm tarballs — no API key, no test suite, no network to us.
+
+  program
+    .command('upgrade-plan')
+    .argument('[dir]', 'project directory (default: current)', '.')
+    .description('what is behind in this project, and what each upgrade removes from its API')
+    .option('--json', 'output the plan as JSON (feed to `check-upgrade --plan`)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(async (dir: string, opts: { json?: boolean; url?: string; apiKey?: string }) => {
+      const { buildUpgradePlan, formatUpgradePlan } = await import('./upgradePlan');
+      const plan = await buildUpgradePlan(dir, { url: opts.url, apiKey: opts.apiKey });
+      console.log(opts.json ? JSON.stringify(plan, null, 2) : formatUpgradePlan(plan));
+    });
+
+  program
+    .command('check-upgrade')
+    .argument('[dir]', 'project directory to scan (default: current)', '.')
+    .description('do these upgrades remove symbols your code actually references?')
+    .option('--plan <file>', 'targets from `upgrade-plan --json`')
+    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. commander@11.1.0..12.1.0')
+    .option('--json', 'output the report as JSON')
+    .option('--exit-code', 'exit 1 when the report is not safe (for CI)')
+    .action(
+      async (
+        dir: string,
+        opts: { plan?: string; upgrade?: string[]; json?: boolean; exitCode?: boolean },
+      ) => {
+        const { runCheckUpgrade } = await import('./checkUpgrade');
+        await runCheckUpgrade(dir, opts);
+      },
+    );
+
   program
     .command('install')
     .description('guided setup: connect lurq to your AI assistant(s)')

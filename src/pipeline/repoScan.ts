@@ -33,13 +33,13 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
   const base = { repoId: repo.id, fullName: repo.fullName };
   try {
     const branch = repo.defaultBranch ?? 'main';
-    const { manifests, partial } = await fetchManifests(
+    const { manifests, installCommand, partial } = await fetchManifests(
       repo.installationId,
       repo.fullName,
       branch,
     );
     const drift = await computeDrift(db, manifests);
-    await saveScan(db, repo.id, { manifests, drift });
+    await saveScan(db, repo.id, { manifests, drift, installCommand });
     return {
       ...base,
       ok: true,

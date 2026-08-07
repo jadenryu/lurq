@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
+import { RepoSetup } from "@/components/dashboard/repo-setup";
+import { UpgradeRuns } from "@/components/dashboard/upgrade-runs";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { buttonVariants } from "@/components/ui/button";
 import { loadRepo, loadRepoBrief } from "@/lib/dashboard-data";
@@ -88,7 +90,16 @@ export default async function RepoDetailPage({
           <Brief id={repo.id} />
         </Suspense>
 
+        <UpgradeRuns runs={repo.runs} />
+
         <RepoPolicyPanel repoId={repo.id} policy={repo.policy} demo={demo} />
+
+        <RepoSetup
+          workflow={repo.workflow}
+          workflowPath={repo.workflowPath}
+          setupUrl={repo.setupUrl}
+          armed={repo.policy.enabled}
+        />
 
         <RepoDeps deps={repo.deps} />
       </div>

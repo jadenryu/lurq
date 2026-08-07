@@ -85,13 +85,14 @@ export async function getRepo(
 export async function saveScan(
   db: Database,
   id: number,
-  scan: { manifests: RepoManifest[]; drift: RepoDrift },
+  scan: { manifests: RepoManifest[]; drift: RepoDrift; installCommand: string },
 ): Promise<void> {
   await db
     .update(repos)
     .set({
       manifests: scan.manifests,
       drift: scan.drift,
+      installCommand: scan.installCommand,
       lastScanAt: new Date(),
       lastScanError: null,
     })

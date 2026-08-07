@@ -195,10 +195,63 @@ export async function fetchRepos(ownerId: string): Promise<DashboardRepo[]> {
   return data.repos ?? [];
 }
 
+export interface UpgradeRun {
+  id: number;
+  packageName: string;
+  fromVersion: string;
+  toVersion: string;
+  severity: "blocking" | "warning" | "ok" | "unverified";
+  status: "checked" | "skipped" | "edited" | "pr_open" | "merged" | "failed";
+  symbolsAffected: string[];
+  callSites: number;
+  callSiteFiles: string[] | null;
+  filesChanged: number | null;
+  testsPassed: boolean | null;
+  prUrl: string | null;
+  runUrl: string;
+  createdAt: string;
+}
+
+/** Autopilot totals. `unverified` is reported alongside, never inside, the rest. */
+export interface UpgradeImpact {
+  analysed: number;
+  blocking: number;
+  callSites: number;
+  prsOpened: number;
+  merged: number;
+  unverified: number;
+}
+
+export const EMPTY_IMPACT: UpgradeImpact = {
+  analysed: 0,
+  blocking: 0,
+  callSites: 0,
+  prsOpened: 0,
+  merged: 0,
+  unverified: 0,
+};
+
+export async function fetchImpact(ownerId: string, days = 30): Promise<UpgradeImpact> {
+  const qs = new URLSearchParams({ ownerId, days: String(days) });
+  const res = await issuerFetch(`/impact?${qs.toString()}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read impact.", 502);
+  return { ...EMPTY_IMPACT, ...((await res.json()) as Partial<UpgradeImpact>) };
+}
+
+export interface RepoDetailPayload extends DashboardRepo {
+  deps: DashboardDep[];
+  runs: UpgradeRun[];
+  /** The workflow file, rendered for this repo's package manager and mode. */
+  workflow: string;
+  workflowPath: string;
+  /** GitHub "new file" URL, prefilled. lurq never commits this itself. */
+  setupUrl: string;
+}
+
 export async function fetchRepo(
   ownerId: string,
   id: number,
-): Promise<(DashboardRepo & { deps: DashboardDep[] }) | null> {
+): Promise<RepoDetailPayload | null> {
   const res = await issuerFetch(`/repos/${id}?ownerId=${encodeURIComponent(ownerId)}`);
   if (res.status === 404) {
     // Ambiguous status: the App may be unconfigured, or this repo may not exist
@@ -206,7 +259,7 @@ export async function fetchRepo(
     return null;
   }
   if (!res.ok) throw new LurqIssuerError("Could not read repo.", 502);
-  const data = (await res.json()) as { repo?: DashboardRepo & { deps: DashboardDep[] } };
+  const data = (await res.json()) as { repo?: RepoDetailPayload };
   return data.repo ?? null;
 }
 

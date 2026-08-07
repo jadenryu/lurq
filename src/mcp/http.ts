@@ -31,8 +31,18 @@ import { getUsageByTool, getUsageSummary } from '../db/usage';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
+import { computeDrift } from '../github/drift';
+import { parseDepsInput, parseUpgradeRuns } from '../github/runs';
+import {
+  findRepoIdByFullName,
+  getUpgradeImpact,
+  listRunsForRepo,
+  recordUpgradeRuns,
+  MAX_RUNS_PER_POST,
+} from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import type { RepoPolicy } from '../github/types';
+import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
 import { scanOwnerRepos, scanRepo } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
@@ -340,6 +350,24 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
   });
 
+  /** Autopilot impact totals for the dashboard. Not gated on the GitHub App:
+   *  runs can arrive from any checkout via the CLI, connected or not. */
+  app.get('/impact', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const daysRaw = typeof req.query.days === 'string' ? Number(req.query.days) : NaN;
+    const days = Number.isInteger(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 365) : 30;
+    try {
+      res.status(200).json(await getUpgradeImpact(db, ownerId, days));
+    } catch (err) {
+      logger.error('impact read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read impact.' });
+    }
+  });
+
   app.get('/contributions', requireIssuerSecret, async (req: Request, res: Response) => {
     const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
     if (!ownerId) {
@@ -474,7 +502,24 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         res.status(404).json({ error: 'Repo not found.' });
         return;
       }
-      res.status(200).json({ repo: { ...toDashboardRepo(row), deps: row.drift?.deps ?? [] } });
+      const runs = await listRunsForRepo(db, ownerId, row.id);
+      // The setup file is rendered per repo because it carries that repo's own
+      // package manager and armed state. Shipped as text so the dashboard can
+      // show exactly what will be committed before anything is.
+      const workflow = renderWorkflow({
+        installCommand: row.installCommand ?? undefined,
+        armed: row.policy.enabled,
+      });
+      res.status(200).json({
+        repo: {
+          ...toDashboardRepo(row),
+          deps: row.drift?.deps ?? [],
+          runs,
+          workflow,
+          workflowPath: WORKFLOW_PATH,
+          setupUrl: newFileUrl(row.fullName, row.defaultBranch ?? 'main', workflow),
+        },
+      });
     } catch (err) {
       logger.error('repo read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read repo.' });
@@ -558,6 +603,68 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('repo delete failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not disconnect repo.' });
+    }
+  });
+
+  // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
+  //
+  // These two are what the user's GitHub Actions workflow calls. They are keyed
+  // on the API key, NOT the issuer secret: the workflow is the user's own
+  // machine, so it holds a per-user key and never the web↔backend shared secret.
+  //
+  // Note there is no repo id in either path. The workflow sends the manifest it
+  // already has on disk, so `upgrade-plan` works in any checkout — connecting a
+  // repo to the dashboard adds visibility, it is not a precondition for the loop.
+
+  app.post('/upgrade-plan', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const deps = parseDepsInput((req.body ?? {}).deps);
+    if (Object.keys(deps).length === 0) {
+      res.status(400).json({ error: 'deps is required: { "package": "range", … }' });
+      return;
+    }
+    try {
+      const drift = await computeDrift(db, [{ path: 'package.json', deps }]);
+      const brief = await briefRepo(db, drift);
+      res.status(200).json({
+        ...brief,
+        // Surfaced so CI can log what lurq had no opinion on. An upgrade we do
+        // not know about must not look like an upgrade we cleared.
+        untracked: Object.keys(deps).length - drift.depsTracked,
+      });
+    } catch (err) {
+      logger.error('upgrade plan failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not build the upgrade plan.' });
+    }
+  });
+
+  app.post('/upgrade-runs', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
+    if (!ownerId) {
+      // Operator-issued keys have no dashboard account to attribute runs to.
+      res.status(403).json({ error: 'This key has no account attached.' });
+      return;
+    }
+    const { runs, rejected } = parseUpgradeRuns((req.body ?? {}).runs, MAX_RUNS_PER_POST);
+    if (runs.length === 0) {
+      res.status(400).json({ error: 'runs must be a non-empty array of upgrade results.' });
+      return;
+    }
+    try {
+      // Resolve repo links once per distinct repo, not once per run.
+      const repoIds = new Map<string, number | null>();
+      for (const run of runs) {
+        if (!repoIds.has(run.repoFullName)) {
+          repoIds.set(run.repoFullName, await findRepoIdByFullName(db, ownerId, run.repoFullName));
+        }
+      }
+      const recorded = await recordUpgradeRuns(
+        db,
+        runs.map((run) => ({ ...run, ownerId, repoId: repoIds.get(run.repoFullName) ?? null })),
+      );
+      res.status(200).json({ recorded, rejected });
+    } catch (err) {
+      logger.error('upgrade run record failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not record the upgrade runs.' });
     }
   });
 

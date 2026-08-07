@@ -12,11 +12,10 @@ import "./globals.css";
 // declaration is the one that wins.
 import "./styles/tokens.css";
 
-// Mirrors the home page h1 and lede (components/marketing/hero.tsx) so the
-// metadata and the page make the same claim.
+// TITLE mirrors the home page h1 (components/marketing/hero.tsx).
 const TITLE = "lurq | your agent picks the packages, lurq knows what happens next";
 const DESCRIPTION =
-  "An MCP server your coding agent calls before it installs anything. It reads the shipped types, checks whether a set of packages holds together, and confirms a name isn't a typosquat — from live data, with a timestamp on every answer.";
+  "lurq is the verification infra behind your agent's choices, from package selection to dynamic upkeeping. lurq combats version drift while returning tangible results, fast.";
 
 export const metadata: Metadata = {
   // Canonical base for resolving relative metadata URLs (canonical, OG images).

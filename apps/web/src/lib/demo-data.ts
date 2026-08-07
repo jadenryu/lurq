@@ -20,6 +20,9 @@ import type {
   DashboardRepo,
   DashboardUsage,
   RepoBrief,
+  RepoDetailPayload,
+  UpgradeImpact,
+  UpgradeRun,
 } from "@/lib/lurq-issuer";
 
 const DEFAULT_DEMO_EMAILS = ["me.shivansh007@gmail.com"];
@@ -267,7 +270,7 @@ export function demoRepos(): DashboardRepo[] {
 }
 
 /** Per-dependency detail for the demo repo drill-down. */
-export function demoRepoDeps(): DashboardDep[] {
+function demoRepoDeps(): DashboardDep[] {
   const rows: [string, string, string, string, number, boolean, number][] = [
     ["request", "^2.88.0", "2.88.2", "2.88.2", 0, true, 3],
     ["react-router", "^6.4.0", "6.9.2", "8.1.0", 2, false, 0],
@@ -381,5 +384,58 @@ export function demoRepoBrief(): RepoBrief {
         newlyDeprecated: [],
       },
     ],
+  };
+}
+
+/** A believable run history: mostly analysis, a few PRs, one honest failure. */
+function demoRuns(): UpgradeRun[] {
+  const rows: [string, string, string, UpgradeRun["severity"], UpgradeRun["status"], string[], number, boolean | null, number][] = [
+    ["react-router", "6.9.2", "8.1.0", "blocking", "pr_open", ["useHistory", "Switch", "Redirect"], 14, true, 6],
+    ["node-fetch", "2.7.0", "4.0.1", "blocking", "merged", ["FetchError"], 3, true, 30],
+    ["express", "4.21.2", "5.2.1", "warning", "failed", ["Router"], 2, false, 30],
+    ["zod", "3.25.76", "4.1.5", "ok", "merged", [], 0, true, 54],
+    ["date-fns", "2.30.0", "4.1.0", "unverified", "checked", [], 0, null, 54],
+    ["chalk", "5.6.2", "6.0.0", "ok", "merged", [], 0, true, 78],
+  ];
+  return rows.map(([packageName, fromVersion, toVersion, severity, status, symbolsAffected, callSites, testsPassed, h], i) => ({
+    id: i + 1,
+    packageName,
+    fromVersion,
+    toVersion,
+    severity,
+    status,
+    symbolsAffected,
+    callSites,
+    callSiteFiles: callSites > 0 ? ["src/routes/nav.tsx", "src/app.tsx"] : null,
+    filesChanged: status === "checked" ? null : Math.max(1, Math.ceil(callSites / 3)),
+    testsPassed,
+    prUrl: status === "pr_open" || status === "merged" ? "https://github.com/acme/checkout-web/pull/412" : null,
+    runUrl: "https://github.com/acme/checkout-web/actions/runs/1",
+    createdAt: hoursAgo(h),
+  }));
+}
+
+/** Impact totals consistent with demoRuns above — the arithmetic has to hold. */
+export function demoImpact(): UpgradeImpact {
+  const runs = demoRuns();
+  return {
+    analysed: runs.length,
+    blocking: runs.filter((r) => r.severity === "blocking").length,
+    callSites: runs.filter((r) => r.severity === "blocking").reduce((s, r) => s + r.callSites, 0),
+    prsOpened: runs.filter((r) => r.status === "pr_open" || r.status === "merged").length,
+    merged: runs.filter((r) => r.status === "merged").length,
+    unverified: runs.filter((r) => r.severity === "unverified").length,
+  };
+}
+
+/** The detail payload the repo page needs beyond the list row. */
+export function demoRepoDetail(fullName: string): Omit<RepoDetailPayload, keyof DashboardRepo> {
+  const workflow = `# Managed by lurq — https://lurq.run\nname: lurq upgrade\n\non:\n  schedule:\n    - cron: "0 6 * * 1"\n  workflow_dispatch:\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  upgrade:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - run: npx -y lurqrun upgrade-plan . --json > lurq-plan.json\n      - run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json\n`;
+  return {
+    deps: demoRepoDeps(),
+    runs: demoRuns(),
+    workflow,
+    workflowPath: ".github/workflows/lurq-upgrade.yml",
+    setupUrl: `https://github.com/${fullName}/new/main`,
   };
 }
