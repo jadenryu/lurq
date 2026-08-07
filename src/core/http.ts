@@ -113,7 +113,26 @@ interface CacheEntry {
   body: string;
 }
 
+/**
+ * In-run memo in front of the disk cache. Bounded: the hosted server fetches
+ * packuments for arbitrary packages over a process lifetime measured in weeks,
+ * and packument bodies run to megabytes — unbounded, this is the box's OOM.
+ * Map preserves insertion order, so deleting the first key evicts the oldest
+ * (re-inserting on hit makes it LRU rather than FIFO).
+ * ponytail: count-bounded, not byte-bounded. Swap in a byte budget only if
+ * profiling shows entry size, not entry count, is what runs the heap up.
+ */
+const MEMORY_CACHE_MAX = 500;
 const memoryCache = new Map<string, CacheEntry>();
+
+function memoryCacheSet(key: string, entry: CacheEntry): void {
+  memoryCache.delete(key);
+  memoryCache.set(key, entry);
+  if (memoryCache.size > MEMORY_CACHE_MAX) {
+    const oldest = memoryCache.keys().next();
+    if (!oldest.done) memoryCache.delete(oldest.value);
+  }
+}
 
 /** When true, cache reads are skipped (writes still happen). Used by `sync --full`. */
 let bypassCacheRead = false;
@@ -135,14 +154,17 @@ function cacheFile(key: string): string {
 async function readCache(key: string, ttlMs: number): Promise<CacheEntry | undefined> {
   const now = Date.now();
   const mem = memoryCache.get(key);
-  if (mem && now - mem.fetchedAt < ttlMs) return mem;
+  if (mem && now - mem.fetchedAt < ttlMs) {
+    memoryCacheSet(key, mem); // touch: most-recently-used moves to the back
+    return mem;
+  }
 
   const file = cacheFile(key);
   if (!existsSync(file)) return undefined;
   try {
     const entry = JSON.parse(await readFile(file, 'utf8')) as CacheEntry;
     if (now - entry.fetchedAt < ttlMs) {
-      memoryCache.set(key, entry);
+      memoryCacheSet(key, entry);
       return entry;
     }
   } catch {
@@ -152,7 +174,7 @@ async function readCache(key: string, ttlMs: number): Promise<CacheEntry | undef
 }
 
 async function writeCache(key: string, entry: CacheEntry): Promise<void> {
-  memoryCache.set(key, entry);
+  memoryCacheSet(key, entry);
   const file = cacheFile(key);
   try {
     await mkdir(dirname(file), { recursive: true });

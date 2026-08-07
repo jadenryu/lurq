@@ -273,12 +273,12 @@ export function registerOperatorCommands(program: Command): void {
         // biases toward packages matching the seed terms. The curated seed list
         // is a fixed frame; it skews popular, which biases coverage UP, and that
         // must be stated alongside any number drawn from it.
-        const { readFileSync } = await import('node:fs');
-        const seed = JSON.parse(readFileSync('src/data/seed.json', 'utf8')) as
-          | string[]
-          | { name: string }[];
-        const all = seed.map((s) => (typeof s === 'string' ? s : s.name));
-        names = all.slice(0, opts.limit ?? 20);
+        // Package-relative (loadSeedFile → seedJsonPath), never cwd-relative:
+        // the operator runs from deploy dirs, not just the repo root.
+        const { loadSeedFile } = await import('../db/seed');
+        names = loadSeedFile()
+          .map((e) => e.name)
+          .slice(0, opts.limit ?? 20);
       }
 
       const report = await runValidation(names.map((name) => ({ name })), { sandbox });

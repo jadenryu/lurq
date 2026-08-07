@@ -41,7 +41,15 @@ import { enqueueIngest, runIngest } from './ingestQueue';
 export const FIRST_TOUCH_BUDGET_MS = 4000;
 
 function raceTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+  let timer: NodeJS.Timeout;
+  // Cleared on settle: a live timer keeps Node's event loop open, so without
+  // this the CLI sat idle for the rest of the budget after a fast ingest.
+  return Promise.race([
+    p,
+    new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 async function getSeedCategory(db: Database, name: string): Promise<Category | null> {
