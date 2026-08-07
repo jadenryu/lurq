@@ -84,8 +84,20 @@ describe('getUsageSummary', () => {
     expect(res.today).toBe(7);
   });
 
-  it('today is 0 when no row matches the current day', async () => {
-    const { db } = fakeExecDb([{ date: '2020-01-01', count: 4 }]);
+  // The window is generated DB-side and always ends at the database's
+  // CURRENT_DATE — the same clock the counters are written against. Matching on
+  // the process's UTC date instead would read 0 on a non-UTC database.
+  it('takes today from the last point of the window, not the process clock', async () => {
+    const { db } = fakeExecDb([
+      { date: '2020-01-01', count: 4 },
+      { date: '2020-01-02', count: 9 },
+    ]);
+    const res = await getUsageSummary(db, 'user_x', 30);
+    expect(res.today).toBe(9);
+  });
+
+  it('today is 0 for an empty window', async () => {
+    const { db } = fakeExecDb([]);
     const res = await getUsageSummary(db, 'user_x', 30);
     expect(res.today).toBe(0);
   });
