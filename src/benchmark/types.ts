@@ -11,8 +11,13 @@
  *   - `install-script-failure` is reserved; scripts are off in v1 (§ amendment #4).
  *   - Only 7 metrics are measurable in this pass (§ amendment #2).
  */
-import type { Category } from '../core/types';
+import type { Category, CompatOutput } from '../core/types';
 import type { Database } from '../db/client';
+
+/** The compat verdict, aliased from the tool's own output type so the benchmark
+ *  can never drift from the grades `checkCompat` actually emits (it returns
+ *  `likely` — evidence-graded "no conflict found, not fully proven"). */
+export type CompatPrediction = CompatOutput['overall'];
 
 // ── Fixture types ───────────────────────────────────────────────────────────
 
@@ -171,7 +176,7 @@ export interface BenchmarkResult {
   packageValidity: PackageValidity;
   coverage: CoverageResult;
   resolution: ResolutionOutcome | null;
-  compatPrediction: 'compatible' | 'conflict' | 'unknown';
+  compatPrediction: CompatPrediction;
   timestamps: { startedAt: string; finishedAt: string };
   participantError: string | null;
   lurqDiagnosis: LurqDiagnosis | null;

@@ -23,8 +23,8 @@ describe('parseStackProposalJson', () => {
     const raw = '```json\n' + valid + '\n```';
     const parsed = parseStackProposalJson(raw, 'model-with-lurq');
     expect(parsed.selections).toHaveLength(1);
-    expect(parsed.selections[0].package).toBe('typescript');
-    expect(parsed.selections[0].source).toBe('model-with-lurq');
+    expect(parsed.selections[0]?.package).toBe('typescript');
+    expect(parsed.selections[0]?.source).toBe('model-with-lurq');
   });
 
   it('parses fenced JSON with prose before the fence', () => {

@@ -26,7 +26,7 @@ export function extractJsonObject(raw: string): string {
   let text = raw.trim();
 
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) {
+  if (fenced?.[1]) {
     text = fenced[1].trim();
   }
 
