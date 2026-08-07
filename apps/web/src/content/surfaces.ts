@@ -57,7 +57,7 @@ export const SURFACES: Surface[] = [
     command: "npx lurqrun install",
     chrome: "lurq · install",
     detail:
-      "It asks for your API key, works out which assistants are installed on the machine, and writes a keyed entry for each. Nothing else about your setup changes, and no database credentials are written anywhere.",
+      "After lurq asks for your API key, we work out which assistants are installed on the machine and write a keyed entry for each. Nothing else about your setup changes, and you don't need any database credentials.",
     lines: [
       { kind: "cmd", text: "npx lurqrun install" },
       { kind: "ok", text: "key validated" },
@@ -70,11 +70,11 @@ export const SURFACES: Surface[] = [
   {
     id: "mcp",
     name: "MCP server",
-    blurb: "The tools your editor gets, once lurq is registered.",
+    blurb: "The tools your editor gets.",
     command: "npx lurqrun install-skill --agent claude-code",
     chrome: "lurq · mcp",
     detail:
-      "MCP is the standard way an editor hands a model a new tool. Register lurq once and everything in that editor can reach it. The installer above does this for you; this is the scriptable form.",
+      "MCP is the standard way an editor hands a model a new tool. Register lurq once and everything in that editor can reach it.",
     lines: [
       { kind: "cmd", text: "npx lurqrun install-skill --agent claude-code" },
       { kind: "ok", text: "connected · https://api.lurq.run/mcp" },
@@ -86,11 +86,11 @@ export const SURFACES: Surface[] = [
   {
     id: "cli",
     name: "Command line",
-    blurb: "The same answers, from your terminal.",
+    blurb: "For nerds, run in your terminal.",
     command: "npm i -g lurqrun",
     chrome: "lurq · cli",
     detail:
-      "Every capability is a subcommand, so the check that settles a question mid-task can gate a CI job on the way out.",
+      "Every capability is a subcommand, so the check that settles a question mid-task can prevent a bad CI job on the way out.",
     lines: [
       { kind: "cmd", text: "lurq verify jsonwebtoken" },
       { kind: "cmd", text: "lurq compare date-fns dayjs moment" },
@@ -102,7 +102,7 @@ export const SURFACES: Surface[] = [
   {
     id: "api",
     name: "Self-hosted endpoint",
-    blurb: "Run the server yourself, behind your own key.",
+    blurb: "Run the server behind your personal key.",
     command: "lurq serve-http",
     chrome: "lurq · serve-http",
     detail:

@@ -36,31 +36,31 @@ export type Capability = {
 export const CAPABILITIES: Capability[] = [
   {
     title: "Is it real, and is it healthy?",
-    body: "Downloads, release cadence, open advisories, deprecation flags. Mostly this catches the package that does not exist: a name the model produced fluently, spelled the way a real one would be spelled.",
+    body: "Downloads, release cadence, open advisories, deprecation flags. We catch the package that does not exist: a name the model produced fluently, spelled the way a real one would be spelled.",
     backedBy: "verify · evaluate",
     figure: "health",
   },
   {
     title: "Will these install together?",
-    body: "Every pair in the set, graded against declared peer ranges and against co-installs already sitting in the index. You get the denominator with the failures, so a clean result means something.",
+    body: "Every pair in the set, graded against declared peer ranges and co-installs already in the compatibility matrix.",
     backedBy: "compat",
     figure: "pairs",
   },
   {
     title: "Does it run on your Node?",
-    body: "Each declared engines range, checked against the runtime you actually deploy on. A stack can resolve perfectly and still die on boot because one member never supported the Node you ship.",
+    body: "We check against the runtime you deploy on. Declared engines can range, so stacks can resolve perfectly and still die in production because one node doesn't support the Node you ship.",
     backedBy: "compat · usage",
     figure: "engines",
   },
   {
     title: "What is the API, exactly?",
-    body: "Exported symbols and signatures, read out of the version's own shipped .d.ts. Hand it the version your model remembers and it returns the delta: what moved, what went, what is new.",
+    body: "Exported symbols and signatures, read out of the version's own shipped .d.ts. We hand the delta to your model: what moved, what went, what is new.",
     backedBy: "usage · resolve_surface · diff_surface",
     figure: "surface",
   },
   {
     title: "What should the whole stack be?",
-    body: "Describe the project, get every slot filled at once. The pieces are picked against each other rather than one at a time, which is the only way the set holds.",
+    body: "Describe the project and lurq fills every gap. It's quick because compatible sets are already stored.",
     backedBy: "recommend · plan",
     figure: "stack",
   },

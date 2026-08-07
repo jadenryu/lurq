@@ -123,7 +123,6 @@ export const SESSION_CLIENT_MARK = "/logos/claude-code.svg";
  * else: the panel below spends four seconds demonstrating this, and a paragraph
  * here would be explaining what is about to be shown.
  */
-export const SESSION_LABEL = "The check";
 /**
  * "Ask for an upgrade. See what it would have broken." was the draft and it had
  * two problems. "it" had no clear referent: the upgrade, the model, or lurq, and
@@ -140,7 +139,7 @@ export const SESSION_HEAD = "Ask for an upgrade. Find out what breaks first.";
  * mechanism at all. Two sentences, before the artifact rather than after it.
  */
 export const SESSION_BODY =
-  "Your editor can call lurq on its own, without being asked. When a request touches packages it resolves the real versions from the registry, reads the range each one publishes as compatible, and reports the clashes. All of that happens before anything is written to your project.";
+  "When a request touches packages, lurq resolves the versions from the registry, analyzing compatibility, and reports the clashes. We do this before anything is written to your project.";
 
 export const SESSION_REQUEST = "Upgrade me to TypeScript 7.";
 

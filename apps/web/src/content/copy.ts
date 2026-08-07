@@ -68,7 +68,7 @@ export const HEADLINE_LINE_2 = "for everything your agent installs.";
  * subordinate clause.
  */
 export const LEAD =
-  "An MCP server your agent calls before it installs, so the packages are real, the versions agree, and the stack runs where you deploy.";
+  "lurq serves your agent before it ever installs a single package, so the versions agree and the stack runs when you deploy.";
 
 /* THE HERO NOTE IS GONE. It went through three versions and none of them earned
    the line. "Three of the four checks work today" put a four on the page while
@@ -96,8 +96,6 @@ export const CTA_DOCS = "Read the docs";
  * guide for a product the reader had not been shown yet.
  */
 export const IDE_HEADING = "Install it once. It shows up in all of these.";
-export const IDE_SUB =
-  "lurq speaks MCP, so it registers itself wherever your editor already keeps its tools.";
 
 /* The "how it connects" copy that used to sit here (MCP_LABEL, MCP_HEAD,
    MCP_BODY, MCP_STEPS, IDE_COMMAND) is gone. It was written for a section that
@@ -113,12 +111,12 @@ export const IDE_SUB =
  * published. Nothing here is our estimate, which is why the footnote can now name
  * the source instead of apologising for approximating it.
  */
-export const DRIFT_LABEL = "Drift leaderboard";
 export const DRIFT_HEAD_1 = "The most-installed packages";
 /** "model", not "agent": it is the training cutoff that causes this, not the tool. */
 export const DRIFT_HEAD_2 = "your model still gets wrong.";
 export const DRIFT_BODY =
-  "A new major version means the old API broke. Every model here publishes the date its knowledge stops, so pick one and see what the registry did afterwards. Ask it which version to install and it answers with the crossed-out number, sounding certain.";
+  "New versions mean the old API broke. We record the date their knowledge stops and record how the registry transforms over time. Asking models which version to install returns confident answers but breaking code";
+
 
 /** The picker, and the sentence it produces. */
 export const DRIFT_PICKER_LABEL = "Knowledge cutoff";
@@ -140,7 +138,7 @@ export const driftClaim = (model: string) => `${model} stopped learning in`;
  */
 export const driftStatShare = (since: string) =>
   `of the packages it knew have broken since ${since}`;
-export const driftStatDrifted = (since: string) => `shipped a new major after ${since}`;
+export const driftStatDrifted = (since: string) => `shipped a new major upgrade after ${since}`;
 export const DRIFT_STAT_TRACKED = "packages the index already tracked by then";
 /**
  * The read date, not a cadence.
@@ -158,7 +156,7 @@ const READ_ON = new Date(stats.dataAsOf).toLocaleDateString("en-GB", {
 });
 
 export const driftNote = (model: string, vendor: string, since: string) =>
-  `Read from lurq's own index on ${READ_ON}. The ${since} cutoff is ${vendor}'s published figure for ${model}, not our estimate. Totals count only packages the index already tracked by that date, and every number here is measured against it.`;
+  `Read from lurq's own index on ${READ_ON}. The ${since} cutoff is ${vendor}'s published figure for ${model}. Totals count only packages the index already tracked by that date, and every number here is measured against it.`;
 
 // ── contact ─────────────────────────────────────────────────────────
 

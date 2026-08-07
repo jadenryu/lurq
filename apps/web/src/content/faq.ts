@@ -5,27 +5,23 @@ export type Faq = { q: string; a: string };
 export const faqs: Faq[] = [
   {
     q: "What is lurq?",
-    a: "lurq is a live index of JS/TS packages that your coding agent can check before it installs anything. It scores packages from public signals, and where it matters it goes further: installing them in a clean sandbox to see whether they actually work. Your agent asks lurq, then writes the code.",
+    a: "lurq is a dynamic index of JS/TS packages that your coding agent checks before install. We score packages from public signals and verify in sandboxes where necessary. Your agent asks lurq, then writes the code.",
   },
   {
     q: "How is it different from just asking my model?",
-    a: "Models remember what was popular when they were trained. lurq reads live public data, so it can suggest newer options and flag abandoned or risky packages your model would still recommend with total confidence.",
+    a: "Models remember what was popular when they were trained. lurq suggests newer options, flags outdated versions, and hands agents the code they need to craft the strongest stack for you.",
   },
   {
     q: "What do you mean by execution-verified?",
-    a: "Most of what you can know about a package comes from reading metadata: downloads, release dates, advisories. Some things you only learn by running it. lurq installs packages in an isolated sandbox and records what happened. Did the install succeed, does it import, do these two versions coexist. Those facts appear in no changelog and in no model's training data.",
+    a: "lurq reads metadata: downloads, release dates, advisories. But, lurq also returns info from sandboxed trials. Did the install succeed? Does it import? Do these two versions coexist? We outrace the changelog and the training data.",
   },
   {
     q: "Why does a whole stack need checking, not just each package?",
-    a: "Because six individually healthy packages can still refuse to install together. Peer ranges conflict, engines disagree, transitive versions collide. lurq mines compatibility from real co-installs, so `plan` can tell you the set holds together rather than just that each piece looks fine alone.",
+    a: "Because six individually healthy packages can still refuse to install together. Peer ranges conflict, engines disagree, transitive versions collide. lurq mines compatibility from co-installs, so a stack can hold together rather than break later from a simple upgrade.",
   },
   {
     q: "Which tools does it work with?",
     a: "Claude Code, Cursor, Windsurf, VS Code / Copilot, Codex, Gemini CLI, Antigravity, Kiro, and anything else that can use a CLI or MCP connection. One install step writes the config file each of those already reads.",
-  },
-  {
-    q: "Where does the data come from?",
-    a: "Public sources for the signals: npm, GitHub, deps.dev, and bundle size data. Everything else comes from our own sandbox runs. Scores are computed from real signals, never hand-picked, and the exact weights are public. Run `lurq weights` to print them.",
   },
   {
     /**
@@ -35,7 +31,7 @@ export const faqs: Faq[] = [
      * stronger claim: it is checkable per call, where a cadence is a promise.
      */
     q: "How current is it?",
-    a: "Every answer carries a dataAsOf timestamp, so you can see exactly how old the reading is instead of trusting a refresh schedule. Popular packages get re-read most often. A long-tail package can be weeks stale, and the timestamp will say so rather than hide it.",
+    a: "Every answer carries a dataAsOf timestamp, so you can see exactly how old the reading is.",
   },
   {
     /**

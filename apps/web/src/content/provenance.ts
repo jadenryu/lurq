@@ -72,7 +72,7 @@ export const PROVENANCE_HEAD = "Every answer traces back to a host you can check
  * at "traces back to" rather than claiming nothing is derived.
  */
 export const PROVENANCE_BODY =
-  "Existence and version ranges come straight off the registry. Maintenance is a composite: downloads, release cadence, open issues, the OpenSSF Scorecard. Risk is OSV advisories plus the deprecation flags. The API surface is the odd one out. That one gets parsed from the package's own shipped types.";
+  "Existence and version ranges come straight off the registry. Maintenance is a composite: downloads, release cadence, open issues, the OpenSSF Scorecard. Risk is OSV advisories plus the deprecation flags. The API surface is the odd one out, parsed from each package's shipped types.";
 
 /**
  * The receipt line. Every figure on it is measured.
