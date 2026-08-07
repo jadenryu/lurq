@@ -51,7 +51,6 @@ export const RINGS = [0, 1, 2].map((ring) => {
 
 // ── copy ─────────────────────────────────────────────────────────────────────
 
-export const PROVENANCE_LABEL = "Where it comes from";
 
 /**
  * No count in the headline. The number is data, it belongs in the caption at

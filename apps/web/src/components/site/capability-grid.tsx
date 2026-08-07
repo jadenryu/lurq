@@ -6,7 +6,6 @@ import { FIGURES } from "@/components/site/capability-figures";
 import {
   CAPABILITIES,
   CAPABILITIES_HEAD,
-  CAPABILITIES_LABEL,
   type Capability,
 } from "@/content/capabilities";
 
@@ -105,13 +104,13 @@ export function CapabilityGrid() {
     // was py-16/py-20 and sat visibly tighter than the sections either side.
     <section id="tools" className="w-full px-4 py-24 min-[768px]:px-6 min-[900px]:py-32">
       <div className="mx-auto w-full max-w-[1180px]">
-        {/* A label and one sentence. The cards state their own questions, so
-            anything more here is explaining what is about to be shown. */}
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-          {CAPABILITIES_LABEL}
-        </p>
+        {/* Headline only. The mono small-caps kicker that opened this and every
+            other section is gone: six of them down one page was a pattern, and a
+            pattern that says nothing is decoration. The cards state their own
+            questions, so anything above them is explaining what is about to be
+            shown. */}
         <h2
-          className="mt-4 max-w-[24ch] font-sans font-medium text-ink"
+          className="max-w-[24ch] font-sans font-medium text-ink"
           style={{
             fontSize: "clamp(1.6rem, 3vw, 2.25rem)",
             lineHeight: 1.12,

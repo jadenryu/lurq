@@ -1,4 +1,4 @@
-import { IDE_HEADING, IDE_SUB } from "@/content/copy";
+import { IDE_HEADING } from "@/content/copy";
 
 /**
  * Where lurq runs, as a band that crosses the whole page.
@@ -61,8 +61,6 @@ export function IdeMarquee() {
       <h2 className="px-4 text-center font-sans text-[20px] font-medium text-ink">
         {IDE_HEADING}
       </h2>
-      <p className="mt-3 px-4 text-center font-mono text-[12px] text-ink-3">{IDE_SUB}</p>
-
       <div className="room-marquee mt-12">
         <Track />
         <Track hidden />

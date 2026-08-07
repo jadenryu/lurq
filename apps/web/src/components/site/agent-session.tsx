@@ -13,7 +13,6 @@ import {
   SESSION_DETAIL,
   SESSION_BODY,
   SESSION_HEAD,
-  SESSION_LABEL,
   SESSION_NOTES,
   SESSION_PLACEHOLDER,
   SESSION_PROPOSAL,
@@ -340,12 +339,9 @@ export function AgentSession() {
                 below is the section's argument, and a centred headline over a
                 left-aligned panel reads as two compositions rather than one. */}
             <div className="mb-8 min-[900px]:mb-10">
-              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-                {SESSION_LABEL}
-              </p>
               <h2
                 id="verify-title"
-                className="mt-4 max-w-[24ch] font-sans font-medium text-ink"
+                className="max-w-[24ch] font-sans font-medium text-ink"
                 style={{
                   fontSize: "clamp(1.6rem, 3vw, 2.25rem)",
                   lineHeight: 1.12,
@@ -377,7 +373,10 @@ export function AgentSession() {
                   style={{ ["--mark-src" as string]: `url(${SESSION_CLIENT_MARK})` }}
                 />
                 <span className="font-mono text-[12px] text-ink">{SESSION_CLIENT}</span>
-                <span className="ml-auto font-mono text-[11px] text-ink-3">mcp · lurq</span>
+                {/* No "mcp · lurq" tag on the right. The call below is literally
+                    `lurq · verify`, so the tag restated the one thing the
+                    artifact already shows, in the corner where a real editor
+                    puts nothing. */}
               </div>
 
               {/* Composer and exchange share one grid cell inside the window, so the

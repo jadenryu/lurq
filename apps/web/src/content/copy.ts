@@ -160,7 +160,6 @@ export const driftNote = (model: string, vendor: string, since: string) =>
 
 // ── contact ─────────────────────────────────────────────────────────
 
-export const CONTACT_LABEL = "Talk to us";
 export const CONTACT_HEAD = "Tell us what broke.";
 export const CONTACT_BODY =
   "A bug, a package we have scored wrong, a stack you want a second opinion on. There is no ticket queue. It lands in an inbox one of us reads.";

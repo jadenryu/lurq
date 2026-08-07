@@ -1355,29 +1355,61 @@ li:hover > .room-ide-label {
   flex: 1;
 }
 
+/* Quarter rules, drawn behind every lane at the same four positions.
+   Eight independent two-tone bars stacked in a column is not a chart, it is
+   eight sparklines that happen to be adjacent, and nothing on screen said the
+   left edge of row one was the same date as the left edge of row eight. These
+   are what make the shared axis visible: a reader can now put a straightedge
+   down the column and read one row against another. Faint enough that the data
+   still wins, present enough that the column has structure when the lanes
+   themselves are near-empty.
+
+   A repeating gradient rather than four elements: it is a background, it is
+   never read, and it costs nothing to paint. */
+.room-drift-track::before {
+  content: "";
+  position: absolute;
+  inset: 1px 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--edge) 0 1px,
+    transparent 1px 25%
+  );
+  opacity: 0.55;
+}
+
 .room-drift-held,
 .room-drift-wrong {
   position: absolute;
   top: 50%;
-  height: 1px;
-  margin-top: -0.5px;
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 700ms var(--ease) var(--row-at, 0ms);
 }
 
+/* The two spans are deliberately not the same weight. Equal halves of a
+   two-colour bar read as a progress meter, where both sides are a quantity of
+   the same kind, and that is not the statement: the green stretch is the period
+   nobody needs to care about and the orange one is the finding. So the held
+   period is a hairline rail and the wrong period is a drawn stroke, and the row
+   can be scanned for the finding without reading either colour. */
 .room-drift-held {
   left: 0;
   width: var(--at);
+  height: 1px;
+  margin-top: -0.5px;
   background: var(--held);
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
 .room-drift-wrong {
   left: var(--at);
   right: 0;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 999px;
   background: var(--conflict);
-  opacity: 0.55;
+  opacity: 0.7;
   transition:
     transform 700ms var(--ease) var(--row-at, 0ms),
     opacity var(--dur-hover) var(--ease-ui);
@@ -1422,7 +1454,7 @@ li:hover > .room-ide-label {
 }
 
 .room-drift-row:hover .room-drift-wrong {
-  opacity: 0.85;
+  opacity: 1;
 }
 
 .room-drift-row:hover .room-drift-dot {

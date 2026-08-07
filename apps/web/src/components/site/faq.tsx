@@ -4,7 +4,6 @@ import {
   FAQ_CONTACT_LINK,
   FAQ_GROUPS,
   FAQ_HEAD,
-  FAQ_LABEL,
 } from "@/content/faq-groups";
 
 /**
@@ -24,11 +23,8 @@ export function Faq() {
     <section id="faq" className="w-full py-24 min-[900px]:py-32">
       <div className="mx-auto grid w-full max-w-[1180px] gap-12 px-4 min-[900px]:grid-cols-[minmax(0,0.5fr)_minmax(0,1fr)] min-[900px]:gap-20 min-[768px]:px-6">
         <div className="min-[900px]:sticky min-[900px]:top-28 min-[900px]:self-start">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-            {FAQ_LABEL}
-          </p>
           <h2
-            className="mt-5 font-sans font-medium text-ink"
+            className="font-sans font-medium text-ink"
             style={{
               fontSize: "clamp(1.75rem, 3.4vw, 2.5rem)",
               lineHeight: 1.1,
@@ -65,9 +61,11 @@ export function Faq() {
         <div className="flex flex-col gap-14">
           {FAQ_GROUPS.map((group, gi) => (
             <div key={group.id} id={`faq-${group.id}`} className="scroll-mt-28">
-              <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">
-                {group.title}
-              </h3>
+              {/* A real heading, in the page's own sans at a readable size.
+                  Mono small-caps made a group name read as a system label
+                  rather than as the thing it is: the answer to "which
+                  questions are these". */}
+              <h3 className="text-[13px] font-medium text-ink-3">{group.title}</h3>
               <div className="mt-5">
                 {group.items.map((item, i) => (
                   <details

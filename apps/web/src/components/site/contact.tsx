@@ -6,7 +6,6 @@ import {
   CONTACT_BODY,
   CONTACT_EMAIL,
   CONTACT_HEAD,
-  CONTACT_LABEL,
   CONTACT_SENT,
   CONTACT_SUBMIT,
 } from "@/content/copy";
@@ -49,7 +48,12 @@ type Status = "idle" | "sending" | "sent" | "error";
  */
 const field =
   "w-full rounded-[4px] border border-edge bg-transparent px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-3 transition-[border-color] focus:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark";
-const label = "block font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3";
+/**
+ * Field labels stay, because a form without them is unusable. What went is the
+ * mono small-caps: a field called NAME in tracked capitals is styled like a
+ * system constant, not like a question being asked of a person.
+ */
+const label = "block text-[13px] text-ink-3";
 
 /** One reachable channel. Never a phone number and never an office we do not have. */
 const CHANNELS: { label: string; value: string; href?: string }[] = [
@@ -69,11 +73,8 @@ export function Contact() {
           the right — and reading as one register is the whole point. */}
       <div className="mx-auto grid w-full max-w-[1180px] gap-12 px-4 min-[900px]:grid-cols-[minmax(0,0.5fr)_minmax(0,1fr)] min-[900px]:gap-20 min-[768px]:px-6">
         <div className="min-[900px]:sticky min-[900px]:top-28 min-[900px]:self-start">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-            {CONTACT_LABEL}
-          </p>
           <h2
-            className="mt-5 font-sans font-medium text-ink"
+            className="font-sans font-medium text-ink"
             style={{
               fontSize: "clamp(1.75rem, 3.4vw, 2.5rem)",
               lineHeight: 1.1,
@@ -91,7 +92,7 @@ export function Contact() {
                 key={c.label}
                 className="flex items-baseline justify-between gap-6 border-b border-edge py-3"
               >
-                <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">
+                <dt className="text-[13px] text-ink-3">
                   {c.label}
                 </dt>
                 <dd className="min-w-0 truncate">

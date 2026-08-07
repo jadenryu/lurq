@@ -81,7 +81,6 @@ export const CAPABILITIES: Capability[] = [
  * it need — each one already states its own question. The paragraph in
  * particular was explaining what the cards then demonstrate.
  */
-export const CAPABILITIES_LABEL = "The tools";
 
 /**
  * The count is read off the list rather than typed, so a card added or dropped

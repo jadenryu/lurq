@@ -40,11 +40,11 @@ const GROUPING: { id: string; title: string; questions: string[] }[] = [
   {
     id: "data",
     title: "Data and access",
-    questions: [
-      "Where does the data come from?",
-      "How current is it?",
-      "Is it free?",
-    ],
+    // "Where does the data come from?" was here and its answer has been deleted
+    // from faq.ts. The guard below is what caught that: the grouping matches on
+    // question text, so a question that goes away takes the page down at build
+    // rather than quietly dropping out of the list. #sources answers it now.
+    questions: ["How current is it?", "Is it free?"],
   },
 ];
 
@@ -64,8 +64,6 @@ export const FAQ_GROUPS: FaqGroup[] = GROUPING.map((g) => ({
   }),
 }));
 
-/** The mono eyebrow every other section on this page opens with. */
-export const FAQ_LABEL = "Frequently asked";
 export const FAQ_HEAD = "Questions, answered.";
 export const FAQ_CONTACT_BEFORE = "Something not covered here?";
 export const FAQ_CONTACT_LINK = "Talk to us";

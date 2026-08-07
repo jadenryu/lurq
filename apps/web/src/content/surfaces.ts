@@ -46,7 +46,6 @@ export interface Surface {
   lines: TerminalLine[];
 }
 
-export const SURFACES_LABEL = "How you use it";
 export const SURFACES_HEAD = "Four ways in, and the same index behind them.";
 
 export const SURFACES: Surface[] = [

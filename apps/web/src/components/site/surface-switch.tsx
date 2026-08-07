@@ -6,7 +6,6 @@ import { CopyCommandButton } from "@/components/site/copy-command-button";
 import {
   SURFACES,
   SURFACES_HEAD,
-  SURFACES_LABEL,
   type TerminalLine,
 } from "@/content/surfaces";
 
@@ -198,11 +197,8 @@ export function SurfaceSwitch() {
   return (
     <section id="use" className="w-full px-4 py-24 min-[768px]:px-6 min-[900px]:py-32">
       <div className="mx-auto w-full max-w-[1180px]">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-          {SURFACES_LABEL}
-        </p>
         <h2
-          className="mt-4 max-w-[24ch] font-sans font-medium text-ink"
+          className="max-w-[24ch] font-sans font-medium text-ink"
           style={{
             fontSize: "clamp(1.6rem, 3vw, 2.25rem)",
             lineHeight: 1.12,

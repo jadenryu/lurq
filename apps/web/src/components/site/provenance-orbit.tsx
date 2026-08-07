@@ -3,7 +3,6 @@ import { GLOBE_TINTS, markFor, tintFor } from "@/components/site/source-marks";
 import {
   PROVENANCE_BODY,
   PROVENANCE_HEAD,
-  PROVENANCE_LABEL,
   PROVENANCE_STATS,
   RINGS,
   SOURCES,
@@ -134,11 +133,8 @@ export function ProvenanceOrbit() {
     // py-24/py-32, the page rhythm. Was py-20/py-24.
     <section id="sources" className="w-full py-24 min-[900px]:py-32">
       <div className="mx-auto w-full max-w-[1180px] px-4 min-[768px]:px-6">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-          {PROVENANCE_LABEL}
-        </p>
         <h2
-          className="mt-4 max-w-[24ch] font-sans font-medium text-ink"
+          className="max-w-[24ch] font-sans font-medium text-ink"
           style={{
             fontSize: "clamp(1.6rem, 3vw, 2.25rem)",
             lineHeight: 1.12,

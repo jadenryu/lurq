@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import drift from "@/content/generated/drift.json";
 import { MODEL_CUTOFFS, type Vendor } from "@/content/model-cutoffs";
 import { Mark } from "@/components/site/wordmark";
@@ -8,7 +16,6 @@ import {
   DRIFT_BODY,
   DRIFT_HEAD_1,
   DRIFT_HEAD_2,
-  DRIFT_LABEL,
   DRIFT_PICKER_LABEL,
   driftStatShare,
   DRIFT_STAT_TRACKED,
@@ -117,9 +124,16 @@ function synced(iso: string): string {
     .toLowerCase();
 }
 
-const cell = "px-3 py-3.5 text-[13px] whitespace-nowrap";
-const head =
-  "px-3 py-3 text-[10px] font-normal uppercase tracking-[0.14em] text-ink-3 whitespace-nowrap";
+const cell = "px-3 py-3.5 font-mono text-[13px] whitespace-nowrap";
+/**
+ * Headers are the page's sans at a size a person reads, not 10px mono capitals
+ * on a 0.14em track. The cells below are monospaced because their contents are
+ * literals — package names, semver strings, counts — and a column of those has
+ * to align on the digit. A header is a sentence fragment in English and gets no
+ * such benefit; setting it in the same face as the data was what made the whole
+ * board read as one undifferentiated block of terminal output.
+ */
+const head = "px-3 py-3 text-[12px] font-medium text-ink-3 whitespace-nowrap";
 
 /** The four columns worth ordering by. Version strings are not among them: "10.0.0" sorts before "9.0.0" as text and comparing them properly is a semver dependency for a control nobody asked for. */
 type SortKey = "name" | "majors_since" | "bumped_at" | "weekly_downloads";
@@ -153,7 +167,7 @@ function SortHead({
         onClick={() => onSort(sortKey)}
         data-active={active}
         data-dir={active && !sort.desc ? "asc" : "desc"}
-        className={`room-drift-sort inline-flex w-full items-center gap-1.5 uppercase tracking-[0.14em] transition-[color] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark ${
+        className={`room-drift-sort inline-flex w-full items-center gap-1.5 transition-[color] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark ${
           align === "right" ? "justify-end" : ""
         } ${active ? "text-ink" : ""}`}
         style={{ transitionDuration: "var(--dur-hover)" }}
@@ -190,7 +204,9 @@ function Stat({ value, label }: { value: string; label: string }) {
       >
         {value}
       </p>
-      <p className="mt-2 font-mono text-[11px] leading-[1.5] text-ink-3">{label}</p>
+      {/* The number above is monospaced by its own class; this is a clause of
+          English and is set as one. */}
+      <p className="mt-2 text-[12px] leading-[1.5] text-ink-3">{label}</p>
     </div>
   );
 }
@@ -220,6 +236,81 @@ function shortLabel(label: string): string {
   return label.replace(/^Claude /, "");
 }
 
+/**
+ * This is a client component but Next still renders it once on the server,
+ * where a layout effect cannot run and React says so in the console. The effect
+ * below is pure measurement, so on the server there is genuinely nothing to do
+ * and the swap silences a warning about a non-problem.
+ */
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/**
+ * Re-rank, animated: rows slide from where they were to where the new ordering
+ * puts them.
+ *
+ * FLIP, in the browser's own animation engine. The positions are read in a
+ * layout effect after React has committed the new order but before paint, each
+ * row is offset back to where it just was, and the offset is animated away. So
+ * the DOM is only ever in the correct, sorted order — the movement is a paint
+ * detail on top of it, which is why nothing here has to touch `rows`, the
+ * keys, or the rank numbers.
+ *
+ * Sorting is the moment the board asks to be believed: click "Installs" and
+ * eight rows silently become eight different rows, and a reader cannot tell a
+ * re-order from a re-fetch. Watching row six climb to position two answers that
+ * for free.
+ *
+ * `useLayoutEffect` and not `useEffect` on purpose. After paint the rows have
+ * already been seen in their new places, and offsetting them then is a visible
+ * jump backwards before the slide.
+ *
+ * ponytail: no library. This is the entire feature; react-flip-toolkit or
+ * Framer's layout prop is 12-30kB to move eight table rows that are known at
+ * build time. Reach for one if this table ever gains insertion, removal or
+ * virtualisation, none of which are on the roadmap.
+ */
+function useRerank(deps: unknown[]): (node: HTMLTableSectionElement | null) => void {
+  const body = useRef<HTMLTableSectionElement | null>(null);
+  const wasAt = useRef(new Map<string, number>());
+
+  useIsomorphicLayoutEffect(() => {
+    const rows = body.current?.querySelectorAll<HTMLTableRowElement>("tr[data-row]");
+    if (!rows) return;
+    // Honoured here rather than in CSS: a Web Animation is not a transition and
+    // the tokens.css reduced-motion block cannot reach it.
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    for (const row of rows) {
+      const key = row.dataset.row!;
+      const now = row.offsetTop;
+      const before = wasAt.current.get(key);
+      wasAt.current.set(key, now);
+      // First measurement of this row, or it did not move. Nothing to play.
+      if (before === undefined || before === now || still) continue;
+      row.animate(
+        [{ transform: `translateY(${before - now}px)` }, { transform: "none" }],
+        // Long enough to follow a row across the board, short enough that a
+        // second click does not queue behind the first.
+        { duration: 420, easing: "cubic-bezier(.22,.61,.36,1)" },
+      );
+    }
+     
+  }, deps);
+
+  // A callback ref, so a tbody remounting on a model change (it is keyed on the
+  // cutoff) clears the remembered positions instead of animating the new
+  // board's rows up from wherever the old board's rows happened to sit.
+  //
+  // Stable identity is load-bearing. An inline arrow is a new function every
+  // render, which makes React detach and reattach the ref every render, which
+  // would empty the map immediately before the layout effect reads it and no
+  // row would ever be seen to move.
+  return useCallback((node: HTMLTableSectionElement | null) => {
+    wasAt.current.clear();
+    body.current = node;
+  }, []);
+}
+
 export function DriftBoard() {
   // Newest cutoff first, so the default is the most current model. Anyone whose
   // model is older sees a worse number, which is the honest direction to default.
@@ -243,6 +334,8 @@ export function DriftBoard() {
       return (x < y ? -1 : x > y ? 1 : 0) * dir;
     });
   }, [sort, bucket]);
+
+  const tbody = useRerank([rows]);
 
   useEffect(() => {
     const el = panel.current;
@@ -277,11 +370,8 @@ export function DriftBoard() {
     <section id="drift" className="w-full px-4 py-24 min-[768px]:px-6 min-[900px]:py-32">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="mx-auto max-w-[64ch] text-center">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
-            {DRIFT_LABEL}
-          </p>
           <h2
-            className="mt-5 font-sans font-medium text-ink"
+            className="font-sans font-medium text-ink"
             style={{
               fontSize: "clamp(1.75rem, 3.4vw, 2.5rem)",
               lineHeight: 1.1,
@@ -310,9 +400,7 @@ export function DriftBoard() {
                 than buttons so arrow keys work and the group announces itself
                 without any ARIA of our own. */}
             <fieldset className="min-w-0">
-              <legend className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-3">
-                {DRIFT_PICKER_LABEL}
-              </legend>
+              <legend className="text-[13px] text-ink-3">{DRIFT_PICKER_LABEL}</legend>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {MODEL_CUTOFFS.map((m) => (
                   <label key={m.label} className="room-drift-chip" data-on={m.label === picked}>
@@ -425,7 +513,7 @@ export function DriftBoard() {
                   same place whatever the day's data is. Left to auto layout the
                   widths follow the longest package name, which is why the board
                   looked hand-placed differently on every refresh. */}
-              <table className="w-full min-w-[880px] table-fixed border-collapse text-left font-mono">
+              <table className="w-full min-w-[880px] table-fixed border-collapse text-left">
                 <caption className="sr-only">
                   Packages that changed major version since {model.label}&rsquo;s knowledge cutoff
                   of {month(model.cutoff)}, by weekly installs
@@ -492,10 +580,13 @@ export function DriftBoard() {
                 {/* Keyed on the cutoff so switching models fades the new board in.
                     A table whose contents change with no acknowledgement reads as
                     a glitch. */}
-                <tbody key={model.cutoff} className="room-drift-swap">
+                <tbody key={model.cutoff} ref={tbody} className="room-drift-swap">
                   {rows.map((r, i) => (
                     <tr
                       key={r.name}
+                      // The identity useRerank tracks a row by across a sort.
+                      // The React key cannot be read back off the DOM.
+                      data-row={r.name}
                       // Each row carries its own place in the ladder, so the
                       // schedule reads in source order instead of hiding in CSS.
                       style={{ ["--row-at" as string]: `${i * 40}ms` }}
@@ -566,7 +657,7 @@ export function DriftBoard() {
                 right half of the footer empty, which read as a rendering fault
                 rather than as typography. */}
             <div className="border-t border-edge bg-surface-2 px-5 py-4">
-              <p className="font-mono text-[11px] leading-[1.6] text-ink-3">
+              <p className="text-[12px] leading-[1.6] text-ink-3">
                 {driftNote(model.label, model.vendor, month(model.cutoff))}
               </p>
             </div>
