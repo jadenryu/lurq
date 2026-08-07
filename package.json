@@ -1,7 +1,7 @@
 {
   "name": "lurqrun",
   "version": "0.0.6",
-  "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
+  "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill \u2014 so AI coding assistants get fresh, objective dependency recommendations.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "jadenryu",
@@ -56,7 +56,8 @@
     "db:migrate": "tsx src/bin/operator.ts db migrate",
     "operator": "tsx src/bin/operator.ts",
     "operator:prod": "LURQ_ENV_FILE=.env.production tsx src/bin/operator.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "content:drift": "tsx scripts/gen-drift.ts"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",

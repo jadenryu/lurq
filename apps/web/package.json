@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "prebuild": "npx tsx ../../scripts/check-generated-content.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

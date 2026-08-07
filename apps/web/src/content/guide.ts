@@ -157,6 +157,9 @@ export const ASSISTANTS = [
   { label: "Windsurf", logo: "/logos/windsurf.svg" },
   { label: "VS Code / Copilot", logo: "/logos/github-copilot.svg" },
   { label: "OpenAI Codex", logo: "/logos/codex.svg" },
+  { label: "Gemini CLI", logo: "/logos/geminicli.svg" },
+  { label: "Antigravity", logo: "/logos/antigravity.svg" },
+  { label: "Kiro", logo: "/logos/kiro.svg" },
 ];
 
 /** Confidence labels, in ascending evidence order (src/scoring). */

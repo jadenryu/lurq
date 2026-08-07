@@ -7,6 +7,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { geist, commitMono, robotoMono } from "@/lib/fonts";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
+// After globals.css on purpose: the dark-room palette re-declares --ink,
+// --conflict, --declared and --mark for a near-black ground, and the later
+// declaration is the one that wins.
+import "./styles/tokens.css";
 
 // Mirrors the home page h1 and lede (components/marketing/hero.tsx) so the
 // metadata and the page make the same claim.

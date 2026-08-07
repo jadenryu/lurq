@@ -1,0 +1,896 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Dark, atmospheric, precise.
+
+   Content floats over one continuous background that runs the length of the
+   page: a field, not a stack of boxes. Panels are opaque with a lit top edge;
+   the atmosphere comes from the field showing around and behind them, never
+   from blurring through them. Nothing on this route filters what is behind it.
+   ───────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* ground */
+  --ground: #08080a; /* page base, behind the graph layer */
+  --surface: #101013; /* panels */
+  --surface-2: #17171b; /* panel headers, inset rows */
+  --edge: #232328;
+  --edge-lit: #3e3e46; /* top border of a raised panel */
+
+  /* ink */
+  --ink: #f2f2ee;
+  --ink-2: #a0a099;
+  /* Spec value was #66665F, which is 3.28:1 on --surface and fails AA. The
+     accompanying "captions >= 12px only" rule would have covered it, but the
+     eyebrow and the panel title are both 11px. #82827A is the nearest step that
+     clears 4.5:1 against every surface it lands on: --surface-2 (4.67:1),
+     --surface (4.83:1) and --ground (5.31:1). */
+  --ink-3: #82827a;
+
+  /* verdicts: a verdict and nothing else. Never a button, never decoration. */
+  --held: #5bae92;
+  --conflict: #e86a3c;
+  --declared: #8e8e86; /* always an outlined chip, never colour alone */
+
+  /* interaction: never a verdict */
+  --mark: #6e96d4;
+
+  /* Package tile palette: decorative identity, never a verdict. Currently
+     unused: the letter tiles these coloured went out with the row list when the
+     plate replaced it. Kept because §2 of the spec still declares them and the
+     next surface that needs to tell packages apart should reach for these rather
+     than invent a second set. */
+  --tile-1: #4a6fa5;
+  --tile-2: #7a5c9e;
+  --tile-3: #a66a3f;
+  --tile-4: #3f7a6b;
+  --tile-5: #96524e;
+  --tile-6: #5a6b8c;
+
+  /* type: the faces already in the repo (lib/fonts.ts), unchanged. */
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-commit-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* motion */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* For things that change size. --ease is expo-out: it covers 90% of the
+     distance in the first third, which on a box that is resizing reads as a
+     snap-and-settle rather than a move. Chrome's standard curve is near enough
+     to linear that the nav condensing looks mechanical, which is the point. */
+  --ease-ui: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 240ms;
+  --dur-hover: 120ms;
+}
+
+/* Every numeral, so the nav's latency readout doesn't reflow on each poll. */
+:root {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The field runs to the edges of the document, not just the route wrapper. */
+body:has([data-surface="room"]) {
+  background: var(--ground);
+  color: var(--ink);
+}
+
+/* ── Field ───────────────────────────────────────────────────────────────────
+   The background is a drawing, not a photograph: a dot matrix for paper, and in
+   the hero a dependency graph drawn on it. See dependency-graph.tsx for why
+   that shape and not a texture.
+
+   The photograph that used to live here was doing two jobs badly. It had to be
+   crushed to near-black to keep the headline legible, at which point it was an
+   expensive way to render dark grey, and it read as stock imagery on a product
+   whose whole argument is measurement. A plain dot grid replaced it and had the
+   opposite problem: legible, cheap, and indistinguishable from every other dark
+   landing page. The graph is the third answer.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.room-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.room-field > * {
+  position: absolute;
+  inset: 0;
+}
+
+/* Dot matrix. Masked to nothing at the edges so the field has no visible end. */
+.room-field-dots {
+  background-image: radial-gradient(circle at center, var(--edge) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 75% at 50% 40%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(ellipse 90% 75% at 50% 40%, #000 0%, transparent 78%);
+  opacity: 0.55;
+}
+
+/* The hero's pocket is a ring, and it goes on the container rather than on the
+   dot layer, so the graph inherits it too. The long spans are routed straight
+   through the middle on purpose and this is what cuts them: an edge runs behind
+   the headline and comes out the other side, which is the read we want, without
+   ever putting a line under the type. */
+.room-field[data-variant="hero"] {
+  /* Wide and short, because the type block is wide and short: the headline runs
+     nearly the full column, so a round pocket big enough to clear it also
+     clears both shoulders and leaves the graph nothing but the top and bottom
+     strips. Clear from roughly the eyebrow to the note line, ramping over
+     ~160px on each side of that. */
+  --hero-pocket: radial-gradient(
+    ellipse 95% 30% at 50% 31%,
+    transparent 0%,
+    transparent 62%,
+    rgba(0, 0, 0, 0.5) 78%,
+    #000 100%
+  );
+  -webkit-mask-image: var(--hero-pocket);
+  mask-image: var(--hero-pocket);
+}
+
+/* The hero matrix is the paper the graph is drawn on, so it does two things the
+   section variant does not: it is bright enough to read (--edge at 1px is
+   invisible on --ground), and its origin is pinned to the graph's. The tile is
+   40px and `circle at center` puts the dot at +20, which is why every node
+   coordinate in dependency-graph.tsx is ≡ 20 (mod 40). Change one of these
+   three numbers and the nodes drift off the dots. */
+.room-field[data-variant="hero"] .room-field-dots {
+  background-image: radial-gradient(circle at center, var(--edge-lit) 1.2px, transparent 1.2px);
+  background-size: 40px 40px;
+  background-position: calc(50% - 800px) 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  opacity: 0.75;
+}
+
+/* ── Dependency graph ────────────────────────────────────────────────────────
+   Drawn 1:1, centred, and allowed to overhang the viewport on both sides. */
+.room-graph {
+  position: absolute;
+  inset: auto;
+  top: 0;
+  left: 50%;
+  width: 1600px;
+  height: 1000px;
+  transform: translateX(-50%);
+  transform-origin: top center;
+  overflow: visible;
+}
+
+.room-graph-edge {
+  fill: none;
+  stroke: var(--edge-lit);
+  stroke-width: 1;
+  opacity: 0.85;
+}
+
+.room-graph-node {
+  fill: var(--ground);
+  stroke: var(--edge-lit);
+  stroke-width: 1.25;
+}
+
+/* A verdict is an outlined ring around the node, never a fill: the same rule
+   the declared chip follows, so colour is never the only carrier. */
+.room-graph-verdict {
+  fill: none;
+  stroke-width: 1.25;
+  opacity: 0.75;
+}
+
+.room-graph-verdict[data-verdict="held"] {
+  stroke: var(--held);
+}
+
+.room-graph-verdict[data-verdict="conflict"] {
+  stroke: var(--conflict);
+}
+
+/* One dash walked along a normalised path (pathLength=1000 in the component).
+   The gap is 2.6x the path, so each edge is dark for most of the loop and the
+   staggered delays read as a single traversal rather than as blinking. */
+@keyframes room-graph-walk {
+  from {
+    stroke-dashoffset: 2670;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.room-graph-pulse {
+  fill: none;
+  stroke: var(--mark);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-dasharray: 70 2600;
+  animation: room-graph-walk 26s linear infinite;
+}
+
+/* Narrow viewports wrap the headline to three lines and the lead to four, so the
+   type block is a much taller share of the section and the desktop pocket is no
+   longer big enough to clear it. Same shape, taller and wider. */
+@media (max-width: 767px) {
+  .room-field[data-variant="hero"] {
+    --hero-pocket: radial-gradient(
+      ellipse 130% 46% at 50% 30%,
+      transparent 0%,
+      transparent 52%,
+      rgba(0, 0, 0, 0.45) 74%,
+      #000 96%
+    );
+  }
+
+  /* 1600px of graph centred on a 390px viewport shows only the middle, which is
+     exactly the part the pocket removes. Scaling to 0.6 brings both shoulders
+     back into frame; the dot tile scales with it (40 → 24) so nodes stay on
+     dots, and the strokes are compensated so hairlines stay hairlines. */
+  .room-field[data-variant="hero"] .room-field-dots {
+    background-size: 24px 24px;
+    background-position: calc(50% - 480px) 0;
+  }
+
+  .room-graph {
+    transform: translateX(-50%) scale(0.6);
+  }
+
+  .room-graph-edge,
+  .room-graph-node {
+    stroke-width: 1.6;
+  }
+
+  .room-graph-pulse {
+    stroke-width: 2;
+  }
+}
+
+/* Film grain: one feTurbulence tile, repeated, static. Animated grain costs
+   battery and reads as noise for its own sake. */
+.room-field-grain {
+  opacity: 0.025;
+  mix-blend-mode: overlay;
+  background-repeat: repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* A cut line between sections. Hatching means "this is a section edge", which is
+   what it means on a drawing. */
+.room-hatch {
+  height: 44px;
+  width: 100%;
+  border-top: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--edge) 0,
+    var(--edge) 1px,
+    transparent 1px,
+    transparent 7px
+  );
+  opacity: 0.5;
+}
+
+/* ── Version chip ────────────────────────────────────────────────────────────
+   A light travelling once around the border. The chip is the only place in the
+   hero with a moving colour, which is what makes it read as a live thing rather
+   than as decoration: it announces a published version, and the version is
+   checkable in one click.
+
+   Built as a conic gradient on a wrapper with the chip's own opaque background
+   inset by 1px, so the "border" is the sliver of gradient showing around the
+   edge. Rotating a background-image costs one composited layer and never touches
+   layout.
+   ─────────────────────────────────────────────────────────────────────────── */
+@property --chip-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes room-chip-spin {
+  to {
+    --chip-angle: 360deg;
+  }
+}
+
+.room-chip {
+  position: relative;
+  display: inline-flex;
+  padding: 1px;
+  border-radius: 999px;
+  /* Mostly --edge, with one short arc of --mark. A full rainbow sweep would be
+     the thing every generated landing page does. */
+  background: conic-gradient(
+    from var(--chip-angle),
+    var(--edge) 0deg,
+    var(--edge) 250deg,
+    var(--mark) 310deg,
+    var(--edge-lit) 340deg,
+    var(--edge) 360deg
+  );
+  animation: room-chip-spin 6s linear infinite;
+}
+
+.room-chip-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  background: var(--ground);
+  padding: 6px 14px 6px 8px;
+}
+
+/* ── FAQ ─────────────────────────────────────────────────────────────────────
+   Native <details>, so the answers exist without JS. The default triangle goes;
+   the chevron turns instead.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.room-faq-glyph {
+  display: inline-flex;
+  transition:
+    transform var(--dur-hover) var(--ease-ui),
+    color var(--dur-hover) var(--ease-ui);
+}
+
+.room-faq[open] .room-faq-glyph {
+  transform: rotate(180deg);
+  color: var(--ink);
+}
+
+/* The answer resolves out of blur as it opens.
+   Deliberately one animation on the whole paragraph rather than a per-character
+   stagger. Splitting an answer into ~250 spans costs find-in-page across word
+   boundaries, breaks selection, and is the reason <details> was chosen in the
+   first place. A 260ms blur-in reads as the same gesture for none of that. */
+@keyframes room-faq-answer {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+.room-faq[open] .room-faq-answer {
+  animation: room-faq-answer 260ms var(--ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-faq[open] .room-faq-answer {
+    animation: none;
+  }
+}
+
+/* ── Marquee ─────────────────────────────────────────────────────────────────
+   Full-bleed band. Two identical tracks side by side, translated by exactly the
+   width of one, so the loop has no seam. Masked at both ends: the marks arrive
+   and leave rather than being cut off at the viewport edge.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-marquee {
+  display: flex;
+  width: 100%;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+}
+
+.room-marquee-track {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 104px;
+  padding-right: 104px;
+  /* Scales with the number of clients: the track always travels its own width,
+     so adding logos speeds the loop up unless the duration grows with it.
+     ~6.3s per item, set from 38s across the original six. */
+  animation: room-marquee 57s linear infinite;
+}
+
+/* A loop nobody can stop is what makes marquees hostile. */
+.room-marquee:hover .room-marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes room-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.room-marquee-item {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+}
+
+.room-marquee-item:hover .room-ide-mark {
+  opacity: 0.8;
+}
+
+.room-marquee-item:hover .room-ide-label {
+  color: var(--ink-2);
+}
+
+/* Client marks. The SVGs ship in five different fills, so each is used as a mask
+   and the colour comes from --ink. A filter chain could force them monochrome
+   too, but it would land on #fff rather than on the token. */
+.room-ide-mark {
+  display: block;
+  width: 40px;
+  height: 40px;
+  background-color: var(--ink);
+  opacity: 0.46;
+  -webkit-mask-image: var(--mark-src);
+  mask-image: var(--mark-src);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  transition: opacity var(--dur-hover) var(--ease);
+}
+
+.room-ide-label {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--ink-3);
+  text-align: center;
+  transition: color var(--dur-hover) var(--ease);
+}
+
+li:hover > .room-ide-mark {
+  opacity: 0.8;
+}
+
+li:hover > .room-ide-label {
+  color: var(--ink-2);
+}
+
+/* ── Agent session ───────────────────────────────────────────────────────────
+   The exchange plays on scroll, not on load. Each step carries its own
+   --reveal-at and every one of them starts paused, so the whole sequence sits at
+   its first frame until the observer in agent-session.tsx sets data-playing on
+   the root. Pausing rather than toggling a class means the schedule is declared
+   once here and never recomputed in JS.
+
+   `both` fill is what makes the paused state legible: during the delay the
+   element holds the `from` frame, so a step that has not run yet is invisible
+   rather than flashing in and back out.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-session [data-step],
+.room-session-verdicts li {
+  opacity: 0;
+  animation: room-reveal var(--dur) var(--ease) var(--reveal-at, 0ms) both;
+  animation-play-state: paused;
+}
+
+.room-session[data-playing="true"] [data-step],
+.room-session[data-playing="true"] .room-session-verdicts li,
+.room-session[data-playing="true"] .room-session-pending {
+  animation-play-state: running;
+}
+
+/* With scripting off nothing ever sets data-playing, and a panel that stays on
+   its first frame forever is a blank box. Show the finished exchange instead. */
+@media (scripting: none) {
+  .room-session [data-step],
+  .room-session-verdicts li {
+    animation: none;
+    opacity: 1;
+  }
+  .room-session-pending {
+    display: none;
+  }
+}
+
+/* The human's line, marked as a prompt rather than by colour alone. Decorative,
+   so it lives in CSS and stays out of the accessible name. */
+.room-session-request::before {
+  content: "›";
+  margin-right: 10px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+/* The call sits inset from the conversation around it: it is the machine's turn,
+   not another sentence. */
+.room-session-call {
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+@keyframes room-session-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Sits over the verdicts rather than above them, so the answer replaces the
+   waiting in place and the panel never changes height mid-sequence. Positioned
+   to the parent's padding box (px-3.5 py-3). */
+.room-session-pending {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 12px;
+  animation: room-session-out 240ms var(--ease) 1620ms both;
+  animation-play-state: paused;
+}
+
+.room-session-mark {
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  background-color: var(--ink);
+  -webkit-mask-image: var(--mark-src);
+  mask-image: var(--mark-src);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* ── Drift board ─────────────────────────────────────────────────────────────
+   The board keeps all seven columns and scrolls sideways rather than dropping
+   any: a board missing a column is a board you cannot check. What that costs is
+   discoverability, so below the width where the table fits, the right edge
+   fades. Same mask idiom as the marquee, same meaning: content continues.
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 927.98px) {
+  .room-drift-scroll {
+    -webkit-mask-image: linear-gradient(to right, #000 86%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 86%, transparent 100%);
+  }
+}
+
+/* ── MCP wires ───────────────────────────────────────────────────────────────
+   Pulses drawn as a dash travelling along the path, so one property animates and
+   nothing in the DOM moves. vector-effect keeps the stroke 1px however the
+   viewBox is stretched.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-wires {
+  overflow: visible;
+}
+
+.room-wire {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+@keyframes room-pulse {
+  from {
+    stroke-dashoffset: 320;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+.room-wire-pulse {
+  fill: none;
+  stroke: var(--mark);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 26 320;
+  vector-effect: non-scaling-stroke;
+  animation: room-pulse 2.6s linear var(--pulse-at, 0ms) infinite;
+}
+
+.room-wire-node {
+  fill: var(--surface);
+  stroke: var(--edge-lit);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The hub's own heartbeat, so a still frame still reads as live. */
+@keyframes room-hub-beat {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+.room-wire-beat {
+  background: var(--held);
+  animation: room-hub-beat 2.6s var(--ease-ui) infinite;
+}
+
+/* ── Nav ─────────────────────────────────────────────────────────────────────
+   Two states, one transition.
+
+   At rest the bar is 1180px of nothing: transparent, borderless, sitting on the
+   field. Past 80px the container contracts to 860px and lifts off the top edge
+   as a pill. The contraction inward is the effect: a bar that only got shorter
+   reads as a rendering glitch; a bar that pulls its ends toward the centre reads
+   as condensing.
+
+   Sign in leaves with it. Someone 800px down the page is closer to installing
+   than to signing in, and dropping the secondary action is what gets the pill
+   narrow enough to look deliberate rather than arbitrary.
+
+   The bar is fixed in both states; the <header> is a 68px spacer holding its
+   place in flow. No backdrop-filter: the background is opaque enough on its own.
+   It started at .94, where hero type ghosted through the pill at 1440; .97 is
+   where that stops without the pill reading as a solid slab.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.room-nav {
+  height: 68px;
+  flex: none;
+}
+
+.room-nav-bar {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  right: 0;
+  left: 0;
+  margin-inline: auto;
+  display: flex;
+  max-width: 1180px;
+  height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-inline: 24px;
+  /* Declared transparent rather than absent so the 1px arriving on condense is
+     a colour change, not a 2px jump in the box. Same reason the shadow is
+     declared at zero alpha. */
+  border: 1px solid transparent;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0);
+  transition-property:
+    max-width, height, top, border-radius, background-color, border-color,
+    box-shadow;
+  transition-duration: 280ms;
+  transition-timing-function: var(--ease-ui);
+}
+
+/* A promise to the compositor, not a hint to leave on: held permanently it pins
+   a layer for a bar that changes state twice in a session. */
+.room-nav-bar[data-transitioning="true"] {
+  will-change: max-width;
+}
+
+@media (min-width: 720px) {
+  .room-nav-bar[data-condensed="true"] {
+    top: 10px;
+    max-width: 860px;
+    height: 56px;
+    border-radius: 16px;
+    border-color: var(--edge);
+    background-color: rgba(16, 16, 19, 0.97);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* Below 720px the pill never happens: at 375px a pill touches both edges, which
+   is a full-width bar wearing rounded corners. The bar keeps its width and keeps
+   Sign in.
+
+   It does still take the ground past the threshold. A transparent bar fixed over
+   scrolling body copy is unreadable, and that is not what "never condense" was
+   protecting against. */
+@media (max-width: 719.98px) {
+  .room-nav-bar[data-condensed="true"] {
+    border-bottom-color: var(--edge);
+    background-color: rgba(16, 16, 19, 0.97);
+  }
+}
+
+/* Spacing as explicit margins rather than a flex `gap`, so Sign in takes its own
+   spacing with it when it collapses. Under `gap` the row would keep a 28px hole
+   where a zero-width item used to be. */
+.room-nav-links {
+  display: flex;
+  align-items: center;
+}
+
+.room-nav-links > * + * {
+  margin-left: 20px;
+}
+
+@media (min-width: 640px) {
+  .room-nav-links > * + * {
+    margin-left: 28px;
+  }
+}
+
+.room-nav-signin {
+  display: inline-flex;
+  max-width: 10rem;
+  align-items: center;
+  overflow: hidden;
+  opacity: 1;
+  white-space: nowrap;
+  transition-property: max-width, margin-left, opacity, visibility;
+  transition-duration: 280ms;
+  transition-timing-function: var(--ease-ui);
+}
+
+@media (min-width: 720px) {
+  .room-nav-bar[data-condensed="true"] .room-nav-signin {
+    max-width: 0;
+    margin-left: 0;
+    opacity: 0;
+    /* Out of the tab order too. A zero-width link you can still tab to is a
+       focus ring landing on nothing. `visibility` is in the transition list so
+       the flip waits out the 280ms on the way out and happens immediately on the
+       way back in. */
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* ── IDE strip ───────────────────────────────────────────────────────────────
+   The marks ship in five different fills, so each SVG is used as a mask and the
+   colour comes from --ink. A filter chain could force them monochrome too, but
+   it would land on #fff rather than on the token, and these sit next to type
+   that is exactly --ink.
+   ─────────────────────────────────────────────────────────────────────────── */
+/* ── Motion ──────────────────────────────────────────────────────────────────
+   One sequence, on load, once. Each step is a 16px rise and a fade over --dur.
+   No blur, no per-character stagger, nothing loops. Timing is passed per element
+   as --reveal-at so the schedule reads in source order.
+   ─────────────────────────────────────────────────────────────────────────── */
+@keyframes room-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Corner marks come in on opacity alone: a register mark that slides has moved
+   off its register, which is the one thing it cannot do. */
+@keyframes room-reveal-opacity {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The artifact panel rises further than everything else. */
+@keyframes room-reveal-panel {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-reveal] {
+  opacity: 0;
+  animation: room-reveal var(--dur) var(--ease) var(--reveal-at, 0ms) both;
+}
+
+[data-reveal="opacity"] {
+  animation-name: room-reveal-opacity;
+}
+
+[data-reveal="panel"] {
+  animation-name: room-reveal-panel;
+}
+
+/* One pulse per successful poll. The element is remounted on a new key, which
+   restarts the animation: the API's heartbeat, and the only ambient motion. */
+@keyframes room-beat {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.room-beat {
+  animation: room-beat 900ms var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Final state at t=0. Grain and the photograph still render; neither moves. */
+  [data-reveal] {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .room-beat {
+    animation: none;
+  }
+  /* The nav still changes state on scroll: it just arrives there rather than
+     travelling. Condensing is layout, not decoration. */
+  .room-nav-bar,
+  .room-nav-signin {
+    transition: none;
+  }
+  /* Every cell is simply already filled. The stagger is the argument, but not at
+     the cost of making the page move for someone who asked it not to. */
+  .room-cell {
+    animation: none;
+    opacity: 1;
+  }
+  /* Wires are drawn, not travelled. */
+  .room-wire-pulse,
+  .room-wire-beat {
+    animation: none;
+  }
+  .room-wire-pulse {
+    display: none;
+  }
+  /* The field holds still: nothing traverses the graph. */
+  .room-graph-pulse {
+    display: none;
+  }
+  .room-marquee-track {
+    animation: none;
+  }
+  /* The chip keeps its border, it just stops travelling. */
+  .room-chip {
+    animation: none;
+    background: var(--edge);
+  }
+  /* The exchange is simply already finished. Every step at its final state, and
+     the "checking" beat gone rather than frozen mid-thought: a pending label
+     that never resolves reads as a hung request, which is worse than no
+     animation at all. */
+  .room-session [data-step],
+  .room-session-verdicts li {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .room-session-pending {
+    display: none;
+  }
+  .room-session-verdicts {
+    position: static;
+  }
+  /* The plate renders at its full width immediately: see the reduced-motion
+     branch in pair-plate.tsx, which sets --plate-w and never starts the rAF. */
+}

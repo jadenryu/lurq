@@ -1,49 +1,47 @@
-import { SiteHeader } from "@/components/marketing/site-header";
-import { Hero } from "@/components/marketing/hero";
-import { SectionStack } from "@/components/marketing/section-stack";
-import { SectionNumbers } from "@/components/marketing/numbers";
-import {
-  FeatureProvenance,
-  FeatureUsage,
-  FeatureVerify,
-} from "@/components/marketing/features";
-import { SectionWeights } from "@/components/marketing/weights";
-import { SectionInstall } from "@/components/marketing/install";
-import { SectionLimits } from "@/components/marketing/limits";
-import { SectionFaq } from "@/components/marketing/faq";
-import { SectionFinalCta } from "@/components/marketing/final-cta";
-import { SiteFooter } from "@/components/marketing/site-footer";
+import { SiteNav } from "@/components/site/nav";
+import { Hero } from "@/components/site/hero";
+import { IdeMarquee } from "@/components/site/ide-marquee";
+import { AgentSession } from "@/components/site/agent-session";
+import { DriftBoard } from "@/components/site/drift-board";
+import { SiteFooter } from "@/components/site/footer";
+import { ScaffoldSection } from "@/components/site/scaffold-section";
+import { Faq } from "@/components/site/faq";
+import { Contact } from "@/components/site/contact";
 
 /**
- * Show, then prove, then install.
+ * The page, in order: hero with the video slot, where it installs, the drift
+ * board below the fold, the limits, questions, contact, footer.
  *
- * The matrix carries the argument nobody else can make — that we know what happens
- * when these packages meet — so it comes first and gets the only breakout width on
- * the page. Everything after it gets the form its data actually wants: a grid for
- * an API surface, two cards for two packages being compared, bars for a weight
- * model, a diagram for a pipeline.
+ * `#limits` is still scaffolding and it is the target of the hero's note line,
+ * so nothing above it is allowed to overclaim while it is empty.
  *
- * Dark three times only — the matrix, the install band, the closing line — so the
- * page has a rhythm rather than six identical panels in a row. And nothing dense
- * sits next to anything dense: the numbers are a held breath after the matrix, and
- * the limits are prose after the diagram.
+ * Background is flat `--ground` plus thin column rules on sections that opt in.
+ * Atmosphere comes from the product chrome (drift panel), not a decorated field.
  */
 export default function Home() {
   return (
     <>
-      <SiteHeader />
+      <SiteNav />
       <main className="flex-1">
         <Hero />
-        <SectionStack />
-        <SectionNumbers />
-        <FeatureUsage />
-        <FeatureVerify />
-        <SectionWeights />
-        <FeatureProvenance />
-        <SectionInstall />
-        <SectionLimits />
-        <SectionFaq />
-        <SectionFinalCta />
+        <IdeMarquee />
+        {/* The first thing on the page that demonstrates rather than asserts,
+            and the only section with no heading of its own: the artifact opens
+            it. Sits here because the marquee has just said lurq installs
+            everywhere, and "so what does it do once it is there" is the next
+            question a reader has. */}
+        <AgentSession />
+        <DriftBoard />
+        {/* Scaffolding: see components/site/scaffold-section.tsx. Delete this
+            and its component once the section lands. */}
+        <ScaffoldSection
+          id="limits"
+          label="What doesn't work yet"
+          note="The target of the hero's note line. Nothing above it is allowed to overclaim while this is empty."
+          height={420}
+        />
+        <Faq />
+        <Contact />
       </main>
       <SiteFooter />
     </>

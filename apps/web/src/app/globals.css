@@ -2,6 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* components/site has to be registered by hand.
+   The root .gitignore carries `/site` from a stock mkdocs block (line ~192).
+   Git reads that as anchored to the repo root, so `apps/web/src/components/site`
+   is correctly tracked — but Tailwind's automatic source detection matches the
+   bare directory name anywhere in the tree and skips it, so every class used
+   only in there silently fails to compile. Registering the path explicitly is
+   the documented escape hatch, the same one that pulls classes out of an
+   ignored node_modules package. */
+@source "../components/site";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -54,6 +64,18 @@
   --color-viewport-2: var(--viewport-2);
   --color-viewport-3: var(--viewport-3);
   --color-viewport-ink: var(--viewport-ink);
+  /* Dark-room surface. Values live in app/styles/tokens.css; these only make
+     them reachable as utilities (bg-ground, border-edge, text-ink-2). --ink,
+     --conflict, --declared and --mark are already mapped above and are
+     re-declared for the dark ground by that file. */
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-edge: var(--edge);
+  --color-edge-lit: var(--edge-lit);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-held: var(--held);
   /* Verdicts — the only saturated colour on the marketing page. Used in the
      graph, in verdict badges, in the diff markers, and nowhere else. The `-lift`
      variants are the same hues raised for the dark surfaces. */

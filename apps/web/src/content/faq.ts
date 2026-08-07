@@ -19,7 +19,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "Which tools does it work with?",
-    a: "Claude Code, Cursor, Windsurf, Copilot, Codex, and anything else that can use a CLI or MCP connection. One install step wires it into your agent.",
+    a: "Claude Code, Cursor, Windsurf, VS Code / Copilot, Codex, Gemini CLI, Antigravity, Kiro, and anything else that can use a CLI or MCP connection. One install step writes the config file each of those already reads.",
   },
   {
     q: "Where does the data come from?",
