@@ -196,7 +196,11 @@ export async function fetchNpmRegistry(
 
 /**
  * Compat metadata for a specific published version (peers + engines).
- * Falls back to `latest` when `version` is null/missing from the packument.
+ *
+ * `latest` is used only when no version was requested. A version that was
+ * requested but isn't published returns null rather than silently answering
+ * about `latest` — otherwise `compat` would grade a different stack than the
+ * caller pinned, and the caller would have no way to tell.
  */
 export async function fetchNpmCompatAtVersion(
   name: string,
@@ -216,12 +220,11 @@ export async function fetchNpmCompatAtVersion(
       fetchImpl,
     });
     const latest: string | null = data?.['dist-tags']?.latest ?? null;
-    const wanted =
-      version && data?.versions?.[version]
-        ? version
-        : latest && data?.versions?.[latest]
-          ? latest
-          : null;
+    const wanted = version
+      ? (data?.versions?.[version] ? version : null)
+      : latest && data?.versions?.[latest]
+        ? latest
+        : null;
     if (!wanted) return null;
     const manifest = data.versions[wanted] ?? {};
     return {
