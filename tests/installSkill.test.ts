@@ -4,6 +4,7 @@ import {
   buildTomlBlock,
   buildRemoteServerEntry,
   buildRemoteTomlBlock,
+  stripTomlBlock,
 } from '../src/cli/installSkill';
 
 describe('buildServerEntry', () => {
@@ -78,5 +79,41 @@ describe('buildRemoteTomlBlock (hosted)', () => {
     expect(toml).not.toContain('[mcp_servers.lurq.headers]');
     expect(toml).not.toContain('command');
     expect(toml).not.toContain('DATABASE_URL');
+  });
+});
+
+describe('stripTomlBlock', () => {
+  const config = [
+    'model = "gpt-5"',
+    '',
+    '[mcp_servers.other]',
+    'command = "x"',
+    '',
+    '[mcp_servers.lurq]',
+    'url = "https://api.lurq.run/mcp"',
+    'http_headers = { Authorization = "Bearer old" }',
+    '',
+    '[mcp_servers.lurq.env]',
+    'FOO = "1"',
+    '',
+    '[profiles.dev]',
+    'approval = "never"',
+    '',
+  ].join('\n');
+
+  // Re-running `lurq install` after a key rotation must replace the entry, not
+  // skip it and leave Codex on the dead key.
+  it('removes the lurq table and its sub-tables, keeping siblings', () => {
+    const out = stripTomlBlock(config);
+    expect(out).not.toContain('[mcp_servers.lurq]');
+    expect(out).not.toContain('Bearer old');
+    expect(out).not.toContain('[mcp_servers.lurq.env]');
+    expect(out).toContain('[mcp_servers.other]');
+    expect(out).toContain('[profiles.dev]');
+    expect(out).toContain('model = "gpt-5"');
+  });
+
+  it('leaves a config with no lurq entry untouched', () => {
+    expect(stripTomlBlock('model = "gpt-5"\n')).toBe('model = "gpt-5"\n');
   });
 });
