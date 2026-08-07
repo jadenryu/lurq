@@ -14,8 +14,10 @@
 import { currentUser } from "@clerk/nextjs/server";
 import type {
   DashboardContribution,
+  DashboardDep,
   DashboardKey,
   DashboardOutcome,
+  DashboardRepo,
   DashboardUsage,
 } from "@/lib/lurq-issuer";
 
@@ -230,4 +232,62 @@ export function demoContributions(): { total: number; packages: DashboardContrib
     firstRequestedAt: `${dayISO(daysAgo)}T14:12:00.000Z`,
   }));
   return { total: packages.length, packages };
+}
+
+/**
+ * Connected repositories with realistic drift. The numbers are internally
+ * consistent — `majorDrift <= anyDrift <= depsTracked <= depsDeclared` — because
+ * a demo whose totals don't add up is the fastest way to lose a room.
+ */
+export function demoRepos(): DashboardRepo[] {
+  const rows: [string, number, number, number, number, number, number, number][] = [
+    // fullName-suffix, declared, tracked, anyDrift, majorDrift, deprecated, advisories, scannedHoursAgo
+    ["acme/checkout-web", 148, 131, 44, 9, 3, 2, 3],
+    ["acme/billing-api", 96, 88, 21, 4, 1, 0, 5],
+    ["acme/design-system", 72, 66, 17, 6, 2, 1, 7],
+    ["acme/internal-tools", 210, 174, 83, 23, 11, 4, 26],
+  ];
+  return rows.map(
+    ([fullName, depsDeclared, depsTracked, anyDrift, majorDrift, deprecated, advisories, h], i) => ({
+      id: i + 1,
+      fullName,
+      defaultBranch: "main",
+      isPrivate: i !== 2,
+      policy: {
+        enabled: i < 2,
+        scope: i === 0 ? ("all" as const) : ("blocking" as const),
+        autoMerge: false,
+      },
+      drift: { depsDeclared, depsTracked, anyDrift, majorDrift, deprecated, advisories },
+      lastScanAt: hoursAgo(h),
+      lastScanError: null,
+    }),
+  );
+}
+
+/** Per-dependency detail for the demo repo drill-down. */
+export function demoRepoDeps(): DashboardDep[] {
+  const rows: [string, string, string, string, number, boolean, number][] = [
+    ["request", "^2.88.0", "2.88.2", "2.88.2", 0, true, 3],
+    ["react-router", "^6.4.0", "6.9.2", "8.1.0", 2, false, 0],
+    ["node-fetch", "^2.6.7", "2.7.0", "4.0.1", 2, false, 1],
+    ["express", "^4.18.2", "4.21.2", "5.2.1", 1, false, 0],
+    ["zod", "^3.23.8", "3.25.76", "4.1.5", 1, false, 0],
+    ["eslint", "^8.57.0", "8.57.1", "10.2.0", 2, false, 0],
+    ["date-fns", "^2.30.0", "2.30.0", "4.1.0", 2, false, 0],
+    ["dotenv", "^16.4.5", "16.6.1", "17.2.1", 1, false, 0],
+    ["chalk", "^5.3.0", "5.6.2", "6.0.0", 1, false, 0],
+    ["vitest", "^2.1.9", "2.1.9", "3.2.4", 1, false, 0],
+    ["typescript", "^5.6.3", "5.9.2", "5.9.2", 0, false, 0],
+    ["drizzle-orm", "^0.45.2", "0.45.2", "0.45.2", 0, false, 0],
+  ];
+  return rows.map(([name, range, resolved, latest, majorsBehind, deprecated, advisories]) => ({
+    name,
+    range,
+    resolved,
+    latest,
+    majorsBehind,
+    deprecated,
+    advisories,
+  }));
 }

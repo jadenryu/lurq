@@ -23,6 +23,8 @@ import {
   demoContributions,
   demoKeys,
   demoOutcomes,
+  demoRepoDeps,
+  demoRepos,
   demoUsage,
   isDemoUser,
 } from "@/lib/demo-data";
@@ -30,10 +32,15 @@ import {
   fetchContributions,
   fetchKeys,
   fetchOutcomes,
+  fetchRepo,
+  fetchRepos,
   fetchUsage,
+  GithubNotConfiguredError,
   type DashboardContribution,
+  type DashboardDep,
   type DashboardKey,
   type DashboardOutcome,
+  type DashboardRepo,
   type DashboardUsage,
 } from "@/lib/lurq-issuer";
 
@@ -101,6 +108,66 @@ export function loadContributions(): Promise<
     total: 0,
     packages: [],
   });
+}
+
+/**
+ * Connected repos.
+ *
+ * `configured` is separate from `failed` on purpose. Everywhere else the
+ * dashboard collapses "no data" and "backend unreachable" into the new-user
+ * state, but here the two lead to different actions: an unconfigured GitHub App
+ * means *nothing the user does* will connect a repo, and telling them to click
+ * "Connect GitHub" would send them into a dead end.
+ */
+export interface ReposData {
+  repos: DashboardRepo[];
+  configured: boolean;
+}
+
+export async function loadRepos(): Promise<Loaded<ReposData>> {
+  const { userId, demo } = await context();
+  if (!userId) return { data: { repos: [], configured: false }, demo: false, failed: false };
+  if (demo) return { data: { repos: demoRepos(), configured: true }, demo: true, failed: false };
+  try {
+    return {
+      data: { repos: await fetchRepos(userId), configured: true },
+      demo: false,
+      failed: false,
+    };
+  } catch (err) {
+    if (err instanceof GithubNotConfiguredError) {
+      return { data: { repos: [], configured: false }, demo: false, failed: false };
+    }
+    console.warn(
+      "[lurq] repo read failed; rendering the empty state instead.",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { data: { repos: [], configured: true }, demo: false, failed: true };
+  }
+}
+
+export type RepoDetail = DashboardRepo & { deps: DashboardDep[] };
+
+export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
+  const { userId, demo } = await context();
+  if (!userId) return { data: null, demo: false, failed: false };
+  if (demo) {
+    const repo = demoRepos().find((r) => r.id === id);
+    return {
+      data: repo ? { ...repo, deps: demoRepoDeps() } : null,
+      demo: true,
+      failed: false,
+    };
+  }
+  try {
+    return { data: await fetchRepo(userId, id), demo: false, failed: false };
+  } catch (err) {
+    console.warn(
+      "[lurq] repo detail read failed.",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { data: null, demo: false, failed: true };
+  }
 }
 
 export interface OverviewData {

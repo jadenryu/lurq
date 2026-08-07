@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "node dist-operator/bin/operator.js sync",
+    "startCommand": "node dist-operator/bin/operator.js sync; node dist-operator/bin/operator.js repos-scan",
     "cronSchedule": "0 6 * * *",
     "restartPolicyType": "NEVER",
     "numReplicas": 1

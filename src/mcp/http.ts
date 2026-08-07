@@ -26,9 +26,14 @@ import {
 } from '../auth/apiKeys';
 import { getOutcomesByOwner } from '../db/outcomes';
 import { getContributionsByOwner } from '../db/packages';
+import { deleteRepo, getRepo, listRepos, setRepoPolicy, upsertRepos } from '../db/repos';
 import { getUsageByTool, getUsageSummary } from '../db/usage';
 import { createDb } from '../db/client';
-import type { ApiKeyRow } from '../db/schema';
+import { githubAppCredentials, GithubAppError } from '../github/app';
+import { listInstallationRepos } from '../github/manifests';
+import type { RepoPolicy } from '../github/types';
+import { scanOwnerRepos, scanRepo } from '../pipeline/repoScan';
+import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { renderPrometheus } from './metrics';
 
@@ -350,6 +355,188 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('contributions read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read contributions.' });
+    }
+  });
+
+  // ── Repo autopilot (dashboard-authenticated, same issuer-secret model) ──────
+
+  /** 404 the whole surface when no GitHub App is configured, matching /keys. */
+  const requireGithubApp = (_req: Request, res: Response, next: NextFunction): void => {
+    if (!githubAppCredentials()) {
+      res.status(404).end();
+      return;
+    }
+    next();
+  };
+
+  /** Every repo route is owner-scoped; a missing ownerId is a 400, never a
+   *  wildcard read. See the header of src/db/repos.ts. */
+  const ownerFrom = (req: Request): string => {
+    const source = req.method === 'GET' ? req.query : (req.body ?? {});
+    const raw = (source as Record<string, unknown>).ownerId;
+    return typeof raw === 'string' ? raw.trim() : '';
+  };
+
+  /** Manifests are never sent to the browser — only the derived drift summary.
+   *  The dependency ranges are input to our computation, not dashboard content. */
+  const toDashboardRepo = (row: RepoRow) => ({
+    id: row.id,
+    fullName: row.fullName,
+    defaultBranch: row.defaultBranch,
+    isPrivate: row.isPrivate,
+    policy: row.policy,
+    drift: row.drift
+      ? {
+          depsDeclared: row.drift.depsDeclared,
+          depsTracked: row.drift.depsTracked,
+          majorDrift: row.drift.majorDrift,
+          anyDrift: row.drift.anyDrift,
+          deprecated: row.drift.deprecated,
+          advisories: row.drift.advisories,
+        }
+      : null,
+    lastScanAt: row.lastScanAt,
+    lastScanError: row.lastScanError,
+  });
+
+  /** Reject anything not matching RepoPolicy rather than merging partial input —
+   *  a policy is a permission grant, and a half-parsed one could arm a repo the
+   *  user meant to leave off. */
+  function parsePolicy(input: unknown): RepoPolicy | null {
+    if (!input || typeof input !== 'object') return null;
+    const raw = input as Record<string, unknown>;
+    if (typeof raw.enabled !== 'boolean') return null;
+    if (typeof raw.autoMerge !== 'boolean') return null;
+    if (raw.scope !== 'security' && raw.scope !== 'blocking' && raw.scope !== 'all') return null;
+    return { enabled: raw.enabled, scope: raw.scope, autoMerge: raw.autoMerge };
+  }
+
+  app.post('/repos/connect', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const installationRaw = (req.body ?? {}).installationId;
+    const installationId = Number(installationRaw);
+    if (!ownerId || !Number.isInteger(installationId) || installationId <= 0) {
+      res.status(400).json({ error: 'ownerId and installationId are required.' });
+      return;
+    }
+    try {
+      const found = await listInstallationRepos(installationId);
+      const connected = await upsertRepos(
+        db,
+        found.map((repo) => ({
+          ownerId,
+          installationId,
+          fullName: repo.fullName,
+          defaultBranch: repo.defaultBranch,
+          isPrivate: repo.isPrivate,
+        })),
+      );
+      // Respond as soon as the repos are registered. A first scan of a large
+      // account is minutes of GitHub calls, and holding the connect request open
+      // for it would time out at the edge and look like a failed install.
+      void scanOwnerRepos(db, ownerId).catch((err: unknown) => {
+        logger.warn(`initial repo scan failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+      res.status(200).json({ connected });
+    } catch (err) {
+      const status = err instanceof GithubAppError ? err.status : 502;
+      logger.error('repo connect failed:', err instanceof Error ? err.message : String(err));
+      res.status(status).json({ error: 'Could not read the GitHub installation.' });
+    }
+  });
+
+  app.get('/repos', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      const rows = await listRepos(db, ownerId);
+      res.status(200).json({ repos: rows.map(toDashboardRepo) });
+    } catch (err) {
+      logger.error('repo list failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not list repos.' });
+    }
+  });
+
+  app.get('/repos/:id', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const id = Number(req.params.id);
+    if (!ownerId || !Number.isInteger(id)) {
+      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
+      return;
+    }
+    try {
+      const row = await getRepo(db, ownerId, id);
+      if (!row) {
+        res.status(404).json({ error: 'Repo not found.' });
+        return;
+      }
+      res.status(200).json({ repo: { ...toDashboardRepo(row), deps: row.drift?.deps ?? [] } });
+    } catch (err) {
+      logger.error('repo read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read repo.' });
+    }
+  });
+
+  app.post('/repos/:id/scan', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const id = Number(req.params.id);
+    if (!ownerId || !Number.isInteger(id)) {
+      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
+      return;
+    }
+    try {
+      const row = await getRepo(db, ownerId, id);
+      if (!row) {
+        res.status(404).json({ error: 'Repo not found.' });
+        return;
+      }
+      // One repo is a handful of GitHub calls — fast enough to await, so the
+      // dashboard can render the new numbers instead of polling for them.
+      const result = await scanRepo(db, row);
+      res.status(200).json({ result });
+    } catch (err) {
+      logger.error('repo scan failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not scan repo.' });
+    }
+  });
+
+  app.patch('/repos/:id', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const id = Number(req.params.id);
+    const policy = parsePolicy((req.body ?? {}).policy);
+    if (!ownerId || !Number.isInteger(id) || !policy) {
+      res.status(400).json({ error: 'ownerId, a numeric id, and a complete policy are required.' });
+      return;
+    }
+    try {
+      const updated = await setRepoPolicy(db, ownerId, id, policy);
+      if (!updated) {
+        res.status(404).json({ error: 'Repo not found.' });
+        return;
+      }
+      res.status(200).json({ policy });
+    } catch (err) {
+      logger.error('repo policy update failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not update policy.' });
+    }
+  });
+
+  app.delete('/repos/:id', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const id = Number(req.params.id);
+    if (!ownerId || !Number.isInteger(id)) {
+      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
+      return;
+    }
+    try {
+      const removed = await deleteRepo(db, ownerId, id);
+      res.status(removed ? 200 : 404).json(removed ? { removed: true } : { error: 'Repo not found.' });
+    } catch (err) {
+      logger.error('repo delete failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not disconnect repo.' });
     }
   });
 

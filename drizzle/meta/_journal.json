@@ -148,6 +148,13 @@
       "when": 1786054284547,
       "tag": "0020_normal_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786125423454,
+      "tag": "0021_dazzling_blue_shield",
+      "breakpoints": true
     }
   ]
 }

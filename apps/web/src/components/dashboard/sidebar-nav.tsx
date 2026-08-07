@@ -16,6 +16,7 @@ interface NavItem {
 
 const WORKSPACE: NavItem[] = [
   { href: "/dashboard", label: "overview" },
+  { href: "/dashboard/repos", label: "repositories" },
   { href: "/dashboard/keys", label: "api keys" },
   { href: "/dashboard/usage", label: "usage" },
   { href: "/dashboard/activity", label: "activity" },

@@ -26,8 +26,12 @@ describe('Railway service configs (sync / api / discover)', () => {
   const api = loadRailway('railway.serve.json');
   const discover = loadRailway('railway.discover.json');
 
-  it('lurq-sync (railway.json): daily operator sync cron only', () => {
-    expect(sync.deploy.startCommand).toBe('node dist-operator/bin/operator.js sync');
+  it('lurq-sync (railway.json): daily operator sync + repo scan cron', () => {
+    // `;` not `&&`: a failed package sync must not skip the repo scan. The two
+    // read different sources and neither depends on the other succeeding.
+    expect(sync.deploy.startCommand).toBe(
+      'node dist-operator/bin/operator.js sync; node dist-operator/bin/operator.js repos-scan',
+    );
     expect(sync.deploy.cronSchedule).toBe('0 6 * * *'); // 06:00 UTC = 2am EDT
     expect(sync.deploy.restartPolicyType).toBe('NEVER');
     expect(sync.deploy.healthcheckPath).toBeUndefined();

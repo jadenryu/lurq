@@ -49,6 +49,7 @@ import type {
   UsageGuide,
 } from '../core/types';
 import type { EntityKind, EvidenceClass, Verdict } from '../graph/types';
+import type { RepoDrift, RepoManifest, RepoPolicy } from '../github/types';
 import type { ExtractionTier, SymbolKind } from '../surface/types';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -406,6 +407,41 @@ export const ownerUsageDaily = pgTable(
   ],
 );
 
+/**
+ * A GitHub repository connected through the lurq App (repo autopilot).
+ *
+ * What is NOT here is the point: no source, no tokens, no clone. `manifests`
+ * holds only declared dependency ranges, and access is re-minted per scan from
+ * the App's own installation credentials, so revoking the install revokes
+ * everything instantly and there is no long-lived secret to leak.
+ */
+export const repos = pgTable(
+  'repos',
+  {
+    id: serial('id').primaryKey(),
+    /** Clerk user id — same identity as api_keys.owner_id. */
+    ownerId: text('owner_id').notNull(),
+    /** GitHub App installation this repo is reachable through. */
+    installationId: bigint('installation_id', { mode: 'number' }).notNull(),
+    /** `owner/name`. */
+    fullName: text('full_name').notNull(),
+    defaultBranch: text('default_branch'),
+    isPrivate: boolean('is_private').notNull().default(false),
+    policy: jsonb('policy').$type<RepoPolicy>().notNull(),
+    manifests: jsonb('manifests').$type<RepoManifest[]>(),
+    drift: jsonb('drift').$type<RepoDrift>(),
+    lastScanAt: ts('last_scan_at'),
+    /** Last scan failure, surfaced in the dashboard. Null once a scan succeeds —
+     *  a stale error next to fresh drift numbers reads as a current outage. */
+    lastScanError: text('last_scan_error'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('repos_owner_full_name_idx').on(table.ownerId, table.fullName),
+    index('repos_installation_idx').on(table.installationId),
+  ],
+);
+
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';
 
 export interface SyncError {
@@ -623,3 +659,5 @@ export type RecommendationOutcomeRow = typeof recommendationOutcomes.$inferSelec
 export type NewRecommendationOutcomeRow = typeof recommendationOutcomes.$inferInsert;
 export type OwnerUsageDailyRow = typeof ownerUsageDaily.$inferSelect;
 export type NewOwnerUsageDailyRow = typeof ownerUsageDaily.$inferInsert;
+export type RepoRow = typeof repos.$inferSelect;
+export type NewRepoRow = typeof repos.$inferInsert;

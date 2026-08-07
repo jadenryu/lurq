@@ -454,6 +454,35 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('repos-scan')
+    .description('re-read every connected repo\'s manifests and recompute its drift')
+    .option('--json', 'output the per-repo scan results as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { githubAppCredentials } = await import('../github/app');
+      if (!githubAppCredentials()) {
+        // Not an error: most deployments have no GitHub App, and the daily cron
+        // chains this after `sync`. Exiting non-zero would fail the whole run.
+        console.log('GitHub App not configured — nothing to scan.');
+        return;
+      }
+      const { createDb } = await import('../db/client');
+      const { scanAllRepos } = await import('../pipeline/repoScan');
+      const { db, close } = createDb();
+      try {
+        const results = await scanAllRepos(db);
+        if (opts.json) console.log(JSON.stringify(results, null, 2));
+        else {
+          const failed = results.filter((r) => !r.ok).length;
+          console.log(`scanned ${results.length} repo(s), ${failed} failed`);
+        }
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('watch')
     .description('follow the npm changes feed, re-syncing tracked packages on new releases')
     .action(async () => {

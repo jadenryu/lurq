@@ -134,6 +134,127 @@ export async function fetchUsage(ownerId: string, days = 30): Promise<DashboardU
   return { today: data.today ?? 0, series: data.series ?? [], byTool: data.byTool ?? [] };
 }
 
+// ── Repo autopilot ──────────────────────────────────────────────────────────
+
+export interface RepoDriftSummary {
+  depsDeclared: number;
+  depsTracked: number;
+  majorDrift: number;
+  anyDrift: number;
+  deprecated: number;
+  advisories: number;
+}
+
+export interface RepoPolicy {
+  enabled: boolean;
+  scope: "security" | "blocking" | "all";
+  autoMerge: boolean;
+}
+
+export interface DashboardRepo {
+  id: number;
+  fullName: string;
+  defaultBranch: string | null;
+  isPrivate: boolean;
+  policy: RepoPolicy;
+  drift: RepoDriftSummary | null;
+  lastScanAt: string | null;
+  lastScanError: string | null;
+}
+
+export interface DashboardDep {
+  name: string;
+  range: string;
+  resolved: string | null;
+  latest: string | null;
+  majorsBehind: number;
+  deprecated: boolean;
+  advisories: number;
+}
+
+/**
+ * A 404 from any repo route means the backend has no GitHub App configured, not
+ * that the request was wrong. Callers render the "connect GitHub" state for it
+ * rather than an error — it is the pre-setup case, not a failure.
+ */
+export class GithubNotConfiguredError extends LurqIssuerError {
+  constructor() {
+    super("GitHub integration isn't configured yet.", 404);
+  }
+}
+
+function assertRepoOk(res: Response, message: string): void {
+  if (res.status === 404) throw new GithubNotConfiguredError();
+  if (!res.ok) throw new LurqIssuerError(message, 502);
+}
+
+export async function fetchRepos(ownerId: string): Promise<DashboardRepo[]> {
+  const res = await issuerFetch(`/repos?ownerId=${encodeURIComponent(ownerId)}`);
+  assertRepoOk(res, "Could not list repos.");
+  const data = (await res.json()) as { repos?: DashboardRepo[] };
+  return data.repos ?? [];
+}
+
+export async function fetchRepo(
+  ownerId: string,
+  id: number,
+): Promise<(DashboardRepo & { deps: DashboardDep[] }) | null> {
+  const res = await issuerFetch(`/repos/${id}?ownerId=${encodeURIComponent(ownerId)}`);
+  if (res.status === 404) {
+    // Ambiguous status: the App may be unconfigured, or this repo may not exist
+    // for this owner. Both render as "nothing to show here", so don't guess.
+    return null;
+  }
+  if (!res.ok) throw new LurqIssuerError("Could not read repo.", 502);
+  const data = (await res.json()) as { repo?: DashboardRepo & { deps: DashboardDep[] } };
+  return data.repo ?? null;
+}
+
+export async function connectInstallation(
+  ownerId: string,
+  installationId: number,
+): Promise<number> {
+  const res = await issuerFetch("/repos/connect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, installationId }),
+  });
+  assertRepoOk(res, "Could not connect the GitHub installation.");
+  const data = (await res.json()) as { connected?: number };
+  return data.connected ?? 0;
+}
+
+export async function scanRepo(ownerId: string, id: number): Promise<void> {
+  const res = await issuerFetch(`/repos/${id}/scan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  assertRepoOk(res, "Could not scan the repo.");
+}
+
+export async function updateRepoPolicy(
+  ownerId: string,
+  id: number,
+  policy: RepoPolicy,
+): Promise<void> {
+  const res = await issuerFetch(`/repos/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, policy }),
+  });
+  assertRepoOk(res, "Could not update the policy.");
+}
+
+export async function disconnectRepo(ownerId: string, id: number): Promise<void> {
+  const res = await issuerFetch(`/repos/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  assertRepoOk(res, "Could not disconnect the repo.");
+}
+
 export async function fetchContributions(
   ownerId: string,
   opts: { limit?: number; offset?: number } = {},
