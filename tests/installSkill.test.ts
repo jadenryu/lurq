@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  agentSpecs,
   buildServerEntry,
   buildTomlBlock,
   buildRemoteServerEntry,
   buildRemoteTomlBlock,
+  resolveAgents,
+  SUPPORTED_AGENTS,
 } from '../src/cli/installSkill';
 
 describe('buildServerEntry', () => {
@@ -60,11 +63,47 @@ describe('buildRemoteServerEntry (hosted)', () => {
     });
   });
 
-  it('uses serverUrl for Windsurf', () => {
-    expect(buildRemoteServerEntry('windsurf', opts)).toEqual({
-      serverUrl: 'https://api.lurq.run/mcp',
+  it('uses serverUrl for Windsurf and Antigravity', () => {
+    for (const id of ['windsurf', 'antigravity']) {
+      expect(buildRemoteServerEntry(id, opts)).toEqual({
+        serverUrl: 'https://api.lurq.run/mcp',
+        headers: { Authorization: 'Bearer lurq_live_abc' },
+      });
+    }
+  });
+
+  it('omits type for Kiro (transport inferred from url)', () => {
+    expect(buildRemoteServerEntry('kiro', opts)).toEqual({
+      url: 'https://api.lurq.run/mcp',
       headers: { Authorization: 'Bearer lurq_live_abc' },
     });
+  });
+
+  // A plain `url` is an SSE endpoint to the Gemini CLI, so the streamable-HTTP
+  // handshake would never happen. This is the one field name we cannot share.
+  it('uses httpUrl for the Gemini CLI, never a bare url', () => {
+    const entry = buildRemoteServerEntry('gemini-cli', opts);
+    expect(entry).toEqual({
+      httpUrl: 'https://api.lurq.run/mcp',
+      headers: { Authorization: 'Bearer lurq_live_abc' },
+    });
+    expect(entry.url).toBeUndefined();
+  });
+});
+
+describe('agentSpecs', () => {
+  it('covers every id in SUPPORTED_AGENTS, with no duplicate config paths', () => {
+    const specs = agentSpecs();
+    expect(specs.map((s) => s.id).sort()).toEqual([...SUPPORTED_AGENTS].sort());
+    const paths = specs.map((s) => s.path);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it('resolves every supported agent by id and rejects unknown ones', () => {
+    for (const id of SUPPORTED_AGENTS) {
+      expect(resolveAgents(id)[0]?.id).toBe(id);
+    }
+    expect(() => resolveAgents('zed')).toThrow(/Unknown agent/);
   });
 });
 

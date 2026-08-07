@@ -13,8 +13,9 @@
  * widely-supported shapes and prints exactly what it did, so a stale path is
  * obvious rather than silent. Remote shapes verified against current agent docs
  * (2026-06): Claude Code / VS Code use `{ type:"http", url, headers }`; Cursor
- * uses `{ url, headers }`; Windsurf uses `{ serverUrl, headers }`; Codex (TOML)
- * uses `url` + an inline `http_headers` table.
+ * and Kiro use `{ url, headers }`; Windsurf and Antigravity use
+ * `{ serverUrl, headers }`; Gemini CLI uses `{ httpUrl, headers }` (`url` there
+ * means SSE); Codex (TOML) uses `url` + an inline `http_headers` table.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { copyFileSync } from 'node:fs';
@@ -88,10 +89,42 @@ export function agentSpecs(): AgentSpec[] {
       path: home('.codex', 'config.toml'),
       detected: existsSync(home('.codex')),
     },
+    {
+      id: 'gemini-cli',
+      label: 'Gemini CLI',
+      format: 'mcpServers',
+      path: home('.gemini', 'settings.json'),
+      detected: existsSync(home('.gemini', 'settings.json')),
+    },
+    {
+      // Shares the ~/.gemini root with the Gemini CLI but keeps its own file, so
+      // detection has to look at the file rather than at the directory.
+      id: 'antigravity',
+      label: 'Google Antigravity',
+      format: 'mcpServers',
+      path: home('.gemini', 'config', 'mcp_config.json'),
+      detected: existsSync(home('.gemini', 'config')),
+    },
+    {
+      id: 'kiro',
+      label: 'Kiro',
+      format: 'mcpServers',
+      path: home('.kiro', 'settings', 'mcp.json'),
+      detected: existsSync(home('.kiro')),
+    },
   ];
 }
 
-export const SUPPORTED_AGENTS = ['claude-code', 'cursor', 'windsurf', 'copilot', 'codex'] as const;
+export const SUPPORTED_AGENTS = [
+  'claude-code',
+  'cursor',
+  'windsurf',
+  'copilot',
+  'codex',
+  'gemini-cli',
+  'antigravity',
+  'kiro',
+] as const;
 
 /** How to wire the lurq entry: hosted HTTP endpoint, or local stdio process. */
 export type InstallMode =
@@ -136,8 +169,10 @@ export function buildServerEntry(env: Record<string, string>, withType: boolean)
 
 /**
  * Remote (hosted) lurq server entry for JSON configs. Per-agent shape differs:
- * Claude Code & VS Code take `type:"http"`; Cursor & Windsurf infer transport
- * from the URL (Windsurf names the field `serverUrl`).
+ * Claude Code & VS Code take `type:"http"`; the rest infer transport from which
+ * URL field is set — `url` (Cursor, Kiro), `serverUrl` (Windsurf, Antigravity),
+ * or `httpUrl` (Gemini CLI, where a plain `url` would be read as an SSE
+ * endpoint and the streamable-HTTP handshake would never happen).
  */
 export function buildRemoteServerEntry(
   agentId: string,
@@ -146,9 +181,13 @@ export function buildRemoteServerEntry(
   const headers = { Authorization: `Bearer ${opts.apiKey}` };
   switch (agentId) {
     case 'cursor':
+    case 'kiro':
       return { url: opts.url, headers };
     case 'windsurf':
+    case 'antigravity':
       return { serverUrl: opts.url, headers };
+    case 'gemini-cli':
+      return { httpUrl: opts.url, headers };
     case 'claude-code':
     case 'copilot':
     default:

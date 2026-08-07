@@ -1,6 +1,6 @@
 # lurq
 
-> execution-verified answers for AI coding agents. a live index of npm scored from public signals, plus a sandbox that settles the questions metadata can't — exposed as an mcp server, a cli, an http api, and an installable agent skill, compatible with claude code, cursor, windsurf, vscode/copilot, and codex.
+> execution-verified answers for AI coding agents. a live index of npm scored from public signals, plus a sandbox that settles the questions metadata can't — exposed as an mcp server, a cli, an http api, and an installable agent skill, compatible with claude code, cursor, windsurf, vscode/copilot, codex, gemini cli, antigravity, and kiro.
 
 your agent picks the dependencies now, and it picks them from training data frozen at its cutoff and ranked by how often a name appeared in text — not by whether the package is healthy today. so agents install libraries that are abandoned, carry open advisories, or don't exist at all.
 
@@ -25,7 +25,8 @@ npx lurqrun install
 ```
 
 it prompts for your key, validates it, detects your installed assistants
-(claude code, cursor, windsurf, vscode/copilot, codex), and writes a keyed
+(claude code, cursor, windsurf, vscode/copilot, codex, gemini cli, antigravity,
+kiro), and writes a keyed
 remote mcp entry:
 `{ "type": "http", "url": "https://api.lurq.run/mcp", "headers": { "Authorization": "Bearer …" } }`.
 **no database credentials ever touch your machine.** restart your agent afterward.
