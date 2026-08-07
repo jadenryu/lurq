@@ -127,6 +127,36 @@ export interface CompatConflict {
   /** The packages involved in the conflict. */
   packages: string[];
   detail: string;
+  /** The same fact as `detail`, structured, so a consumer can lay it out without
+   *  parsing prose. Present on peer-range violations; absent for engine and
+   *  sandbox conflicts, which aren't about a single declared range. */
+  requirement?: {
+    /** The peer being asked for. */
+    peer: string;
+    /** The range the requirer declares. */
+    range: string;
+    /** What the set actually resolves that peer to, when it is in the set. */
+    resolved: string | null;
+  };
+}
+
+/**
+ * One unordered pair among the checked members.
+ *
+ * A verdict belongs to a pair, not to a package: the same package can sit in a
+ * held pair and a conflicting one, so grading packages would either contradict
+ * itself or paint the whole set red. `held` means no declared constraint between
+ * the two was violated — it does not mean the pair was executed. Nothing here
+ * has been executed.
+ */
+export interface CompatPair {
+  a: string;
+  b: string;
+  status: 'held' | 'conflict';
+  /** Only on `conflict` — the conflict's own detail string. */
+  detail?: string;
+  /** Only on `conflict`, and only for peer-range violations. */
+  requirement?: CompatConflict['requirement'];
 }
 
 /** One stored compat edge surfaced to agents, with its evidence class (§4B). */
@@ -161,6 +191,11 @@ export interface CompatOutput {
   /** Stored edges among these packages with their evidence strength (§4B) — lets
    *  agents (and metrics) see *why* a pair is called compatible, not just that. */
   evidence: CompatEvidence[];
+  /** Every unordered pair among `checked`, each with its own verdict — exactly
+   *  n(n−1)/2 entries. `conflicts` lists only what went wrong; this lists what
+   *  was compared, which is what lets a caller show coverage rather than just
+   *  failures. */
+  pairs: CompatPair[];
 }
 
 // ── Usage axis D1: API signature drift (§4D) ─────────────────────────────────

@@ -95,6 +95,8 @@ describe('benchmark resolution pipeline', () => {
         unverified: [],
         checked: [{ name: 'react', version: null }],
         evidence: [],
+        // One member, so no pairs — C(1,2) is 0.
+        pairs: [],
       }),
     });
     

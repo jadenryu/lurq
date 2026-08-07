@@ -4,7 +4,7 @@
  * Tier-2 sandbox conflicts. The result lists every member as name@version so
  * versions are explicit and the evidence stays structured for later scraping.
  */
-import type { CompatConflict, CompatEvidence, CompatOutput } from '../core/types';
+import type { CompatConflict, CompatEvidence, CompatOutput, CompatPair } from '../core/types';
 import type { Database } from '../db/client';
 import { enqueueCompatVerify, fullyCovered, getCompatEdges, pairKey } from '../db/compat';
 import { assembleMembers, type CompatPackageRef } from './members';
@@ -100,5 +100,52 @@ export async function checkCompat(
     unverified,
     checked: members.map((m) => ({ name: m.name, version: m.version })),
     evidence,
+    pairs: enumeratePairs(checkedNames, conflicts),
   };
+}
+
+/**
+ * Every unordered pair among the checked members, in reading order (row-major
+ * over the lower triangle), each graded from the conflicts already found.
+ *
+ * `held` is the absence of a violated declared constraint, which is a weaker
+ * claim than "these work together" — see the note on CompatPair. It is reported
+ * anyway because "we compared these ten pairs and two failed" is a different and
+ * more useful statement than "two things failed", and a caller can only make the
+ * first one if it knows what the denominator was.
+ */
+export function enumeratePairs(names: string[], conflicts: CompatConflict[]): CompatPair[] {
+  // First conflict wins a pair; a second one for the same two packages adds no
+  // verdict, and the detail of the first is the one that was found first.
+  const byPair = new Map<string, CompatConflict>();
+  for (const c of conflicts) {
+    const [a, b] = c.packages;
+    if (!a || !b) continue;
+    const key = pairKey(a, b);
+    if (!byPair.has(key)) byPair.set(key, c);
+  }
+
+  const pairs: CompatPair[] = [];
+  for (let i = 0; i < names.length; i++) {
+    for (let j = 0; j < i; j++) {
+      const a = names[i]!;
+      const b = names[j]!;
+      const hit = byPair.get(pairKey(a, b));
+      pairs.push(
+        hit
+          ? {
+              // Orient the pair the way the conflict states it, so `a` is the
+              // package making the demand rather than whichever came first in
+              // the argument list.
+              a: hit.packages[0] ?? a,
+              b: hit.packages[1] ?? b,
+              status: 'conflict',
+              detail: hit.detail,
+              ...(hit.requirement ? { requirement: hit.requirement } : {}),
+            }
+          : { a, b, status: 'held' },
+      );
+    }
+  }
+  return pairs;
 }

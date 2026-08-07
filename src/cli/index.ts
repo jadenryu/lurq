@@ -7,6 +7,15 @@
  */
 import { Command, Option } from 'commander';
 import { SERVER_NAME, VERSION } from '../core/constants';
+import { SUPPORTED_AGENTS } from './installSkill';
+
+/**
+ * Built from the installer's own list rather than typed out, so adding an agent
+ * cannot leave `--help` advertising the old set. Safe to import eagerly:
+ * installSkill pulls in node builtins only (the heavy prompt deps live in
+ * ./install, which stays lazy).
+ */
+const AGENT_CHOICES = [...SUPPORTED_AGENTS, 'all'].join(' | ');
 
 export function buildProgram(): Command {
   const program = new Command();
@@ -156,8 +165,12 @@ export function buildProgram(): Command {
     .command('compat')
     .argument('<packages...>', 'npm package names to check together')
     .description('check whether a set of packages forms a coherent stack (peer/engine + recorded evidence)')
+    // The checker has always taken exact versions (CheckCompatOptions.versions);
+    // there was just no way to say so from the CLI. Arguments are bare names, so
+    // `next@15` would look up a package called "next@15" and come back unknown.
+    .option('--pin <name=version...>', 'evaluate an exact version, e.g. --pin next=15')
     .option('--json', 'output JSON')
-    .action(async (pkgs: string[], opts: { json?: boolean }) => {
+    .action(async (pkgs: string[], opts: { json?: boolean; pin?: string[] }) => {
       const { runCompat } = await import('./commands');
       await runCompat(pkgs, opts);
     });
@@ -167,7 +180,7 @@ export function buildProgram(): Command {
     .description('guided setup: connect lurq to your AI assistant(s)')
     .option('--api-key <key>', 'hosted API key (skips the prompt)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
-    .option('--agent <agent>', 'claude-code | cursor | copilot | windsurf | codex | all')
+    .option('--agent <agent>', AGENT_CHOICES)
     .option('--yes', 'non-interactive: use flags/env and detected agents without prompting')
     .action(async (opts: { apiKey?: string; url?: string; agent?: string; yes?: boolean }) => {
       const { runInstallWizard } = await import('./install');
@@ -177,11 +190,7 @@ export function buildProgram(): Command {
   program
     .command('install-skill')
     .description('register lurq as an MCP server in supported AI assistants (scriptable)')
-    .option(
-      '--agent <agent>',
-      'claude-code | cursor | copilot | windsurf | codex | all',
-      'claude-code',
-    )
+    .option('--agent <agent>', AGENT_CHOICES, 'claude-code')
     .option('--api-key <key>', 'hosted API key (remote install; default mode)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--local', 'self-host: write a local stdio entry using your own DATABASE_URL')

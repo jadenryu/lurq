@@ -74,6 +74,7 @@ export function resolveArchitectureCompat(members: CompatMember[]): CompatConfli
         source: 'peer-deps',
         packages: [c.requirer, c.peer],
         detail: `${c.requirer} needs peer ${c.peer}@${c.range}, but the stack uses ${c.peer}@${pv}`,
+        requirement: { peer: c.peer, range: c.range, resolved: pv },
       });
     }
   }
@@ -94,6 +95,9 @@ export function resolveArchitectureCompat(members: CompatMember[]): CompatConfli
             source: 'peer-deps',
             packages: [cs[i]!.requirer, cs[j]!.requirer],
             detail: `${cs[i]!.requirer} needs ${peer}@${cs[i]!.range} but ${cs[j]!.requirer} needs ${peer}@${cs[j]!.range} — no overlapping version`,
+            // Two requirers disagreeing about a peer that isn't in the set: the
+            // peer has no resolved version to report.
+            requirement: { peer, range: cs[i]!.range, resolved: null },
           });
         }
       }
