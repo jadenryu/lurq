@@ -48,7 +48,8 @@ import type {
   ScoreBreakdown,
   UsageGuide,
 } from '../core/types';
-import type { EntityKind, Verdict } from '../graph/types';
+import type { EntityKind, EvidenceClass, Verdict } from '../graph/types';
+import type { ExtractionTier, SymbolKind } from '../surface/types';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -419,6 +420,33 @@ export interface SyncError {
 // docs/lurq-v2-integration-plan.md §4 for why the migration is deferred.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Demand-driven surface-extraction queue (§6.1).
+ *
+ * A query for a package-version not in the graph IS a discovery event, and the
+ * spec ranks it the highest-priority queue input because it is revealed demand
+ * rather than a guess about what matters. Enqueueing is instant and off the
+ * query path: extraction never runs synchronously inside a request (§8), so a
+ * miss returns UNKNOWN and the worker fills it in.
+ *
+ * Same shape as compat_verify_queue, deliberately — that loop already works.
+ */
+export const surfaceQueue = pgTable(
+  'surface_queue',
+  {
+    id: serial('id').primaryKey(),
+    packageName: text('package_name').notNull(),
+    /** Null means "whatever latest resolves to at extraction time". */
+    version: text('version'),
+    /** Dedup key: `name@version`. */
+    specKey: text('spec_key').notNull().unique(),
+    /** Failed drains bump this; the worker drops a spec that keeps failing. */
+    attempts: integer('attempts').notNull().default(0),
+    requestedAt: ts('requested_at').notNull().defaultNow(),
+  },
+  (table) => [index('surface_queue_requested_idx').on(table.requestedAt)],
+);
+
 /** A node in the graph. Anything an agent depends on that an oracle can check. */
 export const entities = pgTable(
   'entities',
@@ -439,12 +467,60 @@ export const entities = pgTable(
      * A non-null sentinel is the cheap fix that works on every PG version.
      */
     tenantId: bigint('tenant_id', { mode: 'number' }).notNull().default(0),
+    /** Tarball digest. THE extraction cache key: unchanged digest, no re-extraction.
+     *  This is what keeps cost sublinear as the index grows (§5, §6.5). */
+    artifactHash: text('artifact_hash'),
+    /** Dependent count. Drives sampling AND refresh priority — and note priority
+     *  is NOT popularity: the study found drift concentrates at LOW in-degree
+     *  (18.7% vs 8.3%), which is exactly where models have the weakest priors. */
+    inDegree: integer('in_degree'),
     firstSeen: ts('first_seen').notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('entities_canonical_idx').on(table.canonicalKey, table.tenantId),
     index('entities_kind_idx').on(table.kind, table.namespace, table.name),
+    index('entities_artifact_idx').on(table.artifactHash),
   ],
+);
+
+/**
+ * One row per exported symbol of a package version (§5).
+ *
+ * `origin` and `tier` are not decoration — each exists because of a defect that
+ * silently corrupted the drift study:
+ *   - `origin` (§6.4.1): a symbol re-exported from another package is not this
+ *     package's surface. Counting them made one package appear to delete 168
+ *     exports when the true figure was 0.
+ *   - `tier` (§6.4.3): surfaces extracted at different tiers are NOT comparable,
+ *     so the tier has to travel with every symbol or diffs go wrong quietly.
+ */
+export const symbols = pgTable(
+  'symbols',
+  {
+    id: serial('id').primaryKey(),
+    entityId: integer('entity_id')
+      .notNull()
+      .references(() => entities.id),
+    /** 'default', 'foo', 'foo.bar' */
+    path: text('path').notNull(),
+    /** function | class | object | primitive | type_only */
+    kind: text('kind').$type<SymbolKind>().notNull(),
+    /** `fn.length` equivalent; null when not statically determinable. */
+    arity: integer('arity'),
+    /** 'local' | 'external:<pkg>' */
+    origin: text('origin').notNull().default('local'),
+    deprecated: boolean('deprecated').notNull().default(false),
+    tier: text('tier').$type<ExtractionTier>().notNull(),
+    /** Full declaration text; tier C only (§6.2). */
+    signature: text('signature'),
+    sourceFile: text('source_file'),
+    sourceLine: integer('source_line'),
+  },
+  // Keyed by TIER as well as path: a package version has one surface per tier and
+  // they are not interchangeable (§6.4.3). Without the tier in the key, storing a
+  // tier-C surface would silently overwrite the tier-A one that answers runtime
+  // existence — replacing the authoritative answer with a type-level guess.
+  (table) => [uniqueIndex('symbols_entity_path_tier_idx').on(table.entityId, table.path, table.tier)],
 );
 
 /** The runtime a verdict holds in. Never a node — always a dimension (§2). */
@@ -470,9 +546,10 @@ export const claims = pgTable(
     /** Null for unary claims ("does this install at all"). */
     objectId: integer('object_id').references(() => entities.id),
     relation: text('relation').notNull(),
-    environmentId: integer('environment_id')
-      .notNull()
-      .references(() => environments.id),
+    /** NULL for DECLARED claims: a shipped-JS surface reads the same on every
+     *  machine, so there is no environment to fingerprint. Executed claims
+     *  (co-install, conflict, behaviour) always carry one (§5). */
+    environmentId: integer('environment_id').references(() => environments.id),
     tenantId: bigint('tenant_id', { mode: 'number' }).notNull().default(0),
   },
   (table) => [
@@ -500,6 +577,11 @@ export const observations = pgTable(
       .notNull()
       .references(() => claims.id),
     verdict: text('verdict').$type<Verdict>().notNull(),
+    /** What KIND of evidence backs the verdict (§4.1) — orthogonal to the verdict
+     *  itself. A declared surface fact must never read as behavioural proof. */
+    class: text('class').$type<EvidenceClass>().notNull().default('executed'),
+    /** Which extraction tier produced it; null for executed claims. */
+    tier: text('tier').$type<ExtractionTier>(),
     /** Evidence that makes the verdict auditable. Null only for `unknown`. */
     evidence: text('evidence'),
     oracleId: text('oracle_id').notNull(),
@@ -517,6 +599,9 @@ export type NewEntityRow = typeof entities.$inferInsert;
 export type EnvironmentRow = typeof environments.$inferSelect;
 export type ClaimRow = typeof claims.$inferSelect;
 export type ObservationRow = typeof observations.$inferSelect;
+export type SymbolRow = typeof symbols.$inferSelect;
+export type SurfaceQueueRow = typeof surfaceQueue.$inferSelect;
+export type NewSymbolRow = typeof symbols.$inferInsert;
 export type NewObservationRow = typeof observations.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;
 export type SyncRunRow = typeof syncRuns.$inferSelect;

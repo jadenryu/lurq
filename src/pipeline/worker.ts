@@ -2,7 +2,7 @@
  * Autonomous discovery worker (§4G). One bounded loop that grows the frontier so
  * packages + edges + surfaces compound without human curation:
  *
- *   drain queue → ingest → mine → extract → rescore → sleep → repeat
+ *   drain queue → ingest → mine → extract → surface → rescore → sleep → repeat
  *
  * Discovery and asset-building are the *same crawl* (§4G) — no separate matrix
  * job. Ingest mines observed edges (§4B) as a side effect; this loop adds the
@@ -16,8 +16,8 @@ import { getPackagesMissingSurface } from '../db/apiSurfaces';
 import { pMap } from '../core/concurrency';
 import { runDiscovery } from './discovery';
 import { drainCompatVerifyQueue } from './compat';
+import { drainSurfaceQueue } from './surface';
 import { runRescore } from './rescore';
-import { getOrExtractSurface } from '../usage/service';
 
 export interface WorkerOptions {
   /** Seconds between cycles (default 900 = 15 min). */
@@ -28,6 +28,8 @@ export interface WorkerOptions {
   extractPerCycle?: number;
   /** Demand-driven compat-verify sets drained per cycle (§4C). */
   compatVerifyPerCycle?: number;
+  /** Demand-driven surface extractions drained per cycle (v1 §6.1). */
+  surfacePerCycle?: number;
   /** Run exactly one cycle and return (for tests / cron). */
   once?: boolean;
 }
@@ -38,6 +40,9 @@ async function extractSurfacesPass(limit: number): Promise<number> {
   try {
     const missing = await getPackagesMissingSurface(handle.db, limit);
     if (missing.length === 0) return 0;
+    // Kept off the module graph: extraction needs the TypeScript compiler, and
+    // a static import made every operator command require it at boot.
+    const { getOrExtractSurface } = await import('../usage/service');
     const results = await pMap(
       missing,
       (p) => getOrExtractSurface(handle.db, p.name, p.version).then((s) => (s ? 1 : 0)),
@@ -63,6 +68,7 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
   const intervalSec = opts.intervalSec ?? 900;
   const extractPerCycle = opts.extractPerCycle ?? 25;
   const compatVerifyPerCycle = opts.compatVerifyPerCycle ?? 10;
+  const surfacePerCycle = opts.surfacePerCycle ?? 10;
 
   let stopped = false;
   const stop = (sig: string) => {
@@ -94,6 +100,22 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: compat-verify drain failed: ${String(err)}`));
+    // Service surface-extraction misses (v1 §6.1). Query misses are revealed
+    // demand and rank highest, so this runs every cycle; without it
+    // resolve_surface answers UNKNOWN forever and the queue only grows.
+    await (async () => {
+      const handle = createDb({ max: 4 });
+      try {
+        const s = await drainSurfaceQueue(handle.db, { limit: surfacePerCycle });
+        if (s.drained) {
+          logger.info(
+            `worker: surface drain — ${s.stored} stored, ${s.cached} cached, ${s.undeclared} undeclared, ${s.failed} failed`,
+          );
+        }
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: surface drain failed: ${String(err)}`));
     // Freshness of scores is a cheap rescore (§4G) — no re-fetch.
     await runRescore().catch((err) => logger.warn(`worker: rescore failed: ${String(err)}`));
 

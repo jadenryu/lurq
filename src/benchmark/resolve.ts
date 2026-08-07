@@ -17,6 +17,7 @@ import { fetchNpmRegistry } from '../ingestion/sources';
 import { handleVerify } from '../mcp/handlers';
 import { handleCompat } from '../mcp/handlers';
 import type {
+  CompatPrediction,
   FailureClass,
   NormalizedProposal,
   NormalizedSelection,
@@ -27,7 +28,7 @@ import type {
 
 export interface ResolveResult {
   packageValidity: PackageValidity;
-  compatPrediction: 'compatible' | 'conflict' | 'unknown';
+  compatPrediction: CompatPrediction;
   resolution: ResolutionOutcome | null;
   resolvedSelections: ResolvedSelection[];
 }
@@ -79,7 +80,7 @@ export async function resolveProposal(
   packageValidity.unresolvedVersions = unresolvedVersions;
 
   // ── Step 4: handleCompat preflight (version-aware + runtime engines) ──────
-  let compatPrediction: 'compatible' | 'conflict' | 'unknown' = 'unknown';
+  let compatPrediction: CompatPrediction = 'unknown';
   if (allSelections.length >= 2) {
     try {
       const names = resolvedSelections.map((s) => s.package);

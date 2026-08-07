@@ -38,6 +38,334 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('surface')
+    .argument('<dir>', 'installed package directory (e.g. node_modules/express)')
+    .description('extract a package surface (v1 §6.2); --tier c reads .d.ts, --store persists')
+    .option('--store', 'persist to the graph (requires DATABASE_URL)')
+    .option('--tier <a|c>', "extraction tier: 'a' = shipped JS (default), 'c' = .d.ts")
+    .option('--json', 'output the full surface as JSON')
+    .action(async (dir: string, opts: { store?: boolean; tier?: string; json?: boolean }) => {
+      const { extractSurface } = await import('../surface/extract');
+      const { extractTypeSurface } = await import('../surface/dts');
+      const { runtimeSymbols } = await import('../surface/types');
+      const tierC = (opts.tier ?? 'a').toLowerCase() === 'c';
+      const surface = tierC ? extractTypeSurface(dir) : extractSurface(dir);
+      if (opts.json) {
+        console.log(JSON.stringify(surface, null, 2));
+      } else {
+        const rt = runtimeSymbols(surface);
+        console.log(
+          `${surface.package}@${surface.version ?? '?'} · entry ${surface.entry ?? '<none>'} · ${surface.filesWalked} file(s)`,
+        );
+        console.log(
+          `  ${rt.length} runtime symbol(s), ${surface.symbols.length - rt.length} excluded (type-only or external)`,
+        );
+        if (surface.externalReExports.length) {
+          console.log(`  external re-exports: ${surface.externalReExports.join(', ')}`);
+        }
+        if (tierC) {
+          const dep = surface.symbols.filter((x) => x.deprecated);
+          console.log(`  tier C · ${surface.symbols.length} declared symbol(s), ${dep.length} @deprecated`);
+          if (dep.length) console.log(`  deprecated: ${dep.map((x) => x.path).join(', ')}`);
+          console.log('  NOTE: type-level only — never evidence of runtime existence');
+        }
+        if (surface.undeclaredReason) console.log(`  UNDECLARED: ${surface.undeclaredReason}`);
+      }
+      if (opts.store) {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { createDb } = await import('../db/client');
+        const { storeSurface } = await import('../db/surface');
+        const { db, close } = createDb();
+        try {
+          const res = await storeSurface(db, surface, { extractorVersion: '1' });
+          console.log(`  stored: ${res.symbolsWritten} symbol(s) · verdict ${res.verdict}`);
+        } finally {
+          await close();
+        }
+      }
+    });
+
+  program
+    .command('replay')
+    .argument('<dirs...>', 'repository checkouts to replay')
+    .description('M0 human baseline — do real repos reference symbols their pinned versions lack?')
+    .option('--include-dev', 'also score devDependencies')
+    .option('--fetch-missing', 'fetch uninstalled deps from the registry')
+    .option('--json', 'output the full report as JSON')
+    .action(
+      async (dirs: string[], opts: { includeDev?: boolean; fetchMissing?: boolean; json?: boolean }) => {
+        const { replayRepo } = await import('../benchmark/replay');
+        const reports = [];
+        for (const dir of dirs) {
+          try {
+            reports.push(await replayRepo(dir, opts));
+          } catch (err) {
+            console.error(`  ! ${dir}: ${String(err).slice(0, 140)}`);
+          }
+        }
+        if (opts.json) {
+          console.log(JSON.stringify(reports, null, 2));
+          return;
+        }
+        let ref = 0;
+        let miss = 0;
+        for (const r of reports) {
+          ref += r.totalReferenced;
+          miss += r.totalMissing;
+          const pct = r.missRate === null ? 'n/a' : `${(r.missRate * 100).toFixed(1)}%`;
+          console.log(
+            `\n${r.repo}\n  ${r.packagesReferenced} pkg(s) scored · ${r.totalReferenced} symbol(s) referenced · ${r.totalMissing} absent (${pct})`,
+          );
+          for (const p of r.packages.filter((x) => x.missing.length)) {
+            console.log(`    MISS ${p.package}@${p.version}: ${p.missing.join(', ')}`);
+          }
+          if (r.skipped.length) {
+            console.log(`    skipped: ${r.skipped.map((x) => x.package).join(', ')}`);
+          }
+        }
+        const overall = ref ? ((miss / ref) * 100).toFixed(1) : 'n/a';
+        console.log(`\n  HUMAN BASELINE: ${overall}% symbol miss rate (${miss}/${ref}) over ${reports.length} repo(s)`);
+        console.log('  Compare against the agent arm from `miss-rate` — that comparison is M0.');
+      },
+    );
+
+  program
+    .command('miss-rate')
+    .description('M0 controlled arm — how often does model-authored code reference absent symbols?')
+    .option('--model <name>', 'model id — gpt-* | claude-* | gemini-* (default gpt-4o-mini)')
+    .option('--samples <n>', 'samples per case; >1 is required for a meaningful number', (v) => parseInt(v, 10))
+    .option('--suite <path>', 'case file (default tests/benchmark/miss-rate-v1.json)')
+    .option('--limit <n>', 'run only the first N cases (pilot)', (v) => parseInt(v, 10))
+    .option('--show-code', 'include the generated source in JSON output')
+    .option('--json', 'output the full report as JSON')
+    .action(
+      async (opts: {
+        model?: string;
+        suite?: string;
+        limit?: number;
+        samples?: number;
+        showCode?: boolean;
+        json?: boolean;
+      }) => {
+        const { readFileSync } = await import('node:fs');
+        const { runMissRate } = await import('../benchmark/missRate');
+        const path = opts.suite ?? 'tests/benchmark/miss-rate-v1.json';
+        const suite = JSON.parse(readFileSync(path, 'utf8')) as {
+          cases: { id: string; package: string; version: string; task: string }[];
+        };
+        const cases = opts.limit ? suite.cases.slice(0, opts.limit) : suite.cases;
+        const model = opts.model ?? 'gpt-4o-mini';
+
+        const report = await runMissRate(cases, model, {
+          keepCode: opts.showCode,
+          samples: opts.samples,
+        });
+        if (opts.json) {
+          console.log(JSON.stringify(report, null, 2));
+          return;
+        }
+        console.log(
+          `\nmodel: ${report.model} · ${report.samples} sample(s)/case · ${report.scored}/${report.cases} scored · ${report.unverifiable} unverifiable\n`,
+        );
+        for (const r of report.results) {
+          if (r.unverifiable) {
+            console.log(`  —      ${r.id.padEnd(20)} unverifiable: ${r.unverifiable}`);
+          } else {
+            const mark = r.missing.length ? 'MISS  ' : 'ok    ';
+            console.log(
+              `  ${mark} ${r.id.padEnd(20)} ${r.referenced.length - r.missing.length}/${r.referenced.length} exist` +
+                (r.missing.length ? `  absent: ${r.missing.join(', ')}` : ''),
+            );
+          }
+        }
+        const pct = (n: number | null) => (n === null ? 'n/a' : `${(n * 100).toFixed(1)}%`);
+        console.log(`\n  symbol miss rate: ${pct(report.symbolMissRate)} (${report.totalMissing}/${report.totalReferenced})`);
+        console.log(`  case miss rate:   ${pct(report.caseMissRate)} — samples with >=1 absent symbol`);
+        console.log(
+          `  symbols/sample:   ${report.symbolsPerCase?.toFixed(1) ?? 'n/a'} referenced (the exposure N)`,
+        );
+        console.log(
+          `  projected break:  ${pct(report.projectedBreakRate)} = 1-(1-p)^N at this p and N`,
+        );
+        console.log('\n  NOTE: no human baseline arm, so this measures magnitude and cannot');
+        console.log('        pass or fail M0 on its own (§12 kill condition).');
+      },
+    );
+
+  program
+    .command('check-upgrade')
+    .argument('<dir>', 'project directory to scan')
+    .description('§8.1 check_upgrade — do these upgrades remove symbols your code references?')
+    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. commander@11.1.0..12.1.0')
+    .option('--json', 'output the report as JSON')
+    .option('--exit-code', 'exit 1 when the report is not safe (for CI)')
+    .action(
+      async (dir: string, opts: { upgrade?: string[]; json?: boolean; exitCode?: boolean }) => {
+        const { scanReferences } = await import('../surface/references');
+        const { checkUpgrade, formatUpgradeReport } = await import('../surface/upgrade');
+
+        const specs = opts.upgrade ?? [];
+        if (!specs.length) {
+          console.error('give at least one --upgrade pkg@from..to');
+          process.exitCode = 1;
+          return;
+        }
+        const targets = specs.map((spec) => {
+          const at = spec.lastIndexOf('@');
+          const name = spec.slice(0, at);
+          const [fromVersion, toVersion] = spec.slice(at + 1).split('..');
+          if (!name || !fromVersion || !toVersion) {
+            throw new Error(`bad --upgrade '${spec}', expected pkg@from..to`);
+          }
+          return { package: name, fromVersion, toVersion };
+        });
+
+        const refs = scanReferences(dir);
+        const report = await checkUpgrade(targets, refs);
+        if (opts.json) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          console.log(formatUpgradeReport(report, `upgrade check on ${dir}`));
+        }
+        if (opts.exitCode && !report.safe) process.exitCode = 1;
+      },
+    );
+
+  program
+    .command('scan-references')
+    .argument('<dir>', 'project directory to scan')
+    .description('list the symbols this codebase uses from each dependency')
+    .option('--package <name>', 'only this package')
+    .action(async (dir: string, opts: { package?: string }) => {
+      const { scanReferences } = await import('../surface/references');
+      const refs = scanReferences(dir).filter((r) => !opts.package || r.package === opts.package);
+      for (const r of refs) {
+        console.log(`${r.package} (${r.symbols.size} symbol(s))`);
+        for (const [sym, uses] of r.symbols) {
+          console.log(`  ${sym}  ${uses.slice(0, 3).map((u) => `${u.file}:${u.line}`).join(', ')}`);
+        }
+      }
+    });
+
+  program
+    .command('surface-validate')
+    .description('run the §7 validation gates against a sample of packages')
+    .option('--packages <list>', 'comma-separated package names (default: a seed sample)')
+    .option('--limit <n>', 'sample size when drawing from the seed list', (v) => parseInt(v, 10))
+    .option('--json', 'output the full report as JSON')
+    .action(async (opts: { packages?: string; limit?: number; json?: boolean }) => {
+      const { getSandbox } = await import('../sandbox');
+      const { runValidation } = await import('../surface/validate');
+      const sandbox = await getSandbox();
+      if (sandbox.name === 'local') {
+        console.warn(
+          '[warn] using the LOCAL sandbox: tier B imports execute package code on this machine.\n' +
+            '       Set E2B_API_KEY to validate untrusted packages under VM isolation.',
+        );
+      }
+
+      let names: string[];
+      if (opts.packages) {
+        names = opts.packages.split(',').map((s) => s.trim()).filter(Boolean);
+      } else {
+        // §6.4.7: never sample from search relevance — it is name-weighted and
+        // biases toward packages matching the seed terms. The curated seed list
+        // is a fixed frame; it skews popular, which biases coverage UP, and that
+        // must be stated alongside any number drawn from it.
+        // Package-relative (loadSeedFile → seedJsonPath), never cwd-relative:
+        // the operator runs from deploy dirs, not just the repo root.
+        const { loadSeedFile } = await import('../db/seed');
+        names = loadSeedFile()
+          .map((e) => e.name)
+          .slice(0, opts.limit ?? 20);
+      }
+
+      const report = await runValidation(names.map((name) => ({ name })), { sandbox });
+      if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
+      console.log(
+        `\nsampled ${report.sampled} · covered ${report.covered} · undeclared ${report.undeclared} · unverifiable ${report.unverifiable}`,
+      );
+      console.log(`symbols: ${report.totalConfirmed}/${report.totalClaimed} confirmed at tier B\n`);
+      for (const g of report.gates) {
+        const mark = g.pass === null ? '—' : g.pass ? 'PASS' : 'FAIL';
+        console.log(`  [${mark}] ${g.name}: ${g.actual} (target ${g.target})`);
+      }
+      const bad = report.perPackage.filter((p) => p.precision !== null && p.precision < 1);
+      if (bad.length) {
+        console.log('\n  packages below 100% precision:');
+        for (const b of bad) {
+          console.log(`    ${b.package}@${b.version}: ${b.confirmed}/${b.claimed}`);
+        }
+      }
+      const unv = report.perPackage.filter((p) => p.unverifiable);
+      if (unv.length) {
+        console.log('\n  unverifiable (excluded from the gate, NOT counted as failures):');
+        for (const u of unv.slice(0, 10)) console.log(`    ${u.package}: ${u.unverifiable}`);
+      }
+    });
+
+  program
+    .command('surface-drain')
+    .description('service the demand-driven surface-extraction queue (§6.1)')
+    .option('--limit <n>', 'specs to drain this run (default 10)', (v) => parseInt(v, 10))
+    .option('--package <name>', 'extract one package directly, bypassing the queue')
+    .option('--package-version <v>', 'version for --package (default latest)')
+    .action(async (opts: { limit?: number; package?: string; packageVersion?: string }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { drainSurfaceQueue, extractAndStore } = await import('../pipeline/surface');
+      const { db, close } = createDb();
+      try {
+        if (opts.package) {
+          const outcome = await extractAndStore(db, opts.package, opts.packageVersion ?? null);
+          console.log(`${opts.package}@${opts.packageVersion ?? 'latest'}: ${outcome}`);
+        } else {
+          const s = await drainSurfaceQueue(db, { limit: opts.limit });
+          console.log(
+            `drained ${s.drained} · stored ${s.stored} · cached ${s.cached} · undeclared ${s.undeclared} · failed ${s.failed}`,
+          );
+        }
+      } finally {
+        await close();
+      }
+    });
+
+  program
+    .command('surface-diff')
+    .argument('<dirA>', 'package directory at the FROM version')
+    .argument('<dirB>', 'package directory at the TO version')
+    .description('diff two extracted surfaces (v1 §8.1 diff_surface)')
+    .option('--json', 'output the diff as JSON')
+    .action(async (dirA: string, dirB: string, opts: { json?: boolean }) => {
+      const { extractSurface } = await import('../surface/extract');
+      const { diffSurfaces } = await import('../surface/diff');
+      const diff = diffSurfaces(extractSurface(dirA), extractSurface(dirB));
+      if (opts.json) {
+        console.log(JSON.stringify(diff, null, 2));
+        return;
+      }
+      if (diff.inconclusive) {
+        console.log(`inconclusive: ${diff.inconclusive}`);
+        process.exitCode = 1;
+        return;
+      }
+      console.log(`${diff.package} ${diff.fromVersion ?? '?'} → ${diff.toVersion ?? '?'} (tier ${diff.tier})`);
+      const line = (label: string, items: string[]) => {
+        if (items.length) console.log(`  ${label}: ${items.join(', ')}`);
+      };
+      line(`removed (${diff.removed.length})`, diff.removed.map((s) => s.path));
+      line(`arity changed`, diff.arityChanged.map((a) => `${a.path} ${a.from}→${a.to}`));
+      line(`type-only removed (breaks tsc, not node)`, diff.typeOnlyRemoved.map((s) => s.path));
+      line(`added (${diff.added.length})`, diff.added.map((s) => s.path));
+      if (!diff.removed.length && !diff.arityChanged.length) console.log('  no runtime breakage');
+    });
+
+  program
     .command('oracle')
     .argument('<kind>', 'node kind to verify (mcp_server)')
     .argument('<name>', 'entity name, e.g. an npm package that ships an MCP server')
@@ -88,6 +416,7 @@ export function registerOperatorCommands(program: Command): void {
     .option('--cap <n>', 'candidates ingested per cycle', (v) => parseInt(v, 10))
     .option('--extract <n>', 'API surfaces extracted per cycle', (v) => parseInt(v, 10))
     .option('--compat-verify <n>', 'demand-driven compat-verify sets drained per cycle', (v) => parseInt(v, 10))
+    .option('--surface <n>', 'demand-driven surface extractions drained per cycle', (v) => parseInt(v, 10))
     .option('--once', 'run exactly one cycle and exit')
     .action(
       async (opts: {
@@ -95,6 +424,7 @@ export function registerOperatorCommands(program: Command): void {
         cap?: number;
         extract?: number;
         compatVerify?: number;
+        surface?: number;
         once?: boolean;
       }) => {
         const { requireConfig } = await import('../core/config');
@@ -105,6 +435,7 @@ export function registerOperatorCommands(program: Command): void {
           perRunCap: opts.cap,
           extractPerCycle: opts.extract,
           compatVerifyPerCycle: opts.compatVerify,
+          surfacePerCycle: opts.surface,
           once: opts.once,
         });
       },

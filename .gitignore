@@ -256,3 +256,7 @@ __marimo__/
 /vault/
 
 DEPLOY.md
+
+# personal files and in-progress specs kept on disk, not tracked
+/*.png
+/lurq-v*-spec*.md

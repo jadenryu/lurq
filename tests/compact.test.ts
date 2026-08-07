@@ -32,4 +32,14 @@ describe('compact', () => {
   it('preserves string and number leaves', () => {
     expect(compact({ summary: 'hi', score: 88.5 })).toEqual({ summary: 'hi', score: 88.5 });
   });
+
+  // A Date has no own keys — without a guard it reads as an empty object and
+  // any handler returning a raw DB row would silently lose its timestamps.
+  it('preserves Date values, nested and in arrays', () => {
+    const at = new Date('2026-01-01T00:00:00.000Z');
+    expect(compact({ ranAt: at, rows: [{ at }], gone: null })).toEqual({
+      ranAt: at,
+      rows: [{ at }],
+    });
+  });
 });

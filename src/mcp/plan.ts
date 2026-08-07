@@ -223,17 +223,28 @@ export async function handlePlan(
   // `recommend` itself untouched.
   const bundleByName = optimize === 'speed' ? await bundleSizes(db, recs.flat()) : new Map<string, number>();
 
+  // Adjacent needs often retrieve the same package (an "auth" slot and a
+  // "session" slot both landing on the same library). Emitting it twice reads as
+  // "install this twice" and double-counts it in the compat check, so a slot
+  // whose top pick is already taken falls through to its best free alternative.
+  const taken = new Set<string>();
   const recSlots: PlanSlot[] = needs.map((n, i) => {
     const candidates = orderCandidates(recs[i]!, anchorFamily, optimize, bundleByName);
-    const recommended = candidates[0] ?? null;
+    const free = candidates.filter((c) => !taken.has(c.name));
+    const recommended = free[0] ?? null;
+    if (recommended) taken.add(recommended.name);
     const category = n.category ?? recommended?.category ?? inferCategory(n.need);
     return {
       need: n.need,
       category,
       layer: layerFor({ label: recommended?.name ?? n.need, category }),
       recommended,
-      alternatives: candidates.slice(1),
-      note: recommended ? undefined : 'no tracked package matched this need yet',
+      alternatives: free.slice(1),
+      note: recommended
+        ? undefined
+        : candidates.length
+          ? 'every match for this need is already in the stack for another slot'
+          : 'no tracked package matched this need yet',
     };
   });
 

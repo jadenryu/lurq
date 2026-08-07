@@ -240,6 +240,10 @@ export interface UsageOutput {
    *  the README, which is already fetched). */
   surface: ExportSymbol[] | null;
   available: boolean;
+  /** Declared `engines` for this exact version (e.g. `{ node: ">=20" }`), or null
+   *  when the manifest declares none. Independent of `available` — the runtime
+   *  floor matters even for untyped packages. */
+  engines: Record<string, string> | null;
   /** Present when a `knownVersion` was supplied and both surfaces resolved. */
   delta?: SurfaceDelta & { fromVersion: string };
   note?: string;

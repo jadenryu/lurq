@@ -77,8 +77,10 @@ export async function getUsageSummary(
   `)) as unknown as { date: string; count: number }[];
 
   const series: UsagePoint[] = rows.map((r) => ({ date: String(r.date), count: Number(r.count) }));
-  const todayUtc = new Date().toISOString().slice(0, 10);
-  const today = series.find((p) => p.date === todayUtc)?.count ?? 0;
+  // The series ends at the database's CURRENT_DATE, which is the same clock the
+  // counters are written against. Deriving "today" from the process's UTC date
+  // instead would read 0 on any server not running in UTC.
+  const today = series.at(-1)?.count ?? 0;
   return { today, series };
 }
 

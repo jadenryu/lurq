@@ -126,6 +126,12 @@ export function resolveArchitectureCompat(members: CompatMember[]): CompatConfli
 /**
  * Tier-1 check: each member's `engines.node` must satisfy the target runtime
  * (e.g. the benchmark / sandbox Node version). Sparse/missing engines are ignored.
+ *
+ * A bare major (`"20"`) means "some Node 20", not `20.0.0` — coercing it to the
+ * .0.0 floor false-flagged every package with a modern engines floor (vite's
+ * `^20.19.0 || >=22.12.0` "conflicted" with node 20). Partial versions are
+ * therefore compared as *ranges* and only conflict when no Node in the target
+ * line can satisfy the package; an exact version still gets an exact check.
  */
 export function resolveRuntimeEngineConflicts(
   members: CompatMember[],
@@ -138,22 +144,38 @@ export function resolveRuntimeEngineConflicts(
   for (const m of members) {
     const range = m.engines?.node;
     if (!range) continue;
-    if (satisfiesRange(runtime, range) === false) {
+    const ok = runtime.exact
+      ? satisfiesRange(runtime.value, range)
+      : rangesIntersect(runtime.value, range);
+    if (ok === false) {
       conflicts.push({
         source: 'engines',
         packages: [m.name],
-        detail: `${m.name}@${m.version ?? '?'} needs node ${range}, but the runtime is node ${runtime}`,
+        detail: `${m.name}@${m.version ?? '?'} needs node ${range}, but the runtime is node ${runtime.label}`,
       });
     }
   }
   return conflicts;
 }
 
-/** Accept `20`, `v20.20.2`, or full semver — coerce to a concrete version string. */
-function normalizeNodeVersion(raw: string): string | null {
+/** The target runtime as a semver *range*, plus whether the caller pinned an
+ *  exact version. `20` / `v20` → `20.x` (any Node 20); `20.20.2` → exact. */
+interface TargetRuntime {
+  /** Exact version, or a range covering the requested line. */
+  value: string;
+  exact: boolean;
+  /** What the caller asked for, for the conflict message. */
+  label: string;
+}
+
+export function normalizeNodeVersion(raw: string): TargetRuntime | null {
   const trimmed = raw.trim().replace(/^v/i, '');
   if (!trimmed) return null;
-  if (semver.valid(trimmed)) return trimmed;
+  if (semver.valid(trimmed)) return { value: trimmed, exact: true, label: trimmed };
+  // `20` or `20.19` — a version line, not a version. Widen to the whole line.
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return { value: `${trimmed}.x`, exact: false, label: trimmed };
+  }
   const coerced = semver.coerce(trimmed);
-  return coerced?.version ?? null;
+  return coerced ? { value: coerced.version, exact: true, label: coerced.version } : null;
 }

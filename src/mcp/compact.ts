@@ -9,16 +9,23 @@
  * carry meaning an agent shouldn't have to infer from a field's absence. Only
  * genuinely-absent data (null/undefined/empty) is stripped.
  */
+/** True only for a *plain* object with no keys. A Date has no own keys, so
+ *  without the instanceof guard every date field would be dropped as "empty". */
 function isEmptyObject(value: unknown): boolean {
   return (
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
+    !(value instanceof Date) &&
     Object.keys(value).length === 0
   );
 }
 
 export function compact<T>(value: T): T {
+  // A Date is an object with no own keys, so the generic object walk below would
+  // see `{}` and drop the field entirely. Handlers stringify their dates today;
+  // this keeps the first one that forgets from silently losing data.
+  if (value instanceof Date) return value;
   if (Array.isArray(value)) {
     return value
       .map((v) => compact(v))

@@ -4,7 +4,9 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
     ignores: [
+      // Both build targets (tsup writes the operator bundle to dist-operator/).
       'dist/**',
+      'dist-operator/**',
       'node_modules/**',
       'coverage/**',
       'drizzle/**',

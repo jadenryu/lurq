@@ -17,7 +17,7 @@
  * `{ serverUrl, headers }`; Gemini CLI uses `{ httpUrl, headers }` (`url` there
  * means SSE); Codex (TOML) uses `url` + an inline `http_headers` table.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -52,6 +52,22 @@ function home(...p: string[]): string {
   return join(homedir(), ...p);
 }
 
+/**
+ * VS Code's user-data directory, which is per-platform:
+ *   macOS   ~/Library/Application Support/Code/User
+ *   Windows %APPDATA%\Code\User
+ *   Linux   $XDG_CONFIG_HOME/Code/User (default ~/.config/Code/User)
+ * Hardcoding the macOS path made detection always false elsewhere — and
+ * `--agent copilot` write a config nobody reads.
+ */
+function vscodeUserDir(): string {
+  if (process.platform === 'darwin') return home('Library', 'Application Support', 'Code', 'User');
+  if (process.platform === 'win32') {
+    return join(process.env.APPDATA ?? home('AppData', 'Roaming'), 'Code', 'User');
+  }
+  return join(process.env.XDG_CONFIG_HOME || home('.config'), 'Code', 'User');
+}
+
 export function agentSpecs(): AgentSpec[] {
   return [
     {
@@ -79,8 +95,8 @@ export function agentSpecs(): AgentSpec[] {
       id: 'copilot',
       label: 'VS Code / GitHub Copilot',
       format: 'servers',
-      path: home('Library', 'Application Support', 'Code', 'User', 'mcp.json'),
-      detected: existsSync(home('Library', 'Application Support', 'Code', 'User')),
+      path: join(vscodeUserDir(), 'mcp.json'),
+      detected: existsSync(vscodeUserDir()),
     },
     {
       id: 'codex',
@@ -154,9 +170,30 @@ function readJsonObject(path: string): Record<string, any> {
   return JSON.parse(text);
 }
 
-function writeJson(path: string, obj: unknown): void {
+/**
+ * Write via a temp file + rename, which is atomic within a directory. These are
+ * the user's own agent configs — `~/.claude.json` holds Claude Code's entire
+ * project state — and a crash partway through a plain write truncates the file.
+ * A reader sees either the old config or the new one, never a half-written one.
+ */
+function writeFileAtomic(path: string, contents: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(obj, null, 2) + '\n', 'utf8');
+  const tmp = `${path}.lurq-${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, contents, 'utf8');
+    renameSync(tmp, path);
+  } catch (err) {
+    try {
+      rmSync(tmp, { force: true });
+    } catch {
+      /* best-effort cleanup; report the original failure */
+    }
+    throw err;
+  }
+}
+
+function writeJson(path: string, obj: unknown): void {
+  writeFileAtomic(path, JSON.stringify(obj, null, 2) + '\n');
 }
 
 /** Local (stdio) lurq server entry for JSON configs. */
@@ -230,20 +267,40 @@ function installJsonEntry(spec: AgentSpec, entry: Record<string, any>): InstallR
   return { agent: spec.id, path: spec.path, status: 'installed' };
 }
 
-function installTomlBlock(spec: AgentSpec, block: string): InstallResult {
-  const existing = existsSync(spec.path) ? readFileSync(spec.path, 'utf8') : '';
-  if (existing.includes('[mcp_servers.lurq]')) {
-    return {
-      agent: spec.id,
-      path: spec.path,
-      status: 'skipped',
-      message: 'lurq already present; edit manually to change it.',
-    };
+/**
+ * Drop the existing `[mcp_servers.lurq]` table (its header through the line
+ * before the next top-level `[`), leaving every other table untouched. Enough
+ * TOML awareness to replace our own block without taking a parser dependency:
+ * we only ever need to find one section we wrote ourselves.
+ */
+export function stripTomlBlock(text: string, header = '[mcp_servers.lurq]'): string {
+  const lines = text.split('\n');
+  const start = lines.findIndex((l) => l.trim() === header);
+  if (start === -1) return text;
+  let end = start + 1;
+  // Sub-tables ([mcp_servers.lurq.env]) belong to the block; a sibling table ends it.
+  while (end < lines.length) {
+    const t = lines[end]!.trim();
+    if (t.startsWith('[') && !t.startsWith(`${header.slice(0, -1)}.`)) break;
+    end++;
   }
-  mkdirSync(dirname(spec.path), { recursive: true });
-  const sep = existing && !existing.endsWith('\n') ? '\n\n' : existing ? '\n' : '';
-  writeFileSync(spec.path, existing + sep + block, 'utf8');
-  return { agent: spec.id, path: spec.path, status: 'installed' };
+  return [...lines.slice(0, start), ...lines.slice(end)].join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function installTomlBlock(spec: AgentSpec, block: string): InstallResult {
+  const current = existsSync(spec.path) ? readFileSync(spec.path, 'utf8') : '';
+  // Replace, never skip: skipping meant a re-run after a key rotation left
+  // Codex pointed at the dead key while reporting success. Every other agent
+  // upserts its entry, so this one does too.
+  const existing = stripTomlBlock(current).replace(/\s+$/, '');
+  const sep = existing ? '\n\n' : '';
+  writeFileAtomic(spec.path, existing + sep + block);
+  return {
+    agent: spec.id,
+    path: spec.path,
+    status: 'installed',
+    message: current.includes('[mcp_servers.lurq]') ? 'replaced the existing lurq entry' : undefined,
+  };
 }
 
 /** Apply the lurq entry to one agent's config, in the given mode. */

@@ -16,11 +16,16 @@ import type { Sandbox } from '../sandbox/types';
 
 /** Node types. Extend only when the Oracle Rule is satisfiable for the new kind. */
 export type EntityKind =
+  /** P0 */
   | 'package_version'
+  /** P0 — the central node type: highest query volume, and what breaks (§2). */
+  | 'package_surface'
+  /** P1 */
   | 'mcp_server'
   | 'mcp_tool'
-  | 'cli_surface'
-  | 'http_endpoint';
+  /** P2 */
+  | 'api_spec'
+  | 'schema_provider';
 
 /**
  * §4.1. The distinction between `verified_false` and `unknown` is the most
@@ -36,7 +41,29 @@ export type Verdict =
   | 'verified_false'
   | 'unknown'
   | 'stale'
+  /** Entity ships no usable artifact for this claim. NOT the same as absence:
+   *  3.0% of study extractions resolved at no tier, and reporting those as
+   *  "no exports" would be a false removal. */
+  | 'undeclared'
   | 'unverifiable';
+
+/**
+ * §4.1. Orthogonal to the verdict: a verdict says what we concluded, a class says
+ * what kind of evidence backs it.
+ *
+ * The rule that matters: a DERIVED claim inherits the WEAKEST class among its
+ * inputs, and a DECLARED surface fact must never be presented as behavioural
+ * evidence. "This symbol is exported" and "this symbol works" are different
+ * claims and conflating them is how an index starts lying.
+ */
+export type EvidenceClass = 'declared' | 'executed' | 'derived';
+
+/** Weakest-wins, for DERIVED claims computed from several inputs (§4.1). */
+export function weakestClass(classes: EvidenceClass[]): EvidenceClass {
+  if (classes.includes('derived')) return 'derived';
+  if (classes.includes('declared')) return 'declared';
+  return 'executed';
+}
 
 /** Identity of a node, before it has a database id. */
 export interface EntityRef {

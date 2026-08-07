@@ -42,7 +42,15 @@ export default defineConfig([
     outDir: 'dist-operator',
     clean: true,
     sourcemap: true,
-    splitting: false,
+    // Splitting is load-bearing here, not a size optimization. With one flat
+    // bundle, esbuild hoists every external to the top of bin/operator.js — so
+    // the four `import ts from "typescript"` statements inside the surface
+    // extractors ran at BOOT, and a runtime without typescript (a prod install
+    // that omits devDependencies) failed every operator command with
+    // ERR_MODULE_NOT_FOUND, `db migrate` included. Splitting keeps the
+    // dynamically-imported extractors in their own chunk, so typescript is
+    // resolved only if surface extraction actually runs.
+    splitting: true,
     external: NO_BUNDLE,
     shims: true,
   },

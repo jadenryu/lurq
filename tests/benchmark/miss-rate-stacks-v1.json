@@ -1,0 +1,140 @@
+{
+  "suite": "miss-rate-stacks-v1",
+  "schemaVersion": 1,
+  "description": "Realistic multi-package stacks for the M0 controlled arm. Each case pins several packages at versions resolved from the registry at generation time, so the model writes against a production-shaped stack rather than one library. Purpose: the per-symbol miss rate is a property of the model and does not change with stack size — what changes is EXPOSURE, so this suite measures the project-level break rate that compounds across packages.",
+  "generatedAt": "2026-08-07T00:08:04.934Z",
+  "cases": [
+    {
+      "id": "express-api",
+      "task": "Build an HTTP API module with a POST /users route that validates the body, signs a JWT for the created user, and logs the request. Export the configured app.",
+      "packages": [
+        {
+          "name": "express",
+          "version": "5.2.1"
+        },
+        {
+          "name": "zod",
+          "version": "4.4.3"
+        },
+        {
+          "name": "jose",
+          "version": "6.2.8"
+        },
+        {
+          "name": "pino",
+          "version": "10.3.1"
+        }
+      ]
+    },
+    {
+      "id": "cli-tool",
+      "task": "Build a CLI module with a \"sync\" subcommand taking a --since flag, coloured status output, a spinner while work runs, and a semver check on the supplied version.",
+      "packages": [
+        {
+          "name": "commander",
+          "version": "15.0.0"
+        },
+        {
+          "name": "chalk",
+          "version": "6.0.0"
+        },
+        {
+          "name": "ora",
+          "version": "9.4.1"
+        },
+        {
+          "name": "semver",
+          "version": "7.8.5"
+        }
+      ]
+    },
+    {
+      "id": "data-pipeline",
+      "task": "Build a module that fetches a CSV over HTTP, parses it, normalizes a date column, groups rows by a key, and assigns each row a unique id.",
+      "packages": [
+        {
+          "name": "axios",
+          "version": "1.19.0"
+        },
+        {
+          "name": "csv-parse",
+          "version": "7.0.2"
+        },
+        {
+          "name": "date-fns",
+          "version": "4.4.0"
+        },
+        {
+          "name": "lodash",
+          "version": "4.18.1"
+        },
+        {
+          "name": "uuid",
+          "version": "14.0.1"
+        }
+      ]
+    },
+    {
+      "id": "db-service",
+      "task": "Build a data-access module that defines a users table, runs a select with a where clause, validates the result shape, and formats createdAt for display.",
+      "packages": [
+        {
+          "name": "drizzle-orm",
+          "version": "0.45.2"
+        },
+        {
+          "name": "postgres",
+          "version": "3.4.9"
+        },
+        {
+          "name": "zod",
+          "version": "4.4.3"
+        },
+        {
+          "name": "date-fns",
+          "version": "4.4.0"
+        }
+      ]
+    },
+    {
+      "id": "react-app",
+      "task": "Build a React component module with a form that validates input, conditionally composes class names, and formats a timestamp for display.",
+      "packages": [
+        {
+          "name": "react",
+          "version": "19.2.8"
+        },
+        {
+          "name": "zod",
+          "version": "4.4.3"
+        },
+        {
+          "name": "clsx",
+          "version": "2.1.1"
+        },
+        {
+          "name": "date-fns",
+          "version": "4.4.0"
+        }
+      ]
+    },
+    {
+      "id": "test-build",
+      "task": "Build a module exporting a test helper that creates a temp fixture, a small assertion utility, and a semver-aware version guard.",
+      "packages": [
+        {
+          "name": "vitest",
+          "version": "4.1.10"
+        },
+        {
+          "name": "semver",
+          "version": "7.8.5"
+        },
+        {
+          "name": "fs-extra",
+          "version": "11.4.0"
+        }
+      ]
+    }
+  ]
+}

@@ -102,6 +102,23 @@ describe('resolveArchitectureCompat', () => {
     expect(out[0]).toMatchObject({ source: 'engines', packages: ['@angular/core'] });
   });
 
+  // A bare major is a version *line*, not 20.0.0 — coercing it to the floor
+  // false-flagged every package with a modern engines floor.
+  it('treats a bare major as any version in that line', () => {
+    const vite = member({
+      name: 'vite',
+      version: '8.1.4',
+      engines: { node: '^20.19.0 || >=22.12.0' },
+    });
+    expect(resolveRuntimeEngineConflicts([vite], '20')).toEqual([]);
+    expect(resolveRuntimeEngineConflicts([vite], 'v22')).toEqual([]);
+    expect(resolveRuntimeEngineConflicts([vite], '20.19')).toEqual([]);
+    // …while a line with no satisfying version, or an exact one below the
+    // floor, still conflicts.
+    expect(resolveRuntimeEngineConflicts([vite], '18')).toHaveLength(1);
+    expect(resolveRuntimeEngineConflicts([vite], '20.0.0')).toHaveLength(1);
+  });
+
   it('flags React 19 pinned against spring peers that only allow 16-18', () => {
     const out = resolveArchitectureCompat([
       member({ name: 'react', version: '19.2.7' }),

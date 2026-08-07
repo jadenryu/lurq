@@ -30,7 +30,12 @@ import { recordOutcome } from '../db/outcomes';
 import { lookupSuccessor } from '../core/successors';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
-import { fetchNpmRegistry, fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
+import {
+  fetchNpmCompatAtVersion,
+  fetchNpmRegistry,
+  fetchWeeklyDownloads,
+  npmPackageExists,
+} from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
@@ -395,19 +400,28 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
       version: null,
       surface: null,
       available: false,
+      engines: null,
       note: `Could not resolve a version for "${input.package}" on npm.`,
     };
   }
 
+  // Both halves of the answer at once. The surface comes through the
+  // read-through path (a miss extracts within the budget rather than turning the
+  // caller away); `engines` is a registry read that shares none of that state,
+  // so serialising them would add its latency to every request for nothing.
   const deadline = Date.now() + USAGE_EXTRACT_BUDGET_MS;
-  const surface = await getOrExtractSurface(db, input.package, version, {
-    budgetMs: USAGE_EXTRACT_BUDGET_MS,
-  });
+  const [surface, compat] = await Promise.all([
+    getOrExtractSurface(db, input.package, version, {
+      budgetMs: USAGE_EXTRACT_BUDGET_MS,
+    }),
+    fetchNpmCompatAtVersion(input.package, version).catch(() => null),
+  ]);
   const out: UsageOutput = {
     package: input.package,
     version,
     surface,
     available: surface !== null,
+    engines: compat?.engines ?? null,
     note: surface
       ? undefined
       : 'No extracted API surface for this version yet; fall back to the README.',
