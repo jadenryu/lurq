@@ -30,10 +30,10 @@ describe('e2b command builders', () => {
     expect(cmd).toContain(`'pkg@$(curl evil)'`); // literal, not a subshell
   });
 
-  it('smoke command loads via require (cjs) / import (esm), pkg name JSON-quoted', () => {
-    expect(smokeCommand('react', 'cjs')).toContain(`require("react")`);
-    const esm = smokeCommand('react', 'esm');
-    expect(esm).toContain('--input-type=module');
-    expect(esm).toContain(`await import("react")`);
+  it('smoke command always loads via import, pkg name JSON-quoted', () => {
+    const cmd = smokeCommand('react');
+    expect(cmd).toContain('--input-type=module');
+    expect(cmd).toContain('await import("react")');
+    expect(cmd).not.toContain('require(');
   });
 });

@@ -15,7 +15,6 @@ import {
   DEFAULT_TARGET,
   type ExecOptions,
   type ExecResult,
-  type ModuleSystem,
   type Sandbox as SandboxDriver,
   type SandboxPackage,
   type SandboxResult,
@@ -42,12 +41,11 @@ export function installCommand(specs: string[], allowScripts: boolean): string {
   return `npm install ${specs.map(shQuote).join(' ')} ${flags.join(' ')}`;
 }
 
-/** Shell command that loads a package and exits non-zero if it throws. */
-export function smokeCommand(pkg: string, moduleSystem: ModuleSystem): string {
-  const js =
-    moduleSystem === 'esm' ? `await import(${JSON.stringify(pkg)})` : `require(${JSON.stringify(pkg)})`;
-  const flags = moduleSystem === 'esm' ? '--input-type=module ' : '';
-  return `node ${flags}-e ${shQuote(js)}`;
+/** Shell command that loads a package and exits non-zero if it throws.
+ *  Always `import()` — it handles ESM and CJS alike; see smokeScript in
+ *  local.ts for why branching on a module system nobody derived was wrong. */
+export function smokeCommand(pkg: string): string {
+  return `node --input-type=module -e ${shQuote(`await import(${JSON.stringify(pkg)})`)}`;
 }
 
 function condense(s: string): string {
@@ -129,7 +127,7 @@ export class E2BSandbox implements SandboxDriver {
 
       for (let i = 0; i < smokeTargets.length; i++) {
         try {
-          await sandbox.commands.run(smokeCommand(smokeTargets[i]!.name, target.moduleSystem), {
+          await sandbox.commands.run(smokeCommand(smokeTargets[i]!.name), {
             cwd: WORKDIR,
             timeoutMs: SMOKE_TIMEOUT_MS,
           });

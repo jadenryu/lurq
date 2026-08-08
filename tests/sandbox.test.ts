@@ -25,18 +25,24 @@ describe('npmInstallArgs', () => {
 });
 
 describe('smokeScript', () => {
-  it('uses require for cjs', () => {
-    expect(smokeScript('react', 'cjs').join(' ')).toContain('require("react")');
+  // One path for both module systems: import() loads ESM and CJS alike, and the
+  // branch it replaced was choosing require() for everything, because nothing
+  // ever derived the module system (DEFAULT_TARGET hardcodes 'cjs'). ESM-only
+  // packages were therefore recorded as failing to load — measured on
+  // nanoid@6.0.1, which installs and works.
+  it('always loads via dynamic import, under module input', () => {
+    const s = smokeScript('react');
+    expect(s).toContain('--input-type=module');
+    expect(s.join(' ')).toContain('await import("react")');
   });
 
-  it('uses dynamic import (module input) for esm', () => {
-    const s = smokeScript('react', 'esm');
-    expect(s).toContain('--input-type=module');
-    expect(s.join(' ')).toContain('import("react")');
+  it('loads an ESM-only package the same way as a CJS one', () => {
+    expect(smokeScript('nanoid').join(' ')).toContain('await import("nanoid")');
+    expect(smokeScript('nanoid').join(' ')).not.toContain('require(');
   });
 
   it('JSON-quotes the package name (no shell injection surface)', () => {
     // execFile (no shell) + JSON.stringify means a hostile name can't break out.
-    expect(smokeScript('a"); evil()//', 'cjs').join(' ')).toContain('"a\\"); evil()//"');
+    expect(smokeScript('a"); evil()//').join(' ')).toContain('"a\\"); evil()//"');
   });
 });
