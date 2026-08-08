@@ -127,6 +127,31 @@ describe('renderWorkflow', () => {
     );
   });
 
+  // The reviewer opening this PR is the audience the whole loop is for. Pasting
+  // the agent's JSON input there buried the case for the change.
+  it('puts the rendered report in the PR body, not the raw JSON', () => {
+    const yaml = renderWorkflow();
+    expect(yaml).toContain('body-path: lurq-report.md');
+    expect(yaml).not.toContain('body-path: lurq-brief.json');
+  });
+
+  // The agent has no network tool, so the only install command it is permitted
+  // to run is the one the allowlist names. Telling it to run a different one
+  // would fail the step that puts the target version on disk.
+  it('tells the agent to reinstall with the manager it is allowed to run', () => {
+    const yaml = renderWorkflow({ installCommand: 'pnpm install --frozen-lockfile' });
+    expect(yaml).toContain('`pnpm install`');
+    expect(yaml).toContain('Bash(pnpm:*)');
+  });
+
+  it('points the agent at the brief for replacements rather than at docs', () => {
+    const yaml = renderWorkflow();
+    expect(yaml).toContain('newExports');
+    // It cannot reach documentation, so instructing it to consult any is an
+    // instruction to either invent an API or stall.
+    expect(yaml).not.toMatch(/consult the package's own docs/);
+  });
+
   it('gates every mutating step on pr mode', () => {
     const yaml = renderWorkflow();
     for (const step of ['Install dependencies', 'Apply upgrades', 'Open pull request']) {

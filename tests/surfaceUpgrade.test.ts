@@ -181,6 +181,10 @@ describe('upgrade report formatting', () => {
           { symbol: 'escapePath', refs: [{ symbol: 'escapePath', via: 'named' as const, specifier: 'fast-glob', file: 'src/util/paths.ts', line: 14 }] },
         ],
         arityChanged: [],
+        newExports: [
+          { symbol: 'convertPathToPattern', kind: 'function' as const, arity: 1 },
+          { symbol: 'GLOB_DEFAULTS', kind: 'object' as const, arity: null },
+        ],
       },
       {
         package: 'pino',
@@ -189,6 +193,7 @@ describe('upgrade report formatting', () => {
         severity: 'warning',
         symbolsRemoved: [],
         arityChanged: [{ symbol: 'child', from: 1, to: 2, refs: [{ symbol: 'child', via: 'named' as const, specifier: 'pino', file: 'src/log.ts', line: 31 }] }],
+        newExports: [{ symbol: 'multistream', kind: 'function' as const, arity: 2 }],
       },
     ],
     ok: ['semver', 'zod'],
@@ -206,6 +211,23 @@ describe('upgrade report formatting', () => {
     const out = formatUpgradeReport(report);
     expect(out).toMatch(/WARNING\s+pino/);
     expect(out).toContain('1 → 2 params');
+  });
+
+  // The agent that rewrites call sites has no network tool, so the brief is its
+  // only verified source for what replaced a removed export. Without this it can
+  // only recall the new API from training data — the exact failure lurq exists
+  // to correct.
+  it('names candidate replacements next to what was removed', () => {
+    const out = formatUpgradeReport(report);
+    expect(out).toContain('candidate replacements');
+    expect(out).toContain('convertPathToPattern');
+  });
+
+  it('offers no candidates where nothing was removed to replace', () => {
+    // pino only changed an arity. There is no missing symbol to substitute, and
+    // listing unrelated new exports there would read as a suggested edit.
+    const out = formatUpgradeReport(report);
+    expect(out).not.toContain('multistream');
   });
 
   // A check that says "safe" when it simply did not look is worse than no check.

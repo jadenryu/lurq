@@ -132,6 +132,34 @@ function unfence(text: string): string {
  * all three arms of the comparison should differ only in the model, and three
  * SDKs for three ~20-line calls is a dependency cost with no payoff here.
  */
+/**
+ * Enough room for the module AND whatever the model thinks first.
+ *
+ * This was 4096 on the Anthropic arm and unset on the other two. Thinking is on
+ * by default on current Claude models and is billed out of the same ceiling, so
+ * a measured run spent 3,560 of 4,096 tokens thinking and returned a file cut
+ * off mid-line — `stop_reason: max_tokens`, one case in four unusable. Truncated
+ * code is worse than no code here: it references fewer symbols than the model
+ * intended, so a partial file that still parses drags the miss rate DOWN. The
+ * number would have looked better for being broken.
+ */
+const MAX_OUTPUT_TOKENS = 8192;
+
+/**
+ * A generation that ran out of room, which is not an answer.
+ *
+ * Thrown rather than returned so it lands in scoreCase's existing catch and is
+ * reported as `unverifiable` — the same treatment as a package whose surface
+ * cannot be read. A case we could not measure has to be visibly absent from the
+ * denominator, never silently counted as a model that got it right.
+ */
+class TruncatedError extends Error {
+  constructor(model: string) {
+    super(`${model} hit the output cap before finishing the module`);
+    this.name = 'TruncatedError';
+  }
+}
+
 async function generate(model: string, prompt: string): Promise<string> {
   const provider = providerOf(model);
   if (provider === 'anthropic') return generateAnthropic(model, prompt);
@@ -152,7 +180,10 @@ async function generateOpenAI(model: string, prompt: string): Promise<string> {
   if (!res.ok) {
     throw new Error(`OpenAI API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
   }
-  const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const body = (await res.json()) as {
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+  };
+  if (body.choices?.[0]?.finish_reason === 'length') throw new TruncatedError(model);
   return unfence(body.choices?.[0]?.message?.content ?? '');
 }
 
@@ -174,7 +205,7 @@ async function generateAnthropic(model: string, prompt: string): Promise<string>
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: MAX_OUTPUT_TOKENS,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -188,6 +219,7 @@ async function generateAnthropic(model: string, prompt: string): Promise<string>
   // A safety decline returns HTTP 200 with stop_reason 'refusal' and no text —
   // that is not a model failure to measure, so surface it as unverifiable.
   if (body.stop_reason === 'refusal') throw new Error('anthropic declined the request (refusal)');
+  if (body.stop_reason === 'max_tokens') throw new TruncatedError(model);
   const text = body.content?.find((c) => c.type === 'text')?.text ?? '';
   return unfence(text);
 }
@@ -208,8 +240,9 @@ async function generateGemini(model: string, prompt: string): Promise<string> {
     throw new Error(`Gemini API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
   }
   const body = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
   };
+  if (body.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new TruncatedError(model);
   return unfence(body.candidates?.[0]?.content?.parts?.[0]?.text ?? '');
 }
 

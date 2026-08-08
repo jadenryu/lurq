@@ -106,8 +106,14 @@ jobs:
       - name: Check against this codebase
         run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json
 
+      # The same report twice: once into the run summary, once as the body of
+      # the pull request. Fenced, because the report is aligned plain text and
+      # markdown would otherwise collapse its indentation into one paragraph.
       - name: Summarise
-        run: npx -y lurqrun check-upgrade . --plan lurq-plan.json >> "$\{GITHUB_STEP_SUMMARY}"
+        run: |
+          npx -y lurqrun check-upgrade . --plan lurq-plan.json > lurq-report.txt
+          { echo '\`\`\`'; cat lurq-report.txt; echo '\`\`\`'; } > lurq-report.md
+          cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
       # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
       #    changed nothing — the brief is in the run summary above, and no
@@ -158,13 +164,21 @@ jobs:
 
             1. Bump the dependency's range in every manifest listed in
                "declaredIn".
-            2. Rewrite every listed call site to the target version's API. The
-               brief tells you what was removed; consult the package's own docs
-               for the replacement. Do not invent an API you have not verified.
-            3. Run the repository's test script. If it fails and you cannot fix
+            2. Run \`${install.split(' ')[0]} install\` so node_modules holds the
+               TARGET version. Until you do, the package on disk is the old one
+               and anything you read from it describes the API you are leaving.
+            3. Rewrite every listed call site. "newExports" on each entry names
+               the exports the target version ADDED, extracted from its shipped
+               JavaScript — that is where the replacement for a removed symbol
+               comes from. Confirm each one against the freshly installed package
+               under node_modules before you call it. You have NO network access
+               and no documentation: an API in neither the brief nor node_modules
+               is one you cannot verify, and writing it anyway is the failure
+               this whole job exists to prevent. Revert that dependency instead.
+            4. Run the repository's test script. If it fails and you cannot fix
                it from the upgrade itself, revert that dependency and move on —
                a reverted upgrade is a fine outcome, a broken build is not.
-            4. Leave the working tree with only the upgrades that pass.
+            5. Leave the working tree with only the upgrades that pass.
 
             Do not touch unrelated files. Do not change CI configuration. Do not
             run git commands — the workflow handles version control.
@@ -179,7 +193,10 @@ jobs:
           branch: lurq/upgrades
           title: "chore(deps): lurq dependency upgrades"
           commit-message: "chore(deps): upgrade dependencies and migrate call sites"
-          body-path: lurq-brief.json
+          # The rendered report, not the raw JSON. A reviewer opening this PR
+          # reads what was removed and where it is used; the JSON is the agent's
+          # input, and pasting it here made the case for the change unreadable.
+          body-path: lurq-report.md
           labels: dependencies
           delete-branch: true
 `;

@@ -22,7 +22,7 @@ import { fetchAndExtract } from './fetch';
 import { diffSurfaces } from './diff';
 import { SURFACE_CLAIM_KINDS, isRootSpecifier } from './references';
 import type { PackageReferences, SymbolReference } from './references';
-import { runtimeSymbols } from './types';
+import { runtimeSymbols, type SymbolKind } from './types';
 
 export interface UpgradeTarget {
   package: string;
@@ -38,7 +38,28 @@ export interface BreakingFinding {
   /** Referenced symbols removed at the target version. */
   symbolsRemoved: { symbol: string; refs: SymbolReference[] }[];
   arityChanged: { symbol: string; from: number | null; to: number | null; refs: SymbolReference[] }[];
+  /**
+   * Runtime exports that exist at the target version and did not at the source
+   * — the verified candidates for whatever replaced `symbolsRemoved`.
+   *
+   * This is the other half of the answer and it used to be computed and thrown
+   * away. Knowing `renderToString` disappeared does not tell an agent to reach
+   * for `renderToPipeableStream`; the agent that rewrites the call sites runs
+   * with no network tool and no MCP access, so without this list its only source
+   * for a replacement is the training data whose staleness is the entire reason
+   * lurq exists. Extracted from the target's own shipped JS, so it is a fact
+   * about the package rather than a recollection.
+   *
+   * Same-kind-as-something-removed first, then alphabetical, then capped: a
+   * package can add hundreds of exports and this rides inside a brief a model
+   * has to read.
+   */
+  newExports: { symbol: string; kind: SymbolKind; arity: number | null }[];
 }
+
+/** How many candidate replacements travel with one finding. Enough to contain
+ *  the real replacement, small enough to stay legible inside the brief. */
+const NEW_EXPORT_CAP = 40;
 
 export interface UpgradeReport {
   safe: boolean;
@@ -107,6 +128,21 @@ export async function checkUpgradeOne(
     .map((a) => ({ symbol: a.path, from: a.from, to: a.to, refs: refs.symbols.get(a.path) ?? [] }));
 
   if (!symbolsRemoved.length && !arityChanged.length) return { ok: true };
+
+  // Rank by kind against what this codebase lost, so a removed function is not
+  // pushed off the cap by newly added constants.
+  const lostKinds = new Set(
+    diff.removed.filter((s) => referenced.has(s.path)).map((s) => s.kind),
+  );
+  const newExports = diff.added
+    .map((s) => ({ symbol: s.path, kind: s.kind, arity: s.arity }))
+    .sort(
+      (a, b) =>
+        Number(lostKinds.has(b.kind)) - Number(lostKinds.has(a.kind)) ||
+        a.symbol.localeCompare(b.symbol),
+    )
+    .slice(0, NEW_EXPORT_CAP);
+
   return {
     package: target.package,
     fromVersion: target.fromVersion,
@@ -114,6 +150,7 @@ export async function checkUpgradeOne(
     severity: symbolsRemoved.length ? 'blocking' : 'warning',
     symbolsRemoved,
     arityChanged,
+    newExports,
   };
 }
 
@@ -146,6 +183,10 @@ export async function checkUpgrade(
   };
 }
 
+/** Candidates listed in the text report. The full set stays in the JSON; this
+ *  keeps the report to the one screen §9.0 asks for. */
+const REPORT_CANDIDATE_CAP = 8;
+
 /** The §9.0 report: fits on one screen, names files and lines. */
 export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade check'): string {
   const out: string[] = [`lurq — ${title}`, ''];
@@ -164,6 +205,17 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
       const where = a.refs.map((r) => `${r.file}:${r.line}`).join(', ') || '(no location)';
       out.push(`  Arity change: ${a.symbol} ${a.from} → ${a.to} params`);
       out.push(`    · ${where}`);
+    }
+    // The reader's next question is always "replaced by what", so answer it here
+    // rather than making them open the JSON. Named as candidates, not as a
+    // mapping: these are the exports the target version gained, and which one
+    // replaces which is a judgement this diff cannot make.
+    if (b.symbolsRemoved.length && b.newExports.length) {
+      const shown = b.newExports.slice(0, REPORT_CANDIDATE_CAP);
+      const more = b.newExports.length - shown.length;
+      out.push(
+        `  New at ${b.toVersion}, candidate replacements: ${shown.map((n) => n.symbol).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`,
+      );
     }
     out.push('');
   }
