@@ -3,10 +3,15 @@ import { defineConfig } from 'tsup';
 // Heavy CJS packages that MUST NOT be bundled into the ESM output: esbuild turns
 // their internal `require("fs")` etc. into a shim that throws "Dynamic require of
 // X is not supported" at runtime. Keep them external so Node loads the real
-// installed package (whose dynamic requires work natively). `typescript` is only
-// reached by operator-side extraction (§4D); `e2b` only by the sandbox (§4C) —
-// both operator paths, present at runtime via devDependencies. The public plane
-// imports neither, so externalizing here is a no-op for the published package.
+// installed package (whose dynamic requires work natively).
+//
+// `e2b` is reached only by the sandbox (§4C), an operator path, so a
+// devDependency covers it. `typescript` used to be operator-only too, and this
+// comment used to say so. It stopped being true when `check-upgrade` joined the
+// public CLI: its reference scanner imports the compiler, esbuild hoists that
+// static import to the top of the unsplit public bundle, and a public install
+// (which gets no devDependencies) then died at boot with ERR_MODULE_NOT_FOUND on
+// EVERY command. `typescript` is therefore a real runtime dependency now.
 const NO_BUNDLE = ['typescript', 'e2b'];
 
 // Two build targets (§4E operator/public plane split):
