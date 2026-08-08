@@ -1,0 +1,127 @@
+{
+  "suite": "miss-rate-v2",
+  "schemaVersion": 1,
+  "description": "Production-grade miss-rate suite: packages TypeScript teams actually choose and write code against, pinned across a real major boundary. Selected on installs and on whether the major genuinely moved — never on whether a model gets it wrong, which is the question this suite exists to answer. Every version pair is a real published release, read from the npm registry on 2026-08-08. Paired cases (the previous major and the current one) are the point: the previous major is the control a model trained before the bump should handle, and the difference between the two is the drift. Tasks state the outcome and never name the symbols to use, because naming them would be handing over the answer.",
+  "cases": [
+    {
+      "id": "zod-3-schema",
+      "package": "zod",
+      "version": "3.25.76",
+      "task": "Define a schema for a user record with an email, an age that must be a positive integer, and an optional list of tags. Export a function that parses unknown input and returns a typed result without throwing, plus the inferred TypeScript type."
+    },
+    {
+      "id": "zod-4-schema",
+      "package": "zod",
+      "version": "4.4.3",
+      "task": "Define a schema for a user record with an email, an age that must be a positive integer, and an optional list of tags. Export a function that parses unknown input and returns a typed result without throwing, plus the inferred TypeScript type."
+    },
+    {
+      "id": "express-4-api",
+      "package": "express",
+      "version": "4.22.2",
+      "task": "Build a small JSON API: a router with a GET and a POST route, body parsing for JSON requests, and an error-handling middleware that returns a 500 with a JSON body. Export the configured app."
+    },
+    {
+      "id": "express-5-api",
+      "package": "express",
+      "version": "5.2.1",
+      "task": "Build a small JSON API: a router with a GET and a POST route, body parsing for JSON requests, and an error-handling middleware that returns a 500 with a JSON body. Export the configured app."
+    },
+    {
+      "id": "jose-5-jwt",
+      "package": "jose",
+      "version": "5.10.0",
+      "task": "Sign a JWT with an HMAC secret and a 10-minute expiry, then verify one and return its payload. Export both functions."
+    },
+    {
+      "id": "jose-6-jwt",
+      "package": "jose",
+      "version": "6.2.8",
+      "task": "Sign a JWT with an HMAC secret and a 10-minute expiry, then verify one and return its payload. Export both functions."
+    },
+    {
+      "id": "pino-9-logger",
+      "package": "pino",
+      "version": "9.14.0",
+      "task": "Create a JSON logger at info level with a child logger that carries a request id, and a helper that serializes an Error onto a log line. Export the logger factory."
+    },
+    {
+      "id": "pino-10-logger",
+      "package": "pino",
+      "version": "10.3.1",
+      "task": "Create a JSON logger at info level with a child logger that carries a request id, and a helper that serializes an Error onto a log line. Export the logger factory."
+    },
+    {
+      "id": "date-fns-3-range",
+      "package": "date-fns",
+      "version": "3.6.0",
+      "task": "Export helpers that: add a number of business days to a date, format a date as an ISO week label, and return whether two dates fall in the same calendar month."
+    },
+    {
+      "id": "date-fns-4-range",
+      "package": "date-fns",
+      "version": "4.4.0",
+      "task": "Export helpers that: add a number of business days to a date, format a date as an ISO week label, and return whether two dates fall in the same calendar month."
+    },
+    {
+      "id": "trpc-10-router",
+      "package": "@trpc/server",
+      "version": "10.45.4",
+      "task": "Define a router with one query that takes an id and one mutation that takes a name, using a context type that carries a user id. Export the router and its type."
+    },
+    {
+      "id": "trpc-11-router",
+      "package": "@trpc/server",
+      "version": "11.18.0",
+      "task": "Define a router with one query that takes an id and one mutation that takes a name, using a context type that carries a user id. Export the router and its type."
+    },
+    {
+      "id": "vitest-3-suite",
+      "package": "vitest",
+      "version": "3.2.7",
+      "task": "Write a test module with a suite, a setup hook that runs before each test, a mocked function whose calls are asserted, and a test using fake timers. Import everything explicitly rather than relying on globals."
+    },
+    {
+      "id": "vitest-4-suite",
+      "package": "vitest",
+      "version": "4.1.10",
+      "task": "Write a test module with a suite, a setup hook that runs before each test, a mocked function whose calls are asserted, and a test using fake timers. Import everything explicitly rather than relying on globals."
+    },
+    {
+      "id": "react-router-7-routes",
+      "package": "react-router",
+      "version": "7.18.2",
+      "task": "Define a route configuration with a parent layout and two child routes, one of which takes a URL parameter. Export a component that reads the current parameters and one that navigates programmatically."
+    },
+    {
+      "id": "react-router-8-routes",
+      "package": "react-router",
+      "version": "8.3.0",
+      "task": "Define a route configuration with a parent layout and two child routes, one of which takes a URL parameter. Export a component that reads the current parameters and one that navigates programmatically."
+    },
+    {
+      "id": "eslint-10-lint",
+      "package": "eslint",
+      "version": "10.8.1",
+      "task": "Programmatically lint a string of JavaScript source and a file on disk, returning the messages. Export a function that reports whether any error-severity problems were found."
+    },
+    {
+      "id": "mongoose-9-model",
+      "package": "mongoose",
+      "version": "9.9.1",
+      "task": "Define a schema and model for a blog post with a title, a body, and a created-at timestamp, plus a query helper that finds posts by title prefix. Export the model."
+    },
+    {
+      "id": "redis-6-cache",
+      "package": "redis",
+      "version": "6.2.0",
+      "task": "Export a cache helper that connects to Redis, gets and sets a JSON value with a TTL, and closes the connection cleanly."
+    },
+    {
+      "id": "yargs-18-cli",
+      "package": "yargs",
+      "version": "18.1.0",
+      "task": "Build a CLI with one command that takes a required positional argument and an optional boolean flag, with a help output and strict argument validation. Export the parser."
+    }
+  ]
+}

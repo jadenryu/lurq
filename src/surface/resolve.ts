@@ -32,34 +32,26 @@ export function readManifest(pkgDir: string): PackageManifest | null {
   }
 }
 
+
+/** The conditions tier A will read an entry from, best first. */
+const CONDITIONS = ['require', 'node', 'default', 'import', 'module'] as const;
+
 /**
- * Walk an `exports` value for the "." entry, preferring the conditions Node
- * actually uses for a CJS require, then ESM. Handles string, condition object,
- * subpath object, and arrays (first resolvable wins).
+ * Every root entry an `exports` map offers, in condition order.
+ *
+ * Same walk as pickFromExports, collecting rather than short-circuiting, so a
+ * caller whose first choice extracted nothing has the remaining conditions to
+ * try. Duplicates are fine here — resolveEntryCandidates dedupes on the
+ * resolved path, which is what actually has to be distinct.
  */
-function pickFromExports(exp: unknown, depth = 0): string | null {
-  if (depth > 8) return null;
-  if (typeof exp === 'string') return exp;
-  if (Array.isArray(exp)) {
-    for (const e of exp) {
-      const r = pickFromExports(e, depth + 1);
-      if (r) return r;
-    }
-    return null;
-  }
-  if (!exp || typeof exp !== 'object') return null;
+function pickAllFromExports(exp: unknown, depth = 0): string[] {
+  if (depth > 8) return [];
+  if (typeof exp === 'string') return [exp];
+  if (Array.isArray(exp)) return exp.flatMap((e) => pickAllFromExports(e, depth + 1));
+  if (!exp || typeof exp !== 'object') return [];
   const o = exp as Record<string, unknown>;
-  // Subpath map: the root entry is "."
-  if ('.' in o) return pickFromExports(o['.'], depth + 1);
-  // Condition map. `require` first: tier A reads shipped JS, and the CJS build
-  // is the one whose surface a `require()` would see.
-  for (const cond of ['require', 'node', 'default', 'import', 'module']) {
-    if (cond in o) {
-      const r = pickFromExports(o[cond], depth + 1);
-      if (r) return r;
-    }
-  }
-  return null;
+  if ('.' in o) return pickAllFromExports(o['.'], depth + 1);
+  return CONDITIONS.filter((c) => c in o).flatMap((c) => pickAllFromExports(o[c], depth + 1));
 }
 
 /** Resolve a file path, trying extensions and directory index files. */
@@ -85,19 +77,45 @@ export function resolveFile(candidate: string): string | null {
 
 /** The file `require('<pkg>')` loads. Null when the package ships no usable JS entry. */
 export function resolveEntry(pkgDir: string, manifest?: PackageManifest | null): string | null {
+  return resolveEntryCandidates(pkgDir, manifest)[0] ?? null;
+}
+
+/**
+ * Every entry this package could reasonably be read from, best first.
+ *
+ * `resolveEntry` returns only the winner, which is right until the winner turns
+ * out to be unreadable. An ESM-first package ships a `require` condition that is
+ * a thin CJS wrapper — it re-exports through a runtime call the AST walker
+ * cannot follow, so extraction resolves an entry, walks one file, and finds zero
+ * exports. date-fns and vitest both did exactly that, and the result was not an
+ * error: `usage` and `diff_surface` returned an empty surface for two packages
+ * with hundreds of exports between them, which reads as "this package has no
+ * API" rather than "we could not read it".
+ *
+ * So the caller gets the whole ordered list and can move on when a candidate
+ * comes back empty. The order is unchanged — `require` still wins for the CJS
+ * packages it was chosen for, and nothing that already extracted cleanly takes a
+ * different path. This only adds somewhere to go when the first door is shut.
+ */
+export function resolveEntryCandidates(
+  pkgDir: string,
+  manifest?: PackageManifest | null,
+): string[] {
   const m = manifest ?? readManifest(pkgDir);
-  if (!m) return null;
-  const candidates = [
-    m.exports !== undefined ? pickFromExports(m.exports) : null,
+  if (!m) return [];
+  const specifiers = [
+    ...(m.exports !== undefined ? pickAllFromExports(m.exports) : []),
     m.main ?? null,
+    m.module ?? null,
     './index.js',
   ].filter((c): c is string => typeof c === 'string' && c.length > 0);
 
-  for (const c of candidates) {
+  const out: string[] = [];
+  for (const c of specifiers) {
     const hit = resolveFile(resolvePath(pkgDir, c));
-    if (hit) return hit;
+    if (hit && !out.includes(hit)) out.push(hit);
   }
-  return null;
+  return out;
 }
 
 /**
