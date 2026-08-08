@@ -286,14 +286,3 @@ function walkDts(
     }
   }
 }
-
-/** True when the package ships its own declarations (as opposed to @types/*). */
-export function shipsOwnTypes(pkgDir: string): boolean {
-  return resolveTypesEntry(pkgDir) !== null;
-}
-
-/** Convenience for callers holding a directory rather than a manifest. */
-export function typesEntryPath(pkgDir: string): string | null {
-  const e = resolveTypesEntry(pkgDir);
-  return e ? join(pkgDir, relative(pkgDir, e)) : null;
-}

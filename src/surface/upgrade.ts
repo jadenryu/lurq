@@ -220,7 +220,12 @@ function compareEntry(
         to: a.to,
         refs: symbols.get(a.path) ?? [],
       })),
-    candidates: diff.added.map((s) => ({ symbol: s.path, kind: s.kind, arity: s.arity })),
+    // The target's whole surface, not just what it added: a rename that shipped
+    // the new name a major early leaves `diff.added` empty. `default` is never a
+    // useful candidate, and the caller drops anything it just reported removed.
+    candidates: runtimeSymbols(to)
+      .filter((s) => s.path !== 'default')
+      .map((s) => ({ symbol: s.path, kind: s.kind, arity: s.arity })),
     lostKinds: new Set(diff.removed.filter((s) => referenced.has(s.path)).map((s) => s.kind)),
   };
 }
@@ -284,11 +289,35 @@ export async function checkUpgradeOne(
     return unverified ? { unverified } : {};
   }
 
-  // Rank by kind against what this codebase lost, so a removed function is not
-  // pushed off the cap by newly added constants.
+  // Candidates are what the TARGET exports, not what it added.
+  //
+  // This read `diff.added` — symbols present at the target and absent at the
+  // source. That is right for "the library grew a new API" and wrong for the
+  // commonest rename there is: ship the new name, let both live, remove the old
+  // one a major later. cookie did exactly that. Going 1.1.1 → 2.0.1 removes
+  // `parse` and `serialize`, and `parseCookie` and `stringifyCookie` — the
+  // things you are supposed to call instead — had been exported since 1.x. So
+  // `diff.added` was empty, and a caller holding a blocking finding got
+  // `"newExports": []`: told what broke, told nothing about what to write.
+  //
+  // The model does the mapping, and does it well, given the candidates. It
+  // cannot do it from an empty array. So this hands over the target's surface
+  // and leaves the choice where it belongs; there is deliberately no matcher
+  // here, because `parse(str, options?)` → `parseCookie(str, options?)` is not
+  // a problem that needs one.
+  //
+  // Ranking survives as a retrieval filter rather than an answer. Surfaces run
+  // to 129 exports for react-router and 240 for zod, so the cap is real and
+  // what it keeps matters: symbols whose kind matches something this codebase
+  // just lost come first, so a removed function is not pushed out by constants.
+  //
+  // Collected per entry point, so a package used through several of them offers
+  // candidates from each. Deduped on the symbol name: `lostKinds` and the cap
+  // both count distinct names, and two entry points can re-export one.
+  const removedNames = new Set(symbolsRemoved.map((s) => s.symbol));
   const seen = new Set<string>();
   const newExports = candidates
-    .filter((c) => !seen.has(c.symbol) && seen.add(c.symbol))
+    .filter((c) => !removedNames.has(c.symbol) && !seen.has(c.symbol) && seen.add(c.symbol))
     .sort(
       (a, b) =>
         Number(lostKinds.has(b.kind)) - Number(lostKinds.has(a.kind)) ||

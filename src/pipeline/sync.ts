@@ -219,29 +219,30 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
           now,
         }),
       );
-      // Append the version timeline from the signals this run already fetched.
+      // Record the version timeline. The on-demand path (pipeline/single.ts)
+      // has always done this; the sync pass never did, so every package whose
+      // only route into the index is the nightly cron — which is the entire
+      // seed list — had a package row and no history behind it. Measured on
+      // production before this line existed: 220 tracked packages with zero
+      // versions, including react, chalk, commander, lodash, eslint and
+      // esbuild, and 15 of the 100 most-installed packages in the index.
       //
-      // The daily sync wrote `packages.latest_version` and nothing else, so a
-      // package's timeline only ever held what its FIRST full ingest saw. That
-      // is invisible for a dormant package and compounds for a busy one, which
-      // is why the 105 packages whose timeline was missing their own
-      // `latest_version` averaged 48M weekly downloads against 14M for the rest:
-      // minimatch, ansi-styles, vite, acorn. `github/drift.ts` computes repo
-      // drift off this table, so accuracy was worst for exactly the packages
-      // most likely to be in someone's package.json.
+      // Everything version-shaped reads that table, so the absence was not
+      // quiet: the drift board's "N% of packages have broken" is computed over
+      // a set that could not contain them, and `compat`, `usage` and the whole
+      // upgrade path have nothing to say about a package with no timeline.
       //
-      // Idempotent (onConflictDoNothing) and non-fatal, matching the ingest path
-      // in pipeline/single.ts: a version-history write must never fail a sync
-      // run that already stored the package row.
+      // Failure is logged rather than swallowed. single.ts catches this into a
+      // bare `() => {}` — right that a history write must not fail a sync,
+      // wrong that it should do so in silence, which is the other half of why
+      // this went unnoticed.
       await upsertPackageVersions(
         handle.db,
         c.target.name,
         c.signals.registry?.versionTimeline ?? [],
-      ).catch((err) =>
-        logger.warn(
-          `version timeline write failed for ${c.target.name}: ${(err as Error).message}`,
-        ),
-      );
+      ).catch((err: unknown) => {
+        logger.warn(`version timeline write failed for ${c.target.name}: ${String(err)}`);
+      });
       updated++;
     }
 

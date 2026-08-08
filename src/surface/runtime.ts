@@ -39,7 +39,7 @@ interface ProbeResult {
  * guard — and reports emptiness explicitly rather than returning `[]`, so the
  * caller can tell "loaded and exposed nothing" from "never loaded".
  */
-export function runtimeProbeScript(pkgName: string): string {
+function runtimeProbeScript(pkgName: string): string {
   return `
 const out = (o) => { process.stdout.write("@@LURQ@@" + JSON.stringify(o) + "\\n", () => process.exit(0)); };
 let mod;
@@ -84,7 +84,7 @@ try {
 }
 
 /** Pull the probe line out of stdout the package may also have written to. */
-export function parseRuntimeProbe(stdout: string): ProbeResult | null {
+function parseRuntimeProbe(stdout: string): ProbeResult | null {
   const marker = '@@LURQ@@';
   const idx = stdout.lastIndexOf(marker);
   if (idx < 0) return null;

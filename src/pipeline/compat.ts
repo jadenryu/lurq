@@ -148,7 +148,7 @@ export interface ResolveCompatResult {
  * An ERESOLVE on a pair is a real `conflict`. Inconclusive resolves (network,
  * timeout) throw so the caller can retry rather than record a false result.
  */
-export async function resolveVerifyCompatibility(
+async function resolveVerifyCompatibility(
   db: Database,
   packages: string[],
 ): Promise<ResolveCompatResult> {

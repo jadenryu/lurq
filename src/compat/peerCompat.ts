@@ -168,7 +168,7 @@ interface TargetRuntime {
   label: string;
 }
 
-export function normalizeNodeVersion(raw: string): TargetRuntime | null {
+function normalizeNodeVersion(raw: string): TargetRuntime | null {
   const trimmed = raw.trim().replace(/^v/i, '');
   if (!trimmed) return null;
   if (semver.valid(trimmed)) return { value: trimmed, exact: true, label: trimmed };

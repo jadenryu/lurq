@@ -130,8 +130,3 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
     deprecated,
   };
 }
-
-/** Severity for reporting: runtime removals only, matching the study's metric. */
-export function removalCount(diff: SurfaceDiff): number {
-  return diff.inconclusive ? 0 : diff.removed.length;
-}

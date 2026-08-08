@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeMetrics } from '../../src/benchmark/results';
+import { computeMetrics, validateTemplate } from '../../src/benchmark/results';
 import type { BenchmarkResult } from '../../src/benchmark/types';
 
 function baseResult(overrides: Partial<BenchmarkResult> = {}): BenchmarkResult {
@@ -168,5 +168,29 @@ describe('benchmark results', () => {
     // TP=1 (deprecated), FN=1 (missed), TN=1 → recall 1/2, precision 1/1
     expect(metrics.failureDetectionRecall).toBe(0.5);
     expect(metrics.failureDetectionPrecision).toBe(1);
+  });
+});
+
+/**
+ * The guard exists to refuse a mutable alias — an image that can change between
+ * runs makes two measurements incomparable. Its id half used to demand hex,
+ * which E2B does not issue: the public `base` alias resolves to the base36
+ * `rki5dems9wqfm4r03t7g`, so nothing you could actually pin was accepted.
+ */
+describe('validateTemplate', () => {
+  it('accepts a pinned E2B template id', () => {
+    expect(validateTemplate('base:rki5dems9wqfm4r03t7g')).toBe('base:rki5dems9wqfm4r03t7g');
+  });
+
+  it('still accepts a hex-shaped id', () => {
+    expect(validateTemplate('node20:3f8a91c2')).toBe('node20:3f8a91c2');
+  });
+
+  it('rejects a bare mutable alias', () => {
+    expect(() => validateTemplate('base')).toThrow(/template-name:build-id|form/);
+  });
+
+  it('rejects an absent template', () => {
+    expect(() => validateTemplate(undefined)).toThrow(/required/);
   });
 });

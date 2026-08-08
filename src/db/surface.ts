@@ -12,7 +12,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from './client';
 import { entities, surfaceQueue, symbols } from './schema';
-import type { SurfaceQueueRow, SymbolRow } from './schema';
+import type { SurfaceQueueRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
 import type { EntityRef } from '../graph/types';
 import type { ExtractedSurface, ExtractionTier } from '../surface/types';
@@ -115,24 +115,6 @@ export async function storeSurface(
   }
 
   return { entityId: entity.id, symbolsWritten: rows.length, verdict: 'verified_true' };
-}
-
-/** Read a stored surface back, for `resolve_surface` and for diffing. */
-export async function getStoredSymbols(
-  db: Database,
-  pkg: string,
-  version: string | null,
-  tenantId = 0,
-): Promise<SymbolRow[]> {
-  const ref = surfaceRef(pkg, version);
-  const rows = await db
-    .select()
-    .from(entities)
-    .where(eq(entities.canonicalKey, `${ref.kind}:${ref.namespace}:${ref.name}:${ref.version ?? ''}`))
-    .limit(1);
-  const entity = rows.find((r) => r.tenantId === tenantId);
-  if (!entity) return [];
-  return db.select().from(symbols).where(eq(symbols.entityId, entity.id));
 }
 
 /** Dedup key for the extraction queue. */

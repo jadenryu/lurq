@@ -32,6 +32,10 @@ export function readManifest(pkgDir: string): PackageManifest | null {
   }
 }
 
+
+/** The conditions tier A will read an entry from, best first. */
+const CONDITIONS = ['require', 'node', 'default', 'import', 'module'] as const;
+
 /** A subpath map keys entries by path (`"."`, `"./pg-core"`); a condition map
  *  keys them by condition (`"require"`, `"import"`). One dot tells them apart. */
 function isSubpathMap(o: Record<string, unknown>): boolean {
@@ -54,33 +58,28 @@ function matchWildcard(pattern: string, key: string): string | null {
 }
 
 /**
- * Walk an `exports` value for one subpath key, preferring the conditions Node
- * actually uses for a CJS require, then ESM. Handles string, condition object,
- * subpath object, `./*` patterns, and arrays (first resolvable wins).
+ * Every entry an `exports` map offers for one subpath key, in condition order.
+ *
+ * Collecting rather than short-circuiting, so a caller whose first choice
+ * extracted nothing has the remaining conditions to try. Duplicates are fine
+ * here — resolveEntryCandidates dedupes on the resolved path, which is what
+ * actually has to be distinct.
  *
  * `key` is `"."` for the package root and `"./pg-core"` for a subpath. Without
- * it this function could only ever answer for the root, which is why
+ * it this could only ever answer for the root, which is why
  * `drizzle-orm/pg-core` had no surface to compare against and every symbol
  * imported from it went unchecked.
  */
-function pickFromExports(exp: unknown, key = '.', depth = 0): string | null {
-  if (depth > 8) return null;
-  if (typeof exp === 'string') {
-    // A bare string `exports` declares the root entry and nothing else.
-    return key === '.' ? exp : null;
-  }
-  if (Array.isArray(exp)) {
-    for (const e of exp) {
-      const r = pickFromExports(e, key, depth + 1);
-      if (r) return r;
-    }
-    return null;
-  }
-  if (!exp || typeof exp !== 'object') return null;
+function pickAllFromExports(exp: unknown, key = '.', depth = 0): string[] {
+  if (depth > 8) return [];
+  // A bare string `exports` declares the root entry and nothing else.
+  if (typeof exp === 'string') return key === '.' ? [exp] : [];
+  if (Array.isArray(exp)) return exp.flatMap((e) => pickAllFromExports(e, key, depth + 1));
+  if (!exp || typeof exp !== 'object') return [];
   const o = exp as Record<string, unknown>;
 
   if (isSubpathMap(o)) {
-    if (key in o) return pickFromExports(o[key], '.', depth + 1);
+    if (key in o) return pickAllFromExports(o[key], '.', depth + 1);
     // Longest matching pattern wins, as Node does: `./lib/*` beats `./*`.
     const patterns = Object.keys(o)
       .filter((k) => k.includes('*'))
@@ -88,21 +87,12 @@ function pickFromExports(exp: unknown, key = '.', depth = 0): string | null {
     for (const p of patterns) {
       const capture = matchWildcard(p, key);
       if (capture === null) continue;
-      const target = pickFromExports(o[p], '.', depth + 1);
-      if (target) return target.split('*').join(capture);
+      const targets = pickAllFromExports(o[p], '.', depth + 1);
+      if (targets.length) return targets.map((t) => t.split('*').join(capture));
     }
-    return null;
+    return [];
   }
-
-  // Condition map. `require` first: tier A reads shipped JS, and the CJS build
-  // is the one whose surface a `require()` would see.
-  for (const cond of ['require', 'node', 'default', 'import', 'module']) {
-    if (cond in o) {
-      const r = pickFromExports(o[cond], key, depth + 1);
-      if (r) return r;
-    }
-  }
-  return null;
+  return CONDITIONS.filter((c) => c in o).flatMap((c) => pickAllFromExports(o[c], key, depth + 1));
 }
 
 /** Resolve a file path, trying extensions and directory index files. */
@@ -129,46 +119,71 @@ export function resolveFile(candidate: string): string | null {
 /**
  * The file `require('<pkg>')` loads, or `require('<pkg>/<subpath>')` when a
  * subpath is given. Null when the package ships no usable JS entry there.
- *
- * A subpath entry point has its own export surface, unrelated to the root's:
- * `drizzle-orm/pg-core` exports `pgTable`, which `drizzle-orm` does not. Scoring
- * one against the other reports every symbol missing on correct code, so before
- * this the subpath refs were simply dropped instead, which reported *nothing*
- * missing on broken code. Both directions are wrong; resolving the real entry is
- * the only answer.
  */
 export function resolveEntry(
   pkgDir: string,
   manifest?: PackageManifest | null,
   subpath?: string,
 ): string | null {
+  return resolveEntryCandidates(pkgDir, manifest, subpath)[0] ?? null;
+}
+
+/**
+ * Every entry this package could reasonably be read from, best first.
+ *
+ * `resolveEntry` returns only the winner, which is right until the winner turns
+ * out to be unreadable. An ESM-first package ships a `require` condition that is
+ * a thin CJS wrapper — it re-exports through a runtime call the AST walker
+ * cannot follow, so extraction resolves an entry, walks one file, and finds zero
+ * exports. date-fns and vitest both did exactly that, and the result was not an
+ * error: `usage` and `diff_surface` returned an empty surface for two packages
+ * with hundreds of exports between them, which reads as "this package has no
+ * API" rather than "we could not read it".
+ *
+ * So the caller gets the whole ordered list and can move on when a candidate
+ * comes back empty. The order is unchanged — `require` still wins for the CJS
+ * packages it was chosen for, and nothing that already extracted cleanly takes a
+ * different path. This only adds somewhere to go when the first door is shut.
+ *
+ * With a `subpath`, the same list for that entry point instead. A subpath entry
+ * has its own export surface, unrelated to the root's: `drizzle-orm/pg-core`
+ * exports `pgTable`, which `drizzle-orm` does not. Scoring one against the other
+ * reports every symbol missing on correct code, so those references used to be
+ * dropped instead, which reported nothing missing on broken code. Both
+ * directions are wrong; resolving the real entry is the only answer, and it
+ * inherits the same unreadable-candidate fallback the root gets.
+ */
+export function resolveEntryCandidates(
+  pkgDir: string,
+  manifest?: PackageManifest | null,
+  subpath?: string,
+): string[] {
   const m = manifest ?? readManifest(pkgDir);
-  if (!m) return null;
+  if (!m) return [];
   const sub = subpath?.replace(/^\.?\//, '').replace(/\/$/, '');
+  const specifiers = (
+    sub
+      ? // An `exports` map is a hard boundary in Node: a subpath it does not
+        // list cannot be imported, so guessing at a file would invent a surface
+        // the runtime refuses to load. The bare path is offered only for the
+        // legacy main/index layout, where any real file is genuinely reachable.
+        m.exports !== undefined
+        ? pickAllFromExports(m.exports, `./${sub}`)
+        : [`./${sub}`]
+      : [
+          ...(m.exports !== undefined ? pickAllFromExports(m.exports) : []),
+          m.main ?? null,
+          m.module ?? null,
+          './index.js',
+        ]
+  ).filter((c): c is string => typeof c === 'string' && c.length > 0);
 
-  if (sub) {
-    const fromExports =
-      m.exports !== undefined ? pickFromExports(m.exports, `./${sub}`) : null;
-    if (fromExports) return resolveFile(resolvePath(pkgDir, fromExports));
-    // An `exports` map is a hard boundary in Node: a subpath it does not list
-    // cannot be imported, so guessing at a file would invent a surface the
-    // runtime refuses to load. Fall back to the filesystem only for the legacy
-    // main/index layout, where any real file is genuinely reachable.
-    if (m.exports !== undefined) return null;
-    return resolveFile(resolvePath(pkgDir, sub));
-  }
-
-  const candidates = [
-    m.exports !== undefined ? pickFromExports(m.exports) : null,
-    m.main ?? null,
-    './index.js',
-  ].filter((c): c is string => typeof c === 'string' && c.length > 0);
-
-  for (const c of candidates) {
+  const out: string[] = [];
+  for (const c of specifiers) {
     const hit = resolveFile(resolvePath(pkgDir, c));
-    if (hit) return hit;
+    if (hit && !out.includes(hit)) out.push(hit);
   }
-  return null;
+  return out;
 }
 
 /**

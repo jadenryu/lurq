@@ -32,7 +32,7 @@ export interface RunOracleResult {
 }
 
 /** Describe the sandbox's runtime as an environment fingerprint (§2). */
-export async function describeEnvironment(sandbox: Sandbox): Promise<Environment> {
+async function describeEnvironment(sandbox: Sandbox): Promise<Environment> {
   const { nodeVersion, npmVersion } = await sandbox.getRuntimeInfo();
   return {
     os: process.platform,

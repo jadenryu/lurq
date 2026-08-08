@@ -58,13 +58,6 @@ export type Verdict =
  */
 export type EvidenceClass = 'declared' | 'executed' | 'derived';
 
-/** Weakest-wins, for DERIVED claims computed from several inputs (§4.1). */
-export function weakestClass(classes: EvidenceClass[]): EvidenceClass {
-  if (classes.includes('derived')) return 'derived';
-  if (classes.includes('declared')) return 'declared';
-  return 'executed';
-}
-
 /** Identity of a node, before it has a database id. */
 export interface EntityRef {
   kind: EntityKind;

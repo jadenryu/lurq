@@ -46,7 +46,7 @@ export interface MissRateCase {
 }
 
 /** Normalize either form to a package list. */
-export function casePackages(c: MissRateCase): { name: string; version: string }[] {
+function casePackages(c: MissRateCase): { name: string; version: string }[] {
   if (c.packages?.length) return c.packages;
   if (c.package) return [{ name: c.package, version: c.version ?? 'latest' }];
   return [];
@@ -113,7 +113,7 @@ ${list}
 /** Provider inferred from the model id, matching the existing participants. */
 export type Provider = 'openai' | 'anthropic' | 'gemini';
 
-export function providerOf(model: string): Provider {
+function providerOf(model: string): Provider {
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gemini-')) return 'gemini';
   return 'openai';
@@ -142,8 +142,16 @@ function unfence(text: string): string {
  * code is worse than no code here: it references fewer symbols than the model
  * intended, so a partial file that still parses drags the miss rate DOWN. The
  * number would have looked better for being broken.
+ *
+ * 8192 was the first attempt and proved marginal rather than wrong: uuid-9-v6
+ * scored cleanly on one run and tripped the cap on the next, because thinking
+ * length varies between identical requests. A ceiling that a case crosses only
+ * sometimes turns the suite into a coin flip, so this is set well clear of the
+ * observed draw rather than just above it. It costs nothing to raise — the
+ * parameter is a limit, not a reservation, and only generated tokens are
+ * billed.
  */
-const MAX_OUTPUT_TOKENS = 8192;
+const MAX_OUTPUT_TOKENS = 16384;
 
 /**
  * A generation that ran out of room, which is not an answer.

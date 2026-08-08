@@ -1,0 +1,103 @@
+{
+  "suite": "miss-rate-v3",
+  "schemaVersion": 1,
+  "description": "Drift-shaped miss-rate suite for a model with a 2026-05-01 cutoff (Claude Opus 5). Every 'now' case pins a major whose FIRST release landed after that date, so the model cannot have seen it in training — that is the only shape that measures drift rather than recall, and it is what v2 got wrong: thirteen of its eighteen majors predated the cutoff, so it measured recall and scored 0%. Paired 'then' cases pin the previous major, which the model does know, and exist as the control: a miss on a then-case is unfamiliarity, a miss on a now-case is drift. Packages are chosen for installs, for being something a developer selects rather than inherits transitively, and for being idiomatically used through named imports — the last because tier-A scoring reads module exports, so a package used as `x.method()` on a default export presents one scorable symbol however much code is written against it. That is a constraint of the scorer and of package shape, not of any model. Ship dates and version pairs read from the index on 2026-08-08.",
+  "cases": [
+    {
+      "id": "nanoid-5-ids",
+      "package": "nanoid",
+      "version": "5.1.16",
+      "task": "Export a function that returns a URL-safe random id of a given length, and a second one that generates ids from a custom alphabet of digits only."
+    },
+    {
+      "id": "nanoid-6-ids",
+      "package": "nanoid",
+      "version": "6.0.1",
+      "task": "Export a function that returns a URL-safe random id of a given length, and a second one that generates ids from a custom alphabet of digits only."
+    },
+    {
+      "id": "execa-9-shell",
+      "package": "execa",
+      "version": "9.6.1",
+      "task": "Export helpers that run a command capturing stdout, run one that is allowed to fail and returns its exit code, and pipe the output of one command into another."
+    },
+    {
+      "id": "execa-10-shell",
+      "package": "execa",
+      "version": "10.0.1",
+      "task": "Export helpers that run a command capturing stdout, run one that is allowed to fail and returns its exit code, and pipe the output of one command into another."
+    },
+    {
+      "id": "react-router-7-routes",
+      "package": "react-router",
+      "version": "7.18.1",
+      "task": "Define a route configuration with a parent layout and two child routes, one taking a URL parameter. Export a component that reads the current parameters and one that navigates programmatically."
+    },
+    {
+      "id": "react-router-8-routes",
+      "package": "react-router",
+      "version": "8.2.0",
+      "task": "Define a route configuration with a parent layout and two child routes, one taking a URL parameter. Export a component that reads the current parameters and one that navigates programmatically."
+    },
+    {
+      "id": "cookie-1-headers",
+      "package": "cookie",
+      "version": "1.1.1",
+      "task": "Export a function that parses a Cookie header into an object, and one that serializes a session cookie with an expiry, HttpOnly, SameSite and a path."
+    },
+    {
+      "id": "cookie-2-headers",
+      "package": "cookie",
+      "version": "2.0.1",
+      "task": "Export a function that parses a Cookie header into an object, and one that serializes a session cookie with an expiry, HttpOnly, SameSite and a path."
+    },
+    {
+      "id": "ini-6-config",
+      "package": "ini",
+      "version": "6.0.0",
+      "task": "Export a function that parses an INI string into a nested object and one that serializes an object back to INI text with a section header."
+    },
+    {
+      "id": "ini-7-config",
+      "package": "ini",
+      "version": "7.0.0",
+      "task": "Export a function that parses an INI string into a nested object and one that serializes an object back to INI text with a section header."
+    },
+    {
+      "id": "jsdom-30-dom",
+      "package": "jsdom",
+      "version": "30.0.1",
+      "task": "Export a function that builds a DOM from an HTML string, queries an element by selector, and returns its text content. Include a variant that runs with scripts enabled and a quiet virtual console."
+    },
+    {
+      "id": "pako-3-gzip",
+      "package": "pako",
+      "version": "3.0.1",
+      "task": "Export functions that gzip a string to bytes and ungzip bytes back to a string, and one that deflates raw without a header."
+    },
+    {
+      "id": "google-auth-11-auth",
+      "package": "google-auth-library",
+      "version": "11.0.0",
+      "task": "Export a helper that obtains an authenticated client from application default credentials for a read-only scope, and one that builds an OAuth2 client from a client id, secret and redirect URI."
+    },
+    {
+      "id": "redis-6-cache",
+      "package": "redis",
+      "version": "6.2.0",
+      "task": "Export a cache helper that connects to Redis, gets and sets a JSON value with a TTL, and closes the connection cleanly."
+    },
+    {
+      "id": "ai-7-generate",
+      "package": "ai",
+      "version": "7.0.31",
+      "task": "Export a function that generates text from a prompt with a model passed in, one that streams the same, and a tool definition with a typed input schema the model can call."
+    },
+    {
+      "id": "magic-string-1-edit",
+      "package": "magic-string",
+      "version": "1.0.0",
+      "task": "Export a function that takes source text, replaces a range with new content, prepends a banner, and returns both the edited code and a source map."
+    }
+  ]
+}

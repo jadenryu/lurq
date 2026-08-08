@@ -25,8 +25,20 @@ import type {
 
 // ── E2B_TEMPLATE format guard ───────────────────────────────────────────────
 
-/** Validates that E2B_TEMPLATE is in immutable "template-name:build-id" form. */
-const TEMPLATE_RE = /^[a-z][a-z0-9_-]*:[a-f0-9-]{8,}$/i;
+/**
+ * Validates that E2B_TEMPLATE is in immutable "template-name:template-id" form.
+ *
+ * The point is to refuse a mutable alias: pointing a benchmark at `base` means
+ * the image can change under it between runs, and two numbers measured against
+ * different sandboxes are not comparable. That part is right and stays.
+ *
+ * The id half used to be `[a-f0-9-]{8,}`, which assumed a hex build id. E2B
+ * hands out base36 — the public `base` alias resolves to `rki5dems9wqfm4r03t7g`
+ * — so the guard rejected the exact string you are supposed to pin, and there
+ * was no accepted value at all. Widened to E2B's alphabet; a bare alias still
+ * fails, which is the requirement that matters.
+ */
+const TEMPLATE_RE = /^[a-z][a-z0-9_-]*:[a-z0-9-]{8,}$/i;
 
 export function validateTemplate(template: string | undefined): string {
   if (!template) {

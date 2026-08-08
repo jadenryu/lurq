@@ -378,4 +378,110 @@ describe('surface diff', () => {
     );
     expect(d.removed).toEqual([]);
   });
+
+
+  /**
+   * The rename pattern that motivated candidates being the target's surface
+   * rather than its additions: ship the new name, let both live for a major,
+   * remove the old one. cookie 1.1.1 -> 2.0.1 is the real instance —
+   * `parseCookie` and `stringifyCookie` shipped in 1.x, `parse` and `serialize`
+   * were dropped in 2.0. Against `diff.added` the candidate list came back empty
+   * exactly when a caller needed it most.
+   */
+  describe('replacement candidates on a pre-existing rename', () => {
+    const from = surface({
+      symbols: [
+        sym('parse', { kind: 'function', arity: 2 }),
+        sym('serialize', { kind: 'function', arity: 3 }),
+        sym('parseCookie', { kind: 'function', arity: 2 }),
+        sym('stringifyCookie', { kind: 'function', arity: 2 }),
+      ],
+    });
+    const to = surface({
+      symbols: [
+        sym('parseCookie', { kind: 'function', arity: 2 }),
+        sym('stringifyCookie', { kind: 'function', arity: 2 }),
+      ],
+    });
+
+    it('offers the target surface even when nothing was added', () => {
+      const d = diffSurfaces(from, to);
+      expect(d.added).toEqual([]); // the old source — empty, which was the bug
+      const names = runtimeSymbols(to).map((s) => s.path);
+      expect(names).toContain('parseCookie');
+      expect(names).toContain('stringifyCookie');
+    });
+  });
+});
+
+/**
+ * An ESM-first package ships a `require` condition that is a thin wrapper: it
+ * re-exports through a runtime call the AST walker cannot follow, so the entry
+ * resolves, one file is walked, and zero exports come back. Reporting that as
+ * the surface is the dangerous outcome — an empty surface reads as "no API",
+ * and every later diff against it looks like the package deleted everything.
+ *
+ * Measured on the real registry before the fallback existed: date-fns@4.4.0 and
+ * vitest@4.1.10 both resolved index.cjs and extracted 0 symbols. Both have
+ * hundreds of exports between them, and `usage` and `diff_surface` returned
+ * nothing for either.
+ */
+describe('entry fallback for ESM-first packages', () => {
+  let dir: string;
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lurq-esm-first-'));
+    const p = join(dir, 'esm-first');
+    mkdirSync(p, { recursive: true });
+    // The CJS condition: resolvable, parseable, and empty — a runtime re-export
+    // the walker cannot see through.
+    writeFileSync(join(p, 'index.cjs'), `module.exports = require('./impl.cjs')(globalThis);\n`);
+    writeFileSync(join(p, 'impl.cjs'), `module.exports = () => ({});\n`);
+    // The ESM condition: where the surface actually is.
+    writeFileSync(
+      join(p, 'index.mjs'),
+      `export function addBusinessDays(d, n) {}\nexport function isSameMonth(a, b) {}\nexport const VERSION = '4';\n`,
+    );
+    writeFileSync(
+      join(p, 'package.json'),
+      JSON.stringify({
+        name: 'esm-first',
+        version: '4.0.0',
+        main: 'index.cjs',
+        exports: { '.': { require: './index.cjs', import: './index.mjs' } },
+      }),
+    );
+  });
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('falls through an empty require entry to the import condition', () => {
+    const s = extractSurface(join(dir, 'esm-first'));
+    expect(s.undeclaredReason).toBeUndefined();
+    expect(runtimeSymbols(s).map((x) => x.path).sort()).toEqual([
+      'VERSION',
+      'addBusinessDays',
+      'isSameMonth',
+    ]);
+    // And it says which entry it actually read, not which one it tried first.
+    expect(s.entry).toBe('index.mjs');
+  });
+
+  it('still prefers the require condition when that one parses', () => {
+    const p = join(dir, 'cjs-real');
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, 'index.cjs'), `exports.fromCjs = function () {};\n`);
+    writeFileSync(join(p, 'index.mjs'), `export function fromEsm() {}\n`);
+    writeFileSync(
+      join(p, 'package.json'),
+      JSON.stringify({
+        name: 'cjs-real',
+        version: '1.0.0',
+        exports: { '.': { require: './index.cjs', import: './index.mjs' } },
+      }),
+    );
+    const s = extractSurface(p);
+    expect(runtimeSymbols(s).map((x) => x.path)).toEqual(['fromCjs']);
+    expect(s.entry).toBe('index.cjs');
+  });
 });

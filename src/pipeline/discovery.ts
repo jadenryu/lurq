@@ -78,7 +78,7 @@ export function passesGate(preScore: number | null): boolean {
  * §1 quality model but with only manifest signals — no downloads, no GitHub —
  * so the gate is adoption-independent by construction.
  */
-export async function preScorePackage(
+async function preScorePackage(
   name: string,
   fetchImpl?: typeof fetch,
 ): Promise<number | null> {

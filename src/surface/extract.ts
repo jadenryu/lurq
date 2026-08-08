@@ -20,7 +20,7 @@ import { relative } from 'node:path';
 import ts from 'typescript';
 import {
   readManifest,
-  resolveEntry,
+  resolveEntryCandidates,
   resolveInternal,
   resolvesInsidePackage,
   type PackageManifest,
@@ -131,7 +131,7 @@ function hasDeprecatedTag(sf: ts.SourceFile, node: ts.Node): boolean {
  * Function and class bodies are deliberately NOT descended into: an assignment
  * inside a function is not the module's surface.
  */
-export function flattenStatements(
+function flattenStatements(
   stmts: readonly ts.Statement[],
   depth = 0,
 ): ts.Statement[] {
@@ -481,6 +481,21 @@ function requireSpecifier(node: ts.Node): string | null {
 }
 
 /**
+ * Did this entry give us anything a consumer could name?
+ *
+ * Empty is the obvious failure. A lone `default` is the same failure wearing a
+ * result: `module.exports = require('./impl')(globalThis)` parses, produces
+ * exactly one symbol, and tells you nothing about the API behind it. Both mean
+ * "try the next condition" — and a package whose surface genuinely is one
+ * default export loses nothing, because no other candidate will read better and
+ * the first attempt is what gets reported.
+ */
+function isReadable(symbols: SurfaceSymbol[]): boolean {
+  if (symbols.length === 0) return false;
+  return !(symbols.length === 1 && symbols[0]!.path === 'default');
+}
+
+/**
  * Extract the tier-A runtime surface of an installed package directory.
  * Never throws for a subject-side problem — a package with no resolvable entry
  * returns `undeclaredReason`, which the caller records as UNDECLARED, not as
@@ -491,17 +506,17 @@ export function extractSurface(
   opts: { manifest?: PackageManifest | null; subpath?: string } = {},
 ): ExtractedSurface {
   const manifest = opts.manifest ?? readManifest(pkgDir);
-  const entry = resolveEntry(pkgDir, manifest, opts.subpath);
+  const candidates = resolveEntryCandidates(pkgDir, manifest, opts.subpath);
   const base: ExtractedSurface = {
     package: manifest?.name ?? pkgDir,
     version: manifest?.version ?? null,
     tier: TIER,
-    entry: entry ? relative(pkgDir, entry) : null,
+    entry: null,
     symbols: [],
     filesWalked: 0,
     externalReExports: [],
   };
-  if (!entry) {
+  if (!candidates.length) {
     return {
       ...base,
       undeclaredReason: opts.subpath
@@ -510,23 +525,45 @@ export function extractSurface(
     };
   }
 
-  const ctx: WalkCtx = {
-    pkgDir,
-    visited: new Set(),
-    filesWalked: 0,
-    external: new Set(),
-    truncated: false,
-  };
-  const out = new Map<string, SurfaceSymbol>();
-  walk(entry, ctx, out);
+  // Try each entry until one yields a readable surface. An ESM-first package's
+  // `require` condition is often a wrapper that re-exports through a runtime
+  // call, which the AST walker cannot follow: it resolves, walks one file, and
+  // reports nothing usable. Reporting that as the package's surface is the
+  // dangerous outcome — an empty surface reads as "no API" and makes every
+  // later diff look like the package deleted everything.
+  //
+  // The first candidate that reads wins, so the require-first preference is
+  // intact for the CJS packages it was chosen for. When no candidate reads, the
+  // first attempt is what we report, because that is the entry a consumer would
+  // actually load and "we could not read this one" is the honest answer.
+  const attempts: { entry: string; symbols: SurfaceSymbol[]; walked: number; external: string[] }[] = [];
+  for (const entry of candidates) {
+    const ctx: WalkCtx = {
+      pkgDir,
+      visited: new Set(),
+      filesWalked: 0,
+      external: new Set(),
+      truncated: false,
+    };
+    const out = new Map<string, SurfaceSymbol>();
+    walk(entry, ctx, out);
+    attempts.push({
+      entry,
+      symbols: [...out.values()].sort((a, b) => a.path.localeCompare(b.path)),
+      walked: ctx.filesWalked,
+      external: [...ctx.external].sort(),
+    });
+    if (isReadable(attempts[attempts.length - 1]!.symbols)) break;
+  }
+  const attempt = attempts.find((a) => isReadable(a.symbols)) ?? attempts[0]!;
 
-  const symbols = [...out.values()].sort((a, b) => a.path.localeCompare(b.path));
   return {
     ...base,
-    symbols,
-    filesWalked: ctx.filesWalked,
-    externalReExports: [...ctx.external].sort(),
-    ...(symbols.length === 0
+    entry: relative(pkgDir, attempt.entry),
+    symbols: attempt.symbols,
+    filesWalked: attempt.walked,
+    externalReExports: attempt.external,
+    ...(attempt.symbols.length === 0
       ? { undeclaredReason: 'entry resolved but no exports found' }
       : {}),
   };

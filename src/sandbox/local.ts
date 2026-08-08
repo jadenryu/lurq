@@ -19,7 +19,6 @@ import {
   DEFAULT_TARGET,
   type ExecOptions,
   type ExecResult,
-  type ModuleSystem,
   type Sandbox,
   type SandboxPackage,
   type SandboxResult,
@@ -45,11 +44,25 @@ export function npmInstallArgs(specs: string[], opts: { allowScripts: boolean })
   return args;
 }
 
-/** A one-liner that loads the package and exits non-zero if it throws. */
-export function smokeScript(pkg: string, moduleSystem: ModuleSystem): string[] {
-  return moduleSystem === 'esm'
-    ? ['--input-type=module', '-e', `await import(${JSON.stringify(pkg)})`]
-    : ['-e', `require(${JSON.stringify(pkg)})`];
+/**
+ * Load the package the way that works for both module systems.
+ *
+ * This used to branch on the target's `moduleSystem`, which nothing ever
+ * derived from the package — DEFAULT_TARGET hardcodes 'cjs', so every smoke
+ * load was a `require()`. An ESM-only package therefore came back
+ * ERR_REQUIRE_ESM and was recorded as failing to load. Measured: nanoid@6.0.1,
+ * a package that works perfectly, reported `installed: yes, loaded: no`.
+ *
+ * That verdict is not cosmetic — it feeds `verify` and the recommendation path,
+ * so lurq was calling a large and growing share of the modern registry broken.
+ * chalk, node-fetch, execa, got, ora and nanoid have all gone ESM-only.
+ *
+ * `import()` handles both: Node wraps a CJS module and hands back its exports
+ * as `default`. So there is nothing to detect and no branch to get wrong, and
+ * "does `import` work" is the right definition of loading in 2026 anyway.
+ */
+export function smokeScript(pkg: string): string[] {
+  return ['--input-type=module', '-e', `await import(${JSON.stringify(pkg)})`];
 }
 
 function condense(s: string): string {
@@ -115,7 +128,7 @@ export class LocalSandbox implements Sandbox {
 
       for (let i = 0; i < smokeTargets.length; i++) {
         try {
-          await execFileAsync('node', smokeScript(smokeTargets[i]!.name, target.moduleSystem), {
+          await execFileAsync('node', smokeScript(smokeTargets[i]!.name), {
             cwd: dir,
             timeout: SMOKE_TIMEOUT_MS,
             signal: opts.signal,
