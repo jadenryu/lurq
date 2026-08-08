@@ -265,3 +265,12 @@ DEPLOY.md
 # personal files and in-progress specs kept on disk, not tracked
 /*.png
 /lurq-v*-spec*.md
+# exported chat transcripts and saved web pages, which land in the root and have
+# twice now been swept into a commit by a `git add -A`
+/20??-??-??-*.txt
+/*.html
+
+# Next.js build output. apps/web/.gitignore covers the copy under apps/web; this
+# is the one Next writes when it is run from the repo root, and nothing here was
+# ignoring it, which is how .next/trace ended up tracked.
+/.next/
