@@ -129,12 +129,33 @@ export async function checkUpgradeOne(
 
   if (!symbolsRemoved.length && !arityChanged.length) return { ok: true };
 
-  // Rank by kind against what this codebase lost, so a removed function is not
-  // pushed off the cap by newly added constants.
+  // Candidates are what the TARGET exports, not what it added.
+  //
+  // This read `diff.added` — symbols present at the target and absent at the
+  // source. That is right for "the library grew a new API" and wrong for the
+  // commonest rename there is: ship the new name, let both live, remove the old
+  // one a major later. cookie did exactly that. Going 1.1.1 → 2.0.1 removes
+  // `parse` and `serialize`, and `parseCookie` and `stringifyCookie` — the
+  // things you are supposed to call instead — had been exported since 1.x. So
+  // `diff.added` was empty, and a caller holding a blocking finding got
+  // `"newExports": []`: told what broke, told nothing about what to write.
+  //
+  // The model does the mapping, and does it well, given the candidates. It
+  // cannot do it from an empty array. So this hands over the target's surface
+  // and leaves the choice where it belongs; there is deliberately no matcher
+  // here, because `parse(str, options?)` → `parseCookie(str, options?)` is not
+  // a problem that needs one.
+  //
+  // Ranking survives as a retrieval filter rather than an answer. Surfaces run
+  // to 129 exports for react-router and 240 for zod, so the cap is real and
+  // what it keeps matters: symbols whose kind matches something this codebase
+  // just lost come first, so a removed function is not pushed out by constants.
   const lostKinds = new Set(
     diff.removed.filter((s) => referenced.has(s.path)).map((s) => s.kind),
   );
-  const newExports = diff.added
+  const removedNames = new Set(symbolsRemoved.map((s) => s.symbol));
+  const newExports = runtimeSymbols(to.surface)
+    .filter((s) => s.path !== 'default' && !removedNames.has(s.path))
     .map((s) => ({ symbol: s.path, kind: s.kind, arity: s.arity }))
     .sort(
       (a, b) =>

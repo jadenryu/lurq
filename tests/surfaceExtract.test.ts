@@ -322,6 +322,40 @@ describe('surface diff', () => {
     );
     expect(d.removed).toEqual([]);
   });
+
+
+  /**
+   * The rename pattern that motivated candidates being the target's surface
+   * rather than its additions: ship the new name, let both live for a major,
+   * remove the old one. cookie 1.1.1 -> 2.0.1 is the real instance —
+   * `parseCookie` and `stringifyCookie` shipped in 1.x, `parse` and `serialize`
+   * were dropped in 2.0. Against `diff.added` the candidate list came back empty
+   * exactly when a caller needed it most.
+   */
+  describe('replacement candidates on a pre-existing rename', () => {
+    const from = surface({
+      symbols: [
+        sym('parse', { kind: 'function', arity: 2 }),
+        sym('serialize', { kind: 'function', arity: 3 }),
+        sym('parseCookie', { kind: 'function', arity: 2 }),
+        sym('stringifyCookie', { kind: 'function', arity: 2 }),
+      ],
+    });
+    const to = surface({
+      symbols: [
+        sym('parseCookie', { kind: 'function', arity: 2 }),
+        sym('stringifyCookie', { kind: 'function', arity: 2 }),
+      ],
+    });
+
+    it('offers the target surface even when nothing was added', () => {
+      const d = diffSurfaces(from, to);
+      expect(d.added).toEqual([]); // the old source — empty, which was the bug
+      const names = runtimeSymbols(to).map((s) => s.path);
+      expect(names).toContain('parseCookie');
+      expect(names).toContain('stringifyCookie');
+    });
+  });
 });
 
 /**
