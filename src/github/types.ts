@@ -58,6 +58,14 @@ export interface TransitiveRisk {
    */
   advisories: number;
   deprecated: boolean;
+  /**
+   * Direct dependencies whose tree pulls this in — the actual upgrade targets.
+   *
+   * Empty means the resolved tree carried no usable parentage, NOT that nothing
+   * depends on this. Every node in a tree got there somehow, so an absence here
+   * is always a gap in our data and the UI says so.
+   */
+  pulledInBy: string[];
 }
 
 /**
@@ -81,6 +89,9 @@ export interface TransitiveDrift {
   risks: TransitiveRisk[];
   /** True when the tree exceeded the node cap and is therefore incomplete. */
   truncated: boolean;
+  /** True when the SBOM carried usable DEPENDS_ON edges, so `pulledInBy` is
+   *  meaningful. False means blame paths were unavailable for the whole repo. */
+  attributed: boolean;
 }
 
 /**

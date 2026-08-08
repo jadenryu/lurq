@@ -429,6 +429,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
                 advisoryPackages: row.drift.transitive.advisoryPackages,
                 deprecated: row.drift.transitive.deprecated,
                 truncated: row.drift.transitive.truncated,
+                attributed: row.drift.transitive.attributed,
               }
             : null,
         }

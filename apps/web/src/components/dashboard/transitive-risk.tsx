@@ -21,6 +21,11 @@ import type { TransitiveRisk, TransitiveSummary } from "@/lib/lurq-issuer";
  *
  * 2. A repo with the dependency graph switched off renders as "not read", not as
  *    a clean tree. Silence has to look different from an all-clear.
+ *
+ * The "pulled in by" column is what makes any of this actionable: a flagged
+ * transitive you cannot trace is a fact you can do nothing with. An empty value
+ * there means the tree gave no usable parentage — never that nothing depends on
+ * the package, which cannot be true of something that is installed.
  */
 export function TransitiveRiskPanel({
   summary,
@@ -57,9 +62,17 @@ export function TransitiveRiskPanel({
       <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Packages your dependencies pull in, which no manifest declares. These carry exact
         installed versions rather than ranges. An advisory here is recorded against the{" "}
-        <em>package</em>, not proven against the installed version — and it is usually fixed by
-        upgrading whatever depends on it, not by editing your own manifest.
+        <em>package</em>, not proven against the installed version — and it is fixed by upgrading
+        whatever pulls it in, named in the last column, not by editing your own manifest.
       </p>
+
+      {!summary.attributed && risks.length > 0 && (
+        <p className="max-w-2xl text-sm leading-relaxed text-warn">
+          This repository&rsquo;s dependency graph carried no parent-child edges, so lurq
+          cannot say which of your dependencies pulls these in. The findings below are still
+          real — only the attribution is missing.
+        </p>
+      )}
 
       {risks.length === 0 ? (
         <Panel padding="tight">
@@ -77,7 +90,8 @@ export function TransitiveRiskPanel({
                 <TableHead className="pl-5 md:pl-6">package</TableHead>
                 <TableHead>installed</TableHead>
                 <TableHead>latest</TableHead>
-                <TableHead className="pr-5 md:pr-6">signal</TableHead>
+                <TableHead>signal</TableHead>
+                <TableHead className="pr-5 md:pr-6">pulled in by</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -88,7 +102,7 @@ export function TransitiveRiskPanel({
                   <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
                     {risk.latest ?? "—"}
                   </TableCell>
-                  <TableCell className="pr-5 md:pr-6">
+                  <TableCell>
                     <span className="flex flex-wrap items-center gap-1.5">
                       {risk.advisories > 0 && (
                         <Chip tone="bad">
@@ -97,6 +111,24 @@ export function TransitiveRiskPanel({
                       )}
                       {risk.deprecated && <Chip tone="warn">deprecated</Chip>}
                     </span>
+                  </TableCell>
+                  <TableCell className="pr-5 md:pr-6">
+                    {risk.pulledInBy.length > 0 ? (
+                      <span className="flex flex-wrap gap-1.5">
+                        {risk.pulledInBy.map((parent) => (
+                          <code
+                            key={parent}
+                            className="rounded-[var(--radius-chip)] border border-border px-1.5 py-0.5 font-mono text-xs"
+                          >
+                            {parent}
+                          </code>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-xs text-muted-foreground/50">
+                        unattributed
+                      </span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

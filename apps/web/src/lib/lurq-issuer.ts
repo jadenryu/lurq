@@ -149,6 +149,9 @@ export interface TransitiveSummary {
   advisoryPackages: number;
   deprecated: number;
   truncated: boolean;
+  /** True when the SBOM carried usable dependency edges, so `pulledInBy` means
+   *  something. False means blame paths were unavailable for this repo. */
+  attributed: boolean;
 }
 
 export interface TransitiveRisk {
@@ -157,6 +160,9 @@ export interface TransitiveRisk {
   latest: string | null;
   advisories: number;
   deprecated: boolean;
+  /** Direct dependencies that pull this in — the real upgrade targets. Empty
+   *  means unattributed, never "nothing depends on it". */
+  pulledInBy: string[];
 }
 
 export interface RepoDriftSummary {

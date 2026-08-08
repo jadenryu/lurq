@@ -23,16 +23,31 @@ import { GithubAppError } from './app';
 export interface ResolvedDep {
   name: string;
   version: string;
+  /** SPDX element id, the key the relationship edges are expressed in. */
+  spdxId?: string;
 }
 
 interface SpdxPackage {
+  SPDXID?: string;
   name?: string;
   versionInfo?: string;
   externalRefs?: { referenceType?: string; referenceLocator?: string }[];
 }
 
+interface SpdxRelationship {
+  spdxElementId?: string;
+  relationshipType?: string;
+  relatedSpdxElement?: string;
+}
+
 interface SbomResponse {
-  sbom?: { packages?: SpdxPackage[] };
+  sbom?: { packages?: SpdxPackage[]; relationships?: SpdxRelationship[] };
+}
+
+/** `parent DEPENDS_ON child`, in SPDX element ids. */
+export interface DependencyEdge {
+  parent: string;
+  child: string;
 }
 
 /**
@@ -90,15 +105,38 @@ export function parseSbom(json: unknown): ResolvedDep[] {
     const key = `${parsed.name}@${parsed.version}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(parsed);
+    out.push({ ...parsed, ...(pkg.SPDXID ? { spdxId: pkg.SPDXID } : {}) });
     if (out.length >= SBOM_NODE_CAP) break;
   }
 
   return out;
 }
 
+/**
+ * `DEPENDS_ON` edges, the raw material for attributing a transitive back to the
+ * direct dependency that pulls it in.
+ *
+ * GitHub does not guarantee a nested tree here — some documents carry only
+ * `DESCRIBES` from the root, which yields no useful parentage at all. That is
+ * why callers check whether any edges came back rather than assuming they did:
+ * "we could not attribute this" and "nothing depends on this" are different
+ * claims, and only the first one is ever true.
+ */
+export function parseRelationships(json: unknown): DependencyEdge[] {
+  const relationships = (json as SbomResponse)?.sbom?.relationships;
+  if (!Array.isArray(relationships)) return [];
+  const out: DependencyEdge[] = [];
+  for (const rel of relationships) {
+    if (rel.relationshipType !== 'DEPENDS_ON') continue;
+    if (!rel.spdxElementId || !rel.relatedSpdxElement) continue;
+    out.push({ parent: rel.spdxElementId, child: rel.relatedSpdxElement });
+  }
+  return out;
+}
+
 export interface SbomResult {
   deps: ResolvedDep[];
+  edges: DependencyEdge[];
   /** True when the tree hit SBOM_NODE_CAP and is therefore incomplete. */
   truncated: boolean;
 }
@@ -120,7 +158,11 @@ export async function fetchResolvedTree(
       `/repos/${fullName}/dependency-graph/sbom`,
     );
     const deps = parseSbom(data);
-    return { deps, truncated: deps.length >= SBOM_NODE_CAP };
+    return {
+      deps,
+      edges: parseRelationships(data),
+      truncated: deps.length >= SBOM_NODE_CAP,
+    };
   } catch (err) {
     const status =
       err instanceof HttpError ? err.status : err instanceof GithubAppError ? err.status : 0;

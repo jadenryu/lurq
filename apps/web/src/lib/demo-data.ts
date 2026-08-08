@@ -280,6 +280,9 @@ export function demoRepos(): DashboardRepo[] {
                 advisoryPackages: [7, 3, 0, 14][i] ?? 0,
                 deprecated: [4, 2, 0, 9][i] ?? 0,
                 truncated: false,
+                // internal-tools has no usable edge data, so its risks show as
+                // unattributed — the state a real SBOM without relationships hits.
+                attributed: i !== 3,
               }
             : null,
       },
@@ -498,21 +501,23 @@ export function demoImpact(): UpgradeImpact {
  * resolved tree gives them — no range guessing like the direct-dependency view.
  */
 function demoTransitiveRisks(): TransitiveRisk[] {
-  const rows: [string, string, string | null, number, boolean][] = [
-    ["minimist", "1.2.5", "1.2.8", 2, false],
-    ["semver", "5.7.1", "7.8.5", 1, false],
-    ["tough-cookie", "2.5.0", "5.1.2", 1, false],
-    ["json5", "1.0.1", "2.2.3", 1, false],
-    ["request", "2.88.2", "2.88.2", 1, true],
-    ["har-validator", "5.1.5", "5.1.5", 0, true],
-    ["querystringify", "2.2.0", "2.2.0", 0, true],
+  const rows: [string, string, string | null, number, boolean, string[]][] = [
+    ["minimist", "1.2.5", "1.2.8", 2, false, ["eslint", "webpack"]],
+    ["semver", "5.7.1", "7.8.5", 1, false, ["eslint"]],
+    ["tough-cookie", "2.5.0", "5.1.2", 1, false, ["request"]],
+    ["json5", "1.0.1", "2.2.3", 1, false, ["@babel/core"]],
+    ["request", "2.88.2", "2.88.2", 1, true, ["node-sass"]],
+    ["har-validator", "5.1.5", "5.1.5", 0, true, ["node-sass"]],
+    // No path found for this one: shown as unattributed, not as parentless.
+    ["querystringify", "2.2.0", "2.2.0", 0, true, []],
   ];
-  return rows.map(([name, version, latest, advisories, deprecated]) => ({
+  return rows.map(([name, version, latest, advisories, deprecated, pulledInBy]) => ({
     name,
     version,
     latest,
     advisories,
     deprecated,
+    pulledInBy,
   }));
 }
 

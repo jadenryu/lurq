@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { parseNpmPurl, parseSbom, SBOM_NODE_CAP } from '../src/github/sbom';
+import { parseNpmPurl, parseRelationships, parseSbom, SBOM_NODE_CAP } from '../src/github/sbom';
+import { buildAttribution } from '../src/github/attribute';
 import { computeTransitiveDrift } from '../src/github/drift';
 
 describe('parseNpmPurl', () => {
@@ -172,5 +173,100 @@ describe('computeTransitiveDrift', () => {
   it('propagates truncation so a partial tree never reads as complete', async () => {
     const db = stubDb([]);
     expect((await computeTransitiveDrift(db, resolved, direct, true)).truncated).toBe(true);
+  });
+});
+
+describe('parseRelationships', () => {
+  it('keeps DEPENDS_ON edges and drops the rest', () => {
+    const edges = parseRelationships({
+      sbom: {
+        relationships: [
+          { spdxElementId: 'DOC', relationshipType: 'DESCRIBES', relatedSpdxElement: 'ROOT' },
+          { spdxElementId: 'A', relationshipType: 'DEPENDS_ON', relatedSpdxElement: 'B' },
+        ],
+      },
+    });
+    expect(edges).toEqual([{ parent: 'A', child: 'B' }]);
+  });
+
+  it('returns nothing for a document with no relationships', () => {
+    expect(parseRelationships({ sbom: {} })).toEqual([]);
+    expect(parseRelationships(null)).toEqual([]);
+  });
+});
+
+const node = (spdxId: string, name: string, version = '1.0.0') => ({ spdxId, name, version });
+
+describe('buildAttribution', () => {
+  const direct = new Set(['eslint', 'react']);
+
+  it('walks a transitive up to the direct dependency that pulls it in', () => {
+    const deps = [
+      node('S-eslint', 'eslint'),
+      node('S-optionator', 'optionator'),
+      node('S-minimist', 'minimist'),
+    ];
+    const edges = [
+      { parent: 'S-eslint', child: 'S-optionator' },
+      { parent: 'S-optionator', child: 'S-minimist' },
+    ];
+    const index = buildAttribution(deps, edges, direct);
+    expect(index.available).toBe(true);
+    expect(index.parentsOf.get('minimist')).toEqual(['eslint']);
+  });
+
+  it('reports every direct dependency that reaches it, sorted', () => {
+    const deps = [
+      node('S-eslint', 'eslint'),
+      node('S-react', 'react'),
+      node('S-minimist', 'minimist'),
+    ];
+    const edges = [
+      { parent: 'S-react', child: 'S-minimist' },
+      { parent: 'S-eslint', child: 'S-minimist' },
+    ];
+    expect(buildAttribution(deps, edges, direct).parentsOf.get('minimist')).toEqual([
+      'eslint',
+      'react',
+    ]);
+  });
+
+  it('terminates on a cycle instead of hanging', () => {
+    // npm graphs really do contain these.
+    const deps = [node('S-eslint', 'eslint'), node('S-a', 'a'), node('S-b', 'b')];
+    const edges = [
+      { parent: 'S-eslint', child: 'S-a' },
+      { parent: 'S-a', child: 'S-b' },
+      { parent: 'S-b', child: 'S-a' },
+    ];
+    expect(buildAttribution(deps, edges, direct).parentsOf.get('b')).toEqual(['eslint']);
+  });
+
+  it('treats a root-only edge set as unattributed, not as universal blame', () => {
+    // Some SBOMs only relate the document to each package. Attributing every
+    // transitive to a repo node nobody can upgrade is worse than saying nothing.
+    const deps = [node('S-minimist', 'minimist')];
+    const edges = [{ parent: 'SPDXRef-DOCUMENT', child: 'S-minimist' }];
+    const index = buildAttribution(deps, edges, direct);
+    expect(index.available).toBe(false);
+    expect(index.parentsOf.size).toBe(0);
+  });
+
+  it('reports unavailable when there are no edges at all', () => {
+    expect(buildAttribution([node('S-a', 'a')], [], direct).available).toBe(false);
+  });
+
+  it('does not attribute a direct dependency to itself', () => {
+    const deps = [node('S-eslint', 'eslint'), node('S-minimist', 'minimist')];
+    const edges = [{ parent: 'S-eslint', child: 'S-minimist' }];
+    expect(buildAttribution(deps, edges, direct).parentsOf.has('eslint')).toBe(false);
+  });
+
+  it('leaves an unreachable transitive out rather than guessing', () => {
+    const deps = [node('S-eslint', 'eslint'), node('S-a', 'a'), node('S-orphan', 'orphan')];
+    const edges = [{ parent: 'S-eslint', child: 'S-a' }];
+    const index = buildAttribution(deps, edges, direct);
+    expect(index.available).toBe(true);
+    expect(index.parentsOf.has('orphan')).toBe(false);
   });
 });

@@ -26,7 +26,8 @@ import {
   type TransitiveDrift,
   type TransitiveRisk,
 } from './types';
-import type { ResolvedDep } from './sbom';
+import { buildAttribution } from './attribute';
+import type { DependencyEdge, ResolvedDep } from './sbom';
 
 /** Postgres caps bind parameters; chunk the `IN` lists well under it. */
 const NAME_CHUNK = 500;
@@ -190,8 +191,10 @@ export async function computeTransitiveDrift(
   resolved: ResolvedDep[],
   directNames: Set<string>,
   truncated: boolean,
+  edges: DependencyEdge[] = [],
 ): Promise<TransitiveDrift> {
   const transitives = resolved.filter((dep) => !directNames.has(dep.name));
+  const attribution = buildAttribution(resolved, edges, directNames);
   const empty: TransitiveDrift = {
     resolved: transitives.length,
     tracked: 0,
@@ -199,6 +202,7 @@ export async function computeTransitiveDrift(
     deprecated: 0,
     risks: [],
     truncated,
+    attributed: attribution.available,
   };
   if (transitives.length === 0) return empty;
 
@@ -217,6 +221,7 @@ export async function computeTransitiveDrift(
       latest: row.latestVersion,
       advisories: row.advisories,
       deprecated: row.deprecated,
+      pulledInBy: attribution.parentsOf.get(dep.name) ?? [],
     });
   }
 
@@ -236,6 +241,7 @@ export async function computeTransitiveDrift(
     deprecated: risks.filter((r) => r.deprecated).length,
     risks: risks.slice(0, TRANSITIVE_DETAIL_CAP),
     truncated,
+    attributed: attribution.available,
   };
 }
 
@@ -243,13 +249,19 @@ export async function computeTransitiveDrift(
 export async function computeDrift(
   db: Database,
   manifests: RepoManifest[],
-  resolvedTree: { deps: ResolvedDep[]; truncated: boolean } | null = null,
+  resolvedTree: { deps: ResolvedDep[]; edges: DependencyEdge[]; truncated: boolean } | null = null,
 ): Promise<RepoDrift> {
   const declared = declaredDeps(manifests);
   const names = [...declared.keys()];
   const directNames = new Set(names);
   const transitive = resolvedTree
-    ? await computeTransitiveDrift(db, resolvedTree.deps, directNames, resolvedTree.truncated)
+    ? await computeTransitiveDrift(
+        db,
+        resolvedTree.deps,
+        directNames,
+        resolvedTree.truncated,
+        resolvedTree.edges,
+      )
     : null;
 
   if (names.length === 0) {
