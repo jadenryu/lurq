@@ -422,6 +422,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           anyDrift: row.drift.anyDrift,
           deprecated: row.drift.deprecated,
           advisories: row.drift.advisories,
+          /** null = scanned before the check existed, so it was never run. Kept
+           *  distinct from 0 so the dashboard cannot render "not checked" as a
+           *  clean stack. */
+          conflicts: row.drift.conflictsAtLatest?.length ?? null,
           transitive: row.drift.transitive
             ? {
                 resolved: row.drift.transitive.resolved,
@@ -525,6 +529,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           ...toDashboardRepo(row),
           deps: row.drift?.deps ?? [],
           transitiveRisks: row.drift?.transitive?.risks ?? [],
+          conflicts: row.drift?.conflictsAtLatest ?? null,
           runs,
           workflow,
           workflowPath: WORKFLOW_PATH,

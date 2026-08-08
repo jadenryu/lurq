@@ -27,6 +27,9 @@ import {
   type TransitiveRisk,
 } from './types';
 import { buildAttribution } from './attribute';
+import { assembleMembers } from '../compat/members';
+import { resolveArchitectureCompat } from '../compat/peerCompat';
+import type { CompatConflict } from '../core/types';
 import type { DependencyEdge, ResolvedDep } from './sbom';
 
 /** Postgres caps bind parameters; chunk the `IN` lists well under it. */
@@ -245,6 +248,31 @@ export async function computeTransitiveDrift(
   };
 }
 
+/**
+ * Peer/engine conflicts across the repo's tracked dependencies, evaluated at the
+ * versions the index calls latest.
+ *
+ * Names are passed without pins on purpose. `assembleMembers` reads peers and
+ * engines straight from the index for an unpinned name, so this costs one query;
+ * pinning each dependency to its *resolved* version would instead fetch that
+ * exact manifest from npm, one request per dependency, on every nightly scan of
+ * every repo. The unpinned question is also the more useful one here — the
+ * dashboard's job is to say whether the upgrades it is recommending land on a
+ * stack that holds together.
+ *
+ * ponytail: conflicts in the CURRENT install (pinned versions) are the other half
+ * and are not computed. Add them when the registry read can be amortised — a
+ * `package_versions`-level peer/engine column would make it another single query.
+ */
+async function conflictsAtLatest(
+  db: Database,
+  names: string[],
+): Promise<CompatConflict[]> {
+  if (names.length === 0) return [];
+  const { members } = await assembleMembers(db, names);
+  return resolveArchitectureCompat(members);
+}
+
 /** Compute a repo's full drift summary from its manifests. */
 export async function computeDrift(
   db: Database,
@@ -274,6 +302,7 @@ export async function computeDrift(
       advisories: 0,
       deps: [],
       transitive,
+      conflictsAtLatest: [],
     };
   }
 
@@ -291,6 +320,11 @@ export async function computeDrift(
 
   deps.sort((a, b) => severity(b) - severity(a) || a.name.localeCompare(b.name));
 
+  // Tracked names only. An untracked one would send `assembleMembers` to the npm
+  // registry for its manifest, turning a one-query check into one request per
+  // unindexed dependency on every scan.
+  const conflicts = await conflictsAtLatest(db, deps.map((d) => d.name));
+
   return {
     depsDeclared: declared.size,
     depsTracked: deps.length,
@@ -300,5 +334,6 @@ export async function computeDrift(
     advisories: deps.reduce((sum, d) => sum + d.advisories, 0),
     deps: deps.slice(0, REPO_DRIFT_DETAIL_CAP),
     transitive,
+    conflictsAtLatest: conflicts,
   };
 }

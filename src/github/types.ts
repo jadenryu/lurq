@@ -7,6 +7,7 @@
  * built on ("lurq never sees your code"). The agent that eventually edits code
  * runs in the user's own CI, on their runner — see docs/lurq-autopilot.md.
  */
+import type { CompatConflict } from '../core/types';
 
 /** One `package.json` found in a repo. Monorepos yield several. */
 export interface RepoManifest {
@@ -121,6 +122,17 @@ export interface RepoDrift {
    * the dashboard renders the two differently.
    */
   transitive: TransitiveDrift | null;
+  /**
+   * Peer-dependency and engine conflicts across the tracked dependencies **at
+   * their latest versions** — i.e. what breaks if the repo takes the upgrades in
+   * its own migration brief. Not the state of the current install: that needs
+   * each pinned version's own manifest, which is a registry read per dependency.
+   *
+   * `undefined` means the repo has not been scanned since this check shipped, and
+   * is rendered as "not checked" rather than as a clean stack — same rule as
+   * `transitive: null`. An empty array is a real all-clear.
+   */
+  conflictsAtLatest?: CompatConflict[];
 }
 
 /** Per-repo autopilot policy. Set by the connect survey, edited in the dashboard. */

@@ -172,7 +172,18 @@ export interface RepoDriftSummary {
   anyDrift: number;
   deprecated: number;
   advisories: number;
+  /** Peer/engine conflicts at latest versions. `null` = the repo predates the
+   *  check and has not been rescanned, which is not the same as zero. */
+  conflicts: number | null;
   transitive: TransitiveSummary | null;
+}
+
+/** A peer-dependency or engine disagreement across the repo's dependencies. */
+export interface StackConflict {
+  source: "peer-deps" | "engines" | "sandbox";
+  packages: string[];
+  detail: string;
+  requirement?: { peer: string; range: string; resolved: string | null };
 }
 
 export interface RepoPolicy {
@@ -271,6 +282,8 @@ export async function fetchImpact(ownerId: string, days = 30): Promise<UpgradeIm
 export interface RepoDetailPayload extends DashboardRepo {
   deps: DashboardDep[];
   transitiveRisks: TransitiveRisk[];
+  /** null when the repo has not been scanned since the check shipped. */
+  conflicts: StackConflict[] | null;
   runs: UpgradeRun[];
   /** The workflow file, rendered for this repo's package manager and mode. */
   workflow: string;

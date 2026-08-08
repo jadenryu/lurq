@@ -7,6 +7,7 @@ import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { RepoSetup } from "@/components/dashboard/repo-setup";
+import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
 import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
 import { UpgradeRuns } from "@/components/dashboard/upgrade-runs";
 import { StatTile } from "@/components/dashboard/stat-tile";
@@ -69,7 +70,7 @@ export default async function RepoDetailPage({
         {repo.lastScanError && <InlineError>{repo.lastScanError}</InlineError>}
 
         {drift && (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <StatTile
               label="tracked"
               value={drift.depsTracked}
@@ -82,6 +83,13 @@ export default async function RepoDetailPage({
             />
             <StatTile label="advisories" value={drift.advisories} />
             <StatTile label="deprecated" value={drift.deprecated} />
+            {/* "—" rather than 0 when the scan predates the check: an unrun check
+                must never occupy the same cell as one that found nothing. */}
+            <StatTile
+              label="conflicts"
+              value={drift.conflicts ?? "—"}
+              hint={drift.conflicts === null ? "rescan to check" : "at latest versions"}
+            />
           </div>
         )}
 
@@ -90,6 +98,8 @@ export default async function RepoDetailPage({
         <Suspense fallback={<BriefSkeleton />}>
           <Brief id={repo.id} />
         </Suspense>
+
+        <StackConflictsPanel conflicts={repo.conflicts} />
 
         <TransitiveRiskPanel
           summary={drift?.transitive ?? null}

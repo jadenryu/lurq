@@ -21,6 +21,7 @@ import type {
   DashboardUsage,
   RepoBrief,
   RepoDetailPayload,
+  StackConflict,
   TransitiveRisk,
   UpgradeImpact,
   UpgradeRun,
@@ -272,6 +273,7 @@ export function demoRepos(): DashboardRepo[] {
         majorDrift,
         deprecated,
         advisories,
+        conflicts: [2, 0, 1, 3][i] ?? 0,
         transitive:
           resolved > 0
             ? {
@@ -521,12 +523,37 @@ function demoTransitiveRisks(): TransitiveRisk[] {
   }));
 }
 
+/**
+ * The two conflicts `acme/checkout-web` carries. Both are shapes the real check
+ * produces: a peer pinned in the set that violates a declared range, and two
+ * requirers of an unpinned peer whose ranges do not overlap.
+ */
+function demoConflicts(): StackConflict[] {
+  return [
+    {
+      source: "peer-deps",
+      packages: ["@testing-library/react", "react"],
+      detail:
+        "@testing-library/react needs peer react@^18.0.0, but the stack uses react@19.2.0",
+      requirement: { peer: "react", range: "^18.0.0", resolved: "19.2.0" },
+    },
+    {
+      source: "peer-deps",
+      packages: ["eslint-plugin-import", "eslint-config-airbnb"],
+      detail:
+        "eslint-plugin-import needs eslint@^8.56.0 but eslint-config-airbnb needs eslint@^9.0.0 — no overlapping version",
+      requirement: { peer: "eslint", range: "^8.56.0", resolved: null },
+    },
+  ];
+}
+
 /** The detail payload the repo page needs beyond the list row. */
 export function demoRepoDetail(fullName: string): Omit<RepoDetailPayload, keyof DashboardRepo> {
   const workflow = `# Managed by lurq — https://lurq.run\nname: lurq upgrade\n\non:\n  schedule:\n    - cron: "0 6 * * 1"\n  workflow_dispatch:\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  upgrade:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - run: npx -y lurqrun upgrade-plan . --json > lurq-plan.json\n      - run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json\n`;
   return {
     deps: demoRepoDeps(),
     transitiveRisks: demoTransitiveRisks(),
+    conflicts: demoConflicts(),
     runs: demoRuns(),
     workflow,
     workflowPath: ".github/workflows/lurq-upgrade.yml",
