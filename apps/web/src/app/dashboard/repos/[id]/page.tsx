@@ -7,6 +7,7 @@ import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { RepoSetup } from "@/components/dashboard/repo-setup";
+import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
 import { UpgradeRuns } from "@/components/dashboard/upgrade-runs";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { buttonVariants } from "@/components/ui/button";
@@ -89,6 +90,11 @@ export default async function RepoDetailPage({
         <Suspense fallback={<BriefSkeleton />}>
           <Brief id={repo.id} />
         </Suspense>
+
+        <TransitiveRiskPanel
+          summary={drift?.transitive ?? null}
+          risks={repo.transitiveRisks}
+        />
 
         <UpgradeRuns runs={repo.runs} />
 

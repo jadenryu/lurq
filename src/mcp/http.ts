@@ -422,6 +422,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           anyDrift: row.drift.anyDrift,
           deprecated: row.drift.deprecated,
           advisories: row.drift.advisories,
+          transitive: row.drift.transitive
+            ? {
+                resolved: row.drift.transitive.resolved,
+                tracked: row.drift.transitive.tracked,
+                advisoryPackages: row.drift.transitive.advisoryPackages,
+                deprecated: row.drift.transitive.deprecated,
+                truncated: row.drift.transitive.truncated,
+              }
+            : null,
         }
       : null,
     lastScanAt: row.lastScanAt,
@@ -514,6 +523,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         repo: {
           ...toDashboardRepo(row),
           deps: row.drift?.deps ?? [],
+          transitiveRisks: row.drift?.transitive?.risks ?? [],
           runs,
           workflow,
           workflowPath: WORKFLOW_PATH,

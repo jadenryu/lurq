@@ -136,6 +136,29 @@ export async function fetchUsage(ownerId: string, days = 30): Promise<DashboardU
 
 // ── Repo autopilot ──────────────────────────────────────────────────────────
 
+/**
+ * The resolved tree beyond the manifest. `null` on a repo means GitHub's
+ * dependency graph is off there — "we could not look", which the UI renders
+ * differently from "nothing found".
+ */
+export interface TransitiveSummary {
+  resolved: number;
+  tracked: number;
+  /** Transitives whose PACKAGE has known advisories — not proven against the
+   *  installed version, since lurq stores no affected-version ranges. */
+  advisoryPackages: number;
+  deprecated: number;
+  truncated: boolean;
+}
+
+export interface TransitiveRisk {
+  name: string;
+  version: string;
+  latest: string | null;
+  advisories: number;
+  deprecated: boolean;
+}
+
 export interface RepoDriftSummary {
   depsDeclared: number;
   depsTracked: number;
@@ -143,6 +166,7 @@ export interface RepoDriftSummary {
   anyDrift: number;
   deprecated: number;
   advisories: number;
+  transitive: TransitiveSummary | null;
 }
 
 export interface RepoPolicy {
@@ -240,6 +264,7 @@ export async function fetchImpact(ownerId: string, days = 30): Promise<UpgradeIm
 
 export interface RepoDetailPayload extends DashboardRepo {
   deps: DashboardDep[];
+  transitiveRisks: TransitiveRisk[];
   runs: UpgradeRun[];
   /** The workflow file, rendered for this repo's package manager and mode. */
   workflow: string;

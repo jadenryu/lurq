@@ -17,6 +17,7 @@ import type { RepoRow } from '../db/schema';
 import { GithubAppError } from '../github/app';
 import { computeDrift } from '../github/drift';
 import { fetchManifests } from '../github/manifests';
+import { fetchResolvedTree } from '../github/sbom';
 
 export interface ScanResult {
   repoId: number;
@@ -25,6 +26,8 @@ export interface ScanResult {
   depsTracked: number;
   majorDrift: number;
   partial: boolean;
+  /** False when the repo has no dependency graph, so transitives were not read. */
+  transitivesRead: boolean;
   error?: string;
 }
 
@@ -38,7 +41,11 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
       repo.fullName,
       branch,
     );
-    const drift = await computeDrift(db, manifests);
+    // The resolved tree is where most advisories actually live, but it depends
+    // on a repo feature that may be off. A null result degrades to
+    // direct-dependency-only drift rather than failing the scan.
+    const resolvedTree = await fetchResolvedTree(repo.installationId, repo.fullName);
+    const drift = await computeDrift(db, manifests, resolvedTree);
     await saveScan(db, repo.id, { manifests, drift, installCommand });
     return {
       ...base,
@@ -46,6 +53,7 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
       depsTracked: drift.depsTracked,
       majorDrift: drift.majorDrift,
       partial,
+      transitivesRead: resolvedTree !== null,
     };
   } catch (err) {
     // A revoked installation is the common case and deserves an actionable
@@ -60,7 +68,15 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
     await saveScanError(db, repo.id, message).catch(() => {
       /* the scan already failed; a bookkeeping write failure must not mask it */
     });
-    return { ...base, ok: false, depsTracked: 0, majorDrift: 0, partial: false, error: message };
+    return {
+      ...base,
+      ok: false,
+      depsTracked: 0,
+      majorDrift: 0,
+      partial: false,
+      transitivesRead: false,
+      error: message,
+    };
   }
 }
 

@@ -43,6 +43,46 @@ export interface DepDrift {
   advisories: number;
 }
 
+/** A resolved transitive dependency carrying a risk signal worth reporting. */
+export interface TransitiveRisk {
+  name: string;
+  /** The exact installed version, from the resolved tree — no range guessing. */
+  version: string;
+  /** Latest known release, so "how stale is this" is answerable. */
+  latest: string | null;
+  /**
+   * Advisories recorded against the PACKAGE, not proven against `version`.
+   * lurq does not store affected-version ranges, so this is "this package has
+   * known advisories", never "this install is vulnerable". The field name and
+   * every label built from it say so.
+   */
+  advisories: number;
+  deprecated: boolean;
+}
+
+/**
+ * The resolved dependency tree beyond what `package.json` declares.
+ *
+ * Kept as its own block rather than folded into the direct-dependency counts,
+ * because the two are fixed differently: a direct dependency you bump, a
+ * transitive one you either wait for its parent or force an override. Adding
+ * them together would produce a number nobody can act on.
+ */
+export interface TransitiveDrift {
+  /** Total resolved npm nodes GitHub reported. */
+  resolved: number;
+  /** How many of those lurq has indexed — the rest carry no signal either way. */
+  tracked: number;
+  /** Indexed transitives whose package has known advisories. */
+  advisoryPackages: number;
+  /** Indexed transitives whose package is deprecated upstream. */
+  deprecated: number;
+  /** The worst of them, ranked. Capped — see TRANSITIVE_DETAIL_CAP. */
+  risks: TransitiveRisk[];
+  /** True when the tree exceeded the node cap and is therefore incomplete. */
+  truncated: boolean;
+}
+
 /**
  * Repo-level drift summary, recomputed on every scan and stored denormalized so
  * the dashboard reads one row per repo instead of joining the whole index.
@@ -64,6 +104,12 @@ export interface RepoDrift {
   advisories: number;
   /** Per-dep detail, worst-drift first. Capped — see REPO_DRIFT_DETAIL_CAP. */
   deps: DepDrift[];
+  /**
+   * The resolved tree beyond the manifest. Null when the repo has no dependency
+   * graph enabled — which is "we could not look", not "nothing is there", and
+   * the dashboard renders the two differently.
+   */
+  transitive: TransitiveDrift | null;
 }
 
 /** Per-repo autopilot policy. Set by the connect survey, edited in the dashboard. */
@@ -132,3 +178,6 @@ export const REPO_MANIFEST_CAP = 25;
 /** Per-dep drift rows persisted. The summary counts are always exact; only the
  *  detail list is capped, and the dashboard says so when it truncates. */
 export const REPO_DRIFT_DETAIL_CAP = 200;
+
+/** Transitive risk rows persisted. Counts above the list stay exact. */
+export const TRANSITIVE_DETAIL_CAP = 100;

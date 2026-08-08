@@ -39,6 +39,7 @@ function drift(deps: DepDrift[]): RepoDrift {
     deprecated: 0,
     advisories: 0,
     deps,
+    transitive: null,
   };
 }
 

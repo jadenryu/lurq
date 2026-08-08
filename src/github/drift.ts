@@ -18,11 +18,15 @@ import type { Database } from '../db/client';
 import { packageVersions, packages } from '../db/schema';
 import {
   REPO_DRIFT_DETAIL_CAP,
+  TRANSITIVE_DETAIL_CAP,
   type DepDeclaration,
   type DepDrift,
   type RepoDrift,
   type RepoManifest,
+  type TransitiveDrift,
+  type TransitiveRisk,
 } from './types';
+import type { ResolvedDep } from './sbom';
 
 /** Postgres caps bind parameters; chunk the `IN` lists well under it. */
 const NAME_CHUNK = 500;
@@ -173,13 +177,81 @@ function severity(dep: DepDrift): number {
   );
 }
 
+/**
+ * Risk in the resolved tree, excluding what the manifest already declares.
+ *
+ * Deliberately reports *presence of advisories on the package*, not "vulnerable
+ * install": lurq stores advisories without affected-version ranges, so claiming
+ * a specific resolved version is affected would be an inference we cannot back.
+ * `advisoryPackages` is named for what it actually counts.
+ */
+export async function computeTransitiveDrift(
+  db: Database,
+  resolved: ResolvedDep[],
+  directNames: Set<string>,
+  truncated: boolean,
+): Promise<TransitiveDrift> {
+  const transitives = resolved.filter((dep) => !directNames.has(dep.name));
+  const empty: TransitiveDrift = {
+    resolved: transitives.length,
+    tracked: 0,
+    advisoryPackages: 0,
+    deprecated: 0,
+    risks: [],
+    truncated,
+  };
+  if (transitives.length === 0) return empty;
+
+  const indexed = await loadIndexed(db, [...new Set(transitives.map((d) => d.name))]);
+
+  const risks: TransitiveRisk[] = [];
+  let tracked = 0;
+  for (const dep of transitives) {
+    const row = indexed.get(dep.name);
+    if (!row) continue; // untracked — no signal either way, never counted as clean
+    tracked++;
+    if (row.advisories === 0 && !row.deprecated) continue;
+    risks.push({
+      name: dep.name,
+      version: dep.version,
+      latest: row.latestVersion,
+      advisories: row.advisories,
+      deprecated: row.deprecated,
+    });
+  }
+
+  // Advisories outrank deprecation: one is a security signal, the other is a
+  // maintenance one, and a capped list should keep the former.
+  risks.sort(
+    (a, b) =>
+      b.advisories - a.advisories ||
+      Number(b.deprecated) - Number(a.deprecated) ||
+      a.name.localeCompare(b.name),
+  );
+
+  return {
+    resolved: transitives.length,
+    tracked,
+    advisoryPackages: risks.filter((r) => r.advisories > 0).length,
+    deprecated: risks.filter((r) => r.deprecated).length,
+    risks: risks.slice(0, TRANSITIVE_DETAIL_CAP),
+    truncated,
+  };
+}
+
 /** Compute a repo's full drift summary from its manifests. */
 export async function computeDrift(
   db: Database,
   manifests: RepoManifest[],
+  resolvedTree: { deps: ResolvedDep[]; truncated: boolean } | null = null,
 ): Promise<RepoDrift> {
   const declared = declaredDeps(manifests);
   const names = [...declared.keys()];
+  const directNames = new Set(names);
+  const transitive = resolvedTree
+    ? await computeTransitiveDrift(db, resolvedTree.deps, directNames, resolvedTree.truncated)
+    : null;
+
   if (names.length === 0) {
     return {
       depsDeclared: 0,
@@ -189,6 +261,7 @@ export async function computeDrift(
       deprecated: 0,
       advisories: 0,
       deps: [],
+      transitive,
     };
   }
 
@@ -214,5 +287,6 @@ export async function computeDrift(
     deprecated: deps.filter((d) => d.deprecated).length,
     advisories: deps.reduce((sum, d) => sum + d.advisories, 0),
     deps: deps.slice(0, REPO_DRIFT_DETAIL_CAP),
+    transitive,
   };
 }

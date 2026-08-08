@@ -21,6 +21,7 @@ import type {
   DashboardUsage,
   RepoBrief,
   RepoDetailPayload,
+  TransitiveRisk,
   UpgradeImpact,
   UpgradeRun,
 } from "@/lib/lurq-issuer";
@@ -244,15 +245,17 @@ export function demoContributions(): { total: number; packages: DashboardContrib
  * a demo whose totals don't add up is the fastest way to lose a room.
  */
 export function demoRepos(): DashboardRepo[] {
-  const rows: [string, number, number, number, number, number, number, number][] = [
-    // fullName-suffix, declared, tracked, anyDrift, majorDrift, deprecated, advisories, scannedHoursAgo
-    ["acme/checkout-web", 148, 131, 44, 9, 3, 2, 3],
-    ["acme/billing-api", 96, 88, 21, 4, 1, 0, 5],
-    ["acme/design-system", 72, 66, 17, 6, 2, 1, 7],
-    ["acme/internal-tools", 210, 174, 83, 23, 11, 4, 26],
+  // Last tuple slot is the resolved-tree size; 0 means the repo has GitHub's
+  // dependency graph switched off, which must render as "not read", not "clean".
+  const rows: [string, number, number, number, number, number, number, number, number][] = [
+    // fullName, declared, tracked, anyDrift, majorDrift, deprecated, advisories, scannedHoursAgo, resolved
+    ["acme/checkout-web", 148, 131, 44, 9, 3, 2, 3, 1284],
+    ["acme/billing-api", 96, 88, 21, 4, 1, 0, 5, 742],
+    ["acme/design-system", 72, 66, 17, 6, 2, 1, 7, 0],
+    ["acme/internal-tools", 210, 174, 83, 23, 11, 4, 26, 2130],
   ];
   return rows.map(
-    ([fullName, depsDeclared, depsTracked, anyDrift, majorDrift, deprecated, advisories, h], i) => ({
+    ([fullName, depsDeclared, depsTracked, anyDrift, majorDrift, deprecated, advisories, h, resolved], i) => ({
       id: i + 1,
       fullName,
       defaultBranch: "main",
@@ -262,7 +265,24 @@ export function demoRepos(): DashboardRepo[] {
         scope: i === 0 ? ("all" as const) : ("blocking" as const),
         autoMerge: false,
       },
-      drift: { depsDeclared, depsTracked, anyDrift, majorDrift, deprecated, advisories },
+      drift: {
+        depsDeclared,
+        depsTracked,
+        anyDrift,
+        majorDrift,
+        deprecated,
+        advisories,
+        transitive:
+          resolved > 0
+            ? {
+                resolved,
+                tracked: Math.round(resolved * 0.72),
+                advisoryPackages: [7, 3, 0, 14][i] ?? 0,
+                deprecated: [4, 2, 0, 9][i] ?? 0,
+                truncated: false,
+              }
+            : null,
+      },
       lastScanAt: hoursAgo(h),
       lastScanError: null,
     }),
@@ -473,11 +493,35 @@ export function demoImpact(): UpgradeImpact {
   };
 }
 
+/**
+ * Transitive risks for the drill-down. Exact installed versions, because the
+ * resolved tree gives them — no range guessing like the direct-dependency view.
+ */
+function demoTransitiveRisks(): TransitiveRisk[] {
+  const rows: [string, string, string | null, number, boolean][] = [
+    ["minimist", "1.2.5", "1.2.8", 2, false],
+    ["semver", "5.7.1", "7.8.5", 1, false],
+    ["tough-cookie", "2.5.0", "5.1.2", 1, false],
+    ["json5", "1.0.1", "2.2.3", 1, false],
+    ["request", "2.88.2", "2.88.2", 1, true],
+    ["har-validator", "5.1.5", "5.1.5", 0, true],
+    ["querystringify", "2.2.0", "2.2.0", 0, true],
+  ];
+  return rows.map(([name, version, latest, advisories, deprecated]) => ({
+    name,
+    version,
+    latest,
+    advisories,
+    deprecated,
+  }));
+}
+
 /** The detail payload the repo page needs beyond the list row. */
 export function demoRepoDetail(fullName: string): Omit<RepoDetailPayload, keyof DashboardRepo> {
   const workflow = `# Managed by lurq — https://lurq.run\nname: lurq upgrade\n\non:\n  schedule:\n    - cron: "0 6 * * 1"\n  workflow_dispatch:\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  upgrade:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - run: npx -y lurqrun upgrade-plan . --json > lurq-plan.json\n      - run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json\n`;
   return {
     deps: demoRepoDeps(),
+    transitiveRisks: demoTransitiveRisks(),
     runs: demoRuns(),
     workflow,
     workflowPath: ".github/workflows/lurq-upgrade.yml",

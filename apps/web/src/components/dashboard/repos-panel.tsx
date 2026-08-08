@@ -45,15 +45,27 @@ function DriftCell({ repo }: { repo: DashboardRepo }) {
   );
 }
 
+/**
+ * Direct and transitive advisories are shown as separate chips, never summed.
+ * You fix them differently — one by bumping your own manifest, the other by
+ * upgrading whatever pulls it in — so a combined number is unactionable.
+ */
 function RiskCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
   if (!drift) return <span className="text-muted-foreground/50">—</span>;
-  if (drift.advisories === 0 && drift.deprecated === 0) {
-    return <span className="text-muted-foreground/50">none</span>;
+  const transitive = drift.transitive?.advisoryPackages ?? 0;
+  if (drift.advisories === 0 && drift.deprecated === 0 && transitive === 0) {
+    // "not read" is not "none": say so when the tree was never visible.
+    return (
+      <span className="text-muted-foreground/50">
+        {drift.transitive ? "none" : "direct only"}
+      </span>
+    );
   }
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {drift.advisories > 0 && <Chip tone="bad">{drift.advisories} advisory</Chip>}
+      {transitive > 0 && <Chip tone="warn">{transitive} transitive</Chip>}
       {drift.deprecated > 0 && <Chip tone="warn">{drift.deprecated} deprecated</Chip>}
     </span>
   );
