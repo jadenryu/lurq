@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -312,5 +313,46 @@ describe('upgrade report formatting', () => {
     expect(report.safe).toBe(false);
     const clean: UpgradeReport = { safe: true, breaking: [], ok: ['a'], unverified: [] };
     expect(formatUpgradeReport(clean)).toContain('No referenced symbols are removed');
+  });
+});
+
+/**
+ * Build output is not source. SKIP_DIRS is a fixed list of names, so a bundler
+ * writing anywhere else gets walked: lurq's own tsup target is `dist-operator`,
+ * and scanning this repo cited `dist-operator/chunk-OX3TLAEA.js:12` — a
+ * generated file, and a line nobody can act on. Asking git which files the
+ * project calls its own is exact where a name list can only guess, and guessing
+ * the other way (excluding `lib` or `es`) would silently drop real code, which
+ * turns a blocking upgrade into a clean one.
+ */
+describe('source discovery ignores generated output', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lurq-gitscan-'));
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    mkdirSync(join(dir, 'dist-operator'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'real.ts'), `import { eq } from 'drizzle-orm';\neq(1, 2);\n`);
+    // Same references, compiled — identical symbols, useless citations.
+    writeFileSync(
+      join(dir, 'dist-operator', 'chunk-AAAA.js'),
+      `import { eq } from 'drizzle-orm';\neq(1, 2);\n`,
+    );
+    writeFileSync(join(dir, '.gitignore'), 'dist-operator/\n');
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('skips a gitignored build directory the name list does not know', () => {
+    execFileSync('git', ['init', '-q'], { cwd: dir });
+    const refs = scanReferences(dir).find((r) => r.package === 'drizzle-orm');
+    const files = (refs?.symbols.get('eq') ?? []).map((r) => r.file);
+    expect(files).toContain('src/real.ts');
+    expect(files.some((f) => f.startsWith('dist-operator'))).toBe(false);
+  });
+
+  it('still scans a directory that is not a git checkout', () => {
+    const refs = scanReferences(dir).find((r) => r.package === 'drizzle-orm');
+    expect((refs?.symbols.get('eq') ?? []).length).toBeGreaterThan(0);
   });
 });

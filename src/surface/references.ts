@@ -14,6 +14,7 @@
  * "you use this" is a false blocking result, and a CI check that cries wolf gets
  * disabled inside two weeks (§12 M3's kill condition).
  */
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import ts from 'typescript';
@@ -93,7 +94,36 @@ export function packageOfSpecifier(spec: string): string | null {
   return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!;
 }
 
+/**
+ * Source files, asking git rather than guessing at directory names.
+ *
+ * SKIP_DIRS is a fixed list — `dist`, `build`, `out` — and a build output
+ * directory called anything else gets walked as if it were source. lurq's own
+ * repo is the proof: tsup writes to `dist-operator` (tsup.config.ts), which is
+ * not on the list, so scanning this project reported symbols at
+ * `dist-operator/chunk-OX3TLAEA.js:12` — a generated file nobody edits, and a
+ * citation nobody can act on. Reading tsconfig's `outDir` would not have caught
+ * it either, since the path is declared by the bundler, not the compiler.
+ *
+ * Widening the list is the wrong repair: `lib`, `es` and `esm` are build output
+ * in some projects and hand-written source in others, so any name-based guess
+ * either misses output or silently drops real code. The second failure is much
+ * worse than the first — a missed call site turns a blocking upgrade into a
+ * clean one.
+ *
+ * `git ls-files --cached --others --exclude-standard` is exactly the question
+ * being asked: the files this project treats as its own, tracked or newly
+ * written, excluding everything its own ignore rules call generated. One
+ * subprocess, no glob parsing, and it uses the project's declaration rather
+ * than our guess about it.
+ *
+ * The walk stays as the fallback, because a directory that is not a git
+ * checkout still has to be scannable.
+ */
 function listSourceFiles(dir: string, limit = 5000): string[] {
+  const tracked = gitSourceFiles(dir, limit);
+  if (tracked) return tracked;
+
   const out: string[] = [];
   const walk = (d: string) => {
     if (out.length >= limit) return;
@@ -118,6 +148,31 @@ function listSourceFiles(dir: string, limit = 5000): string[] {
     }
   };
   walk(dir);
+  return out;
+}
+
+/** Source files per git, or null when `dir` is not a usable checkout. */
+function gitSourceFiles(dir: string, limit: number): string[] | null {
+  let stdout: string;
+  try {
+    stdout = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+      cwd: dir,
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return null; // not a repo, or git is unavailable — walk instead
+  }
+
+  const out: string[] = [];
+  for (const rel of stdout.split('\n')) {
+    if (!rel || out.length >= limit) break;
+    if (!SOURCE_EXT.has(extname(rel)) || rel.endsWith('.d.ts')) continue;
+    // node_modules can be committed; it is never the project's own source.
+    if (rel.split('/').includes('node_modules')) continue;
+    out.push(join(dir, rel));
+  }
   return out;
 }
 
