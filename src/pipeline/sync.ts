@@ -40,6 +40,7 @@ import {
   getStaleRefreshTargets,
   startSyncRun,
   upsertPackage,
+  upsertPackageVersions,
 } from '../db/packages';
 import { mineEdgesForPackage, remineAllClosures } from './mineEdges';
 import { isFrontendCategory } from '../core/types';
@@ -217,6 +218,29 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
           embeddingProvider: embProvider.id,
           now,
         }),
+      );
+      // Append the version timeline from the signals this run already fetched.
+      //
+      // The daily sync wrote `packages.latest_version` and nothing else, so a
+      // package's timeline only ever held what its FIRST full ingest saw. That
+      // is invisible for a dormant package and compounds for a busy one, which
+      // is why the 105 packages whose timeline was missing their own
+      // `latest_version` averaged 48M weekly downloads against 14M for the rest:
+      // minimatch, ansi-styles, vite, acorn. `github/drift.ts` computes repo
+      // drift off this table, so accuracy was worst for exactly the packages
+      // most likely to be in someone's package.json.
+      //
+      // Idempotent (onConflictDoNothing) and non-fatal, matching the ingest path
+      // in pipeline/single.ts: a version-history write must never fail a sync
+      // run that already stored the package row.
+      await upsertPackageVersions(
+        handle.db,
+        c.target.name,
+        c.signals.registry?.versionTimeline ?? [],
+      ).catch((err) =>
+        logger.warn(
+          `version timeline write failed for ${c.target.name}: ${(err as Error).message}`,
+        ),
       );
       updated++;
     }
