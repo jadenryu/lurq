@@ -37,6 +37,7 @@ import {
   finishSyncRun,
   getAllPackageNames,
   getSeedTargets,
+  getStaleRefreshTargets,
   startSyncRun,
   upsertPackage,
 } from '../db/packages';
@@ -101,7 +102,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
   const allErrors: SyncError[] = [];
 
   try {
-    const targets = await resolveTargets(handle.db, opts);
+    const targets = await resolveTargets(handle.db, opts, config.LURQ_SYNC_REFRESH_CAP);
     logger.info(`Syncing ${targets.length} package(s) with concurrency ${config.LURQ_SYNC_CONCURRENCY}…`);
 
     // Bulk-fetch weekly downloads up front (one call per 128 packages) to avoid
@@ -267,13 +268,25 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
   }
 }
 
-async function resolveTargets(db: Database, opts: SyncOptions): Promise<Target[]> {
+/**
+ * Seeds every run, plus a rotation of the stalest discovered packages. Seeds are
+ * ~9% of the index; syncing only those left the other ~91% frozen at their
+ * ingest date (and, via `latest_version`, stalled discovery — see
+ * `getStaleRefreshTargets`).
+ */
+async function resolveTargets(
+  db: Database,
+  opts: SyncOptions,
+  refreshCap: number,
+): Promise<Target[]> {
+  const seeds = await getSeedTargets(db);
   if (opts.packageName) {
-    const seeds = await getSeedTargets(db);
     const found = seeds.find((s) => s.name === opts.packageName);
     return [{ name: opts.packageName, category: found?.category ?? null }];
   }
-  return getSeedTargets(db);
+  const refresh = await getStaleRefreshTargets(db, refreshCap);
+  logger.info(`Targets: ${seeds.length} seed(s) + ${refresh.length} stale refresh(es).`);
+  return [...seeds, ...refresh];
 }
 
 function computeCategoryMedians(computed: Computed[]): Map<Category, number> {

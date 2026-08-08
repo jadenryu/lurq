@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectCandidates, passesGate } from '../src/pipeline/discovery';
+import { selectCandidates, passesGate, nextSearchOffset } from '../src/pipeline/discovery';
 import { DISCOVERY } from '../src/scoring/weights';
 import type { DiscoveryCandidate } from '../src/db/discovery';
 
@@ -39,5 +39,41 @@ describe('passesGate (§2B merit gate — quality only)', () => {
 
   it('rejects candidates with no pre-score (registry fetch failed)', () => {
     expect(passesGate(null)).toBe(false);
+  });
+});
+
+describe('nextSearchOffset (§2B search channel walks the ranking)', () => {
+  const page = DISCOVERY.searchSizePerCategory;
+
+  it('starts at the head when no cursor is stored', () => {
+    expect(nextSearchOffset(null)).toBe(0);
+  });
+
+  it('advances one page per run instead of re-reading the head', () => {
+    let cursor: string | null = null;
+    const walked: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const from = nextSearchOffset(cursor);
+      walked.push(from);
+      cursor = String(from + page);
+    }
+    expect(walked).toEqual([0, page, page * 2, page * 3]);
+    expect(new Set(walked).size).toBe(walked.length);
+  });
+
+  it('laps back to the head rather than walking off into unranked noise', () => {
+    // Whatever the cursor, the offset stays inside the paged window.
+    for (const stored of ['500', '510', '9999']) {
+      const from = nextSearchOffset(stored);
+      expect(from).toBeGreaterThanOrEqual(0);
+      expect(from).toBeLessThan(500);
+    }
+    expect(nextSearchOffset('500')).toBe(0);
+  });
+
+  it('treats a corrupt or negative cursor as the head', () => {
+    expect(nextSearchOffset('not-a-number')).toBe(0);
+    expect(nextSearchOffset('-40')).toBe(0);
+    expect(nextSearchOffset('')).toBe(0);
   });
 });

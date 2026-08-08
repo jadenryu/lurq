@@ -25,6 +25,7 @@ import {
   type DiscoveryCandidate,
 } from '../db/discovery';
 import { packages } from '../db/schema';
+import { getWatchCursor, setWatchCursor } from '../db/watch';
 import { fetchDirectDependencies } from '../ingestion/sources/depsDev';
 import { fetchNpmRegistry } from '../ingestion/sources/npmRegistry';
 import { searchNpm } from '../ingestion/sources/npmSearch';
@@ -163,18 +164,47 @@ async function markSeedsScanned(
   }
 }
 
-/** Category-keyword + recency channel via npm search (the niche workhorse). */
-async function searchChannel(): Promise<DiscoveryCandidate[]> {
+/** Cursor row (in `watch_state`) holding the search channel's rank offset. */
+const SEARCH_CURSOR_ID = 'discovery-search-offset';
+
+/** Where the walk laps back to the head. Past a few hundred hits npm's ranking
+ *  is mostly noise the gate rejects anyway, and lapping is how newly-published
+ *  top-ranked packages get picked up. */
+const SEARCH_MAX_OFFSET = 500;
+
+/**
+ * Category-keyword + recency channel via npm search (the niche workhorse).
+ *
+ * npm's search is deterministic and ranked, so a fixed offset returns the same
+ * names every cycle — with the worker running this every 15 minutes, the channel
+ * contributed 226 candidates in its entire life and then nothing, because
+ * `selectCandidates` drops all of it as already-known. The offset therefore
+ * advances one page per run and is persisted, so the channel walks each
+ * category's ranking instead of re-reading its head forever.
+ */
+async function searchChannel(db: Database): Promise<DiscoveryCandidate[]> {
+  const page = DISCOVERY.searchSizePerCategory;
+  const from = nextSearchOffset(await getWatchCursor(db, SEARCH_CURSOR_ID));
   const out: DiscoveryCandidate[] = [];
   for (const category of CATEGORIES) {
     if (category === 'other') continue;
-    const hits = await searchNpm(`keywords:${category}`, DISCOVERY.searchSizePerCategory);
+    const hits = await searchNpm(`keywords:${category}`, page, from);
     for (const hit of hits) {
       const via = isRecent(hit.date) ? 'recent' : 'category-search';
       out.push({ name: hit.name, via });
     }
   }
+  // Advanced even when a search failed and returned []: skipping a page costs
+  // nothing, and the lap brings it back around.
+  await setWatchCursor(db, SEARCH_CURSOR_ID, String(from + page));
   return out;
+}
+
+/** Parse the stored cursor and wrap it into range. Exported for the unit test. */
+export function nextSearchOffset(stored: string | null): number {
+  const n = Number(stored);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n) % SEARCH_MAX_OFFSET;
 }
 
 /** Published within ~90 days counts as a "recent" entrant. */
@@ -192,7 +222,10 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
   const handle = createDb({ max: 6 });
   try {
     logger.info('Discovery: gathering candidates from graph + search channels…');
-    const [graph, search] = await Promise.all([graphChannel(handle.db), searchChannel()]);
+    const [graph, search] = await Promise.all([
+      graphChannel(handle.db),
+      searchChannel(handle.db),
+    ]);
     const known = await getKnownNames(handle.db);
     const fresh = selectCandidates([...graph.candidates, ...search], known);
     const enqueued = await enqueueCandidates(handle.db, fresh);

@@ -45,6 +45,12 @@ const EnvSchema = z.object({
   SUMMARY_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
 
   LURQ_SYNC_CONCURRENCY: z.coerce.number().int().positive().max(50).default(5),
+  /** Stalest non-seed packages the daily sync refreshes on top of the seed list.
+   *  This is the rotation rate for everything discovery ingested: index size /
+   *  this = days to come all the way around. Raise it if the sync finishes well
+   *  inside the cron window; lower it if npm starts rate-limiting. 0 disables
+   *  the rotation (seeds only, the pre-rotation behaviour). */
+  LURQ_SYNC_REFRESH_CAP: z.coerce.number().int().min(0).max(5000).default(400),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 
   // Hosted HTTP service (`serve-http`). Server-side only.

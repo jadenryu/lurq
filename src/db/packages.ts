@@ -2,7 +2,7 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, notExists, sql } from 'drizzle-orm';
 import type { Category } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
@@ -24,6 +24,49 @@ export async function getSeedTargets(
   const rows = await db
     .select({ name: seedPackages.name, category: seedPackages.category })
     .from(seedPackages);
+  return rows.map((r) => ({ name: r.name, category: r.category ?? null }));
+}
+
+/**
+ * The daily sync's rotation slice: the stalest tracked packages that aren't in
+ * `seed_packages`. Discovery ingests thousands of packages `getSeedTargets`
+ * never returns, so without this their scores — and their `latest_version` —
+ * stay frozen at the moment they were ingested.
+ *
+ * A frozen `latest_version` also closes the discovery frontier: `graphChannel`
+ * (§2B) only re-expands a package whose version moved, so a package that is
+ * never refreshed can never re-arm, and the crawler flatlines once the initial
+ * BFS converges. This rotation is what keeps it open.
+ *
+ * Only a `curated` category is carried through. An `inferred` one is left null
+ * so the pipeline re-infers it — passing it back in would make the refresh
+ * silently relabel it `curated`, and a later curation pass would then skip it.
+ */
+export async function getStaleRefreshTargets(
+  db: Database,
+  limit: number,
+): Promise<{ name: string; category: Category | null }[]> {
+  if (limit <= 0) return [];
+  const rows = await db
+    .select({
+      name: packages.name,
+      category: sql<
+        Category | null
+      >`case when ${packages.categorySource} = 'curated' then ${packages.category} end`,
+    })
+    .from(packages)
+    .where(
+      notExists(
+        db
+          .select({ one: sql`1` })
+          .from(seedPackages)
+          .where(eq(seedPackages.name, packages.name)),
+      ),
+    )
+    // Never-synced rows (null `data_as_of`) are the stalest of all, and ASC puts
+    // nulls last in Postgres — so say it explicitly.
+    .orderBy(sql`${packages.dataAsOf} asc nulls first`)
+    .limit(limit);
   return rows.map((r) => ({ name: r.name, category: r.category ?? null }));
 }
 

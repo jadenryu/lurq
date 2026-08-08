@@ -18,15 +18,18 @@ export interface NpmSearchHit {
 
 /**
  * Run an npm registry search. `query` uses npm's search qualifier syntax, e.g.
- * `keywords:orm` or `orm typescript`. Returns name + publish date per hit.
- * Best-effort: returns [] on any failure.
+ * `keywords:orm` or `orm typescript`. `from` is the rank offset — the search is
+ * deterministic, so a caller that always passes 0 re-reads the same head of the
+ * ranking on every call. Returns name + publish date per hit. Best-effort:
+ * returns [] on any failure.
  */
 export async function searchNpm(
   query: string,
   size = 20,
+  from = 0,
   fetchImpl?: typeof fetch,
 ): Promise<NpmSearchHit[]> {
-  const url = `https://${HOST}/-/v1/search?text=${encodeURIComponent(query)}&size=${size}`;
+  const url = `https://${HOST}/-/v1/search?text=${encodeURIComponent(query)}&size=${size}&from=${from}`;
   try {
     const { data } = await httpGetJson<any>(url, {
       host: HOST,
