@@ -7,8 +7,13 @@ import {
   isRootSpecifier,
   packageOfSpecifier,
   scanReferences,
+  type SymbolReference,
 } from '../src/surface/references';
-import { formatUpgradeReport, type UpgradeReport } from '../src/surface/upgrade';
+import {
+  formatUpgradeReport,
+  isNamespaceMemberClaim,
+  type UpgradeReport,
+} from '../src/surface/upgrade';
 
 let root: string;
 
@@ -28,6 +33,16 @@ beforeAll(() => {
      export const y = [escapePath, sync, debounce, join, local];`,
   );
   writeFileSync(join(root, 'src/helper.ts'), `export const local = 1;`);
+  // The zod shape: a named import whose properties are read. `z.string` is a
+  // real claim on zod's export surface; `vi.fn` is not a claim on vitest's.
+  writeFileSync(
+    join(root, 'src/zod-shape.ts'),
+    `import { z } from 'zod';
+     import { vi } from 'vitest';
+     export const schema = z.object({ a: z.string() });
+     export type Eff = z.ZodEffects<typeof schema>;
+     export const spy = vi.fn();`,
+  );
   mkdirSync(join(root, 'node_modules/ignored'), { recursive: true });
   writeFileSync(join(root, 'node_modules/ignored/index.js'), `require('should-not-appear');`);
 });
@@ -165,6 +180,62 @@ describe('reference kind classification (miss-rate correction, 2026-08-06)', () 
   it('exposes only surface-claim kinds for scoring', () => {
     expect(SURFACE_CLAIM_KINDS).toEqual(['named', 'destructured', 'namespace']);
     expect(SURFACE_CLAIM_KINDS).not.toContain('default-member');
+    // Conditional on the parent's kind, so it is resolved by the scorer rather
+    // than accepted here as an unconditional claim.
+    expect(SURFACE_CLAIM_KINDS).not.toContain('named-member');
+  });
+
+  it('records property reads on a named import, with the parent', () => {
+    const zod = scanReferences(root).find((r) => r.package === 'zod')!;
+    const str = zod.symbols.get('string')!;
+    expect(str[0]!.via).toBe('named-member');
+    expect(str[0]!.parent).toBe('z');
+    expect(zod.symbols.get('object')![0]!.via).toBe('named-member');
+    // `z` itself is still recorded as an ordinary named import.
+    expect(zod.symbols.get('z')!.some((r) => r.via === 'named')).toBe(true);
+  });
+
+  it('leaves type-position member reads alone', () => {
+    // `z.ZodEffects<...>` is a qualified name in a type, erased before runtime,
+    // so it asserts nothing about the runtime surface.
+    const zod = scanReferences(root).find((r) => r.package === 'zod')!;
+    expect(zod.symbols.has('ZodEffects')).toBe(false);
+  });
+});
+
+// The money path: a wrong `true` here is a BLOCKING result on correct code.
+describe('namespace-member claims', () => {
+  const ref = (over: Partial<SymbolReference> = {}): SymbolReference => ({
+    symbol: 'string',
+    via: 'named-member',
+    parent: 'z',
+    specifier: 'zod',
+    file: 'src/a.ts',
+    line: 1,
+    ...over,
+  });
+
+  it('accepts a member of an object export present in both versions', () => {
+    expect(isNamespaceMemberClaim(ref(), new Set(['z']), new Set(['z']))).toBe(true);
+  });
+
+  it('rejects a parent that is not an object export', () => {
+    // `vi.fn()`: vitest exports `vi`, but not as a plain object, so `fn` says
+    // nothing about vitest's own export surface.
+    expect(isNamespaceMemberClaim(ref({ parent: 'vi' }), new Set(), new Set())).toBe(false);
+  });
+
+  it('rejects when the parent stopped being an object export', () => {
+    expect(isNamespaceMemberClaim(ref(), new Set(['z']), new Set())).toBe(false);
+  });
+
+  it('rejects any other reference kind', () => {
+    expect(isNamespaceMemberClaim(ref({ via: 'named' }), new Set(['z']), new Set(['z']))).toBe(
+      false,
+    );
+    expect(
+      isNamespaceMemberClaim(ref({ via: 'default-member', parent: undefined }), new Set(['z']), new Set(['z'])),
+    ).toBe(false);
   });
 });
 

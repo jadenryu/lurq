@@ -40,6 +40,19 @@ export type ReferenceVia =
   | 'namespace'
   | 'default'
   | 'default-member'
+  /**
+   * A property read off a NAMED import: `import { z } from 'zod'` then
+   * `z.string()`. Conditional, which is why it is not in SURFACE_CLAIM_KINDS.
+   *
+   * Some packages export a namespace-shaped object alongside the same names at
+   * the top level, and zod is the canonical one: `z.string` and the top-level
+   * `string` export are the same function. For those, the member IS checkable
+   * against the module surface. For a named export that is merely an object
+   * with its own unrelated properties, it is not, and conflating the two would
+   * block a PR on correct code. The scorer decides using the parent's kind,
+   * which only it can see; the scanner records the fact and the parent name.
+   */
+  | 'named-member'
   /** Erased by TypeScript before runtime — never a runtime-surface claim. */
   | 'type-only';
 
@@ -47,6 +60,8 @@ export interface SymbolReference {
   /** Exported name used from the package. 'default' for a default import. */
   symbol: string;
   via: ReferenceVia;
+  /** Only on `named-member`: the named export the property was read from. */
+  parent?: string;
   /**
    * The full import specifier. A subpath (`drizzle-orm/pg-core`) has its OWN
    * entry point and its own surface — scoring its symbols against the package
@@ -158,13 +173,17 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     specifier: string,
     file: string,
     line: number,
+    parent?: string,
   ) => {
     let syms = byPackage.get(pkg);
     if (!syms) byPackage.set(pkg, (syms = new Map()));
     const list = syms.get(symbol);
-    const ref = { symbol, via, specifier, file, line };
+    const ref: SymbolReference = { symbol, via, specifier, file, line, ...(parent ? { parent } : {}) };
     if (list) {
-      if (!list.some((r) => r.file === file && r.line === line)) list.push(ref);
+      // Same file:line can legitimately carry two different claims (`z` as a
+      // named import, `z.string` as a member read off it), so the dedupe key
+      // has to include how the symbol was reached.
+      if (!list.some((r) => r.file === file && r.line === line && r.via === via)) list.push(ref);
     } else {
       syms.set(symbol, [ref]);
     }
@@ -186,6 +205,11 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     // VALUE that happens to have properties.
     const nsBindings = new Map<string, { pkg: string; spec: string }>();
     const defaultBindings = new Map<string, { pkg: string; spec: string }>();
+    // Named imports whose properties get read: `import { z } from 'zod'` then
+    // `z.string()`. Tracked separately from the other two because whether the
+    // member is a claim about the module surface depends on what the parent
+    // export turns out to be, and only the scorer can see that.
+    const namedBindings = new Map<string, { pkg: string; spec: string; exported: string }>();
 
     // Identifiers used in VALUE position. A named import used only in type
     // position (`(req: Request) => …`) is erased by TypeScript and never
@@ -220,6 +244,13 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
                   rel,
                   lineOf(el),
                 );
+                if (!typeOnly) {
+                  namedBindings.set(local, {
+                    pkg,
+                    spec: node.moduleSpecifier.text,
+                    exported,
+                  });
+                }
               }
             }
           }
@@ -254,12 +285,25 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         }
       }
 
-      // ── member reads on a bound namespace/default ──
+      // ── member reads on a bound namespace/default/named import ──
       if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
-        const ns = nsBindings.get(node.expression.text);
-        const def = defaultBindings.get(node.expression.text);
+        const local = node.expression.text;
+        const ns = nsBindings.get(local);
+        const def = defaultBindings.get(local);
+        const named = namedBindings.get(local);
         if (ns) record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node));
         else if (def) record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node));
+        else if (named) {
+          record(
+            named.pkg,
+            node.name.text,
+            'named-member',
+            named.spec,
+            rel,
+            lineOf(node),
+            named.exported,
+          );
+        }
       }
 
       ts.forEachChild(node, visit);

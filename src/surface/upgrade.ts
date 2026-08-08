@@ -107,6 +107,38 @@ function groupByEntry(
   return byEntry;
 }
 
+/** Runtime exports of `surface` whose value is a plain object. */
+export function objectPaths(surface: ExtractedSurface): Set<string> {
+  return new Set(
+    runtimeSymbols(surface)
+      .filter((s) => s.kind === 'object')
+      .map((s) => s.path),
+  );
+}
+
+/**
+ * Does a `named-member` read assert something about the module's export surface?
+ *
+ * Exported and kept tiny because it is the money path: a wrong `true` here is a
+ * BLOCKING result on correct code, which is the §12 M3 kill condition.
+ *
+ * True only for a namespace-shaped parent: an exported object that groups the
+ * same names the module also exports at the top level. zod is the case that
+ * drove this, and `z.string` and the top-level `string` are the same function.
+ * Requiring `object` in BOTH versions keeps `vi.fn()` and `expect.any()` out,
+ * since those parents are not object exports at all. The remaining guard is
+ * implicit at the call site: only `diff.removed` is consulted, so a property
+ * that was never a top-level export of the from-version cannot be reached.
+ */
+export function isNamespaceMemberClaim(
+  ref: SymbolReference,
+  fromObjects: Set<string>,
+  toObjects: Set<string>,
+): boolean {
+  if (ref.via !== 'named-member' || ref.parent === undefined) return false;
+  return fromObjects.has(ref.parent) && toObjects.has(ref.parent);
+}
+
 interface EntryComparison {
   symbolsRemoved: BreakingFinding['symbolsRemoved'];
   arityChanged: BreakingFinding['arityChanged'];
@@ -136,13 +168,37 @@ function compareEntry(
   // CI gate switched off inside two weeks (§12 M3 kill condition).
   const toSurface = new Set(runtimeSymbols(to).map((s) => s.path));
   const bareValue = toSurface.size <= 1 && toSurface.has('default');
+
+  /**
+   * Is `z.string` a claim about the module's own export surface?
+   *
+   * Only when the parent is a namespace-shaped export: an object that groups
+   * the same names the module also exports at the top level. zod is the case
+   * that matters here, and `z.string` and the top-level `string` really are the
+   * same function, so a removal of one is a removal of the other.
+   *
+   * Two guards, both aimed at the false BLOCKING result rather than the miss.
+   * The parent must be an `object` in both versions, so `foo.bar()` on a
+   * function or class export never routes here. And the member has to already
+   * be a top-level export of the FROM version, which falls out of only ever
+   * consulting `diff.removed`: a property that was never a module export cannot
+   * appear there, so an unrelated same-named export can only be reached if the
+   * package genuinely exported that name and then dropped it.
+   */
+  const objectExports = objectPaths(from);
+  const toObjects = objectPaths(to);
+  const throughNamespaceObject = (r: SymbolReference): boolean =>
+    isNamespaceMemberClaim(r, objectExports, toObjects);
+
   const referenced = new Set(
     [...symbols.entries()]
       .filter(
         ([sym, uses]) =>
           sym !== 'default' &&
           uses.some(
-            (r) => SURFACE_CLAIM_KINDS.includes(r.via) && !(bareValue && r.via === 'namespace'),
+            (r) =>
+              (SURFACE_CLAIM_KINDS.includes(r.via) && !(bareValue && r.via === 'namespace')) ||
+              throughNamespaceObject(r),
           ),
       )
       .map(([sym]) => sym),
