@@ -23,6 +23,14 @@ import { handleDiagram } from './diagram';
 import { handlePlan } from './plan';
 import { timed } from './metrics';
 import { compact } from './compact';
+import {
+  COMPAT_DESCRIPTION,
+  COMPAT_NODE_DESCRIPTION,
+  COMPAT_PACKAGES_DESCRIPTION,
+  COMPAT_VERSIONS_DESCRIPTION,
+  PLAN_DESCRIPTION,
+  VERIFY_DESCRIPTION,
+} from './toolDescriptions';
 import { recordUsage } from '../db/usage';
 
 const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
@@ -132,22 +140,11 @@ export function buildMcpServer(
     'compat',
     {
       title: 'Check package compatibility',
-      description:
-        'Check whether a set of packages forms a coherent stack: peer-dependency and engine-range compatibility across the whole set (instant, from declared metadata), plus any recorded sandbox-verified conflicts. Returns the exact clashing constraints. Read-only — does not run installs. Call before committing to a multi-package stack.',
+      description: COMPAT_DESCRIPTION,
       inputSchema: {
-        packages: z
-          .array(npmName)
-          .min(2)
-          .max(8)
-          .describe('2–8 npm package names to check together'),
-        versions: z
-          .record(z.string())
-          .optional()
-          .describe('Optional exact versions keyed by package name (use when not checking latest)'),
-        node: z
-          .string()
-          .optional()
-          .describe('Optional target Node runtime (e.g. "20" or "20.20.2") for engines.node checks'),
+        packages: z.array(npmName).min(2).max(8).describe(COMPAT_PACKAGES_DESCRIPTION),
+        versions: z.record(z.string()).optional().describe(COMPAT_VERSIONS_DESCRIPTION),
+        node: z.string().optional().describe(COMPAT_NODE_DESCRIPTION),
       },
     },
     async (args) => json(await run('compat', () => handleCompat(db, args))),
@@ -157,8 +154,7 @@ export function buildMcpServer(
     'verify',
     {
       title: 'Verify a package',
-      description:
-        'Confirm an npm package is real, healthy, and not risky before installing — guards against hallucinated or typosquatted dependency names. Checks the live registry.',
+      description: VERIFY_DESCRIPTION,
       inputSchema: {
         package: npmName.describe('npm package name to verify'),
       },
@@ -204,8 +200,7 @@ export function buildMcpServer(
     'plan',
     {
       title: 'Plan a stack from a program description',
-      description:
-        'Turn a detailed program description (spec/README) or a list of component needs into an evidence-scored build plan: a real, lurq-scored package recommended per component, plus a Mermaid roadmap other agents can parse. Recommends building blocks slot-by-slot from the index — it does not invent an architecture from a bare prompt.',
+      description: PLAN_DESCRIPTION,
       inputSchema: {
         document: z
           .string()

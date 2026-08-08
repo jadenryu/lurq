@@ -9,13 +9,21 @@ import {
   isFinalAgentTurn,
   parseStackProposalJson,
 } from './agentLoop';
+import {
+  COMPAT_DESCRIPTION,
+  COMPAT_NODE_DESCRIPTION,
+  COMPAT_PACKAGES_DESCRIPTION,
+  COMPAT_VERSIONS_DESCRIPTION,
+  PLAN_DESCRIPTION,
+  VERIFY_DESCRIPTION,
+} from '../../mcp/toolDescriptions';
 
 const TOOLS = [
   {
     functionDeclarations: [
       {
         name: 'plan',
-        description: 'Recommend the best packages for a list of component needs.',
+        description: PLAN_DESCRIPTION,
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -35,7 +43,7 @@ const TOOLS = [
       },
       {
         name: 'verify',
-        description: 'Check if an npm package exists and gets its health score before selecting it.',
+        description: VERIFY_DESCRIPTION,
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -46,22 +54,22 @@ const TOOLS = [
       },
       {
         name: 'compat',
-        description:
-          'Check if packages are compatible (peer deps + engines). Pass exact versions when known, and node when targeting a specific runtime.',
+        description: COMPAT_DESCRIPTION,
         parameters: {
           type: 'OBJECT',
           properties: {
             packages: {
               type: 'ARRAY',
               items: { type: 'STRING' },
+              description: COMPAT_PACKAGES_DESCRIPTION,
             },
             versions: {
               type: 'OBJECT',
-              description: 'Optional exact versions keyed by package name',
+              description: COMPAT_VERSIONS_DESCRIPTION,
             },
             node: {
               type: 'STRING',
-              description: 'Optional target Node version (e.g. "20" or "20.20.2")',
+              description: COMPAT_NODE_DESCRIPTION,
             },
           },
           required: ['packages'],
