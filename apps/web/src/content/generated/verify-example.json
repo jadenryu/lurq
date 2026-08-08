@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T14:00:30.503Z",
+  "generatedAt": "2026-08-08T18:36:12.972Z",
   "source": "live",
   "checks": [
     {
@@ -31,7 +31,7 @@
         "deprecated": true,
         "archived": false,
         "latestVersion": "2.88.2",
-        "weeklyDownloads": 14580123,
+        "weeklyDownloads": 14511462,
         "riskFlags": [
           "has-known-advisory",
           "deprecated"
