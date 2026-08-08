@@ -108,7 +108,7 @@ function groupByEntry(
 }
 
 /** Runtime exports of `surface` whose value is a plain object. */
-export function objectPaths(surface: ExtractedSurface): Set<string> {
+function objectPaths(surface: ExtractedSurface): Set<string> {
   return new Set(
     runtimeSymbols(surface)
       .filter((s) => s.kind === 'object')
@@ -169,22 +169,8 @@ function compareEntry(
   const toSurface = new Set(runtimeSymbols(to).map((s) => s.path));
   const bareValue = toSurface.size <= 1 && toSurface.has('default');
 
-  /**
-   * Is `z.string` a claim about the module's own export surface?
-   *
-   * Only when the parent is a namespace-shaped export: an object that groups
-   * the same names the module also exports at the top level. zod is the case
-   * that matters here, and `z.string` and the top-level `string` really are the
-   * same function, so a removal of one is a removal of the other.
-   *
-   * Two guards, both aimed at the false BLOCKING result rather than the miss.
-   * The parent must be an `object` in both versions, so `foo.bar()` on a
-   * function or class export never routes here. And the member has to already
-   * be a top-level export of the FROM version, which falls out of only ever
-   * consulting `diff.removed`: a property that was never a module export cannot
-   * appear there, so an unrelated same-named export can only be reached if the
-   * package genuinely exported that name and then dropped it.
-   */
+  // ...and `z.string` can be one too, when the parent is namespace-shaped. See
+  // isNamespaceMemberClaim for which parents qualify and why.
   const objectExports = objectPaths(from);
   const toObjects = objectPaths(to);
   const throughNamespaceObject = (r: SymbolReference): boolean =>

@@ -581,7 +581,7 @@ export async function runCompat(
     //
     // A pair can be both: tier-1 says the declared peer range is violated, and a
     // co-resolution witness says something out there installed them together
-    // anyway. The declared constraint wins, which is the whole point of tier 1, but
+    // anyway. The declared constraint wins, which is the whole point of tier 1,
     // but printing a bare "observed, 1 witness" row directly under a red
     // `conflict` reads as the tool contradicting itself. Say which one lost.
     const conflicted = new Set(
