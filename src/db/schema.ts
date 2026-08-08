@@ -162,6 +162,13 @@ export const syncRuns = pgTable('sync_runs', {
   packagesUpdated: integer('packages_updated').notNull().default(0),
   errors: jsonb('errors').$type<SyncError[]>().notNull().default([]),
   status: text('status').$type<SyncStatus>().notNull().default('running'),
+  /** Which deployment started this run, `<environment>/<service>`, or null when
+   *  the host injects neither (local runs). Diagnostic only: two rows in the
+   *  same minute with *different* origins is a duplicate scheduler — a second
+   *  environment or a second service tile running the same cron — which is
+   *  otherwise invisible from the data and doubles the outbound request rate
+   *  until npm starts answering 429. */
+  origin: text('origin'),
 });
 
 /** Curated v1 seed list (§16), loaded from seed.json. */

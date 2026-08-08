@@ -222,10 +222,19 @@ export async function getContributionsByOwner(
 
 // ── sync_runs audit ─────────────────────────────────────────────────────────
 
+/** `<environment>/<service>` from the host's injected vars, or null when it
+ *  injects neither. Railway sets both on every deployment; nothing to configure. */
+function syncOrigin(): string | null {
+  const env = process.env.RAILWAY_ENVIRONMENT_NAME;
+  const service = process.env.RAILWAY_SERVICE_NAME;
+  if (!env && !service) return null;
+  return `${env ?? '?'}/${service ?? '?'}`;
+}
+
 export async function startSyncRun(db: Database): Promise<number> {
   const [row] = await db
     .insert(syncRuns)
-    .values({ status: 'running' })
+    .values({ status: 'running', origin: syncOrigin() })
     .returning({ id: syncRuns.id });
   return row!.id;
 }
