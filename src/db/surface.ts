@@ -9,9 +9,9 @@
  *
  * Nothing here executes package code; extraction upstream is static (§9.2).
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Database } from './client';
-import { entities, surfaceQueue, symbols } from './schema';
+import { claims, entities, observations, surfaceQueue, symbols } from './schema';
 import type { SurfaceQueueRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
 import type { EntityRef } from '../graph/types';
@@ -23,13 +23,26 @@ export function surfaceRef(pkg: string, version: string | null): EntityRef {
 }
 
 /**
- * Has this exact artifact already been extracted? The digest is the cache key,
- * so an unchanged tarball never pays for extraction twice (§6.5).
+ * Is a stored surface still good, or does it need extracting again?
+ *
+ * This compared the tarball digest alone, and a published tarball never
+ * changes — so once a package was extracted it was cached forever and no
+ * improvement to the extractor could ever reach stored data. Two landed the
+ * same day: the ESM-first entry fallback (date-fns and vitest had no readable
+ * surface) and namespace member resolution (zod presented as one symbol). A
+ * full re-extraction over 2,780 packages reported success and changed nothing,
+ * because every call returned 'cached'.
+ *
+ * The extractor version was already being recorded — `storeSurface` writes it
+ * as the observation's `oracleVer` — it was simply never read back. A cache key
+ * has to contain everything the value depends on, and the surface depends on
+ * the code that produced it as much as on the bytes it was produced from.
  */
 export async function isExtractionCached(
   db: Database,
   ref: EntityRef,
   artifactHash: string,
+  extractorVersion: string,
   tier: ExtractionTier = 'shipped_js_ast',
   tenantId = 0,
 ): Promise<boolean> {
@@ -40,7 +53,24 @@ export async function isExtractionCached(
     .from(symbols)
     .where(and(eq(symbols.entityId, row.id), eq(symbols.tier, tier)))
     .limit(1);
-  return existing.length > 0;
+  if (existing.length === 0) return false;
+
+  // Extracted by which version of the extractor? Anything but the current one
+  // is stale by definition, however unchanged the tarball is.
+  const seen = await db
+    .select({ oracleVer: observations.oracleVer })
+    .from(observations)
+    .innerJoin(claims, eq(claims.id, observations.claimId))
+    .where(
+      and(
+        eq(claims.subjectId, row.id),
+        eq(claims.relation, 'exposes'),
+        eq(observations.tier, tier),
+      ),
+    )
+    .orderBy(desc(observations.observedAt))
+    .limit(1);
+  return seen[0]?.oracleVer === extractorVersion;
 }
 
 /**
