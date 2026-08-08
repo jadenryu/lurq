@@ -20,9 +20,9 @@
  */
 import { fetchAndExtract } from './fetch';
 import { diffSurfaces } from './diff';
-import { SURFACE_CLAIM_KINDS, isRootSpecifier } from './references';
+import { SURFACE_CLAIM_KINDS } from './references';
 import type { PackageReferences, SymbolReference } from './references';
-import { runtimeSymbols, type SymbolKind } from './types';
+import { runtimeSymbols, type ExtractedSurface, type SymbolKind } from './types';
 
 export interface UpgradeTarget {
   package: string;
@@ -35,9 +35,16 @@ export interface BreakingFinding {
   fromVersion: string;
   toVersion: string;
   severity: 'blocking' | 'warning';
-  /** Referenced symbols removed at the target version. */
-  symbolsRemoved: { symbol: string; refs: SymbolReference[] }[];
-  arityChanged: { symbol: string; from: number | null; to: number | null; refs: SymbolReference[] }[];
+  /** Referenced symbols removed at the target version. `specifier` names the
+   *  entry point they were imported from. Absent means the package root. */
+  symbolsRemoved: { symbol: string; specifier?: string; refs: SymbolReference[] }[];
+  arityChanged: {
+    symbol: string;
+    specifier?: string;
+    from: number | null;
+    to: number | null;
+    refs: SymbolReference[];
+  }[];
   /**
    * Runtime exports that exist at the target version and did not at the source
    * — the verified candidates for whatever replaced `symbolsRemoved`.
@@ -71,71 +78,161 @@ export interface UpgradeReport {
 }
 
 /**
- * Check one upgrade against what the codebase references.
+ * Split a package's references by the entry point they were imported from.
+ * The key is the subpath (`pg-core`), or `''` for the package root.
  *
- * Only symbols the code actually uses are reported. A package can drop fifty
- * exports; if this codebase touches none of them, the upgrade is safe FOR THIS
- * CODEBASE, and saying otherwise trains people to ignore the check.
+ * This grouping is the whole of the subpath fix. `drizzle-orm/pg-core` is a
+ * different module with a different export surface than `drizzle-orm`, and the
+ * check used to keep only root-specifier references, so a repo importing
+ * `pgTable` from the subpath had those symbols silently discarded, and a package
+ * whose every use was a subpath import was compared against an empty reference
+ * set and reported OK. In this repo that was 40% of all references.
  */
-export async function checkUpgradeOne(
-  target: UpgradeTarget,
-  refs: PackageReferences | undefined,
-): Promise<BreakingFinding | { ok: true } | { unverified: string }> {
-  if (!refs || refs.symbols.size === 0) return { ok: true };
+function groupByEntry(
+  refs: PackageReferences,
+  pkg: string,
+): Map<string, Map<string, SymbolReference[]>> {
+  const byEntry = new Map<string, Map<string, SymbolReference[]>>();
+  for (const [sym, uses] of refs.symbols) {
+    for (const use of uses) {
+      if (use.specifier !== pkg && !use.specifier.startsWith(`${pkg}/`)) continue;
+      const sub = use.specifier === pkg ? '' : use.specifier.slice(pkg.length + 1);
+      let symbols = byEntry.get(sub);
+      if (!symbols) byEntry.set(sub, (symbols = new Map()));
+      const list = symbols.get(sym);
+      if (list) list.push(use);
+      else symbols.set(sym, [use]);
+    }
+  }
+  return byEntry;
+}
 
-  const [from, to] = await Promise.all([
-    fetchAndExtract(target.package, target.fromVersion),
-    fetchAndExtract(target.package, target.toVersion),
-  ]);
-  if (!from || !to) return { unverified: 'could not fetch one or both versions' };
-  if (from.surface.undeclaredReason || to.surface.undeclaredReason) {
-    return {
-      unverified: `no readable surface (${from.surface.undeclaredReason ?? to.surface.undeclaredReason})`,
-    };
+interface EntryComparison {
+  symbolsRemoved: BreakingFinding['symbolsRemoved'];
+  arityChanged: BreakingFinding['arityChanged'];
+  candidates: BreakingFinding['newExports'];
+  lostKinds: Set<SymbolKind>;
+}
+
+/** Compare one entry point's from/to surfaces against the symbols read from it. */
+function compareEntry(
+  from: ExtractedSurface | undefined,
+  to: ExtractedSurface | undefined,
+  symbols: Map<string, SymbolReference[]>,
+  specifier: string,
+  isRoot: boolean,
+): EntryComparison | { unverified: string } {
+  if (!from || !to) return { unverified: 'entry point not extracted' };
+  if (from.undeclaredReason || to.undeclaredReason) {
+    return { unverified: `no readable surface (${from.undeclaredReason ?? to.undeclaredReason})` };
   }
 
-  const diff = diffSurfaces(from.surface, to.surface);
+  const diff = diffSurfaces(from, to);
   if (diff.inconclusive) return { unverified: diff.inconclusive };
 
   // Only symbols claimed against the MODULE'S export surface can be "removed".
   // `chalk.bold` is a property of the default export's value — valid code that
   // tier A cannot see. Blocking a PR on that is the false positive that gets a
   // CI gate switched off inside two weeks (§12 M3 kill condition).
-  const toSurface = new Set(runtimeSymbols(to.surface).map((s) => s.path));
+  const toSurface = new Set(runtimeSymbols(to).map((s) => s.path));
   const bareValue = toSurface.size <= 1 && toSurface.has('default');
   const referenced = new Set(
-    [...refs.symbols.entries()]
+    [...symbols.entries()]
       .filter(
         ([sym, uses]) =>
           sym !== 'default' &&
           uses.some(
-            (r) =>
-              SURFACE_CLAIM_KINDS.includes(r.via) &&
-              isRootSpecifier(r, target.package) &&
-              !(bareValue && r.via === 'namespace'),
+            (r) => SURFACE_CLAIM_KINDS.includes(r.via) && !(bareValue && r.via === 'namespace'),
           ),
       )
       .map(([sym]) => sym),
   );
-  const stillExports = toSurface;
 
-  const symbolsRemoved = diff.removed
-    .filter((s) => referenced.has(s.path) && !stillExports.has(s.path))
-    .map((s) => ({ symbol: s.path, refs: refs.symbols.get(s.path) ?? [] }));
+  // `specifier` rides along only for subpaths, so root findings serialize
+  // exactly as they did before this change.
+  const tag = isRoot ? {} : { specifier };
+  return {
+    symbolsRemoved: diff.removed
+      .filter((s) => referenced.has(s.path) && !toSurface.has(s.path))
+      .map((s) => ({ symbol: s.path, ...tag, refs: symbols.get(s.path) ?? [] })),
+    arityChanged: diff.arityChanged
+      .filter((a) => referenced.has(a.path))
+      .map((a) => ({
+        symbol: a.path,
+        ...tag,
+        from: a.from,
+        to: a.to,
+        refs: symbols.get(a.path) ?? [],
+      })),
+    candidates: diff.added.map((s) => ({ symbol: s.path, kind: s.kind, arity: s.arity })),
+    lostKinds: new Set(diff.removed.filter((s) => referenced.has(s.path)).map((s) => s.kind)),
+  };
+}
 
-  const arityChanged = diff.arityChanged
-    .filter((a) => referenced.has(a.path))
-    .map((a) => ({ symbol: a.path, from: a.from, to: a.to, refs: refs.symbols.get(a.path) ?? [] }));
+/**
+ * Check one upgrade against what the codebase references.
+ *
+ * Only symbols the code actually uses are reported. A package can drop fifty
+ * exports; if this codebase touches none of them, the upgrade is safe FOR THIS
+ * CODEBASE, and saying otherwise trains people to ignore the check.
+ *
+ * Returns both channels rather than one of three, because a package can be
+ * breaking on one entry point and unreadable on another: `drizzle-orm` can lose
+ * a root symbol while `drizzle-orm/pg-core` fails to resolve. Collapsing that to
+ * a single verdict has to discard one of the two facts, and discarding the
+ * doubt is how the check ends up reporting safe when it did not look.
+ */
+export async function checkUpgradeOne(
+  target: UpgradeTarget,
+  refs: PackageReferences | undefined,
+): Promise<{ finding?: BreakingFinding; unverified?: string }> {
+  if (!refs || refs.symbols.size === 0) return {};
 
-  if (!symbolsRemoved.length && !arityChanged.length) return { ok: true };
+  const byEntry = groupByEntry(refs, target.package);
+  if (byEntry.size === 0) return {};
+  const subpaths = [...byEntry.keys()].filter(Boolean);
+
+  const [from, to] = await Promise.all([
+    fetchAndExtract(target.package, target.fromVersion, { subpaths }),
+    fetchAndExtract(target.package, target.toVersion, { subpaths }),
+  ]);
+  if (!from || !to) return { unverified: 'could not fetch one or both versions' };
+
+  const symbolsRemoved: BreakingFinding['symbolsRemoved'] = [];
+  const arityChanged: BreakingFinding['arityChanged'] = [];
+  const candidates: BreakingFinding['newExports'] = [];
+  const lostKinds = new Set<SymbolKind>();
+  const blind: string[] = [];
+
+  for (const [sub, symbols] of byEntry) {
+    const specifier = sub ? `${target.package}/${sub}` : target.package;
+    const res = compareEntry(
+      sub ? from.subpathSurfaces?.[sub] : from.surface,
+      sub ? to.subpathSurfaces?.[sub] : to.surface,
+      symbols,
+      specifier,
+      !sub,
+    );
+    if ('unverified' in res) {
+      blind.push(byEntry.size === 1 ? res.unverified : `${specifier}: ${res.unverified}`);
+      continue;
+    }
+    symbolsRemoved.push(...res.symbolsRemoved);
+    arityChanged.push(...res.arityChanged);
+    candidates.push(...res.candidates);
+    for (const k of res.lostKinds) lostKinds.add(k);
+  }
+
+  const unverified = blind.length ? blind.join('; ') : undefined;
+  if (!symbolsRemoved.length && !arityChanged.length) {
+    return unverified ? { unverified } : {};
+  }
 
   // Rank by kind against what this codebase lost, so a removed function is not
   // pushed off the cap by newly added constants.
-  const lostKinds = new Set(
-    diff.removed.filter((s) => referenced.has(s.path)).map((s) => s.kind),
-  );
-  const newExports = diff.added
-    .map((s) => ({ symbol: s.path, kind: s.kind, arity: s.arity }))
+  const seen = new Set<string>();
+  const newExports = candidates
+    .filter((c) => !seen.has(c.symbol) && seen.add(c.symbol))
     .sort(
       (a, b) =>
         Number(lostKinds.has(b.kind)) - Number(lostKinds.has(a.kind)) ||
@@ -144,13 +241,16 @@ export async function checkUpgradeOne(
     .slice(0, NEW_EXPORT_CAP);
 
   return {
-    package: target.package,
-    fromVersion: target.fromVersion,
-    toVersion: target.toVersion,
-    severity: symbolsRemoved.length ? 'blocking' : 'warning',
-    symbolsRemoved,
-    arityChanged,
-    newExports,
+    finding: {
+      package: target.package,
+      fromVersion: target.fromVersion,
+      toVersion: target.toVersion,
+      severity: symbolsRemoved.length ? 'blocking' : 'warning',
+      symbolsRemoved,
+      arityChanged,
+      newExports,
+    },
+    ...(unverified ? { unverified } : {}),
   };
 }
 
@@ -166,9 +266,9 @@ export async function checkUpgrade(
   for (const t of targets) {
     try {
       const res = await checkUpgradeOne(t, byPkg.get(t.package));
-      if ('ok' in res) ok.push(t.package);
-      else if ('unverified' in res) unverified.push({ package: t.package, reason: res.unverified });
-      else breaking.push(res);
+      if (res.finding) breaking.push(res.finding);
+      if (res.unverified) unverified.push({ package: t.package, reason: res.unverified });
+      if (!res.finding && !res.unverified) ok.push(t.package);
     } catch (err) {
       unverified.push({ package: t.package, reason: String(err).slice(0, 160) });
     }
@@ -198,12 +298,12 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
       out.push(`  Removes ${b.symbolsRemoved.length} symbol(s) your code references:`);
       for (const s of b.symbolsRemoved) {
         const where = s.refs.map((r) => `${r.file}:${r.line}`).join(', ') || '(no location)';
-        out.push(`    · ${b.package}.${s.symbol}    ${where}`);
+        out.push(`    · ${s.specifier ?? b.package}.${s.symbol}    ${where}`);
       }
     }
     for (const a of b.arityChanged) {
       const where = a.refs.map((r) => `${r.file}:${r.line}`).join(', ') || '(no location)';
-      out.push(`  Arity change: ${a.symbol} ${a.from} → ${a.to} params`);
+      out.push(`  Arity change: ${a.specifier ?? b.package}.${a.symbol} ${a.from} → ${a.to} params`);
       out.push(`    · ${where}`);
     }
     // The reader's next question is always "replaced by what", so answer it here

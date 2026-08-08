@@ -488,10 +488,10 @@ function requireSpecifier(node: ts.Node): string | null {
  */
 export function extractSurface(
   pkgDir: string,
-  opts: { manifest?: PackageManifest | null } = {},
+  opts: { manifest?: PackageManifest | null; subpath?: string } = {},
 ): ExtractedSurface {
   const manifest = opts.manifest ?? readManifest(pkgDir);
-  const entry = resolveEntry(pkgDir, manifest);
+  const entry = resolveEntry(pkgDir, manifest, opts.subpath);
   const base: ExtractedSurface = {
     package: manifest?.name ?? pkgDir,
     version: manifest?.version ?? null,
@@ -501,7 +501,14 @@ export function extractSurface(
     filesWalked: 0,
     externalReExports: [],
   };
-  if (!entry) return { ...base, undeclaredReason: 'no resolvable JS entry point' };
+  if (!entry) {
+    return {
+      ...base,
+      undeclaredReason: opts.subpath
+        ? `no resolvable JS entry point for subpath ./${opts.subpath}`
+        : 'no resolvable JS entry point',
+    };
+  }
 
   const ctx: WalkCtx = {
     pkgDir,

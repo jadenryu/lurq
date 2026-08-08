@@ -3,6 +3,7 @@
  * this single denormalized table (§8.2).
  */
 import { and, desc, eq, isNotNull, isNull, lt, notExists, sql } from 'drizzle-orm';
+import { logger } from '../core/logger';
 import type { Category } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
@@ -90,7 +91,14 @@ export async function upsertPackageVersions(
   name: string,
   versions: VersionInfo[],
 ): Promise<void> {
-  if (versions.length === 0) return;
+  // An empty timeline means the registry fetch came back without one, not that
+  // the package has no versions. Returning silently made that indistinguishable
+  // from a successful write, so a package could sit with no history forever and
+  // nothing in the logs would say why.
+  if (versions.length === 0) {
+    logger.debug(`no version timeline to store for ${name}: registry returned none`);
+    return;
+  }
   for (let i = 0; i < versions.length; i += VERSION_CHUNK) {
     const rows = versions.slice(i, i + VERSION_CHUNK).map((v) => ({
       packageName: name,
