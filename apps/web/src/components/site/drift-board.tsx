@@ -11,6 +11,7 @@ import {
 } from "react";
 import drift from "@/content/generated/drift.json";
 import { MODEL_CUTOFFS, type Vendor } from "@/content/model-cutoffs";
+import { axisTicks, type AxisTick } from "@/lib/drift-axis";
 import { Mark } from "@/components/site/wordmark";
 import {
   DRIFT_BODY,
@@ -164,6 +165,104 @@ const head =
 type SortKey = "name" | "majors_since" | "bumped_at" | "weekly_downloads";
 type Sort = { key: SortKey; desc: boolean };
 
+/** The sort indicator. Its states live in .room-drift-caret, on the button. */
+function Caret() {
+  return (
+    <svg
+      aria-hidden
+      width="9"
+      height="9"
+      viewBox="0 0 10 10"
+      fill="none"
+      className="room-drift-caret shrink-0"
+    >
+      <path
+        d="M2.5 4 5 6.5 7.5 4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * The lane column's header, which is the chart's time axis.
+ *
+ * It used to be the two edge labels with a hairline stretched between them, and
+ * that hairline was the tell: it named no interval, aligned to nothing, and
+ * carried no more information than the gap between the words would have. The
+ * lanes under it were being read against four rules at 0/25/50/75%, which are
+ * quarters of a span rather than dates, so on a nineteen-month board they fell
+ * on nothing in particular and on a three-month board they fell on nothing at
+ * all.
+ *
+ * So it is an axis: the cutoff at the left edge, the last sync at the right, and
+ * the month boundaries between them marked and named. The geometry is shared
+ * with the rows below on purpose — same flex row, same gap, same trailing 54px
+ * column — so every tick lands exactly on the rule drawn through all eight
+ * lanes, and a reader can put a straightedge down the column. The lane rules are
+ * generated from these same positions (see --drift-grid), so the two cannot
+ * drift apart.
+ *
+ * Still the sort control for the column. The caret sits in the trailing slot the
+ * "N mo" figures occupy below, which is the only place on the axis that is not
+ * already spoken for by a date.
+ */
+function AxisHead({
+  from,
+  ticks,
+  sort,
+  onSort,
+}: {
+  from: string;
+  ticks: AxisTick[];
+  sort: Sort;
+  onSort: (k: SortKey) => void;
+}) {
+  const active = sort.key === "bumped_at";
+  return (
+    <th
+      scope="col"
+      aria-sort={active ? (sort.desc ? "descending" : "ascending") : "none"}
+      className={head}
+    >
+      <button
+        type="button"
+        onClick={() => onSort("bumped_at")}
+        data-active={active}
+        data-dir={active && !sort.desc ? "asc" : "desc"}
+        className={`room-drift-sort flex w-full items-center gap-3 transition-[color] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark ${
+          active ? "text-ink" : ""
+        }`}
+        style={{ transitionDuration: "var(--dur-hover)" }}
+      >
+        {/* The control's name. The visible text is a run of dates, and a button
+            called "may 2026 jun jul aug now" is a button nobody can act on. */}
+        <span className="sr-only">Shipped</span>
+        <span aria-hidden className="room-drift-axis">
+          <span className="room-drift-axis-edge" style={{ left: 0 }}>
+            {from}
+          </span>
+          <span className="room-drift-axis-edge" style={{ right: 0 }}>
+            now
+          </span>
+          <span className="room-drift-axis-rule" />
+          {ticks.map((t) => (
+            <span key={t.at} className="room-drift-axis-tick" style={{ left: t.at }}>
+              {t.label}
+            </span>
+          ))}
+        </span>
+        <span className="flex w-[54px] shrink-0 justify-end">
+          <Caret />
+        </span>
+      </button>
+    </th>
+  );
+}
+
 /** A header that is also the control that orders by it. */
 function SortHead({
   label,
@@ -198,22 +297,7 @@ function SortHead({
         style={{ transitionDuration: "var(--dur-hover)" }}
       >
         {label}
-        <svg
-          aria-hidden
-          width="9"
-          height="9"
-          viewBox="0 0 10 10"
-          fill="none"
-          className="room-drift-caret shrink-0"
-        >
-          <path
-            d="M2.5 4 5 6.5 7.5 4"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <Caret />
       </button>
     </th>
   );
@@ -336,6 +420,16 @@ function useRerank(deps: unknown[]): (node: HTMLTableSectionElement | null) => v
   }, []);
 }
 
+/**
+ * How long each model holds the board before the picker moves on.
+ *
+ * The rows draw in over about a second, so anything under three leaves a reader
+ * watching lanes arrive and never at rest. This is the beat after that: long
+ * enough to read the sentence, take the percentage and recognise a package or
+ * two, short enough that all six models are seen inside half a minute.
+ */
+const DWELL = 4800;
+
 export function DriftBoard() {
   // Newest cutoff first, so the default is the most current model. Anyone whose
   // model is older sees a worse number, which is the honest direction to default.
@@ -344,12 +438,33 @@ export function DriftBoard() {
   // first paint matches the server HTML and nothing reshuffles on hydration.
   const [sort, setSort] = useState<Sort>({ key: "weekly_downloads", desc: true });
   const [shown, setShown] = useState(false);
+  /** Whether the picker is still advancing itself. A click ends it for good. */
+  const [cycling, setCycling] = useState(true);
+  /** On screen. Nothing advances a board nobody is looking at. */
+  const [live, setLive] = useState(false);
+  /** Pointer or focus anywhere in the section: someone is reading it. */
+  const [held, setHeld] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
 
   const model = MODEL_CUTOFFS.find((m) => m.label === picked) ?? MODEL_CUTOFFS[0]!;
   const bucket = BUCKETS[model.cutoff]!;
   const t0 = Date.parse(model.cutoff);
   const percent = Math.round((bucket.totals.drifted / bucket.totals.tracked) * 100);
+
+  // The axis, and the rules the lanes are read against, out of one calculation.
+  // Passing the tick positions to CSS as a list of single-pixel backgrounds is
+  // what keeps them in step: the header cannot label a month the rows do not
+  // rule, because there is only one set of numbers.
+  //
+  // Not memoised: nineteen iterations at the very worst, and no effect takes
+  // either of them as a dependency, so a fresh array per render costs a string
+  // comparison on one inline style.
+  const ticks = axisTicks(t0, T1);
+  const grid = ticks.length
+    ? ticks
+        .map((t) => `linear-gradient(var(--edge), var(--edge)) ${t.at} 0 / 1px 100% no-repeat`)
+        .join(", ")
+    : "none";
 
   const rows = useMemo(() => {
     const dir = sort.desc ? -1 : 1;
@@ -369,17 +484,56 @@ export function DriftBoard() {
     // pins rows and bars to their finished state whatever `data-shown` says, so
     // someone who asked for less motion gets the plotted chart immediately
     // rather than an empty one.
+    //
+    // It keeps observing after the first crossing, which it did not used to.
+    // `shown` is still a one-way latch — the lanes draw once, it is a
+    // leaderboard and not a loop — but the picker below needs to know whether
+    // the board is actually on screen, and a timer advancing a section nobody
+    // is looking at burns a render every five seconds to change a chart in an
+    // empty room.
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        setShown(true);
-        io.disconnect(); // Draws once. It is a leaderboard, not a loop.
+        const on = !!entry?.isIntersecting;
+        setLive(on);
+        if (on) setShown(true);
       },
       { rootMargin: "0px 0px -15% 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
+
+  /**
+   * The picker advances itself until someone takes it.
+   *
+   * Six models are on that row and the default is the newest, which is the one
+   * with the least to show: a visitor who never touches the chips reads the
+   * mildest version of the argument and leaves. Cycling makes the section state
+   * its own case — the same eight-row board rebuilt against a cutoff eighteen
+   * months older, with the percentage climbing as it goes — and it advertises
+   * that the chips are live, which a row of quiet pills does not.
+   *
+   * Three things stop it, and all three are the same rule: it runs only while
+   * nobody is engaged with it. Off screen, under a pointer, or with focus
+   * anywhere inside the section, it holds. Choosing a model ends it outright —
+   * once a reader has said which model is theirs, moving the board off it is
+   * taking the answer away.
+   *
+   * Reduced motion opts out entirely rather than cycling without the swap
+   * animation. The objection there is not the fade, it is content that changes
+   * on its own, and honouring the request means not doing that.
+   */
+  useEffect(() => {
+    if (!cycling || !live || held) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => {
+      setPicked((prev) => {
+        const i = MODEL_CUTOFFS.findIndex((m) => m.label === prev);
+        return MODEL_CUTOFFS[(i + 1) % MODEL_CUTOFFS.length]!.label;
+      });
+    }, DWELL);
+    return () => clearInterval(id);
+  }, [cycling, live, held]);
 
   function onSort(key: SortKey) {
     setSort((s) =>
@@ -409,8 +563,24 @@ export function DriftBoard() {
           <p className="mt-6 text-[15px] leading-[1.65] text-ink-2">{DRIFT_BODY}</p>
         </div>
 
-        {/* Two layers: the claim in front, the evidence behind it. */}
-        <div className="relative mt-14">
+        {/* Two layers: the claim in front, the evidence behind it.
+
+            The hold is on the whole section rather than on the picker, because
+            the thing that must not be pulled out from under a reader is the
+            board, not the chips: someone half way down a column of versions
+            when the model changes has lost their place. `data-cycle` is what
+            the dwell indicator under the selected chip animates on, and it
+            carries the three states apart so a pause is a pause and not a
+            restart. */}
+        <div
+          data-cycle={cycling && live ? (held ? "hold" : "on") : undefined}
+          style={{ ["--dwell" as string]: `${DWELL}ms` }}
+          onPointerEnter={() => setHeld(true)}
+          onPointerLeave={() => setHeld(false)}
+          onFocusCapture={() => setHeld(true)}
+          onBlurCapture={() => setHeld(false)}
+          className="relative mt-14"
+        >
           {/* The bloom that puts the card in front of the panel rather than on
               it. Weather, not content. */}
           <div aria-hidden className="room-drift-bloom" />
@@ -434,7 +604,11 @@ export function DriftBoard() {
                       name="drift-model"
                       value={m.label}
                       checked={m.label === picked}
-                      onChange={() => setPicked(m.label)}
+                      onChange={() => {
+                        setPicked(m.label);
+                        // Taken. The board belongs to the reader from here.
+                        setCycling(false);
+                      }}
                       className="sr-only"
                     />
                     <span
@@ -543,7 +717,12 @@ export function DriftBoard() {
                   same place whatever the day's data is. Left to auto layout the
                   widths follow the longest package name, which is why the board
                   looked hand-placed differently on every refresh. */}
-              <table className="w-full min-w-[880px] table-fixed border-collapse text-left">
+              <table
+                // Inherited by every lane's ::before, which is the rule set the
+                // axis above labels. One declaration for eight rows.
+                style={{ ["--drift-grid" as string]: grid }}
+                className="w-full min-w-[880px] table-fixed border-collapse text-left"
+              >
                 <caption className="sr-only">
                   Packages that changed major version since {model.label}&rsquo;s knowledge cutoff
                   of {month(model.cutoff)}, by weekly installs
@@ -580,22 +759,12 @@ export function DriftBoard() {
                       onSort={onSort}
                       align="right"
                     />
-                    {/* The header is the axis. Both ends are labelled, so the lanes
-                        underneath need no legend and no tooltip to be read. The
-                        hidden word is there because the visible text is two dates,
-                        and a control's accessible name has to say what it does. */}
-                    <SortHead
-                      sortKey="bumped_at"
+                    {/* The header is the axis: see AxisHead. */}
+                    <AxisHead
+                      from={month(model.cutoff)}
+                      ticks={ticks}
                       sort={sort}
                       onSort={onSort}
-                      label={
-                        <>
-                          <span className="sr-only">Shipped, </span>
-                          {month(model.cutoff)}
-                          <span aria-hidden className="mx-2 h-px flex-1 bg-edge" />
-                          now
-                        </>
-                      }
                     />
                     <SortHead
                       label="Installs"
@@ -627,8 +796,30 @@ export function DriftBoard() {
                       <td className={`${cell} room-drift-rank pl-5 text-[11px] text-ink-3`}>
                         {String(i + 1).padStart(2, "0")}
                       </td>
-                      <th scope="row" className={`${cell} truncate font-normal text-ink`}>
-                        {r.name}
+                      {/* The name goes to the registry. Every row here is a
+                          claim about a published package, and the place that
+                          settles it is the package's own npm page: the majors
+                          it has shipped and the day each one landed are on it.
+                          A board that says "you are three majors behind on
+                          react" and gives you no way to go and look is asking
+                          to be taken on trust, which is the posture this whole
+                          section is arguing against.
+
+                          aria-label rather than a visible "on npm" or an arrow
+                          glyph per row: eight of either turns the column every
+                          visitor scans first into a column of decoration. The
+                          name is contained in the label, so the spoken name and
+                          the visible one still match. */}
+                      <th scope="row" className={`${cell} font-normal text-ink`}>
+                        <a
+                          href={`https://www.npmjs.com/package/${r.name}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`${r.name} on npm`}
+                          className="room-drift-pkg block truncate"
+                        >
+                          {r.name}
+                        </a>
                       </th>
                       <td className={`${cell} text-ink-3 line-through decoration-ink-3/60`}>
                         {r.version_then}

@@ -1355,27 +1355,86 @@ li:hover > .room-ide-label {
   flex: 1;
 }
 
-/* Quarter rules, drawn behind every lane at the same four positions.
+/* Month rules, drawn behind every lane at the positions the axis labels.
    Eight independent two-tone bars stacked in a column is not a chart, it is
    eight sparklines that happen to be adjacent, and nothing on screen said the
    left edge of row one was the same date as the left edge of row eight. These
-   are what make the shared axis visible: a reader can now put a straightedge
-   down the column and read one row against another. Faint enough that the data
-   still wins, present enough that the column has structure when the lanes
-   themselves are near-empty.
+   are what make the shared axis visible: a reader can put a straightedge down
+   the column and read one row against another. Faint enough that the data still
+   wins, present enough that the column has structure when the lanes themselves
+   are near-empty.
 
-   A repeating gradient rather than four elements: it is a background, it is
-   never read, and it costs nothing to paint. */
+   These used to be a repeating gradient at every 25%, which is quarters of a
+   span and not dates: on a three-month board it ruled nothing, and on the
+   nineteen-month one it ruled four positions no month began on. --drift-grid is
+   a list of single-pixel backgrounds built in drift-board.tsx from the same
+   array the header ticks are drawn from, so a rule here and a label up there
+   cannot disagree about what month it is. */
 .room-drift-track::before {
   content: "";
   position: absolute;
   inset: 1px 0;
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--edge) 0 1px,
-    transparent 1px 25%
-  );
+  background: var(--drift-grid, none);
   opacity: 0.55;
+}
+
+/* ── The axis ────────────────────────────────────────────────────────────────
+   The lane column's header, drawn as the chart's time axis: the two edges named
+   above the rule, the month boundaries ticked and named below it.
+
+   Its geometry is the lane's geometry — the button is the same flex row at the
+   same gap, this box takes the same flex and the same min-width as
+   .room-drift-track, and the caret sits in a 54px slot matching the "N mo"
+   column. That is what puts a tick exactly over its rule. Change one and the
+   other has to move with it.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-drift-axis {
+  position: relative;
+  flex: 1;
+  min-width: 96px;
+  height: 34px;
+}
+
+/* The cutoff and the last sync. These carry the header's own size and colour;
+   the ticks between them are smaller and quieter, because a month boundary is
+   scaffolding and the two ends are the statement. */
+.room-drift-axis-edge {
+  position: absolute;
+  top: 0;
+  line-height: 1;
+}
+
+.room-drift-axis-rule {
+  position: absolute;
+  top: 17px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--edge-lit);
+}
+
+.room-drift-axis-tick {
+  position: absolute;
+  top: 22px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  transform: translateX(-50%);
+}
+
+/* The tick mark itself, hanging off the rule down to its label. Drawn on the
+   label so the two cannot be positioned separately and disagree. */
+.room-drift-axis-tick::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 1px;
+  height: 4px;
+  background: var(--edge-lit);
 }
 
 .room-drift-held,
@@ -1477,6 +1536,30 @@ li:hover > .room-ide-label {
 
 .room-drift-rank {
   transition: color var(--dur-hover) var(--ease-ui);
+}
+
+/* The package name is a link to its npm page. Underlined only on approach: a
+   column of eight permanently underlined names reads as a link list, and this
+   one is the first thing every visitor scans for a name they recognise. The row
+   hover brings it up as well as the link's own, so the affordance appears
+   wherever the pointer is on the row rather than only on the word itself. */
+.room-drift-pkg {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-hover) var(--ease-ui);
+}
+
+.room-drift-row:hover .room-drift-pkg,
+.room-drift-pkg:hover {
+  text-decoration-color: var(--edge-lit);
+}
+
+.room-drift-pkg:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+  text-decoration-color: var(--edge-lit);
 }
 
 .room-drift-row:hover .room-drift-rank {
@@ -1592,6 +1675,7 @@ li:hover > .room-ide-label {
    options and the set announces itself as a group with no ARIA of our own.
    ─────────────────────────────────────────────────────────────────────────── */
 .room-drift-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -1622,6 +1706,44 @@ li:hover > .room-ide-label {
   border-color: var(--mark);
   background: var(--surface-2);
   color: var(--ink);
+}
+
+/* The dwell, under the chip that currently holds the board.
+   The picker advances itself until someone takes it (see DriftBoard), and a
+   board that changes on its own with nothing to say why reads as a fault. This
+   is the why: a rule that runs out under the selected chip, arriving at the far
+   edge exactly as the next model comes up.
+
+   Drawn only while the cycle is actually running, and frozen rather than
+   removed when a pointer or focus holds it — dropping the element on hover
+   would restart it from zero the moment the pointer left, which turns a pause
+   into a stutter. The duration is the same constant the interval uses, handed
+   over as --dwell, so the two cannot fall out of step.
+
+   Inset to the chip's own padding rather than run edge to edge: this is a
+   999px pill, and a full-width bar at the bottom of one gets clipped by the
+   curve at both ends into a shape that reads as a rendering fault. */
+[data-cycle] .room-drift-chip[data-on="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 11px;
+  right: 11px;
+  height: 1px;
+  background: var(--mark);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: room-drift-dwell var(--dwell, 4800ms) linear both;
+}
+
+[data-cycle="hold"] .room-drift-chip[data-on="true"]::after {
+  animation-play-state: paused;
+}
+
+@keyframes room-drift-dwell {
+  to {
+    transform: scaleX(1);
+  }
 }
 
 /* The input itself is sr-only, so the ring has to be drawn on the label. */
