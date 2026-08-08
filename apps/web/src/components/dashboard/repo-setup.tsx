@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Chip, Panel, PanelHeader } from "@/components/dashboard/panel";
+import { Chip, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -44,9 +44,10 @@ export function RepoSetup({
 
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Add <code className="font-mono text-xs">{workflowPath}</code> to run the autopilot in your
-        own GitHub Actions. It plans the upgrades, checks them against your code, and — once you
-        switch it to <code className="font-mono text-xs">pr</code> mode — rewrites the broken call
-        sites and opens a pull request.
+        own GitHub Actions. It starts in <code className="font-mono text-xs">comment</code> mode:
+        it plans the upgrades and checks them against your code, writing the brief to the run
+        summary without changing a line. Switch it to <code className="font-mono text-xs">pr</code>{" "}
+        mode when you want the broken call sites rewritten and a pull request opened.
       </p>
 
       <div className="mt-4 rounded-[var(--radius-control)] border border-border bg-muted/20 px-4 py-3">
@@ -76,9 +77,25 @@ export function RepoSetup({
         </pre>
       )}
 
-      <p className="mt-4 font-mono text-xs text-muted-foreground/70">
-        Requires two repository secrets: LURQ_API_KEY and ANTHROPIC_API_KEY.
-      </p>
+      {/* The earlier copy listed both secrets as flat requirements, which
+          overstated the cost of starting: analysis needs neither Anthropic
+          credential, and the agent accepts a subscription token instead of an
+          API key. Onboarding friction invented by a caption is the avoidable kind. */}
+      <div className="mt-5 space-y-2 border-t border-border pt-4">
+        <p className={eyebrow}>repository secrets</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          <code className="font-mono text-xs text-foreground">LURQ_API_KEY</code> — required. Lets
+          the workflow ask which upgrades are outstanding.
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          <code className="font-mono text-xs text-foreground">ANTHROPIC_API_KEY</code> or{" "}
+          <code className="font-mono text-xs text-foreground">CLAUDE_CODE_OAUTH_TOKEN</code> — only
+          for <code className="font-mono text-xs">pr</code> mode, when you want code rewritten. An
+          existing Claude Pro or Max subscription works for the second one. In{" "}
+          <code className="font-mono text-xs">comment</code> mode you get the full drift and
+          breakage brief without either.
+        </p>
+      </div>
     </Panel>
   );
 }

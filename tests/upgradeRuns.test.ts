@@ -136,6 +136,35 @@ describe('renderWorkflow', () => {
     }
   });
 
+  it('accepts either an API key or a subscription OAuth token', () => {
+    // Requiring an API key specifically is real onboarding friction; plenty of
+    // developers already hold a Claude Pro/Max token.
+    const apply = renderWorkflow().split('Apply upgrades')[1] ?? '';
+    expect(apply).toContain('anthropic_api_key:');
+    expect(apply).toContain('claude_code_oauth_token:');
+  });
+
+  it('needs no Anthropic credential to produce the brief', () => {
+    // Everything before the credential check is plain CLI, so analyse-only mode
+    // works with a lurq key alone. The panel copy makes the same promise.
+    const yaml = renderWorkflow();
+    const beforeAgent = yaml.slice(0, yaml.indexOf('Check agent credentials'));
+    expect(beforeAgent).toContain('upgrade-plan');
+    expect(beforeAgent).toContain('check-upgrade');
+    expect(beforeAgent).not.toContain('ANTHROPIC_API_KEY');
+    expect(beforeAgent).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
+  });
+
+  it('fails pr mode with a readable error when neither credential is set', () => {
+    const yaml = renderWorkflow();
+    const at = yaml.indexOf('Check agent credentials');
+    expect(at).toBeGreaterThan(-1);
+    const step = yaml.slice(at, yaml.indexOf('Install dependencies'));
+    expect(step).toContain("env.LURQ_MODE == 'pr'");
+    expect(step).toContain('::error::');
+    expect(step).toContain('exit 1');
+  });
+
   it('writes to a lurq branch, never the default one', () => {
     expect(renderWorkflow()).toContain('branch: lurq/upgrades');
   });

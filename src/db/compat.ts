@@ -114,6 +114,49 @@ export async function upsertCompatEdgesBatch(db: Database, edges: NewCompatEdgeR
   }
 }
 
+/**
+ * Upsert for the daily re-mine pass (§4B trigger 2). That pass re-reads the
+ * *same* persisted closures with no network, so it has genuine news only about
+ * pairs it has never seen before. An existing same-or-stronger edge is therefore
+ * left completely untouched:
+ *
+ *   - no witness bump. `witness_count` is documented as "distinct resolved graphs
+ *     an edge was witnessed in", but accruing +1 per pass made it count *cron
+ *     runs*: 47.1M updates against 1.31M rows, a median stored value of 29 where
+ *     the true count is 1, and 54% of edges advertising >5 witnesses for a single
+ *     resolved graph.
+ *   - no `ran_at` refresh. The evidence is as old as the closure it came from,
+ *     not as new as the pass that re-read it.
+ *
+ * `setWhere` is what makes skipping a *real* no-write: Postgres writes a new row
+ * version for `DO UPDATE` even when every assigned value is identical, so the
+ * predicate — not the SET list — is what keeps 97% of these writes off the disk.
+ * Because it fires only when the incoming edge *strictly* outranks the stored
+ * one, the SET can assign unconditionally: a weaker `declared` edge is still
+ * upgraded to `observed`, while `verified`/`conflict` are never downgraded.
+ */
+export async function upsertObservedEdgesRemine(
+  db: Database,
+  edges: NewCompatEdgeRow[],
+): Promise<void> {
+  if (edges.length === 0) return;
+  for (const part of chunk(edges, EDGE_UPSERT_CHUNK)) {
+    await db
+      .insert(compatEdges)
+      .values(part)
+      .onConflictDoUpdate({
+        target: [...CONFLICT_TARGET],
+        set: {
+          status: sql`excluded.status`,
+          provenance: sql`excluded.provenance`,
+          driver: sql`excluded.driver`,
+          ranAt: sql`excluded.ran_at`,
+        },
+        setWhere: sql`${provenanceRank(sql`excluded.provenance`)} > ${provenanceRank(compatEdges.provenance)}`,
+      });
+  }
+}
+
 /** Persist a resolved closure once (§4B); refresh nodes if the version reappears
  *  (a republish under the same version — rare, but keep the freshest). */
 export async function persistClosure(

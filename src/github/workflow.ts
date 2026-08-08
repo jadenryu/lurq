@@ -1,6 +1,13 @@
 /**
  * The workflow file a user commits to arm the autopilot.
  *
+ * Note what the analysis half costs: nothing but a lurq key. Planning the
+ * upgrades and checking them against the codebase are plain CLI steps, so a repo
+ * gets the full drift + breakage brief without any Anthropic credential at all.
+ * That is only needed once someone switches the job to `pr` mode and wants code
+ * actually rewritten — and then either an API key or an existing Claude
+ * Pro/Max subscription token will do.
+ *
  * Read the `permissions:` block first — it is the entire trust model. lurq's own
  * GitHub App is Contents:read-only and can never write to anyone's repository.
  * Every write in this loop is done by GitHub's own `GITHUB_TOKEN`: ephemeral,
@@ -103,7 +110,19 @@ jobs:
         run: npx -y lurqrun check-upgrade . --plan lurq-plan.json >> "$\{GITHUB_STEP_SUMMARY}"
 
       # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
-      #    changed nothing — the brief is in the run summary above.
+      #    changed nothing — the brief is in the run summary above, and no
+      #    Anthropic credential is needed to get this far.
+      - name: Check agent credentials
+        if: env.LURQ_MODE == 'pr'
+        env:
+          API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+          OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$API_KEY" ] && [ -z "$OAUTH_TOKEN" ]; then
+            echo "::error::pr mode needs one of ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. A Claude Pro/Max subscription token works for the latter. Set LURQ_MODE=comment to run analysis only."
+            exit 1
+          fi
+
       - name: Install dependencies
         if: env.LURQ_MODE == 'pr'
         run: ${install}
@@ -112,7 +131,11 @@ jobs:
         if: env.LURQ_MODE == 'pr'
         uses: anthropics/claude-code-action@v1
         with:
+          # Either credential works; set whichever you have. An API key bills
+          # per token, an OAuth token uses an existing Claude Pro/Max plan.
+          # Unset secrets resolve to empty and are ignored by the action.
           anthropic_api_key: \${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             REPO: \${{ github.repository }}
 

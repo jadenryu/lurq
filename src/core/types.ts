@@ -165,7 +165,11 @@ export interface CompatEvidence {
   versions: [string, string];
   status: CompatStatus;
   provenance: CompatProvenance;
-  /** Distinct resolved graphs an `observed` edge was witnessed in (0 otherwise). */
+  /** Distinct resolved graphs an `observed` edge was witnessed in (0 otherwise).
+   *  Only a newly-fetched closure accrues one; the daily re-mine re-reads closures
+   *  it has already counted and deliberately does not. NOTE: rows minted before
+   *  that fix carry an inflated count (one per sync run, ~16× on average) and are
+   *  only corrected by a backfill, which has not been run. */
   witnessCount: number;
 }
 

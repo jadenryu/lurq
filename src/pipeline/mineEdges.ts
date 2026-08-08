@@ -13,7 +13,13 @@
 import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 import { getAllPackageNames } from '../db/packages';
-import { canonicalPair, getAllClosures, persistClosure, upsertCompatEdgesBatch } from '../db/compat';
+import {
+  canonicalPair,
+  getAllClosures,
+  persistClosure,
+  upsertCompatEdgesBatch,
+  upsertObservedEdgesRemine,
+} from '../db/compat';
 import type { Database } from '../db/client';
 import { fetchResolvedGraph, type ResolvedNode } from '../ingestion/sources/depsDev';
 
@@ -38,27 +44,35 @@ export function trackedPairs(
   return pairs;
 }
 
-/** Mint `observed` edges for every tracked-tracked pair in a resolved closure.
- *  One chunked batch upsert per closure (§4F) — pairs are unique within a
- *  closure; upsertCompatEdgesBatch splits large sets so fat trees stay bounded. */
+/**
+ * Mint `observed` edges for every tracked-tracked pair in a resolved closure.
+ * One chunked batch upsert per closure (§4F) — pairs are unique within a closure;
+ * both writers split large sets so fat trees stay bounded.
+ *
+ * `freshWitness` distinguishes the two triggers. Trigger 1 has a closure it just
+ * fetched, which is a new co-installation witness, so it accrues. Trigger 2
+ * re-reads closures it has already mined and must not re-count them — see
+ * {@link upsertObservedEdgesRemine}.
+ */
 async function mintObservedPairs(
   db: Database,
   nodes: ResolvedNode[],
   tracked: Set<string>,
   now: Date,
+  freshWitness: boolean,
 ): Promise<number> {
   const pairs = trackedPairs(nodes, tracked);
-  await upsertCompatEdgesBatch(
-    db,
-    pairs.map((pair) => ({
-      ...pair,
-      status: 'compatible' as const,
-      provenance: 'observed' as const,
-      witnessCount: 1,
-      driver: 'depsdev',
-      ranAt: now,
-    })),
-  );
+  const rows = pairs.map((pair) => ({
+    ...pair,
+    status: 'compatible' as const,
+    provenance: 'observed' as const,
+    witnessCount: 1,
+    driver: 'depsdev',
+    ranAt: now,
+  }));
+  await (freshWitness
+    ? upsertCompatEdgesBatch(db, rows)
+    : upsertObservedEdgesRemine(db, rows));
   return pairs.length;
 }
 
@@ -84,7 +98,8 @@ export async function mineEdgesForPackage(
     if (closure.length === 0) return 0;
     await persistClosure(db, name, version, closure).catch(() => {});
     const set = tracked ?? new Set(await getAllPackageNames(db));
-    return await mintObservedPairs(db, closure, set, now);
+    // Freshly fetched closure — a genuinely new witness, so it accrues.
+    return await mintObservedPairs(db, closure, set, now, true);
   } catch (err) {
     logger.warn(`edge mining failed for ${name}@${version}: ${formatError(err)}`);
     return 0;
@@ -96,8 +111,13 @@ export async function mineEdgesForPackage(
  * stable package P that never republishes: a package tracked *later* would never
  * link to it. This local pass re-scans every persisted closure against the
  * *current* tracked set — no network — so any package is fully linked within 24h
- * of becoming tracked. Idempotent: unchanged pairs no-op (witness still accrues,
- * which is the point). Cost is O(tracked × tracked-in-closure) mostly-noop upserts.
+ * of becoming tracked.
+ *
+ * Its only real output is edges that did not exist yet: it is re-reading closures
+ * it has already mined, so an already-known pair gets no witness and no `ran_at`
+ * bump ({@link upsertObservedEdgesRemine}). Pair *generation* is still
+ * O(tracked-in-closure²) — ~4.5M candidate rows a pass — but all but the genuinely
+ * new ones are now discarded by Postgres without a write.
  */
 export async function remineAllClosures(db: Database): Promise<number> {
   const tracked = new Set(await getAllPackageNames(db));
@@ -105,8 +125,8 @@ export async function remineAllClosures(db: Database): Promise<number> {
   const now = new Date();
   let count = 0;
   for (const c of closures) {
-    count += await mintObservedPairs(db, c.nodes, tracked, now);
+    count += await mintObservedPairs(db, c.nodes, tracked, now, false);
   }
-  logger.info(`re-mine: ${count} observed edge upserts across ${closures.length} closures`);
+  logger.info(`re-mine: ${count} candidate pairs across ${closures.length} closures`);
   return count;
 }
