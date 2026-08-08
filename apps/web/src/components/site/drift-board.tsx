@@ -141,11 +141,7 @@ function month(iso: string): string {
 const cell = "px-3 py-3.5 font-sans text-[13px] tabular-nums whitespace-nowrap";
 /**
  * Headers are the page's sans at a size a person reads, not 10px mono capitals
- * on a 0.14em track. The cells below are monospaced because their contents are
- * literals — package names, semver strings, counts — and a column of those has
- * to align on the digit. A header is a sentence fragment in English and gets no
- * such benefit; setting it in the same face as the data was what made the whole
- * board read as one undifferentiated block of terminal output.
+ * on a 0.14em track.
  *
  * --ink-2 rather than --ink-3, and 13px rather than 12. A header row dimmer and
  * smaller than the rows beneath it reads as quieter data; the job of this one is
@@ -153,13 +149,18 @@ const cell = "px-3 py-3.5 font-sans text-[13px] tabular-nums whitespace-nowrap";
  * very slightly negative because Geist at 13px medium sets a touch loose for a
  * label, which is the opposite of the 0.14em track this replaced.
  *
- * No third font family. Inter was the obvious candidate and was measured
- * against Geist at this size: same neo-grotesque lineage, near-identical
- * texture, ~40kB for a difference nobody could name. Weight, size and value are
- * the levers that carry at 13px, and none of them cost a download.
+ * Regular weight, though, not medium. Medium is now the board's emphasis, and
+ * it is spent on exactly three things: the package name and the two columns
+ * that carry the argument. A header row at the same weight as the finding was
+ * half of why the whole board read as one flat grey field — the loudest type in
+ * the panel was its own furniture.
+ *
+ * No second family anywhere in this section. Every word here is Geist, and the
+ * hierarchy is carried by weight and value, which is what a variable font is
+ * for. Mixing in the mono face is what made a leaderboard read as log output.
  */
 const head =
-  "px-3 py-3 text-[13px] font-medium tracking-[-0.01em] text-ink-2 whitespace-nowrap";
+  "px-3 py-3 text-[13px] font-normal tracking-[-0.01em] text-ink-2 whitespace-nowrap";
 
 /** The four columns worth ordering by. Version strings are not among them: "10.0.0" sorts before "9.0.0" as text and comparing them properly is a semver dependency for a control nobody asked for. */
 type SortKey = "name" | "majors_since" | "bumped_at" | "weekly_downloads";
@@ -313,9 +314,7 @@ function Stat({ value, label }: { value: string; label: string }) {
       >
         {value}
       </p>
-      {/* The number above is monospaced by its own class; this is a clause of
-          English and is set as one. */}
-      <p className="mt-2 text-[12px] leading-[1.5] text-ink-3">{label}</p>
+      <p className="mt-2 text-[12px] leading-[1.5] text-ink-2">{label}</p>
     </div>
   );
 }
@@ -557,8 +556,11 @@ export function DriftBoard() {
               letterSpacing: "-0.028em",
             }}
           >
-            <span className="block">{DRIFT_HEAD_1}</span>
-            <span className="block text-ink-3">{DRIFT_HEAD_2}</span>
+            {/* The emphasis is on the second line, which is the claim. It used
+                to be the dim one — a two-tone headline that faded out exactly
+                where the sentence started saying something. */}
+            <span className="block text-ink-2">{DRIFT_HEAD_1}</span>
+            <span className="block">{DRIFT_HEAD_2}</span>
           </h2>
           <p className="mt-6 text-[15px] leading-[1.65] text-ink-2">{DRIFT_BODY}</p>
         </div>
@@ -636,7 +638,7 @@ export function DriftBoard() {
                 href={model.source}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 font-mono text-[11px] text-ink-3 underline decoration-edge-lit underline-offset-[3px] transition-colors hover:text-ink-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 underline decoration-edge-lit underline-offset-[3px] transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
                 style={{ transitionDuration: "var(--dur-hover)" }}
               >
                 {model.vendor}&rsquo;s published figure
@@ -687,14 +689,14 @@ export function DriftBoard() {
                 <span className="text-ink">
                   <Mark size={14} />
                 </span>
-                <span className="font-mono text-[12px] text-ink">version drift</span>
+                <span className="text-[13px] font-medium text-ink">version drift</span>
               </span>
               {/* The size of the last sync, not just its date. "synced 6 aug"
                   is a timestamp and says nothing about whether the sync did
                   anything; a reader checking how live this board is wants the
                   volume. Both halves come out of the same record in stats.json,
                   so the count and the day it belongs to cannot drift apart. */}
-              <span className="ml-auto flex items-center gap-2 font-mono text-[11px] text-ink-3">
+              <span className="ml-auto flex items-center gap-2 text-[12px] text-ink-2">
                 <span aria-hidden className="room-wire-beat size-1.5 rounded-full" />
                 {SYNC_SUMMARY}
               </span>
@@ -810,7 +812,7 @@ export function DriftBoard() {
                           visitor scans first into a column of decoration. The
                           name is contained in the label, so the spoken name and
                           the visible one still match. */}
-                      <th scope="row" className={`${cell} font-normal text-ink`}>
+                      <th scope="row" className={`${cell} font-medium text-ink`}>
                         <a
                           href={`https://www.npmjs.com/package/${r.name}`}
                           target="_blank"
@@ -824,11 +826,17 @@ export function DriftBoard() {
                       <td className={`${cell} text-ink-3 line-through decoration-ink-3/60`}>
                         {r.version_then}
                       </td>
+                      {/* The two version columns are the argument, so they are
+                          the only cells that carry weight. Everything else on
+                          the row is the context that makes them readable. */}
                       <td className={cell}>
-                        <span style={{ color: "var(--held)" }}>{r.version_now}</span>
+                        <span className="font-medium" style={{ color: "var(--held)" }}>
+                          {r.version_now}
+                        </span>
                       </td>
                       <td className={`${cell} text-right`}>
                         <span
+                          className="font-medium"
                           style={{
                             color: r.majors_since > 1 ? "var(--conflict)" : "var(--ink-2)",
                           }}
@@ -856,7 +864,10 @@ export function DriftBoard() {
                               data-multi={r.majors_since > 1}
                             />
                           </span>
-                          <span className="w-[54px] shrink-0 text-right text-[12px] text-ink-3">
+                          {/* How long the answer has been wrong: the number the
+                              lane beside it is drawn to make felt, and not a
+                              caption on it. --ink-2, like the installs column. */}
+                          <span className="w-[54px] shrink-0 text-right text-[12px] text-ink-2">
                             {staleMonths(r.bumped_at)} mo
                           </span>
                         </span>

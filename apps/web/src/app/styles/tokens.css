@@ -1413,11 +1413,13 @@ li:hover > .room-ide-label {
   background: var(--edge-lit);
 }
 
+/* Geist, like every other word on this board. It was mono at 10px, which is the
+   size a proportional face cannot go to — so the ticks carry 11px and the
+   board's one family instead. */
 .room-drift-axis-tick {
   position: absolute;
   top: 22px;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   line-height: 1;
   letter-spacing: 0;
@@ -1683,10 +1685,13 @@ li:hover > .room-ide-label {
   border: 1px solid var(--edge);
   border-radius: 999px;
   background: var(--surface);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 450;
   line-height: 1;
-  color: var(--ink-3);
+  /* --ink-2, not --ink-3. Six chips are the section's one control and the whole
+     hook is finding your own model in the row; at --ink-3 the five unselected
+     ones sat a shade above the border they were drawn in. */
+  color: var(--ink-2);
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -1697,7 +1702,7 @@ li:hover > .room-ide-label {
 
 .room-drift-chip:hover {
   border-color: var(--edge-lit);
-  color: var(--ink-2);
+  color: var(--ink);
 }
 
 /* --mark, because this is a selection and not a verdict. --held and --conflict
