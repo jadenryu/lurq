@@ -58,7 +58,7 @@ interface Manifest {
  * Looking only in the given directory finds nothing and silently drops every
  * dependency, which zeroes out coverage for essentially every monorepo.
  */
-export function resolveInstalled(fromDir: string, pkg: string): string | null {
+function resolveInstalled(fromDir: string, pkg: string): string | null {
   let dir = resolvePath(fromDir);
   for (let depth = 0; depth < 12; depth++) {
     const candidate = join(dir, 'node_modules', pkg);
@@ -71,7 +71,7 @@ export function resolveInstalled(fromDir: string, pkg: string): string | null {
 }
 
 /** The version actually installed, read from the package's own manifest. */
-export function installedVersion(repo: string, pkg: string): string | null {
+function installedVersion(repo: string, pkg: string): string | null {
   const dir = resolveInstalled(repo, pkg);
   if (!dir) return null;
   try {

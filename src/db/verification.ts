@@ -1,5 +1,5 @@
 /** Read/write helpers for sandbox verification results (`verification_runs`). */
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { Database } from './client';
 import {
   verificationRuns,
@@ -23,23 +23,6 @@ export async function getLatestVerificationByName(
     .select()
     .from(verificationRuns)
     .where(eq(verificationRuns.packageName, packageName))
-    .orderBy(desc(verificationRuns.ranAt))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-/** Most recent run for a package version (any module system), if any. */
-export async function getLatestVerification(
-  db: Database,
-  packageName: string,
-  version: string,
-): Promise<VerificationRunRow | null> {
-  const rows = await db
-    .select()
-    .from(verificationRuns)
-    .where(
-      and(eq(verificationRuns.packageName, packageName), eq(verificationRuns.version, version)),
-    )
     .orderBy(desc(verificationRuns.ranAt))
     .limit(1);
   return rows[0] ?? null;

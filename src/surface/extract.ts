@@ -131,7 +131,7 @@ function hasDeprecatedTag(sf: ts.SourceFile, node: ts.Node): boolean {
  * Function and class bodies are deliberately NOT descended into: an assignment
  * inside a function is not the module's surface.
  */
-export function flattenStatements(
+function flattenStatements(
   stmts: readonly ts.Statement[],
   depth = 0,
 ): ts.Statement[] {

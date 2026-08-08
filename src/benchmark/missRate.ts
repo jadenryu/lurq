@@ -46,7 +46,7 @@ export interface MissRateCase {
 }
 
 /** Normalize either form to a package list. */
-export function casePackages(c: MissRateCase): { name: string; version: string }[] {
+function casePackages(c: MissRateCase): { name: string; version: string }[] {
   if (c.packages?.length) return c.packages;
   if (c.package) return [{ name: c.package, version: c.version ?? 'latest' }];
   return [];
@@ -113,7 +113,7 @@ ${list}
 /** Provider inferred from the model id, matching the existing participants. */
 export type Provider = 'openai' | 'anthropic' | 'gemini';
 
-export function providerOf(model: string): Provider {
+function providerOf(model: string): Provider {
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gemini-')) return 'gemini';
   return 'openai';

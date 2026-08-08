@@ -58,7 +58,7 @@ export interface ValidationReport {
  * at runtime by definition (§6.4.4), and an external re-export belongs to another
  * package (§6.4.1) — counting either as a miss would manufacture failures.
  */
-export async function validatePackage(
+async function validatePackage(
   pkg: string,
   version: string | null,
   sandbox: Sandbox,

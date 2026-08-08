@@ -132,10 +132,3 @@ export interface ReportedRun {
   prUrl?: string | null;
   runUrl?: string;
 }
-
-export function reportUpgradeRuns(
-  runs: ReportedRun[],
-  opts: RemoteOptions = {},
-): Promise<{ recorded: number; rejected: number }> {
-  return post('/upgrade-runs', { runs }, opts);
-}

@@ -89,11 +89,6 @@ interface CachedToken {
 
 const tokenCache = new Map<number, CachedToken>();
 
-/** For tests, and for the connect flow after an install is revoked + re-added. */
-export function clearInstallationTokenCache(): void {
-  tokenCache.clear();
-}
-
 /**
  * Exchange the App JWT for an installation access token.
  *

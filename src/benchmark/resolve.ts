@@ -130,7 +130,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 /** Get the exact version npm would select for a package constraint. */
-export async function fetchExactVersion(
+async function fetchExactVersion(
   pkgName: string,
   requestedVersion: string | null,
 ): Promise<string | null> {
@@ -157,7 +157,7 @@ export async function fetchExactVersion(
   }
 }
 
-export async function resolveVersions(
+async function resolveVersions(
   selections: NormalizedSelection[],
   resolver: VersionResolver = fetchExactVersion,
 ): Promise<ResolvedSelection[]> {

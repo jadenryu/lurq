@@ -78,7 +78,7 @@ export function packageOfSpecifier(spec: string): string | null {
   return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!;
 }
 
-export function listSourceFiles(dir: string, limit = 5000): string[] {
+function listSourceFiles(dir: string, limit = 5000): string[] {
   const out: string[] = [];
   const walk = (d: string) => {
     if (out.length >= limit) return;
@@ -270,9 +270,4 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
   return [...byPackage.entries()]
     .map(([pkg, symbols]) => ({ package: pkg, symbols }))
     .sort((a, b) => a.package.localeCompare(b.package));
-}
-
-/** Flatten to the shape `check_upgrade` consumes. */
-export function referencedSymbols(refs: PackageReferences): string[] {
-  return [...refs.symbols.keys()].sort();
 }

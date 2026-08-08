@@ -7,11 +7,11 @@
  * `breaks_at` is derived by scanning the history, so overwriting destroys the
  * product. `stale` is computed at read time from the oracle's TTL.
  */
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import type { Database } from './client';
 import { claims, entities, environments, observations } from './schema';
-import type { ClaimRow, EntityRow, EnvironmentRow, ObservationRow } from './schema';
+import type { ClaimRow, EntityRow, EnvironmentRow } from './schema';
 import {
   canonicalKey,
   type Environment,
@@ -150,21 +150,4 @@ export function applyTtl(
     return verdict;
   const ageHours = (now - observedAt.getTime()) / 3_600_000;
   return ageHours > ttlHours ? 'stale' : verdict;
-}
-
-/** Latest observation for a claim, TTL applied. */
-export async function currentVerdict(
-  db: Database,
-  claimId: number,
-  ttlHours: number,
-): Promise<{ verdict: Verdict; observation: ObservationRow | null }> {
-  const rows = await db
-    .select()
-    .from(observations)
-    .where(eq(observations.claimId, claimId))
-    .orderBy(desc(observations.observedAt))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return { verdict: 'unknown', observation: null };
-  return { verdict: applyTtl(row.verdict, row.observedAt, ttlHours), observation: row };
 }
