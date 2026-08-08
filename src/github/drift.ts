@@ -260,6 +260,14 @@ export async function computeTransitiveDrift(
  * dashboard's job is to say whether the upgrades it is recommending land on a
  * stack that holds together.
  *
+ * Capped like `deps`, and for a sharper reason. `resolveArchitectureCompat` emits
+ * one conflict per PAIR of requirers of the same unpinned peer, so its output is
+ * quadratic in that group's size. Its other caller is `compat`, which passes 2-5
+ * packages; a repo passes every tracked direct dependency, and fifty plugins
+ * disagreeing about one uninstalled peer is 1,225 rows. This result is persisted
+ * whole into the `drift` JSONB column and re-served on every dashboard load, so
+ * an unbounded array here is unbounded storage and an unbounded response.
+ *
  * ponytail: conflicts in the CURRENT install (pinned versions) are the other half
  * and are not computed. Add them when the registry read can be amortised — a
  * `package_versions`-level peer/engine column would make it another single query.
@@ -270,7 +278,7 @@ async function conflictsAtLatest(
 ): Promise<CompatConflict[]> {
   if (names.length === 0) return [];
   const { members } = await assembleMembers(db, names);
-  return resolveArchitectureCompat(members);
+  return resolveArchitectureCompat(members).slice(0, REPO_DRIFT_DETAIL_CAP);
 }
 
 /** Compute a repo's full drift summary from its manifests. */

@@ -137,4 +137,23 @@ describe('resolveArchitectureCompat', () => {
       true,
     );
   });
+
+  it('emits one conflict per pair when many members disagree about an unpinned peer', () => {
+    // Pins the ceiling that github/drift.ts caps against. Every caller here used
+    // to pass 2-5 packages; a repo scan passes every tracked direct dependency,
+    // and the pairwise expansion is quadratic in the size of one peer's requirer
+    // group. Twenty plugins each demanding a different exclusive major of an
+    // uninstalled peer is C(20,2) — if this ever stops being quadratic the cap in
+    // conflictsAtLatest is dead weight and should go with it.
+    const plugins = Array.from({ length: 20 }, (_, i) =>
+      member({
+        name: `eslint-plugin-${i}`,
+        version: '1.0.0',
+        peerDependencies: { eslint: `${i + 1}.x` },
+      }),
+    );
+    const out = resolveArchitectureCompat(plugins);
+    expect(out).toHaveLength((20 * 19) / 2);
+    expect(out.every((c) => c.requirement?.resolved === null)).toBe(true);
+  });
 });
