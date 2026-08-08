@@ -98,6 +98,31 @@ beforeAll(() => {
 
   pkg('no-entry', {}, { main: './nope.js' });
 
+  // The `drizzle-orm/pg-core` shape: a subpath entry with its own surface,
+  // sharing nothing with the root's.
+  pkg(
+    'subpath-exports',
+    {
+      'dist/index.js': `exports.rootOnly = 1;`,
+      'dist/pg-core.js': `exports.pgTable = function (a, b) {};`,
+      'dist/deep/nested.js': `exports.viaWildcard = 2;`,
+    },
+    {
+      main: undefined,
+      exports: {
+        '.': { require: './dist/index.js', default: './dist/index.js' },
+        './pg-core': { require: './dist/pg-core.js', default: './dist/pg-core.js' },
+        './deep/*': { require: './dist/deep/*.js', default: './dist/deep/*.js' },
+      },
+    },
+  );
+
+  // No exports map: any real file under the package is genuinely importable.
+  pkg('subpath-legacy', {
+    'index.js': `exports.rootOnly = 1;`,
+    'lib/extra.js': `exports.legacySub = function () {};`,
+  });
+
   // Babel's CJS output — and older tsc's. uuid@9 declares its ENTIRE surface
   // this way, so without handling it every Babel-compiled package on npm
   // extracts as zero exports and lands as UNDECLARED.
@@ -202,6 +227,37 @@ describe('tier-A extraction', () => {
 
   it('resolveEntry returns null when nothing resolves', () => {
     expect(resolveEntry(pkgs['no-entry']!)).toBeNull();
+  });
+});
+
+// A subpath is a different module with a different surface. Before this the
+// resolver could only answer for '.', so `check-upgrade` dropped every symbol
+// imported from one — and a package used only through subpaths was compared
+// against an empty reference set and reported OK on a breaking upgrade.
+describe('subpath entry points', () => {
+  it('resolves a subpath listed in the exports map', () => {
+    const s = extractSurface(pkgs['subpath-exports']!, { subpath: 'pg-core' });
+    expect(paths(s)).toEqual(['pgTable']);
+    expect(paths(extractSurface(pkgs['subpath-exports']!))).toEqual(['rootOnly']);
+  });
+
+  it('resolves a subpath through a ./* wildcard pattern', () => {
+    const s = extractSurface(pkgs['subpath-exports']!, { subpath: 'deep/nested' });
+    expect(paths(s)).toEqual(['viaWildcard']);
+  });
+
+  it('refuses a subpath the exports map does not list', () => {
+    // Node treats `exports` as a hard boundary, so guessing at a file here would
+    // invent a surface the runtime will not load.
+    const s = extractSurface(pkgs['subpath-exports']!, { subpath: 'dist/pg-core' });
+    expect(s.undeclaredReason).toContain('subpath');
+    expect(paths(s)).toEqual([]);
+  });
+
+  it('falls back to the filesystem when there is no exports map', () => {
+    expect(paths(extractSurface(pkgs['subpath-legacy']!, { subpath: 'lib/extra' }))).toEqual([
+      'legacySub',
+    ]);
   });
 });
 

@@ -5,6 +5,7 @@
  */
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { getConfig } from '../core/config';
+import { logger } from '../core/logger';
 import type { Category, CategorySource, ScoreBreakdown } from '../core/types';
 import { collectSignals } from '../ingestion/collect';
 import { fetchWeeklyDownloads, npmPackageExists } from '../ingestion/sources';
@@ -158,8 +159,11 @@ export async function syncOnePackage(
   }
   // Record the version timeline (idempotent). Non-fatal: never block a
   // successful package upsert on the version-history write.
-  await upsertPackageVersions(db, name, signals.registry?.versionTimeline ?? []).catch(
-    () => {},
+  await upsertPackageVersions(db, name, signals.registry?.versionTimeline ?? []).catch((err) =>
+    // Swallowed but no longer invisible: this is the only write to
+    // package_versions in the codebase, and drift reads that table, so a
+    // failure here silently zeroes drift for the package.
+    logger.warn(`version timeline write failed for ${name}: ${(err as Error).message}`),
   );
   // Mint observed compat edges from this package's resolved closure (§4B
   // Trigger 1). Best-effort — mineEdgesForPackage swallows its own errors.

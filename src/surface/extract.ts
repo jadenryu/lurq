@@ -503,10 +503,10 @@ function isReadable(symbols: SurfaceSymbol[]): boolean {
  */
 export function extractSurface(
   pkgDir: string,
-  opts: { manifest?: PackageManifest | null } = {},
+  opts: { manifest?: PackageManifest | null; subpath?: string } = {},
 ): ExtractedSurface {
   const manifest = opts.manifest ?? readManifest(pkgDir);
-  const candidates = resolveEntryCandidates(pkgDir, manifest);
+  const candidates = resolveEntryCandidates(pkgDir, manifest, opts.subpath);
   const base: ExtractedSurface = {
     package: manifest?.name ?? pkgDir,
     version: manifest?.version ?? null,
@@ -516,7 +516,14 @@ export function extractSurface(
     filesWalked: 0,
     externalReExports: [],
   };
-  if (!candidates.length) return { ...base, undeclaredReason: 'no resolvable JS entry point' };
+  if (!candidates.length) {
+    return {
+      ...base,
+      undeclaredReason: opts.subpath
+        ? `no resolvable JS entry point for subpath ./${opts.subpath}`
+        : 'no resolvable JS entry point',
+    };
+  }
 
   // Try each entry until one yields a readable surface. An ESM-first package's
   // `require` condition is often a wrapper that re-exports through a runtime

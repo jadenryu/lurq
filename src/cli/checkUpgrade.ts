@@ -32,7 +32,26 @@ interface PlanFile {
 
 /** Read targets from a plan produced by `lurq upgrade-plan --json`. */
 export function targetsFromPlanFile(path: string): UpgradeTarget[] {
-  const parsed = JSON.parse(readFileSync(path, 'utf8')) as PlanFile;
+  // A plan file is written by one command and read by another, usually across
+  // two CI steps. When step one fails the file is missing or empty, and the bare
+  // `Unexpected end of JSON input` that fell out of JSON.parse named neither the
+  // file nor the step that should have written it.
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (err) {
+    const why = (err as NodeJS.ErrnoException).code === 'ENOENT' ? 'does not exist' : String(err);
+    throw new Error(`plan file ${path} ${why}. Did \`lurq upgrade-plan --json\` run?`);
+  }
+  if (!text.trim()) {
+    throw new Error(`plan file ${path} is empty. Did \`lurq upgrade-plan --json\` run?`);
+  }
+  let parsed: PlanFile;
+  try {
+    parsed = JSON.parse(text) as PlanFile;
+  } catch (err) {
+    throw new Error(`plan file ${path} is not valid JSON: ${(err as Error).message}`);
+  }
   if (!Array.isArray(parsed.upgrades)) {
     throw new Error(`${path} is not an upgrade plan (no "upgrades" array)`);
   }

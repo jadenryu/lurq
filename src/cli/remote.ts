@@ -29,11 +29,28 @@ function apiKey(override?: string): string {
   const key = override ?? process.env.LURQ_API_KEY;
   if (!key) {
     throw new RemoteError(
-      'No API key. Set LURQ_API_KEY (create one at lurq.dev/dashboard/keys).',
+      'No API key. Set LURQ_API_KEY (create one at lurq.run/dashboard/keys).',
       401,
     );
   }
   return key;
+}
+
+/**
+ * Pull a human-readable message out of an error body.
+ *
+ * The server speaks two envelopes and the client has to read both: the REST
+ * handlers send `{ error: "some text" }`, but every auth and rate-limit
+ * rejection goes through the JSON-RPC shape `{ error: { code, message } }`.
+ * Reading `.error` as a string worked for the first and stringified the second
+ * to `[object Object]`, which is what a user saw for every 401 the hosted API
+ * has ever returned, i.e. exactly the case where the message mattered most.
+ */
+function errorText(body: unknown): string | undefined {
+  const err = (body as { error?: unknown })?.error;
+  if (typeof err === 'string') return err;
+  const message = (err as { message?: unknown })?.message;
+  return typeof message === 'string' ? message : undefined;
 }
 
 export interface RemoteOptions {
@@ -68,7 +85,7 @@ async function post<T>(path: string, body: unknown, opts: RemoteOptions = {}): P
   if (!res.ok) {
     const detail = await res
       .json()
-      .then((b: unknown) => (b as { error?: string })?.error)
+      .then(errorText)
       .catch(() => undefined);
     throw new RemoteError(detail ?? `${path} failed with HTTP ${res.status}`, res.status);
   }

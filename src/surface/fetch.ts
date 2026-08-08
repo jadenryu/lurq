@@ -26,6 +26,13 @@ const MAX_TARBALL_BYTES = 64 * 1024 * 1024;
 
 export interface FetchedSurface {
   surface: ExtractedSurface;
+  /**
+   * Surfaces of the subpath entry points named in `opts.subpaths`, keyed by
+   * subpath (`pg-core`). Extracted from the same unpacked tarball as the root,
+   * because a package with four used entry points would otherwise cost four
+   * downloads of the same archive.
+   */
+  subpathSurfaces?: Record<string, ExtractedSurface>;
   /** sha256 of the tarball — the extraction cache key. */
   artifactHash: string;
   resolvedVersion: string;
@@ -59,7 +66,7 @@ export async function resolveTarball(
 export async function fetchAndExtract(
   name: string,
   version: string | null,
-  opts: { fetchImpl?: typeof fetch } = {},
+  opts: { fetchImpl?: typeof fetch; subpaths?: string[] } = {},
 ): Promise<FetchedSurface | null> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const dist = await resolveTarball(name, version, fetchImpl);
@@ -119,8 +126,17 @@ export async function fetchAndExtract(
     // extracts) refused to boot without it.
     const { extractSurface } = await import('./extract');
     const surface = extractSurface(pkgDir);
+    const subpathSurfaces: Record<string, ExtractedSurface> = {};
+    for (const sub of new Set(opts.subpaths ?? [])) {
+      subpathSurfaces[sub] = {
+        ...extractSurface(pkgDir, { subpath: sub }),
+        package: `${name}/${sub}`,
+        version: dist.version,
+      };
+    }
     return {
       surface: { ...surface, package: name, version: dist.version },
+      ...(opts.subpaths?.length ? { subpathSurfaces } : {}),
       artifactHash,
       resolvedVersion: dist.version,
     };

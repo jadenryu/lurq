@@ -578,6 +578,19 @@ export async function runCompat(
       console.log(dim(`\nunverified (no metadata): ${res.unverified.join(', ')}`));
     }
     // Evidence strength (§4B): show co-install witnesses behind each pair.
+    //
+    // A pair can be both: tier-1 says the declared peer range is violated, and a
+    // co-resolution witness says something out there installed them together
+    // anyway. The declared constraint wins, which is the whole point of tier 1,
+    // but printing a bare "observed, 1 witness" row directly under a red
+    // `conflict` reads as the tool contradicting itself. Say which one lost.
+    const conflicted = new Set(
+      res.conflicts.flatMap((c) =>
+        c.packages.length >= 2 ? [[...c.packages].sort().join(' ')] : [],
+      ),
+    );
+    const isOverruled = (e: { packages: [string, string] }) =>
+      conflicted.has([...e.packages].sort().join(' '));
     const compatEvidence = res.evidence.filter((e) => e.status === 'compatible');
     if (compatEvidence.length) {
       console.log(
@@ -585,11 +598,16 @@ export async function runCompat(
           ['Pair', 'Evidence', 'Witnesses'],
           compatEvidence.map((e) => [
             `${e.packages[0]} + ${e.packages[1]}`,
-            e.provenance,
+            isOverruled(e) ? `${e.provenance} (overruled)` : e.provenance,
             e.provenance === 'observed' ? String(e.witnessCount) : '—',
           ]),
         ),
       );
+      if (compatEvidence.some(isOverruled)) {
+        console.log(
+          dim('overruled: a declared peer/engine constraint above beats the co-resolution witness'),
+        );
+      }
     }
   });
 }
