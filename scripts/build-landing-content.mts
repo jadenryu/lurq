@@ -291,7 +291,7 @@ const witnessRows = (await sql`
   from compat_edges
   where package_a = any(${STACK}) and package_b = any(${STACK}) and status = 'compatible'
   group by 1, 2`) as Row[];
-const witnessKey = (a: string, b: string) => [a, b].sort().join(' ');
+const witnessKey = (a: string, b: string) => [a, b].sort().join('\0');
 const witnesses = new Map(
   witnessRows.map((w) => [
     witnessKey(String(w.package_a), String(w.package_b)),
@@ -395,7 +395,7 @@ type PairCell = {
   reproduce: string;
 };
 
-const pairKey = (a: string, b: string) => [a, b].sort().join(' ');
+const pairKey = (a: string, b: string) => [a, b].sort().join('\0');
 const declaredByPair = new Map(edges.map((e) => [pairKey(e.source, e.target), e]));
 const pairs: PairCell[] = [];
 
