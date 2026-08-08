@@ -267,13 +267,25 @@ export function AgentSession() {
   // not a demonstration any more, it is a page that will not move. Past this
   // point the section is an ordinary one in both directions.
   //
-  // Taking the track out moves everything below it up the page by exactly its
-  // height, so the scroll position comes down by the same amount in the same
-  // frame and nothing on screen moves: the window is at the end of its travel,
-  // so it lands back where it already is, and the only document that changed is
-  // above the fold and behind the reader. Instant explicitly, because
-  // globals.css puts scroll-behavior: smooth on the root and a smooth-animated
-  // correction is the jump this is avoiding, drawn out over 300ms.
+  // Taking the track out moves the window up the page by the track's height, so
+  // the scroll position comes down by the same amount in the same frame and
+  // nothing on screen moves: the window is at the end of its travel, so it lands
+  // back where it already is, and the only document that changed is above the
+  // fold and behind the reader.
+  //
+  // Measured rather than assumed. The correction used to be a flat
+  // `scrollY - height`, which is right only if the browser leaves the scroll
+  // alone — and it does not: shrinking content around the viewport is exactly
+  // what CSS scroll anchoring exists to compensate for, and when it fires first
+  // the flat correction is applied a second time and throws the reader a whole
+  // track back up, into the section they had just scrolled out of. Reading the
+  // window's own position on either side of the write costs one forced layout
+  // and is correct under both: the delta is the full height when nothing
+  // intervened and zero when the browser already did it.
+  //
+  // Instant explicitly, because globals.css puts scroll-behavior: smooth on the
+  // root and a smooth-animated correction is the jump this is avoiding, drawn
+  // out over 300ms.
   useEffect(() => {
     if (stage !== "open") return;
     const pin = pinRef.current;
@@ -286,12 +298,14 @@ export function AgentSession() {
       raf = 0;
       const height = run.offsetHeight;
       if (height === 0) return;
-      const travel = stick.getBoundingClientRect().top - pin.getBoundingClientRect().top;
+      const before = stick.getBoundingClientRect().top;
+      const travel = before - pin.getBoundingClientRect().top;
       // A pixel of slack: sticky offsets land on fractional values.
       if (travel < height - 1) return;
       window.removeEventListener("scroll", onScroll);
       run.style.height = "0px";
-      window.scrollTo({ top: window.scrollY - height, behavior: "instant" });
+      const shift = stick.getBoundingClientRect().top - before;
+      if (shift) window.scrollTo({ top: window.scrollY + shift, behavior: "instant" });
     };
 
     const onScroll = () => {
