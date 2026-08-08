@@ -135,15 +135,29 @@ async function buildBucket(db: Db, cutoff: string): Promise<Bucket> {
     // A total across the whole index, so the board's rows read as a sample of
     // something rather than as the whole story.
     //
-    // No install floor here, and that is a measured decision rather than an
-    // oversight. The obvious objection to this percentage is that it counts
-    // long-tail packages nobody installs alongside the ones everybody does, so
-    // it was run at floors of 10k, 100k and 1M weekly downloads: the share came
-    // back identical at every one of them (10/15/17/17/22/29% across the six
-    // cutoffs, unchanged to the point). There is no tail to cut. Discovery
-    // seeded the index from the popular end, so 2,751 of 3,241 packages are
-    // already above 1M installs a week and only 91 sit below 10k. A filter that
-    // drops 6% of the rows and moves the number zero points is a filter that
+    // Same population as the rows above, which it was not until now: the rows
+    // dropped deprecated packages and ones with no download figure, and this
+    // count kept them, so the eight packages on screen and the percentage over
+    // them were drawn from two different sets. Small in effect — 120 rows of
+    // 7,156, worth about half a point — and indefensible in kind, because this
+    // is the one number on the page that invites a reader to check it.
+    //
+    // No install floor, and that is still a measured decision rather than an
+    // oversight, though not for the reason it used to be. The old note here
+    // said there was no tail to cut, which was true of a hand-seeded index of
+    // 3,241 packages where only 91 sat below 10k a week. The crawl has since
+    // taken it past 7,000 and 1,564 of those are below 10k, so there is now a
+    // real tail — it just does not drift differently. By weekly-install band,
+    // measured 2026-08-08 at the may-2026 cutoff:
+    //
+    //     <10k      7.9%      100k-1M    9.4%      >10M    8.1%
+    //     10k-100k  5.0%      1M-10M    11.0%
+    //
+    // The relationship is not monotonic and barely a relationship at all: the
+    // hardest-drifting band is 1M-10M, in the middle, and cutting the tail
+    // moves the total by a rounding error. Weighting by installs rather than
+    // counting packages gives 8.9% against 8.5%, which is the same answer.
+    // A filter that changes the population and not the number is a filter that
     // exists to answer a question rather than to change an answer.
     const totalResult = await db.execute(sql`
       with stable as (
@@ -152,12 +166,19 @@ async function buildBucket(db: Db, cutoff: string): Promise<Bucket> {
         from package_versions
         where published_at is not null and version ~ '^[0-9]+\\.[0-9]+\\.[0-9]+$'
       ),
+      eligible as (
+        select name from packages
+        where weekly_downloads is not null and deprecated = false
+      ),
       then_state as (
-        select package_name, max(major) as major_then from stable
-        where published_at < ${cutoff}::timestamptz group by package_name
+        select s.package_name, max(s.major) as major_then
+        from stable s join eligible e on e.name = s.package_name
+        where s.published_at < ${cutoff}::timestamptz group by s.package_name
       ),
       now_state as (
-        select package_name, max(major) as major_now from stable group by package_name
+        select s.package_name, max(s.major) as major_now
+        from stable s join eligible e on e.name = s.package_name
+        group by s.package_name
       )
       select count(*)::int as drifted,
              (select count(*)::int from then_state) as tracked
