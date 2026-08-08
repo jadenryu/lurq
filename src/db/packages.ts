@@ -2,7 +2,7 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { and, desc, eq, isNotNull, isNull, notExists, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, lt, notExists, sql } from 'drizzle-orm';
 import type { Category } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
@@ -231,7 +231,49 @@ function syncOrigin(): string | null {
   return `${env ?? '?'}/${service ?? '?'}`;
 }
 
+/** How long a run may sit in `running` before a later run declares it dead.
+ *  Full syncs finish in about twenty minutes, so this is an order of magnitude
+ *  of headroom — the point is to reap abandoned rows, never to race a live one.
+ *  It must also stay clear of a concurrent sibling: two schedulers firing the
+ *  same cron start seconds apart, nowhere near this. */
+const SYNC_STALE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Mark runs abandoned by a process that never came back.
+ *
+ * `runSync` writes a terminal status on both the success and the throw path, so
+ * a row left at `running` means the process died where no handler could run:
+ * OOM, SIGKILL, a container timeout. Nothing else can ever close those rows, and
+ * without this they accumulate forever and quietly corrupt any "when did the
+ * index last sync cleanly" read — a stuck `running` row is indistinguishable
+ * from a sync in progress.
+ */
+async function reapAbandonedSyncRuns(db: Database): Promise<void> {
+  await db
+    .update(syncRuns)
+    .set({
+      status: 'failed',
+      finishedAt: new Date(),
+      errors: [
+        {
+          package: '*',
+          source: 'pipeline',
+          message: 'abandoned: the process died before writing a terminal status',
+        },
+      ],
+    })
+    .where(
+      and(
+        eq(syncRuns.status, 'running'),
+        lt(syncRuns.startedAt, new Date(Date.now() - SYNC_STALE_MS)),
+      ),
+    );
+}
+
 export async function startSyncRun(db: Database): Promise<number> {
+  // Cheap, and this is the only moment we know a sweep is safe: any run still
+  // `running` from six hours ago cannot be the one we are about to start.
+  await reapAbandonedSyncRuns(db);
   const [row] = await db
     .insert(syncRuns)
     .values({ status: 'running', origin: syncOrigin() })
