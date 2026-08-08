@@ -10,34 +10,40 @@ const indexed = (latest: string | null, extra: Partial<{ deprecated: boolean; ad
   advisories: extra.advisories ?? 0,
 });
 
+/** A single-manifest declaration — the common case in these unit tests. */
+const declared = (range: string) => ({
+  range,
+  declaredIn: [{ path: 'package.json', range }],
+});
+
 describe('depDrift', () => {
   it('reports no drift when the declared range already admits latest', () => {
     // The bug this guards: measuring from the range floor (6.4.0) instead of
     // what a fresh install resolves to (6.9.2) invents drift on current repos.
-    const dep = depDrift('react-router', '^6.4.0', indexed('6.9.2'), ['6.4.0', '6.9.2']);
+    const dep = depDrift('react-router', declared('^6.4.0'), indexed('6.9.2'), ['6.4.0', '6.9.2']);
     expect(dep.resolved).toBe('6.9.2');
     expect(dep.majorsBehind).toBe(0);
   });
 
   it('counts majors between the resolved version and latest', () => {
-    const dep = depDrift('react-router', '^6.4.0', indexed('8.1.0'), ['6.4.0', '6.9.2', '7.0.0', '8.1.0']);
+    const dep = depDrift('react-router', declared('^6.4.0'), indexed('8.1.0'), ['6.4.0', '6.9.2', '7.0.0', '8.1.0']);
     expect(dep.resolved).toBe('6.9.2');
     expect(dep.majorsBehind).toBe(2);
   });
 
   it('never reports negative drift when the repo is ahead of the index', () => {
-    const dep = depDrift('next', '^17.0.0', indexed('16.4.0'), ['16.4.0', '17.0.1']);
+    const dep = depDrift('next', declared('^17.0.0'), indexed('16.4.0'), ['16.4.0', '17.0.1']);
     expect(dep.majorsBehind).toBe(0);
   });
 
   it('falls back to the range floor when the index has no version timeline', () => {
-    const dep = depDrift('zod', '^3.23.8', indexed('4.0.1'), []);
+    const dep = depDrift('zod', declared('^3.23.8'), indexed('4.0.1'), []);
     expect(dep.resolved).toBe('3.23.8');
     expect(dep.majorsBehind).toBe(1);
   });
 
   it('carries deprecation and advisory counts through', () => {
-    const dep = depDrift('request', '^2.88.0', indexed('2.88.2', { deprecated: true, advisories: 3 }), ['2.88.0', '2.88.2']);
+    const dep = depDrift('request', declared('^2.88.0'), indexed('2.88.2', { deprecated: true, advisories: 3 }), ['2.88.0', '2.88.2']);
     expect(dep.deprecated).toBe(true);
     expect(dep.advisories).toBe(3);
   });
@@ -49,7 +55,21 @@ describe('declaredDeps', () => {
       { path: 'package.json', deps: { react: '^19.0.0' } },
       { path: 'packages/api/package.json', deps: { react: '^18.2.0' } },
     ]);
-    expect(merged.get('react')).toBe('^18.2.0');
+    // The merged range governs reported drift...
+    expect(merged.get('react')!.range).toBe('^18.2.0');
+  });
+
+  it('records every manifest declaring a package, with that file own range', () => {
+    // ...but editing needs each site, because bumping only the root would leave
+    // the workspace pinned to the old major and the upgrade half-applied.
+    const merged = declaredDeps([
+      { path: 'package.json', deps: { react: '^19.0.0' } },
+      { path: 'packages/api/package.json', deps: { react: '^18.2.0' } },
+    ]);
+    expect(merged.get('react')!.declaredIn).toEqual([
+      { path: 'package.json', range: '^19.0.0' },
+      { path: 'packages/api/package.json', range: '^18.2.0' },
+    ]);
   });
 });
 

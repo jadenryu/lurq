@@ -1,5 +1,5 @@
 import { Chip, EmptyState, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
-import type { RepoBrief, UpgradeBrief, UpgradeVerdict } from "@/lib/lurq-issuer";
+import type { RepoBrief, UpgradeBrief, UpgradeHop, UpgradeVerdict } from "@/lib/lurq-issuer";
 import { cn } from "@/lib/utils";
 
 /**
@@ -55,13 +55,51 @@ function SymbolList({
   );
 }
 
+/**
+ * The migration sequence, drawn as steps rather than listed as versions.
+ *
+ * Nobody upgrades 6 → 8 in one edit, and the ordering is most of the work. These
+ * hops deliberately do not feed the headline verdict: a symbol dropped at 7 and
+ * restored at 8 shows up here and correctly does not count as a breakage.
+ */
+function HopPath({ from, hops }: { from: string; hops: UpgradeHop[] }) {
+  return (
+    <div>
+      <p className={eyebrow}>migration path · {hops.length} steps</p>
+      <ol className="mt-2 space-y-1.5">
+        {hops.map((hop, i) => (
+          <li key={`${hop.fromVersion}-${hop.toVersion}`} className="flex flex-wrap items-baseline gap-x-2">
+            <span className="font-mono text-[0.65rem] text-muted-foreground/50">{i + 1}</span>
+            <span className="font-mono text-xs tabular-nums">
+              {hop.fromVersion} <span className="text-muted-foreground/50">→</span> {hop.toVersion}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {hop.removed.length > 0
+                ? `removes ${hop.removed.slice(0, 4).join(", ")}${hop.removed.length > 4 ? ` +${hop.removed.length - 4}` : ""}`
+                : hop.verdict === "unknown"
+                  ? "not yet analysed"
+                  : "no removals"}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-2 font-mono text-[0.65rem] text-muted-foreground/60">
+        starting from {from}
+      </p>
+    </div>
+  );
+}
+
 function BriefCard({ upgrade }: { upgrade: UpgradeBrief }) {
   const verdict = VERDICTS[upgrade.verdict];
   const detailed =
     upgrade.removed.length > 0 ||
     upgrade.arityChanged.length > 0 ||
     upgrade.typeOnlyRemoved.length > 0 ||
-    upgrade.newlyDeprecated.length > 0;
+    upgrade.newlyDeprecated.length > 0 ||
+    (upgrade.hops?.length ?? 0) > 0;
+  // Only worth naming for a monorepo; one root manifest is the default reading.
+  const multiManifest = (upgrade.declaredIn?.length ?? 0) > 1;
 
   return (
     <Panel padding="tight">
@@ -90,8 +128,22 @@ function BriefCard({ upgrade }: { upgrade: UpgradeBrief }) {
         </p>
       )}
 
+      {/* An unplanned sequence must never read as "this is one hop". */}
+      {upgrade.sequenceNote && (
+        <p className="mt-3 text-sm leading-relaxed text-warn">{upgrade.sequenceNote}</p>
+      )}
+
+      {multiManifest && (
+        <p className="mt-3 font-mono text-xs text-muted-foreground">
+          declared in {upgrade.declaredIn.map((d) => d.path).join(", ")}
+        </p>
+      )}
+
       {detailed && (
         <div className="mt-4 space-y-4 border-t border-border pt-4">
+          {upgrade.hops?.length > 0 && (
+            <HopPath from={upgrade.fromVersion} hops={upgrade.hops} />
+          )}
           <SymbolList label="removed at runtime" symbols={upgrade.removed} tone="bad" />
           {upgrade.arityChanged.length > 0 && (
             <div>

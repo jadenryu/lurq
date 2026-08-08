@@ -69,13 +69,13 @@ const EnvSchema = z.object({
   LURQ_ISSUER_SECRET: z.string().min(1).optional(),
 
   // GitHub App (repo autopilot). Only the App itself holds repo access; lurq
-  // never stores a user's personal token. All three unset → /repos is disabled.
+  // never stores a user's personal token. Either unset → /repos is disabled (404).
+  // The App *slug* is deliberately not here: only the web app needs it, to build
+  // the install link, and it reads process.env directly.
   /** Numeric App ID from the GitHub App settings page. */
   LURQ_GITHUB_APP_ID: z.string().min(1).optional(),
   /** PEM private key. Accepts literal newlines or `\n` escapes (Railway/Vercel). */
   LURQ_GITHUB_APP_PRIVATE_KEY: z.string().min(1).optional(),
-  /** App slug, used to build the install URL the dashboard links to. */
-  LURQ_GITHUB_APP_SLUG: z.string().min(1).optional(),
 
   // Client-side (install wizard / CLI talking to a remote endpoint).
   LURQ_ENDPOINT: z.string().url().optional(),

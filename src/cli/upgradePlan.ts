@@ -128,6 +128,25 @@ export function formatUpgradePlan(plan: UpgradePlanResult): string {
     for (const change of upgrade.arityChanged.slice(0, 5)) {
       out.push(`  arity ${change.path}: ${change.from ?? '?'} → ${change.to ?? '?'}`);
     }
+    // The migration sequence, when this crosses two or more majors. Ordering is
+    // most of the work, and a single 6→8 line hides which step owns which break.
+    if (upgrade.hops?.length) {
+      out.push(`  via ${[upgrade.fromVersion, ...upgrade.hops.map((h) => h.toVersion)].join(' → ')}`);
+      for (const hop of upgrade.hops) {
+        const detail = hop.removed.length
+          ? `removes ${hop.removed.slice(0, 5).join(', ')}`
+          : hop.verdict === 'unknown'
+            ? 'not yet analysed'
+            : 'no removals';
+        out.push(`    ${hop.fromVersion} → ${hop.toVersion}: ${detail}`);
+      }
+    }
+    if (upgrade.sequenceNote) out.push(`  ${upgrade.sequenceNote}`);
+    // Only worth printing for a monorepo; a single root manifest is the default
+    // assumption and saying so on every line would be noise.
+    if (upgrade.declaredIn?.length > 1) {
+      out.push(`  declared in ${upgrade.declaredIn.map((d) => d.path).join(', ')}`);
+    }
     if (upgrade.inconclusive) out.push(`  ${upgrade.inconclusive}`);
   }
 

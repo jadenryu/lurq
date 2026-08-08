@@ -80,6 +80,17 @@ export interface RemoteUpgrade {
   package: string;
   fromVersion: string;
   toVersion: string;
+  /** Manifests declaring it — every one needs bumping, not just the root. */
+  declaredIn: { path: string; range: string }[];
+  /** Migration sequence for a multi-major upgrade; empty when one hop suffices. */
+  hops: {
+    fromVersion: string;
+    toVersion: string;
+    verdict: RemoteUpgrade['verdict'];
+    removed: string[];
+    arityChanged: { path: string; from: number | null; to: number | null }[];
+  }[];
+  sequenceNote?: string;
   majorsBehind: number;
   advisories: number;
   deprecated: boolean;

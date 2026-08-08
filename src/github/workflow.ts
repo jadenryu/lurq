@@ -121,9 +121,20 @@ jobs:
             exports that DISAPPEAR at the target version, and each carries the
             exact file and line where this repository uses it.
 
+            lurq-plan.json carries two more things per upgrade:
+              · "declaredIn" — EVERY package.json declaring that dependency.
+                Bump all of them. Bumping only the root leaves a workspace
+                pinned to the old major, which typechecks and breaks on install.
+              · "hops" — the migration sequence when the upgrade crosses two or
+                more majors, with what each step removes. Work the steps in
+                order; do not jump straight to the target version. When
+                "sequenceNote" is present, the sequence could not be planned —
+                treat that dependency as a migration and skip it.
+
             Take at most \${{ env.MAX_UPGRADES }} entries, hardest first:
 
-            1. Bump the dependency's range in the package.json that declares it.
+            1. Bump the dependency's range in every manifest listed in
+               "declaredIn".
             2. Rewrite every listed call site to the target version's API. The
                brief tells you what was removed; consult the package's own docs
                for the replacement. Do not invent an API you have not verified.

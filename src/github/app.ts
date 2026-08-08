@@ -162,10 +162,3 @@ export async function installationGet<T>(
   });
   return res.data;
 }
-
-/** Public install URL for the dashboard's "Connect GitHub" button. */
-export function installUrl(state: string): string {
-  const slug = getConfig().LURQ_GITHUB_APP_SLUG;
-  if (!slug) return '';
-  return `https://github.com/apps/${slug}/installations/new?state=${encodeURIComponent(state)}`;
-}

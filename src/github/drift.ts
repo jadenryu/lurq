@@ -18,6 +18,7 @@ import type { Database } from '../db/client';
 import { packageVersions, packages } from '../db/schema';
 import {
   REPO_DRIFT_DETAIL_CAP,
+  type DepDeclaration,
   type DepDrift,
   type RepoDrift,
   type RepoManifest,
@@ -32,22 +33,35 @@ interface IndexedPackage {
   advisories: number;
 }
 
-/** Distinct dependency names across every manifest in a repo. */
-export function declaredDeps(manifests: RepoManifest[]): Map<string, string> {
-  const out = new Map<string, string>();
+export interface DeclaredDep {
+  /** Lowest range declared anywhere — see below. */
+  range: string;
+  /** Every manifest that declares it, in manifest order (root first). */
+  declaredIn: DepDeclaration[];
+}
+
+/**
+ * Distinct dependencies across every manifest, with where each is declared.
+ *
+ * `range` is the *lowest* declared range, because that is the one whose upgrade
+ * is furthest away and therefore governs the repo's real drift. `declaredIn`
+ * keeps every site, because reporting drift and *editing* it need different
+ * views: the merged range answers "how far behind is this repo", the file list
+ * answers "which package.json does the agent bump".
+ */
+export function declaredDeps(manifests: RepoManifest[]): Map<string, DeclaredDep> {
+  const out = new Map<string, DeclaredDep>();
   for (const manifest of manifests) {
     for (const [name, range] of Object.entries(manifest.deps)) {
-      // A workspace can pin a different range than the root. Keep the *lowest*
-      // declared range, because that is the one whose upgrade is furthest away
-      // and therefore the one that governs the repo's real drift.
       const existing = out.get(name);
       if (!existing) {
-        out.set(name, range);
+        out.set(name, { range, declaredIn: [{ path: manifest.path, range }] });
         continue;
       }
-      const a = semver.minVersion(existing);
-      const b = semver.minVersion(range);
-      if (a && b && semver.lt(b, a)) out.set(name, range);
+      existing.declaredIn.push({ path: manifest.path, range });
+      const current = semver.minVersion(existing.range);
+      const candidate = semver.minVersion(range);
+      if (current && candidate && semver.lt(candidate, current)) existing.range = range;
     }
   }
   return out;
@@ -86,7 +100,7 @@ async function loadIndexed(
  * Deliberately one query per chunk of names rather than per name: a repo with
  * 300 dependencies would otherwise open 300 round trips per scan.
  */
-async function loadVersions(
+export async function loadVersions(
   db: Database,
   names: string[],
 ): Promise<Map<string, string[]>> {
@@ -108,10 +122,11 @@ async function loadVersions(
 /** Pure drift math for one dependency — the part worth testing in isolation. */
 export function depDrift(
   name: string,
-  range: string,
+  declared: DeclaredDep,
   indexed: IndexedPackage,
   knownVersions: string[],
 ): DepDrift {
+  const { range } = declared;
   const latest = indexed.latestVersion;
   // `maxSatisfying` needs the candidate list; when the index has no timeline yet,
   // fall back to the range's own floor rather than reporting no drift at all.
@@ -128,6 +143,7 @@ export function depDrift(
   return {
     name,
     range,
+    declaredIn: declared.declaredIn,
     resolved,
     latest,
     majorsBehind,
@@ -182,10 +198,10 @@ export async function computeDrift(
   ]);
 
   const deps: DepDrift[] = [];
-  for (const [name, range] of declared) {
+  for (const [name, entry] of declared) {
     const row = indexed.get(name);
     if (!row) continue; // untracked — counted via depsDeclared - depsTracked
-    deps.push(depDrift(name, range, row, versions.get(name) ?? []));
+    deps.push(depDrift(name, entry, row, versions.get(name) ?? []));
   }
 
   deps.sort((a, b) => severity(b) - severity(a) || a.name.localeCompare(b.name));

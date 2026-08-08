@@ -265,10 +265,21 @@ export async function fetchRepo(
 
 export type UpgradeVerdict = "removes-exports" | "arity-changed" | "clean" | "unknown";
 
+export interface UpgradeHop {
+  fromVersion: string;
+  toVersion: string;
+  verdict: UpgradeVerdict;
+  removed: string[];
+  arityChanged: { path: string; from: number | null; to: number | null }[];
+}
+
 export interface UpgradeBrief {
   package: string;
   fromVersion: string;
   toVersion: string;
+  declaredIn: { path: string; range: string }[];
+  hops: UpgradeHop[];
+  sequenceNote?: string;
   majorsBehind: number;
   advisories: number;
   deprecated: boolean;

@@ -16,11 +16,22 @@ export interface RepoManifest {
   deps: Record<string, string>;
 }
 
+/** Where a dependency is declared. A monorepo declares the same package in
+ *  several workspaces, often at different ranges — and an agent editing the
+ *  upgrade needs the file list, not just the merged view. */
+export interface DepDeclaration {
+  /** Repo-relative manifest path. */
+  path: string;
+  range: string;
+}
+
 /** Per-dependency drift, computed against the lurq index. */
 export interface DepDrift {
   name: string;
-  /** Declared range from the manifest, e.g. `^6.4.0`. */
+  /** Lowest range declared anywhere — the one that governs the repo's drift. */
   range: string;
+  /** Every manifest declaring this package, with that manifest's own range. */
+  declaredIn: DepDeclaration[];
   /** Highest indexed version the range admits — what a fresh install resolves to. */
   resolved: string | null;
   /** `packages.latest_version` at scan time. */
