@@ -1,5 +1,9 @@
 # ── Node / TypeScript (lurq) ──────────────────────────────────────────────
-node_modules/
+# No trailing slash. `node_modules/` matches only a directory, so a stray
+# `node_modules` *symlink* (what a git worktree pointed at an installed tree
+# leaves behind) sailed past it into a commit. Every builder that then ran
+# `npm ci` died on "cannot replace to directory /app/node_modules with file".
+node_modules
 dist/
 dist-operator/
 coverage/
