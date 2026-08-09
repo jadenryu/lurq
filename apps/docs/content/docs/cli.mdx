@@ -8,20 +8,22 @@ retrieval the MCP tools expose. Add `--json` to any command for machine-readable
 output.
 
 <Callout type="info">
-  These query commands talk to a lurq index. End users on the hosted service get
-  recommendations through their agent over MCP; the CLI query commands below are
-  primarily for operators and self-hosters running against their own database.
-  See [Self-hosting](/docs/self-hosting).
+  Run `lurq setup` first. The query commands read whichever index is configured:
+  the hosted service via your stored API key, or your own Postgres if
+  `DATABASE_URL` is set and no key is. A key wins over `DATABASE_URL`: otherwise,
+  running `lurq` inside your own Postgres-backed app would point package lookups
+  at that app's database. Operators holding both can force the local index with
+  `LURQ_LOCAL=1`. See [Self-hosting](/docs/self-hosting).
 </Callout>
 
 ## Querying the index
 
 ```bash
-lurqrun recommend "a form library for react"
-lurqrun recommend "debounce a function"
-lurqrun evaluate zod
-lurqrun compare drizzle-orm prisma typeorm
-lurqrun verify lodahs
+lurq recommend "a form library for react"
+lurq recommend "debounce a function"
+lurq evaluate zod
+lurq compare drizzle-orm prisma typeorm
+lurq verify lodahs
 ```
 
 `recommend` accepts `--category` and `--min-confidence` to narrow results.
@@ -29,27 +31,45 @@ lurqrun verify lodahs
 ## Scoring controls
 
 ```bash
-lurqrun weights                                  # show & explain the weight model
-lurqrun edit-weights --set composite.lambda=0.5  # override a weight (or --reset)
-lurqrun rescore                                  # re-derive scores from cached data
-lurqrun discover                                 # crawl & gate new candidate packages
+lurq weights                                  # show & explain the weight model
+lurq edit-weights --set composite.lambda=0.5  # override a weight (or --reset)
 ```
 
-`rescore` recomputes scores from already-ingested breakdowns without re-fetching
-from public APIs — fast, and useful after changing weights.
+Both work without an index: the weight model ships with the package. `rescore`
+and `discover` rebuild a dataset and live on the operator plane, not the public
+CLI. See [Self-hosting](/docs/self-hosting).
 
-## Installing the agent skill
+## Setup and credentials
 
 ```bash
-# interactive: detect assistants and write keyed MCP entries
-lurqrun install
+# interactive: store the key, then wire up every assistant found (MCP + skills)
+lurq setup
 
-# scriptable: configure one assistant (or all)
-lurqrun install-skill --agent claude-code --api-key <key>
-lurqrun install-skill --agent all --api-key <key>
+# scriptable: no prompts, no browser
+lurq setup --yes --no-open --api-key <key> --agent all
 
+# just one assistant
+lurq setup --agent claude-code
+
+# point at your own serve-http instead of api.lurq.run
+lurq setup --url https://lurq.internal/mcp
+
+# forget the stored key on this machine
+lurq logout
+```
+
+The endpoint is stored with the key, so a later bare `lurq setup` stays on your
+server. `LURQ_ENDPOINT` overrides it for a single command without changing what
+is stored.
+
+`lurq install` and `lurq login` are aliases for `lurq setup`.
+
+`install-skill` is the older, narrower command: it writes MCP entries and skill
+files but does **not** store the key for the CLI. Prefer `setup`.
+
+```bash
 # self-host: wire your agent to a local stdio server instead of the hosted API
-lurqrun install-skill --local
+lurq install-skill --local
 ```
 
 ## Output format
@@ -57,7 +77,7 @@ lurqrun install-skill --local
 Every command supports `--json`:
 
 ```bash
-lurqrun recommend "state management for react" --json
+lurq recommend "state management for react" --json
 ```
 
 This emits structured output suitable for piping into other tools — the same

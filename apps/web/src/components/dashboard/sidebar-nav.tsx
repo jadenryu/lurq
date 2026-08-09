@@ -84,7 +84,7 @@ function NavGroup({
 }) {
   return (
     <div>
-      <p className="px-4 pb-2 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted-foreground/45">
+      <p className="px-4 pb-2 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
         {label}
       </p>
       <div className="flex flex-col gap-0.5">

@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 import { cn } from "@/lib/utils";
 
-const INSTALL_COMMAND = "npx lurqrun install";
+const INSTALL_COMMAND = "npm i -g lurqrun && lurq setup";
 
 /**
  * The zero-data overview: a setup checklist reflecting real account state.

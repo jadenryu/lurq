@@ -102,7 +102,7 @@ export function CreateKeyDialog() {
             </div>
             {!isDemoKey && (
               <p className="text-sm text-muted-foreground">
-                Next: run <code className="font-mono text-foreground">npx lurqrun install</code>{" "}
+                Next: run <code className="font-mono text-foreground">npm i -g lurqrun && lurq setup</code>{" "}
                 and paste this key to connect your coding agent.
               </p>
             )}
