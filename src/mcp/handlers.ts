@@ -26,8 +26,8 @@ import { getPackageByName, getTopPackageNames } from '../db/packages';
 import { diffSurface } from '../usage/diff';
 import { getOrExtractSurface, USAGE_EXTRACT_BUDGET_MS } from '../usage/service';
 import { getLatestVerificationByName } from '../db/verification';
-import { recordOutcome } from '../db/outcomes';
-import { lookupSuccessor } from '../core/successors';
+import { loadLearnedSuccessors, recordOutcome } from '../db/outcomes';
+import { lookupSuccessor, type LearnedSuccessors } from '../core/successors';
 import type { VerificationRunRow } from '../db/schema';
 import { packages, type PackageRow } from '../db/schema';
 import {
@@ -81,7 +81,7 @@ function topAdvisories(advisories: Advisory[] | null, max = 5): Advisory[] {
 }
 
 /** Map a stored row to the compact EvaluateOutput shape (§12.3.2). */
-export function rowToEvaluate(row: PackageRow): EvaluateOutput {
+export function rowToEvaluate(row: PackageRow, learned?: LearnedSuccessors): EvaluateOutput {
   const breakdown = row.scoreBreakdown ?? {
     maintenance: 0,
     adoption: 0,
@@ -110,7 +110,7 @@ export function rowToEvaluate(row: PackageRow): EvaluateOutput {
     summary: row.summary ? truncateSentences(row.summary, 3) : null,
     usageGuide: row.usageGuide ?? null,
     repoUrl: row.repoUrl,
-    replacedBy: lookupSuccessor(row.name),
+    replacedBy: lookupSuccessor(row.name, learned),
   };
 }
 
@@ -200,7 +200,12 @@ export async function handleEvaluate(
             : `"${input.package}" was not found on the npm registry. Check the package name.`,
         };
       }
-      const evaluated = rowToEvaluate(row);
+      // Only a dead package can carry a successor, so the map is worth loading
+      // only for one. It is memoised, but skipping the call entirely keeps the
+      // common path — evaluating a healthy package — free.
+      const learned =
+        row.deprecated || row.archived ? await loadLearnedSuccessors(db) : undefined;
+      const evaluated = rowToEvaluate(row, learned);
       const verification = await getLatestVerificationByName(db, row.name);
       return verification
         ? { ...evaluated, buildVerified: toBuildVerified(verification) }
@@ -249,7 +254,9 @@ export async function handleCompare(
       const rows = results
         .map((r) => r.row)
         .filter((row): row is PackageRow => row !== null)
-        .map(rowToEvaluate)
+        // Not point-free: rowToEvaluate takes a second parameter now, and `.map`
+        // would hand it the index.
+        .map((row) => rowToEvaluate(row))
         .sort((a, b) => b.healthScore - a.healthScore);
       const missing = input.packages.filter((name) => !rows.some((r) => r.name === name));
       return {
