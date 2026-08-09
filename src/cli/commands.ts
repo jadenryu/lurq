@@ -127,7 +127,26 @@ export async function runRecommend(need: string, opts: RecommendCliOpts): Promis
       ]),
     ),
   );
+  printExclusions(res);
   console.log(dim(`\ndata as of ${formatDate(res.dataAsOf)}`));
+}
+
+/**
+ * Show what a selection policy refused, when one is in force.
+ *
+ * policy/types.ts is explicit that exclusions are reported and never silently
+ * dropped, for a concrete reason: told "here are 3 options" when 5 were found,
+ * an agent re-derives the blocked one from training and installs it directly.
+ * The same holds for a person at a terminal. The hosted path is the one that
+ * carries a verdict at all, since policy is owner-scoped and the local path
+ * passes no owner.
+ */
+function printExclusions(res: object): void {
+  if (!('excluded' in res)) return;
+  const excluded = (res.excluded ?? []) as { name: string; rule: string; reason: string }[];
+  if (excluded.length === 0) return;
+  console.log(yellow(`\npolicy refused ${excluded.length}:`));
+  for (const e of excluded) console.log(`  ${e.name}  ${dim(`${e.rule}: ${e.reason}`)}`);
 }
 
 export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promise<void> {
@@ -141,6 +160,16 @@ export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promis
     return;
   }
   console.log(bold(res.name) + (res.category ? dim(`  (${res.category})`) : ''));
+  // A blocked verdict is the most actionable line in the whole output, so it
+  // goes above the scores rather than after them. Absent means "no rules
+  // configured", never "allowed": see PolicyVerdict in policy/types.ts.
+  if (res.policy) {
+    console.log(
+      res.policy.allowed
+        ? green('policy: allowed')
+        : red(`policy: blocked (${res.policy.rule}): ${res.policy.reason}`),
+    );
+  }
   // Every component can be null for a barely-tracked package, and `compact`
   // drops the whole object once they are, so this is absent, not just empty.
   const b = res.scoreBreakdown ?? {};

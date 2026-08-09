@@ -55,9 +55,9 @@ export type ConfigFormat = 'mcpServers' | 'servers' | 'toml';
  *    (GEMINI.md, AGENTS.md, Windsurf global rules). We own only a marked block
  *    inside it, and keep that block short because it is in every prompt.
  */
-export type InstructionKind = 'skill' | 'file' | 'shared';
+type InstructionKind = 'skill' | 'file' | 'shared';
 
-export interface InstructionTarget {
+interface InstructionTarget {
   kind: InstructionKind;
   /** Absolute path of the file we write (or upsert a block into). */
   path: string;
@@ -532,7 +532,7 @@ export function printInstallReport(
   } else {
     console.log('  1. Restart the agent so it picks up the new MCP server.');
   }
-  console.log('  • Ask it to recommend a library — it should call lurq.');
+  console.log('  • Ask it to recommend a library. It should call lurq.');
   console.log('  • Or use the terminal directly: `lurq recommend "a form library for React"`.');
 }
 

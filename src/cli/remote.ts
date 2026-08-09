@@ -62,28 +62,47 @@ export interface RemoteOptions {
   timeoutMs?: number;
 }
 
-async function post<T>(path: string, body: unknown, opts: RemoteOptions = {}): Promise<T> {
-  const url = `${endpoint(opts.url)}${path}`;
+/**
+ * POST JSON with a timeout, mapping transport failures to RemoteError.
+ *
+ * Shared by the REST client and the MCP client below, which differ only in what
+ * they send and how they read the reply. One copy means the "timed out" and
+ * "could not reach" wording cannot drift apart, and the callers stay short
+ * enough to see at a glance.
+ */
+async function postJson(
+  url: string,
+  body: unknown,
+  headers: Record<string, string>,
+  timeoutMs = 60_000,
+): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 60_000);
-  let res: Response;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    res = await fetch(url, {
+    return await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey(opts.apiKey)}`,
-      },
+      headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (err) {
-    if (err instanceof RemoteError) throw err;
     const aborted = err instanceof Error && err.name === 'AbortError';
     throw new RemoteError(aborted ? `Timed out calling ${url}` : `Could not reach ${url}`, 0);
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function post<T>(path: string, body: unknown, opts: RemoteOptions = {}): Promise<T> {
+  const url = `${endpoint(opts.url)}${path}`;
+  // `apiKey()` is evaluated here rather than inside postJson, so a missing key
+  // throws before any request is built and needs no unwrapping downstream.
+  const res = await postJson(
+    url,
+    body,
+    { Authorization: `Bearer ${apiKey(opts.apiKey)}` },
+    opts.timeoutMs,
+  );
 
   if (!res.ok) {
     const detail = await res
@@ -112,34 +131,17 @@ export async function callTool<T>(
   opts: RemoteOptions = {},
 ): Promise<T> {
   const url = mcpUrl(opts.url);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 60_000);
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // The streamable-HTTP transport rejects a request that doesn't accept
-        // both, even when it has already decided to answer with plain JSON.
-        Accept: 'application/json, text/event-stream',
-        Authorization: `Bearer ${apiKey(opts.apiKey)}`,
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: tool, arguments: args },
-      }),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err instanceof RemoteError) throw err;
-    const aborted = err instanceof Error && err.name === 'AbortError';
-    throw new RemoteError(aborted ? `Timed out calling ${url}` : `Could not reach ${url}`, 0);
-  } finally {
-    clearTimeout(timer);
-  }
+  const res = await postJson(
+    url,
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: tool, arguments: args } },
+    {
+      // The streamable-HTTP transport rejects a request that doesn't accept
+      // both, even when it has already decided to answer with plain JSON.
+      Accept: 'application/json, text/event-stream',
+      Authorization: `Bearer ${apiKey(opts.apiKey)}`,
+    },
+    opts.timeoutMs,
+  );
 
   const body = parseRpcBody(await res.text());
   if (!res.ok) {
@@ -163,13 +165,11 @@ export async function callTool<T>(
 }
 
 /**
- * Read a JSON-RPC response body that may have come back as SSE.
+ * Read a JSON-RPC body, tolerating an SSE frame and a non-JSON error page.
  *
- * The hosted route sets `enableJsonResponse`, so this is plain JSON in
- * practice, but the same transport falls back to an event stream depending on
- * how it is configured, and a self-hosted endpoint (`--url`) may well do that.
- * Pulling the last `data:` frame costs three lines and removes a class of
- * "unexpected token e in JSON" reports from anyone running their own service.
+ * mcp/http.ts sets `enableJsonResponse`, so SSE does not happen today. The three
+ * lines that handle it are what stop this file breaking silently if that flag is
+ * ever flipped in the server it has no other link to.
  */
 function parseRpcBody(raw: string): unknown {
   const text = raw.trimStart().startsWith('{')

@@ -182,6 +182,79 @@ describe('indexSource', () => {
   });
 });
 
+describe('selection-policy reporting', () => {
+  const saved = { key: process.env.LURQ_API_KEY, endpoint: process.env.LURQ_ENDPOINT };
+  let out: string[];
+
+  beforeEach(() => {
+    loadEnv();
+    process.env.LURQ_API_KEY = 'lurq_live_test';
+    process.env.LURQ_ENDPOINT = baseUrl;
+    delete process.env.DATABASE_URL;
+    out = [];
+    vi.spyOn(console, 'log').mockImplementation((...a) => void out.push(a.join(' ')));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (saved.key) process.env.LURQ_API_KEY = saved.key;
+    if (saved.endpoint) process.env.LURQ_ENDPOINT = saved.endpoint;
+    else delete process.env.LURQ_ENDPOINT;
+  });
+
+  // policy/types.ts: exclusions are reported, never silently dropped, because an
+  // agent (or a person) told "here are 3 options" when 5 were found will
+  // re-derive the blocked one and install it directly.
+  it('prints what a policy refused, and why, under the recommend table', async () => {
+    reply = {
+      body: toolResult({
+        candidates: [{ name: 'ky', healthScore: 82, confidence: 'proven', weeklyDownloads: 1 }],
+        excluded: [{ name: 'axios', rule: 'denied', reason: 'use our internal http client' }],
+      }),
+    };
+    const { runRecommend } = await import('../src/cli/commands');
+    await runRecommend('an http client', {});
+
+    const text = out.join('\n');
+    expect(text).toContain('ky');
+    expect(text).toContain('policy refused 1');
+    expect(text).toContain('axios');
+    expect(text).toContain('use our internal http client');
+  });
+
+  it('says nothing about policy when no rules are in force', async () => {
+    reply = {
+      body: toolResult({
+        candidates: [{ name: 'ky', healthScore: 82, confidence: 'proven', weeklyDownloads: 1 }],
+      }),
+    };
+    const { runRecommend } = await import('../src/cli/commands');
+    await runRecommend('an http client', {});
+    expect(out.join('\n')).not.toContain('policy');
+  });
+
+  it('leads an evaluate with a blocked verdict rather than burying it', async () => {
+    reply = {
+      body: toolResult({
+        name: 'axios',
+        healthScore: 88,
+        confidence: 'proven',
+        weeklyDownloads: 1,
+        policy: { allowed: false, name: 'axios', rule: 'denied', reason: 'use the internal client' },
+      }),
+    };
+    const { runEvaluate } = await import('../src/cli/commands');
+    await runEvaluate('axios', {});
+
+    const lines = out.join('\n').split('\n');
+    expect(lines.some((l) => l.includes('policy: blocked') && l.includes('denied'))).toBe(true);
+    // Above the scores: it is the most actionable line in the output.
+    const verdictAt = lines.findIndex((l) => l.includes('policy: blocked'));
+    const healthAt = lines.findIndex((l) => l.includes('health'));
+    expect(verdictAt).toBeLessThan(healthAt);
+  });
+});
+
 describe('runSetup endpoint handling', () => {
   const OWN = 'https://lurq.internal/mcp';
   const savedHome = process.env.HOME;
