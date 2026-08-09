@@ -95,7 +95,7 @@ carries a `dataAsOf` timestamp.
 | `usage` | A version's *real* public API — symbols and signatures from its shipped `.d.ts` |
 | `resolve_surface` | The exact export surface of one package version |
 | `diff_surface` | What a version bump adds, removes, renames, or changes arity on |
-| `report_outcome` | What happened after a pick shipped — feeds back into scoring |
+| `report_outcome` | What happened after a pick shipped — installed clean, broke the build, resolved the task |
 
 `usage` is the one worth calling out: pass the version your model *thinks* it knows
 and get the precise delta to the version you're actually installing. That fact
