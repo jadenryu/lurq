@@ -38,7 +38,7 @@ function matches(dep: DashboardDep, filter: string): boolean {
  * because the gap between the middle and right column IS the drift, and showing
  * only "latest" next to a caret range makes every repo look out of date.
  */
-export function RepoDeps({ deps }: { deps: DashboardDep[] }) {
+export function RepoDeps({ deps, scanning = false }: { deps: DashboardDep[]; scanning?: boolean }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
@@ -50,7 +50,15 @@ export function RepoDeps({ deps }: { deps: DashboardDep[] }) {
   }, [deps, query, filter]);
 
   if (deps.length === 0) {
-    return (
+    // Telling someone to go and run a rescan while the first scan is still
+    // running is both wrong and the thing that taught people rescan is the only
+    // button that does anything.
+    return scanning ? (
+      <EmptyState title="Reading dependencies">
+        The first scan is still running. This list fills in on its own as soon as the manifests
+        have been read.
+      </EmptyState>
+    ) : (
       <EmptyState title="No indexed dependencies yet">
         This repository has not been scanned, or none of its dependencies are in the lurq index
         yet. Run a rescan from the repositories page.

@@ -7,6 +7,7 @@ import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { RepoSetup } from "@/components/dashboard/repo-setup";
+import { ScanProgress } from "@/components/dashboard/scan-progress";
 import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
 import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
 import { UpgradeRuns } from "@/components/dashboard/upgrade-runs";
@@ -14,6 +15,7 @@ import { StatTile } from "@/components/dashboard/stat-tile";
 import { buttonVariants } from "@/components/ui/button";
 import { loadRepo, loadRepoBrief } from "@/lib/dashboard-data";
 import { relativeTime } from "@/lib/format";
+import { isScanPending } from "@/lib/repo-scan";
 
 async function Brief({ id }: { id: number }) {
   const { data, failed } = await loadRepoBrief(id);
@@ -48,6 +50,7 @@ export default async function RepoDetailPage({
 
   const drift = repo.drift;
   const uncovered = drift ? drift.depsDeclared - drift.depsTracked : 0;
+  const scanning = !demo && isScanPending(repo);
 
   return (
     <div>
@@ -56,7 +59,9 @@ export default async function RepoDetailPage({
         subtitle={
           repo.lastScanAt
             ? `Manifests read ${relativeTime(repo.lastScanAt)} from ${repo.defaultBranch ?? "the default branch"}.`
-            : "Not scanned yet."
+            : scanning
+              ? `Reading manifests from ${repo.defaultBranch ?? "the default branch"} now.`
+              : "Not scanned yet."
         }
         demo={demo}
         action={
@@ -67,6 +72,11 @@ export default async function RepoDetailPage({
       />
 
       <div className="mt-8 space-y-6">
+        {/* Polls this route until the first scan lands, so the page fills itself
+            in instead of waiting for someone to guess that rescan is the only
+            thing that ever re-reads the data. */}
+        <ScanProgress pending={scanning ? 1 : 0} />
+
         {repo.lastScanError && <InlineError>{repo.lastScanError}</InlineError>}
 
         {drift && (
@@ -129,7 +139,7 @@ export default async function RepoDetailPage({
           armed={repo.policy.enabled}
         />
 
-        <RepoDeps deps={repo.deps} />
+        <RepoDeps deps={repo.deps} scanning={scanning} />
       </div>
     </div>
   );
