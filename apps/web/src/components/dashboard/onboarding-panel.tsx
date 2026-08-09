@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 
-const INSTALL_COMMAND = "npx lurqrun install";
+const INSTALL_COMMAND = "npm i -g lurqrun && lurq setup";
 
 /**
  * Shown when every one of the user's keys is unused — nudges them to finish setup.

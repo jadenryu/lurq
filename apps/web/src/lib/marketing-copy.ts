@@ -12,7 +12,7 @@
  * pair on this page has been co-installed; every edge is declared metadata).
  */
 
-export const INSTALL_COMMAND = "npx lurqrun install";
+export const INSTALL_COMMAND = "npm i -g lurqrun && lurq setup";
 export const MCP_ENDPOINT = "https://api.lurq.run/mcp";
 export const HEALTH_ENDPOINT = "https://api.lurq.run/healthz";
 export const REPO_URL = "https://github.com/jadenryu/lurq";

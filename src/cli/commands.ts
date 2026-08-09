@@ -1,10 +1,12 @@
 /**
- * Human-facing CLI command implementations (§13). Each reuses the MCP handlers
- * against a DB connection, then renders a compact table/detail view — or raw
- * JSON with `--json`.
+ * Human-facing CLI command implementations (§13). Each gets a result from the
+ * index (the hosted service, or a local database), then renders a compact
+ * table/detail view, or raw JSON with `--json`.
  */
 import semver from 'semver';
-import { requireConfig } from '../core/config';
+import { loadEnv, requireConfig } from '../core/config';
+import { openInBrowser } from '../core/open';
+import { resolveApiKey } from '../core/userConfig';
 import { isCategory, type Category, type Confidence } from '../core/types';
 import { createDb } from '../db/client';
 import { getPackageVersions } from '../db/packages';
@@ -44,6 +46,48 @@ async function withDb<T>(fn: (db: ReturnType<typeof createDb>['db']) => Promise<
   }
 }
 
+/**
+ * Which index a read command should answer from.
+ *
+ * An API key wins over DATABASE_URL, and that order is deliberate. dotenv loads
+ * the `.env` of whatever directory the CLI is invoked in, so for a normal user
+ * (someone who ran `lurq setup` and then typed `lurq recommend` inside their
+ * own Postgres-backed app), DATABASE_URL is *their application's* database.
+ * Checking it first would point package lookups at a schema that has never
+ * heard of lurq and fail with a confusing SQL error. Operators and
+ * self-hosters, who have a DATABASE_URL and no key, still get the local path;
+ * anyone holding both can force it with LURQ_LOCAL=1.
+ */
+export function indexSource(): 'hosted' | 'local' {
+  loadEnv();
+  if (process.env.LURQ_LOCAL === '1') return 'local';
+  if (resolveApiKey()) return 'hosted';
+  if (process.env.DATABASE_URL) return 'local';
+  throw new Error(
+    'No API key configured. Run `lurq setup` to connect this machine, ' +
+      'or set DATABASE_URL to read from your own index.',
+  );
+}
+
+/**
+ * Run one read command against whichever index is configured.
+ *
+ * The hosted tools return exactly what the local handler returns (mcp/server.ts
+ * wraps every handler result as a single JSON text block), so both paths hand
+ * back the same shape and the caller renders it once. The one difference is
+ * that the hosted path has been through `compact`, which drops null fields and
+ * empty arrays, hence the `?? []` guards in the renderers below.
+ */
+async function fromIndex<T>(
+  tool: string,
+  args: Record<string, unknown>,
+  local: (db: ReturnType<typeof createDb>['db']) => Promise<T>,
+): Promise<T> {
+  if (indexSource() === 'local') return withDb(local);
+  const { callTool } = await import('./remote');
+  return callTool<T>(tool, args);
+}
+
 export interface RecommendCliOpts {
   category?: string;
   minConfidence?: string;
@@ -54,115 +98,150 @@ export async function runRecommend(need: string, opts: RecommendCliOpts): Promis
   if (opts.category && !isCategory(opts.category)) {
     throw new Error(`Unknown category "${opts.category}".`);
   }
-  await withDb(async (db) => {
-    const res = await handleRecommend(db, {
-      need,
-      category: opts.category as Category | undefined,
-      constraints: opts.minConfidence
-        ? { minConfidence: opts.minConfidence as Confidence }
-        : undefined,
-    });
-    if (opts.json) return console.log(JSON.stringify(res, null, 2));
-    if (res.candidates.length === 0) {
-      console.log('No matching packages found.');
-      return;
-    }
-    console.log(
-      table(
-        ['Package', 'Health', 'Quality', 'Confidence', 'Weekly', 'Latest', 'Category'],
-        res.candidates.map((c) => [
-          c.name,
-          String(c.healthScore),
-          c.qualityScore != null ? String(c.qualityScore) : '—',
-          confidenceLabel(c.confidence),
-          formatNumber(c.weeklyDownloads),
-          c.latestVersion ?? '—',
-          c.category ?? '—',
-        ]),
-      ),
-    );
-    console.log(dim(`\ndata as of ${formatDate(res.dataAsOf)}`));
-  });
+  const args = {
+    need,
+    category: opts.category as Category | undefined,
+    constraints: opts.minConfidence
+      ? { minConfidence: opts.minConfidence as Confidence }
+      : undefined,
+  };
+  const res = await fromIndex('recommend', args, (db) => handleRecommend(db, args));
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+  const candidates = res.candidates ?? [];
+  if (candidates.length === 0) {
+    console.log('No matching packages found.');
+    return;
+  }
+  console.log(
+    table(
+      ['Package', 'Health', 'Quality', 'Confidence', 'Weekly', 'Latest', 'Category'],
+      candidates.map((c) => [
+        c.name,
+        String(c.healthScore),
+        c.qualityScore != null ? String(c.qualityScore) : '—',
+        confidenceLabel(c.confidence),
+        formatNumber(c.weeklyDownloads),
+        c.latestVersion ?? '—',
+        c.category ?? '—',
+      ]),
+    ),
+  );
+  printExclusions(res);
+  console.log(dim(`\ndata as of ${formatDate(res.dataAsOf)}`));
+}
+
+/**
+ * Show what a selection policy refused, when one is in force.
+ *
+ * policy/types.ts is explicit that exclusions are reported and never silently
+ * dropped, for a concrete reason: told "here are 3 options" when 5 were found,
+ * an agent re-derives the blocked one from training and installs it directly.
+ * The same holds for a person at a terminal. The hosted path is the one that
+ * carries a verdict at all, since policy is owner-scoped and the local path
+ * passes no owner.
+ */
+function printExclusions(res: object): void {
+  if (!('excluded' in res)) return;
+  const excluded = (res.excluded ?? []) as { name: string; rule: string; reason: string }[];
+  if (excluded.length === 0) return;
+  console.log(yellow(`\npolicy refused ${excluded.length}:`));
+  for (const e of excluded) console.log(`  ${e.name}  ${dim(`${e.rule}: ${e.reason}`)}`);
 }
 
 export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promise<void> {
-  await withDb(async (db) => {
-    const res = await handleEvaluate(db, { package: pkg });
-    if (opts.json) return console.log(JSON.stringify(res, null, 2));
-    if ('tracked' in res) {
-      console.log(res.suggestion);
-      return;
-    }
-    console.log(bold(res.name) + (res.category ? dim(`  (${res.category})`) : ''));
-    const b = res.scoreBreakdown;
+  const res = await fromIndex('evaluate', { package: pkg }, (db) =>
+    handleEvaluate(db, { package: pkg }),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+  if ('tracked' in res) {
+    console.log(res.suggestion);
+    return;
+  }
+  console.log(bold(res.name) + (res.category ? dim(`  (${res.category})`) : ''));
+  // A blocked verdict is the most actionable line in the whole output, so it
+  // goes above the scores rather than after them. Absent means "no rules
+  // configured", never "allowed": see PolicyVerdict in policy/types.ts.
+  if (res.policy) {
     console.log(
-      detail([
-        ['health', `${res.healthScore}  ${confidenceLabel(res.confidence)}`],
-        ['quality', res.qualityScore != null ? String(res.qualityScore) : '—'],
-        [
-          'breakdown',
-          `maint ${b.maintenance} · adopt ${b.adoption} · rel ${b.reliability} · eff ${b.efficiency ?? '—'} · qual ${b.quality ?? '—'}`,
-        ],
-        ['version', res.latestVersion ?? '—'],
-        ['weekly dl', `${formatNumber(res.weeklyDownloads)}  (${formatPercent(res.downloadGrowth90d)} 90d)`],
-        ['scorecard', res.scorecard != null ? String(res.scorecard) : '—'],
-        ['bundle', res.bundleMinGzipKb != null ? `${res.bundleMinGzipKb} KB gzip` : '—'],
-        ['released', formatDate(res.lastReleaseAt)],
-        ['flags', [res.deprecated && 'deprecated', res.archived && 'archived'].filter(Boolean).join(', ') || 'none'],
-        ['advisories', res.advisories.length ? res.advisories.map((a) => `${a.severity}`).join(', ') : 'none'],
-        ['repo', res.repoUrl ?? '—'],
-      ]),
+      res.policy.allowed
+        ? green('policy: allowed')
+        : red(`policy: blocked (${res.policy.rule}): ${res.policy.reason}`),
     );
-    if (res.buildVerified) {
-      const bv = res.buildVerified;
-      const state = !bv.installed
-        ? red('install failed')
-        : bv.loaded === false
-          ? yellow('installs, load failed')
-          : green('installs and loads');
-      console.log(`\nsandbox: ${state}  ${dim(`${bv.version} · ${bv.driver}`)}`);
-    }
-    if (res.summary) console.log('\n' + res.summary);
-    if (res.usageGuide) {
-      const g = res.usageGuide;
-      console.log(
-        '\n' +
-          detail(
-            [
-              ['what', g.whatItIs],
-              ['when', g.whenToUse],
-              g.whenNotToUse ? (['when not', g.whenNotToUse] as [string, string]) : null,
-              ['fits', g.whereItFits],
-              g.howToWireIn ? (['wire-in', g.howToWireIn] as [string, string]) : null,
-            ].filter(Boolean) as [string, string][],
-          ),
-      );
-    }
-    console.log(dim(`\ndata as of ${formatDate(res.dataAsOf)}${res.stale ? '  (stale)' : ''}`));
-  });
+  }
+  // Every component can be null for a barely-tracked package, and `compact`
+  // drops the whole object once they are, so this is absent, not just empty.
+  const b = res.scoreBreakdown ?? {};
+  const advisories = res.advisories ?? [];
+  console.log(
+    detail([
+      ['health', `${res.healthScore}  ${confidenceLabel(res.confidence)}`],
+      ['quality', res.qualityScore != null ? String(res.qualityScore) : '—'],
+      [
+        'breakdown',
+        `maint ${b.maintenance ?? '—'} · adopt ${b.adoption ?? '—'} · rel ${b.reliability ?? '—'} · eff ${b.efficiency ?? '—'} · qual ${b.quality ?? '—'}`,
+      ],
+      ['version', res.latestVersion ?? '—'],
+      ['weekly dl', `${formatNumber(res.weeklyDownloads)}  (${formatPercent(res.downloadGrowth90d)} 90d)`],
+      ['scorecard', res.scorecard != null ? String(res.scorecard) : '—'],
+      ['bundle', res.bundleMinGzipKb != null ? `${res.bundleMinGzipKb} KB gzip` : '—'],
+      ['released', formatDate(res.lastReleaseAt)],
+      ['flags', [res.deprecated && 'deprecated', res.archived && 'archived'].filter(Boolean).join(', ') || 'none'],
+      ['advisories', advisories.length ? advisories.map((a) => `${a.severity}`).join(', ') : 'none'],
+      ['repo', res.repoUrl ?? '—'],
+    ]),
+  );
+  if (res.buildVerified) {
+    const bv = res.buildVerified;
+    const state = !bv.installed
+      ? red('install failed')
+      : bv.loaded === false
+        ? yellow('installs, load failed')
+        : green('installs and loads');
+    console.log(`\nsandbox: ${state}  ${dim(`${bv.version} · ${bv.driver}`)}`);
+  }
+  if (res.summary) console.log('\n' + res.summary);
+  if (res.usageGuide) {
+    const g = res.usageGuide;
+    console.log(
+      '\n' +
+        detail(
+          [
+            ['what', g.whatItIs],
+            ['when', g.whenToUse],
+            g.whenNotToUse ? (['when not', g.whenNotToUse] as [string, string]) : null,
+            ['fits', g.whereItFits],
+            g.howToWireIn ? (['wire-in', g.howToWireIn] as [string, string]) : null,
+          ].filter(Boolean) as [string, string][],
+        ),
+    );
+  }
+  console.log(dim(`\ndata as of ${formatDate(res.dataAsOf)}${res.stale ? '  (stale)' : ''}`));
 }
 
 export async function runCompare(pkgs: string[], opts: { json?: boolean }): Promise<void> {
-  await withDb(async (db) => {
-    const res = await handleCompare(db, { packages: pkgs });
-    if (opts.json) return console.log(JSON.stringify(res, null, 2));
-    console.log(
-      table(
-        ['Package', 'Health', 'Confidence', 'Weekly', '90d', 'Scorecard', 'Released'],
-        res.rows.map((r) => [
-          r.name,
-          String(r.healthScore),
-          confidenceLabel(r.confidence),
-          formatNumber(r.weeklyDownloads),
-          formatPercent(r.downloadGrowth90d),
-          r.scorecard != null ? String(r.scorecard) : '—',
-          formatDate(r.lastReleaseAt),
-        ]),
-      ),
-    );
-    if (res.missing?.length) console.log(dim(`\nnot found: ${res.missing.join(', ')}`));
-    console.log(dim(`data as of ${formatDate(res.dataAsOf)}`));
-  });
+  const res = await fromIndex('compare', { packages: pkgs }, (db) =>
+    handleCompare(db, { packages: pkgs }),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+  console.log(
+    table(
+      ['Package', 'Health', 'Confidence', 'Weekly', '90d', 'Scorecard', 'Released'],
+      (res.rows ?? []).map((r) => [
+        r.name,
+        String(r.healthScore),
+        confidenceLabel(r.confidence),
+        formatNumber(r.weeklyDownloads),
+        formatPercent(r.downloadGrowth90d),
+        r.scorecard != null ? String(r.scorecard) : '—',
+        formatDate(r.lastReleaseAt),
+      ]),
+    ),
+  );
+  if (res.missing?.length) console.log(dim(`\nnot found: ${res.missing.join(', ')}`));
+  console.log(dim(`data as of ${formatDate(res.dataAsOf)}`));
 }
 
 // ── weights / edit-weights (§4) ──────────────────────────────────────────────
@@ -258,20 +337,6 @@ export interface PlanCliOpts {
   open?: boolean;
 }
 
-/** Open a file/URL in the OS default app, cross-platform, best-effort. No shell
- *  (avoids metacharacter injection); on Windows `cmd /c start "" <target>` keeps
- *  spaced paths intact because Node passes each arg separately. */
-async function openInBrowser(target: string): Promise<void> {
-  const { spawn } = await import('node:child_process');
-  const [cmd, args]: [string, string[]] =
-    process.platform === 'darwin'
-      ? ['open', [target]]
-      : process.platform === 'win32'
-        ? ['cmd', ['/c', 'start', '', target]]
-        : ['xdg-open', [target]];
-  spawn(cmd, args, { stdio: 'ignore', detached: true }).unref();
-}
-
 export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
   const { readFileSync } = await import('node:fs');
   let document: string;
@@ -283,98 +348,108 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
   if (opts.optimize && opts.optimize !== 'speed' && opts.optimize !== 'balanced') {
     throw new Error("--optimize must be 'speed' or 'balanced'.");
   }
-  await withDb(async (db) => {
+  const args = { document, optimize: opts.optimize as 'speed' | 'balanced' | undefined };
+  const res = await fromIndex('plan', args, async (db) => {
     const { handlePlan } = await import('../mcp/plan');
-    const res = await handlePlan(db, {
-      document,
-      optimize: opts.optimize as 'speed' | 'balanced' | undefined,
-    });
-    if (opts.json) return console.log(JSON.stringify(res, null, 2));
-    if (!('slots' in res)) {
-      console.log(res.note);
-      return;
-    }
-
-    // Visualization: render the roadmap to a portable HTML file and optionally open it.
-    if (opts.html || opts.open) {
-      const { writeFileSync } = await import('node:fs');
-      const { tmpdir } = await import('node:os');
-      const { join } = await import('node:path');
-      const { renderPlanHtml } = await import('./planView');
-      const out = opts.html ?? join(tmpdir(), `lurq-plan-${Date.now()}.html`);
-      writeFileSync(out, renderPlanHtml(res), 'utf8');
-      console.log(`Roadmap written to ${out}`);
-      if (opts.open) await openInBrowser(out);
-    }
-
-    console.log(
-      table(
-        ['Component', 'Layer', 'Recommended', 'Health', 'Confidence', 'Alternatives'],
-        res.slots.map((s) => [
-          s.need.length > 32 ? s.need.slice(0, 31) + '…' : s.need,
-          s.layer,
-          s.recommended
-            ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}`
-            : dim('—'),
-          s.recommended ? String(s.recommended.healthScore) : '—',
-          s.recommended ? confidenceLabel(s.recommended.confidence) : '—',
-          s.alternatives.map((a) => a.name).join(', ') || '—',
-        ]),
-      ),
-    );
-    if (res.unmatched.length) console.log(yellow(`\nNo match for: ${res.unmatched.join(', ')}`));
-
-    if (res.compatibility) {
-      const c = res.compatibility;
-      const col = c.overall === 'compatible' ? green : c.overall === 'conflict' ? red : dim;
-      console.log('\n' + bold('Compatibility: ') + col(c.overall));
-      for (const s of res.slots) {
-        if (s.swappedFrom && s.recommended) {
-          console.log(green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`));
-        }
-      }
-      for (const cf of c.conflicts) console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
-      if (c.unverified.length) console.log(dim(`  unverified: ${c.unverified.join(', ')}`));
-    }
-
-    console.log('\n' + bold('Roadmap (Mermaid):'));
-    console.log(res.mermaid);
-    console.log(dim(`\n${res.note}`));
-    console.log(dim(`data as of ${formatDate(res.dataAsOf)}`));
+    return handlePlan(db, args);
   });
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+  if (!('slots' in res)) {
+    console.log(res.note);
+    return;
+  }
+
+  // Visualization: render the roadmap to a portable HTML file and optionally open it.
+  if (opts.html || opts.open) {
+    const { writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { renderPlanHtml } = await import('./planView');
+    const out = opts.html ?? join(tmpdir(), `lurq-plan-${Date.now()}.html`);
+    writeFileSync(out, renderPlanHtml(res), 'utf8');
+    console.log(`Roadmap written to ${out}`);
+    if (opts.open) openInBrowser(out);
+  }
+
+  console.log(
+    table(
+      ['Component', 'Layer', 'Recommended', 'Health', 'Confidence', 'Alternatives'],
+      (res.slots ?? []).map((s) => [
+        s.need.length > 32 ? s.need.slice(0, 31) + '…' : s.need,
+        s.layer,
+        s.recommended
+          ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}`
+          : dim('—'),
+        s.recommended ? String(s.recommended.healthScore) : '—',
+        s.recommended ? confidenceLabel(s.recommended.confidence) : '—',
+        (s.alternatives ?? []).map((a) => a.name).join(', ') || '—',
+      ]),
+    ),
+  );
+  if ((res.unmatched ?? []).length) console.log(yellow(`\nNo match for: ${(res.unmatched ?? []).join(', ')}`));
+
+  if (res.compatibility) {
+    const c = res.compatibility;
+    const col = c.overall === 'compatible' ? green : c.overall === 'conflict' ? red : dim;
+    console.log('\n' + bold('Compatibility: ') + col(c.overall));
+    for (const s of res.slots ?? []) {
+      if (s.swappedFrom && s.recommended) {
+        console.log(green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`));
+      }
+    }
+    for (const cf of c.conflicts ?? []) console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
+    if (c.unverified?.length) console.log(dim(`  unverified: ${c.unverified.join(', ')}`));
+  }
+
+  console.log('\n' + bold('Roadmap (Mermaid):'));
+  console.log(res.mermaid);
+  console.log(dim(`\n${res.note}`));
+  console.log(dim(`data as of ${formatDate(res.dataAsOf)}`));
 }
 
 export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<void> {
-  await withDb(async (db) => {
-    const res = await handleVerify(db, { package: pkg });
-    if (opts.json) return console.log(JSON.stringify(res, null, 2));
-    const riskColor = res.risk === 'high' ? red : res.risk === 'medium' ? yellow : green;
-    const verdict = !res.exists
-      ? red('✗ NOT FOUND on npm')
-      : res.risk === 'high'
-        ? red('✗ high supply-chain risk')
-        : res.risk === 'medium'
-          ? yellow('⚠ exists, but risky')
-          : green('✓ looks safe');
-    console.log(`${bold(pkg)}  ${verdict}`);
-    console.log(
-      detail([
-        ['version', res.latestVersion ?? '—'],
-        ['weekly dl', formatNumber(res.weeklyDownloads)],
-        ['confidence', res.confidence ? confidenceLabel(res.confidence) : '—'],
-        ['advisories', String(res.advisoryCount)],
-        ['risk', riskColor(res.risk)],
-        ['risk flags', res.riskFlags.length ? yellow(res.riskFlags.join(', ')) : 'none'],
-      ]),
-    );
-  });
+  const res = await fromIndex('verify', { package: pkg }, (db) =>
+    handleVerify(db, { package: pkg }),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+  const riskColor = res.risk === 'high' ? red : res.risk === 'medium' ? yellow : green;
+  const verdict = !res.exists
+    ? red('✗ NOT FOUND on npm')
+    : res.risk === 'high'
+      ? red('✗ high supply-chain risk')
+      : res.risk === 'medium'
+        ? yellow('⚠ exists, but risky')
+        : green('✓ looks safe');
+  console.log(`${bold(pkg)}  ${verdict}`);
+  const riskFlags = res.riskFlags ?? [];
+  console.log(
+    detail([
+      ['version', res.latestVersion ?? '—'],
+      ['weekly dl', formatNumber(res.weeklyDownloads)],
+      ['confidence', res.confidence ? confidenceLabel(res.confidence) : '—'],
+      ['advisories', String(res.advisoryCount ?? 0)],
+      ['risk', riskColor(res.risk)],
+      ['risk flags', riskFlags.length ? yellow(riskFlags.join(', ')) : 'none'],
+    ]),
+  );
 }
 
+/** The stored version timeline. Reads the table directly: there is no MCP tool
+ *  behind it, so unlike its neighbours this one is local-index only. */
 export async function runVersions(
   pkg: string,
   opts: { json?: boolean; limit?: string },
 ): Promise<void> {
   const limit = opts.limit ? Math.max(1, parseInt(opts.limit, 10) || 30) : 30;
+  loadEnv();
+  if (!process.env.DATABASE_URL) {
+    throw new Error(
+      '`lurq versions` reads a local index and needs DATABASE_URL. ' +
+        'On the hosted service, `lurq usage <pkg> --known <v>` gives the API delta between two versions.',
+    );
+  }
   await withDb(async (db) => {
     const versions = await getPackageVersions(db, pkg, limit);
     if (opts.json) return console.log(JSON.stringify(versions, null, 2));
@@ -452,41 +527,43 @@ export async function runUsage(
   pkg: string,
   opts: { version?: string; known?: string; json?: boolean },
 ): Promise<void> {
-  await withDb(async (db) => {
+  const args = { package: pkg, version: opts.version, knownVersion: opts.known };
+  const res = await fromIndex('usage', args, async (db) => {
     const { handleUsage } = await import('../mcp/handlers');
-    const res = await handleUsage(db, {
-      package: pkg,
-      version: opts.version,
-      knownVersion: opts.known,
-    });
-    if (opts.json) return console.log(JSON.stringify(res, null, 2));
-
-    console.log(`${bold(res.package)}${res.version ? `@${res.version}` : ''}`);
-    if (res.engines) {
-      const reqs = Object.entries(res.engines).map(([k, v]) => `${k} ${v}`).join(', ');
-      if (reqs) console.log(dim(`requires: ${reqs}`));
-    }
-    if (!res.available) return console.log(dim(res.note ?? 'no API surface available'));
-
-    console.log(
-      table(
-        ['Export', 'Kind', 'Signature'],
-        (res.surface ?? []).map((s) => [s.name, s.kind, s.signature ?? '']),
-      ),
-    );
-
-    if (res.delta) {
-      const d = res.delta;
-      console.log(bold(`\nΔ from ${res.package}@${d.fromVersion}:`));
-      for (const s of d.removed) console.log(red(`  - ${s.name}`));
-      for (const s of d.added) console.log(green(`  + ${s.name}`));
-      for (const r of d.renamed) console.log(yellow(`  ~ ${r.from.name} → ${r.to.name}`));
-      for (const c of d.changed) console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
-      if (!d.removed.length && !d.added.length && !d.renamed.length && !d.changed.length) {
-        console.log(dim('  no API changes'));
-      }
-    }
+    return handleUsage(db, args);
   });
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+  console.log(`${bold(res.package)}${res.version ? `@${res.version}` : ''}`);
+  if (res.engines) {
+    const reqs = Object.entries(res.engines).map(([k, v]) => `${k} ${v}`).join(', ');
+    if (reqs) console.log(dim(`requires: ${reqs}`));
+  }
+  if (!res.available) return console.log(dim(res.note ?? 'no API surface available'));
+
+  console.log(
+    table(
+      ['Export', 'Kind', 'Signature'],
+      (res.surface ?? []).map((s) => [s.name, s.kind, s.signature ?? '']),
+    ),
+  );
+
+  if (res.delta) {
+    const d = res.delta;
+    const removed = d.removed ?? [];
+    const added = d.added ?? [];
+    const renamed = d.renamed ?? [];
+    const changed = d.changed ?? [];
+    console.log(bold(`\nΔ from ${res.package}@${d.fromVersion}:`));
+    for (const s of removed) console.log(red(`  - ${s.name}`));
+    for (const s of added) console.log(green(`  + ${s.name}`));
+    for (const r of renamed) console.log(yellow(`  ~ ${r.from.name} → ${r.to.name}`));
+    for (const c of changed) console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
+    if (!removed.length && !added.length && !renamed.length && !changed.length) {
+      console.log(dim('  no API changes'));
+    }
+  }
 }
 
 /** Operator: batched backfill of compat edges over the top-N packages (§4C).
@@ -545,69 +622,79 @@ function parsePins(pins: string[] | undefined): Record<string, string> | undefin
   return out;
 }
 
-/** Read (or, with --run, sandbox-verify then read) pairwise package compatibility. */
+/** Read pairwise package compatibility (peer/engine constraints + recorded evidence). */
 export async function runCompat(
   pkgs: string[],
   opts: { run?: boolean; json?: boolean; pin?: string[] },
 ): Promise<void> {
   const versions = parsePins(opts.pin);
-  await withDb(async (db) => {
-    if (opts.run) {
-      console.error(
-        yellow('co-installing in the sandbox (loads package code locally without isolation)'),
-      );
-      const { verifyCompatibility } = await import('../pipeline/compat');
-      await verifyCompatibility(db, pkgs);
-    }
+  const args = { packages: pkgs, versions };
+  const read = async (db: ReturnType<typeof createDb>['db']) => {
     const { handleCompat } = await import('../mcp/handlers');
-    const res = await handleCompat(db, { packages: pkgs, versions });
-    if (opts.json) return console.log(JSON.stringify(res, null, 2));
-    const color = res.overall === 'compatible' ? green : res.overall === 'conflict' ? red : dim;
-    console.log(`${bold(res.packages.join(' + '))}  ${color(res.overall)}`);
-    if (res.conflicts.length) {
-      console.log(
-        table(
-          ['Source', 'Detail'],
-          res.conflicts.map((c) => [c.source, c.detail]),
-        ),
-      );
-    } else if (res.overall === 'compatible') {
-      console.log(dim('no peer-dependency or engine conflicts across the set'));
-    }
-    if (res.unverified.length) {
-      console.log(dim(`\nunverified (no metadata): ${res.unverified.join(', ')}`));
-    }
-    // Evidence strength (§4B): show co-install witnesses behind each pair.
-    //
-    // A pair can be both: tier-1 says the declared peer range is violated, and a
-    // co-resolution witness says something out there installed them together
-    // anyway. The declared constraint wins, which is the whole point of tier 1,
-    // but printing a bare "observed, 1 witness" row directly under a red
-    // `conflict` reads as the tool contradicting itself. Say which one lost.
-    const conflicted = new Set(
-      res.conflicts.flatMap((c) =>
-        c.packages.length >= 2 ? [[...c.packages].sort().join(' ')] : [],
+    return handleCompat(db, args);
+  };
+  // `compat-run` (operator plane) co-installs in the sandbox and records the
+  // resulting edges before reading them back, so it always needs the local
+  // database. Only the plain read can be served by the hosted index.
+  const res = opts.run
+    ? await withDb(async (db) => {
+        console.error(
+          yellow('co-installing in the sandbox (loads package code locally without isolation)'),
+        );
+        const { verifyCompatibility } = await import('../pipeline/compat');
+        await verifyCompatibility(db, pkgs);
+        return read(db);
+      })
+    : await fromIndex('compat', args, read);
+
+  const conflicts = res.conflicts ?? [];
+  const unverified = res.unverified ?? [];
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+  const color = res.overall === 'compatible' ? green : res.overall === 'conflict' ? red : dim;
+  console.log(`${bold((res.packages ?? pkgs).join(' + '))}  ${color(res.overall)}`);
+  if (conflicts.length) {
+    console.log(
+      table(
+        ['Source', 'Detail'],
+        conflicts.map((c) => [c.source, c.detail]),
       ),
     );
-    const isOverruled = (e: { packages: [string, string] }) =>
-      conflicted.has([...e.packages].sort().join(' '));
-    const compatEvidence = res.evidence.filter((e) => e.status === 'compatible');
-    if (compatEvidence.length) {
+  } else if (res.overall === 'compatible') {
+    console.log(dim('no peer-dependency or engine conflicts across the set'));
+  }
+  if (unverified.length) {
+    console.log(dim(`\nunverified (no metadata): ${unverified.join(', ')}`));
+  }
+  // Evidence strength (§4B): show co-install witnesses behind each pair.
+  //
+  // A pair can be both: tier-1 says the declared peer range is violated, and a
+  // co-resolution witness says something out there installed them together
+  // anyway. The declared constraint wins, which is the whole point of tier 1,
+  // but printing a bare "observed, 1 witness" row directly under a red
+  // `conflict` reads as the tool contradicting itself. Say which one lost.
+  const conflicted = new Set(
+    conflicts.flatMap((c) =>
+      c.packages.length >= 2 ? [[...c.packages].sort().join(' ')] : [],
+    ),
+  );
+  const isOverruled = (e: { packages: [string, string] }) =>
+    conflicted.has([...e.packages].sort().join(' '));
+  const compatEvidence = (res.evidence ?? []).filter((e) => e.status === 'compatible');
+  if (compatEvidence.length) {
+    console.log(
+      table(
+        ['Pair', 'Evidence', 'Witnesses'],
+        compatEvidence.map((e) => [
+          `${e.packages[0]} + ${e.packages[1]}`,
+          isOverruled(e) ? `${e.provenance} (overruled)` : e.provenance,
+          e.provenance === 'observed' ? String(e.witnessCount) : '—',
+        ]),
+      ),
+    );
+    if (compatEvidence.some(isOverruled)) {
       console.log(
-        table(
-          ['Pair', 'Evidence', 'Witnesses'],
-          compatEvidence.map((e) => [
-            `${e.packages[0]} + ${e.packages[1]}`,
-            isOverruled(e) ? `${e.provenance} (overruled)` : e.provenance,
-            e.provenance === 'observed' ? String(e.witnessCount) : '—',
-          ]),
-        ),
+        dim('overruled: a declared peer/engine constraint above beats the co-resolution witness'),
       );
-      if (compatEvidence.some(isOverruled)) {
-        console.log(
-          dim('overruled: a declared peer/engine constraint above beats the co-resolution witness'),
-        );
-      }
     }
-  });
+  }
 }
