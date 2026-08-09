@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Wordmark } from "@/components/site/wordmark";
 import {
-  NAV_CHANGELOG,
   NAV_CTA,
   NAV_DASHBOARD,
   NAV_DOCS,
@@ -98,13 +97,6 @@ export function SiteNav() {
         <nav className="room-nav-links">
           <a href={DOCS_URL} className={cn(link, "hidden sm:inline")} style={hover}>
             {NAV_DOCS}
-          </a>
-          <a
-            href={`${REPO_URL}/releases`}
-            className={cn(link, "hidden md:inline")}
-            style={hover}
-          >
-            {NAV_CHANGELOG}
           </a>
           <a
             href={REPO_URL}
