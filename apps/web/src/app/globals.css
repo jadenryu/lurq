@@ -222,51 +222,80 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* lurq dark: Nia/Payload-style monochrome. Rich charcoal (not pitch), clear
-   surface lift for cards/panels, white as the only chrome accent. Soft cool
-   tint keeps it from reading as empty void. */
+/* ─────────────────────────────────────────────────────────────────────────────
+   lurq dark = the dark room, reached through shadcn's names.
+
+   These used to be their own palette: a cool charcoal ramp (oklch ~0.175→0.28
+   at 0.005 chroma) with `--muted-foreground` at oklch(0.7 0 0), i.e. dead
+   neutral grey. That is shadcn's stock dark theme with the numbers nudged, and
+   it is why the dashboard read as generated while the marketing page did not —
+   the product surface was wearing the template's colours and the room's were
+   sitting one import away, unused. The dashboard has ~99 `text-muted-foreground`
+   against ~17 `text-ink-*`, so the template palette was, in practice, the
+   dashboard's palette.
+
+   Nothing here holds a value of its own any more. Every token is an alias onto
+   app/styles/tokens.css, which is the one place a colour is decided. That file
+   loads after this one (see layout.tsx) but `var()` resolves at computed-value
+   time, so the indirection works regardless of order.
+
+   The three semantic hues map onto the room's verdict rules exactly, which is
+   what makes this an alias rather than a coincidence:
+     · --signal is interaction (links, focus, active tab, data marks) → --mark,
+       which tokens.css defines as "interaction: never a verdict"
+     · --ok / --bad are outcomes → --held / --conflict, the verdict pair
+   Keeping those separate is the rule the room is built on; collapsing them
+   would let a chart bar read as a verdict.
+   ───────────────────────────────────────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.175 0.006 250); /* rich charcoal · slight cool */
-  --foreground: oklch(0.97 0 0);
-  --card: oklch(0.215 0.005 250); /* clearly lifted above page */
-  --card-foreground: oklch(0.97 0 0);
-  --popover: oklch(0.225 0.005 250);
-  --popover-foreground: oklch(0.97 0 0);
-  --primary: oklch(0.97 0 0); /* white CTA */
-  --primary-foreground: oklch(0.16 0 0);
-  --secondary: oklch(0.255 0.004 250); /* raised control surface */
-  --secondary-foreground: oklch(0.97 0 0);
-  --muted: oklch(0.235 0.004 250);
-  --muted-foreground: oklch(0.7 0 0);
-  --accent: oklch(0.28 0.004 250);
-  --accent-foreground: oklch(0.97 0 0);
-  --brand: oklch(0.92 0 0); /* light grey mono accent */
-  --brand-foreground: oklch(0.16 0 0);
-  /* The landing-page terminal palette, verbatim (see hero-live-demo.tsx). Soft
-     and desaturated on purpose — these read as syntax highlighting, not as an
-     "AI startup" glow, which the design brief rules out. */
-  --signal: #9db4ff; /* periwinkle · accent + data marks */
-  --signal-muted: #6b7fc4;
-  --ok: #7dcea0; /* accepted / active */
-  --bad: #e08b7a; /* failed / revoked-with-error */
-  --warn: #e6c07a; /* needs attention */
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%); /* hairline */
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.58 0 0);
-  --chart-1: oklch(0.95 0 0); /* lead (lurq) series */
-  --chart-2: oklch(0.62 0 0);
-  --chart-3: oklch(0.5 0 0);
-  --chart-4: oklch(0.4 0 0);
-  --chart-5: oklch(0.32 0 0);
-  --sidebar: oklch(0.19 0.005 250);
-  --sidebar-foreground: oklch(0.97 0 0);
-  --sidebar-primary: oklch(0.97 0 0);
-  --sidebar-primary-foreground: oklch(0.16 0 0);
-  --sidebar-accent: oklch(0.28 0.004 250);
-  --sidebar-accent-foreground: oklch(0.97 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.58 0 0);
+  --background: var(--ground);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink); /* white CTA */
+  --primary-foreground: var(--ground);
+  --secondary: var(--surface-2); /* raised control surface */
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--ink-2);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--ink);
+  --brand: var(--ink);
+  --brand-foreground: var(--ground);
+  --signal: var(--mark);
+  /* The one hue with no room token behind it: --mark stepped down against the
+     ground, rather than a second blue picked by eye. */
+  --signal-muted: color-mix(in oklab, var(--mark) 62%, var(--ground));
+  --ok: var(--held);
+  --bad: var(--conflict);
+  /* Deliberately still a literal. The room runs on three verdict colours and
+     "needs attention" is not one of them — it is the demo-data chip and the
+     revoked-key warning, which are notices about the page rather than findings
+     in the data. A fourth hue that only ever appears on chrome. */
+  --warn: #e6c07a;
+  --destructive: var(--conflict);
+  --border: var(--edge); /* hairline */
+  --input: var(--edge-lit);
+  --ring: var(--mark);
+  /* Unused: nothing in components/dashboard/charts.tsx reads a --chart-N. Every
+     plot is single-series in --signal on purpose (see the header there), so a
+     five-step categorical ramp has nothing to colour. Left mapped rather than
+     deleted because @theme inline still exposes them as utilities. */
+  --chart-1: var(--ink);
+  --chart-2: var(--ink-2);
+  --chart-3: var(--ink-3);
+  --chart-4: var(--edge-lit);
+  --chart-5: var(--edge);
+  --sidebar: var(--ground);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--ground);
+  --sidebar-accent: var(--surface-2);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--edge);
+  --sidebar-ring: var(--mark);
 }
 
 @layer base {
@@ -321,27 +350,29 @@
     0 0 22px -6px color-mix(in oklab, white 20%, transparent);
 }
 
-/* Shared "lit panel" cue: hairline top edge + soft overhead wash. */
+/* The dashboard's panel, and the only user of this class (components/dashboard/
+   panel.tsx). It follows the room's rule for a raised surface: opaque fill, one
+   lit top edge, and depth from a cast shadow rather than from anything showing
+   through.
+
+   Three things went, all of them duplicates or contradictions of that rule:
+
+   · the fill was `color-mix(--card 88%, transparent)`, a translucent panel on a
+     route whose stylesheet opens by saying nothing on it filters what is behind
+     it. At 88% over a near-black ground the transparency bought no visible
+     atmosphere and cost a compositing pass per panel.
+   · the `0 0 0 1px white 5%` ring sat directly under panel.tsx's own
+     `border border-edge`, so every panel drew two hairlines a pixel apart in
+     two different colours.
+   · ::before drew a white-28% top-light gradient underneath that same element's
+     `border-t-edge-lit`. Two lit top edges stacked, and the brighter one was
+     not the token.
+
+   What is left is the shadow, which is the part that was doing work. */
 .panel-lit {
   position: relative;
-  background: color-mix(in oklab, var(--card) 88%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, white 5%, transparent),
-    0 20px 48px -28px color-mix(in oklab, black 75%, transparent);
-}
-.panel-lit::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  height: 1px;
-  background: linear-gradient(
-    to right,
-    transparent,
-    color-mix(in oklab, white 28%, transparent),
-    transparent
-  );
+  background: var(--surface);
+  box-shadow: 0 20px 48px -28px color-mix(in oklab, black 75%, transparent);
 }
 
 /* Faint greyscale grid; masked so it reads as ambient depth, not a hard cage. */

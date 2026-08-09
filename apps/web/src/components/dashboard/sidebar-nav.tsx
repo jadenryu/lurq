@@ -17,6 +17,7 @@ interface NavItem {
 const WORKSPACE: NavItem[] = [
   { href: "/dashboard", label: "overview" },
   { href: "/dashboard/repos", label: "repositories" },
+  { href: "/dashboard/policy", label: "policy" },
   { href: "/dashboard/keys", label: "api keys" },
   { href: "/dashboard/usage", label: "usage" },
   { href: "/dashboard/activity", label: "activity" },
@@ -83,7 +84,7 @@ function NavGroup({
 }) {
   return (
     <div>
-      <p className="px-4 pb-2 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted-foreground/45">
+      <p className="px-4 pb-2 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
         {label}
       </p>
       <div className="flex flex-col gap-0.5">
