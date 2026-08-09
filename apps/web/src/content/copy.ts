@@ -39,7 +39,6 @@ export const COPIED_LABEL = "Copied";
 
 export const WORDMARK = "lurq";
 export const NAV_DOCS = "Docs";
-export const NAV_CHANGELOG = "Changelog";
 export const NAV_GITHUB = "GitHub";
 export const NAV_SIGN_IN = "Sign in";
 export const NAV_DASHBOARD = "Dashboard";

@@ -1,14 +1,29 @@
 /** Static identifiers shared across the CLI and MCP server. */
+import pkg from '../../package.json' with { type: 'json' };
+
 export const SERVER_NAME = 'lurq';
 /** Published npm package name (the CLI command and MCP nickname stay `lurq`).
  *  Keep in sync with package.json "name". */
 export const PACKAGE_NAME = 'lurqrun';
-/** Keep in sync with package.json "version" — tests/version.test.ts enforces it.
- *  Not just cosmetic: github/workflow.ts bakes this into the `npx lurqrun@<v>`
- *  pin of every workflow lurq generates, so a stale value ships users a CI job
- *  pinned to a version that is not the one that wrote it. 0.0.9 went out that
- *  way, because `chore(release): 0.0.9` bumped package.json alone. */
-export const VERSION = '0.0.9';
+/**
+ * Read from package.json rather than restated, so a release bump cannot leave
+ * it behind. This used to be a literal under a "keep in sync" comment, and it
+ * drifted the moment someone bumped package.json alone: 0.0.9 shipped to npm
+ * announcing itself as 0.0.8.
+ *
+ * That is not only cosmetic. github/workflow.ts defaults `cliSpec()` to this
+ * value and bakes it into the `npx lurqrun@<v>` line of every workflow lurq
+ * generates, so a stale constant writes users a CI job pinned to a version
+ * other than the one that wrote it.
+ *
+ * The import is resolved at build time — esbuild inlines the JSON, so there is
+ * no file read at runtime and no dependence on where the bundle sits on disk.
+ * That last part is why this is an import and not a `readFileSync` of a path
+ * relative to `import.meta.url`: the public bin lands at dist/bin/lurq.js and
+ * the library entry at dist/index.js, so any relative path correct for one is
+ * wrong for the other.
+ */
+export const VERSION: string = pkg.version;
 
 /** Default hosted endpoint the install wizard writes into agent configs. The
  *  marketing site is `lurq.run`; the MCP service lives on the `api.` subdomain.
