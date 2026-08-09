@@ -1,124 +1,238 @@
+<div align="center">
+
 # lurq
 
-> execution-verified answers for AI coding agents. a live index of npm scored from public signals, plus a sandbox that settles the questions metadata can't, exposed as an mcp server, a cli, an http api, and an installable agent skill, compatible with claude code, cursor, windsurf, vscode/copilot, codex, gemini cli, antigravity, and kiro.
+**Execution-verified dependency intelligence for AI coding agents.**
 
-your agent picks the dependencies now, and it picks them from training data frozen at its cutoff and ranked by how often a name appeared in text, not by whether the package is healthy today. so agents install libraries that are abandoned, carry open advisories, or don't exist at all.
+A live index of npm scored from public signals, plus a sandbox that settles the
+questions metadata can't — exposed as an MCP server, a CLI, an HTTP API, and an
+installable agent skill.
 
-lurq is what the agent checks first. most of what matters is readable (release cadence, advisories, deprecations, types/tests/docs, bundle cost) and lurq ingests all of it daily. the rest isn't readable at all. whether a package installs cleanly, whether it imports without throwing, whether two versions can coexist in one tree: those are only knowable by running them, so lurq runs them in an isolated sandbox and keeps the result.
+[![npm version](https://img.shields.io/npm/v/lurqrun?color=%230b7285&label=npm)](https://www.npmjs.com/package/lurqrun)
+[![npm downloads](https://img.shields.io/npm/dm/lurqrun?color=%230b7285)](https://www.npmjs.com/package/lurqrun)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![MCP](https://img.shields.io/badge/MCP-compatible-6E56CF)](https://modelcontextprotocol.io)
 
-lurq recommends and explains packages; your agent writes the code. responses are compact and token-budgeted, built for an agent's context window rather than a human's screen.
+[Quick start](#quick-start) · [MCP tools](#mcp-tools) · [CLI](#cli) · [Autopilot](#autopilot) · [How ranking works](#how-ranking-works) · [Docs](https://lurq.run/docs)
 
-**v1 scope:** the javascript/typescript web stack (npm) only.
+</div>
 
 ---
 
-## quick start: connect your agent
+## Why
 
-> **lurq is live.** [create a free account](https://lurq.run/sign-up) to generate
-> your API key, then connect your coding agent with the guided installer below.
+Your agent picks the dependencies now, and it picks them from training data frozen
+at its cutoff, ranked by how often a name appeared in text — not by whether the
+package is healthy today. So agents install libraries that are abandoned, carry
+open advisories, or don't exist at all.
 
-lurq is a **hosted service**: you don't run a database or a sync. one command,
-once per machine:
+lurq is what the agent checks first.
+
+Most of what matters is readable — release cadence, advisories, deprecations,
+types/tests/docs, bundle cost — and lurq ingests all of it daily. The rest isn't
+readable at all. Whether a package installs cleanly, whether it imports without
+throwing, whether two versions can coexist in one tree: those are only knowable by
+running them, so lurq runs them in an isolated sandbox and keeps the result.
+
+lurq recommends and explains packages; your agent writes the code. Responses are
+compact and token-budgeted, built for a context window rather than a screen.
+
+> **Scope:** the JavaScript/TypeScript web stack (npm) only.
+
+---
+
+## Quick start
+
+lurq is a **hosted service** — you don't run a database or a sync.
+[Create a free account](https://lurq.run/sign-up) to generate an API key, then run
+the guided installer:
 
 ```bash
-npx lurqrun
+npx lurqrun install
 ```
 
-that runs setup. it offers to install `lurqrun` globally first, so `lurq` works
-in any terminal without npx, then opens the dashboard so you can grab an api key,
-validates it, and does everything else in one pass:
+It prompts for your key, validates it, detects your installed assistants, and
+writes a keyed remote MCP entry:
 
-- **stores the key** in `~/.lurq/config.json` (mode 0600), so `lurq recommend`,
-  `verify`, `compare`, `usage` and the rest work in any directory, with no
-  `LURQ_API_KEY` to export
-- **registers the mcp server** in every assistant it finds (claude code, cursor,
-  windsurf, vscode/copilot, codex, gemini cli, antigravity, kiro), as a keyed
-  remote entry:
-  `{ "type": "http", "url": "https://api.lurq.run/mcp", "headers": { "Authorization": "Bearer …" } }`
-- **installs the agent skill**, so the model reaches for lurq on its own instead of
-  answering about a package from memory: a real skill at
-  `~/.claude/skills/lurq/SKILL.md` for claude code, and the equivalent rules or
-  steering file for the others
+```json
+{
+  "type": "http",
+  "url": "https://api.lurq.run/mcp",
+  "headers": { "Authorization": "Bearer ..." }
+}
+```
 
-**no database credentials ever touch your machine.** restart your agent afterward.
-one machine, one setup: there's no per-project step and nothing to re-run.
+**No database credentials ever touch your machine.** Restart your agent afterward.
 
-re-run the wizard anytime with `lurq setup`, after installing a new editor or to
-swap in a different key. `lurq install` and `lurq login` are aliases for it.
+<details>
+<summary><b>Supported assistants</b></summary>
 
-our servers are the default, not the only option. running your own `lurq
-serve-http`? point setup at it with `lurq setup --url https://your.host/mcp`, and
-issue the key on that machine with `lurq keys create`. the endpoint is stored
-alongside the key, so later re-runs stay on your server.
+Claude Code · Cursor · Windsurf · VS Code / Copilot · Codex · Gemini CLI ·
+Antigravity · Kiro
 
-## what your agent gets (mcp tools)
+Target one explicitly with `npx lurqrun install-skill --agent <name>`, or
+self-host against your own database with `--local`.
 
-once installed, the agent can call these over mcp. every response is compact and
+</details>
+
+---
+
+## MCP tools
+
+Once installed, your agent can call these over MCP. Every response is compact and
 carries a `dataAsOf` timestamp.
 
-- **`recommend`**: best current packages for a described need (≤5, scored, with confidence)
-- **`evaluate`**: full evidence read for one package (scores, advisories, usage guide)
-- **`compare`**: 2 to 5 packages ranked head-to-head
-- **`verify`**: is a package real, healthy, and not risky? (anti-hallucination guard)
-- **`compat`**: will these packages actually install together? (peer/engine constraints)
-- **`plan`**: source every slot in a stack at once, checked for cross-slot coherence
-- **`diagram`**: a reference-architecture mermaid diagram for a stack
-- **`usage`**: a package version's *real* public api: exported symbols and signatures extracted from its shipped `.d.ts`, exact to the version and absent from any model's training data. pass the version your model knows and get the precise delta: what was added, removed, renamed, or changed.
-- **`report_outcome`**: what happened after a pick shipped, whether it installed clean, broke the build, or resolved the task. the signal only exists for whatever sits inside the decision, so it feeds back into scoring.
+| Tool | What it answers |
+|---|---|
+| `recommend` | Best current packages for a described need (≤5, scored, with confidence) |
+| `evaluate` | Full evidence read for one package — scores, advisories, usage guide |
+| `compare` | 2–5 packages ranked head-to-head |
+| `verify` | Is this package real, healthy, and not risky? *(anti-hallucination guard)* |
+| `compat` | Will these packages actually install together? (peer/engine constraints) |
+| `plan` | Source every slot in a stack at once, checked for cross-slot coherence |
+| `diagram` | A reference-architecture Mermaid diagram for a stack |
+| `usage` | A version's *real* public API — symbols and signatures from its shipped `.d.ts` |
+| `resolve_surface` | The exact export surface of one package version |
+| `diff_surface` | What a version bump adds, removes, renames, or changes arity on |
+| `report_outcome` | What happened after a pick shipped — feeds back into scoring |
 
-## cli
+`usage` is the one worth calling out: pass the version your model *thinks* it knows
+and get the precise delta to the version you're actually installing. That fact
+exists in no changelog and no model's training data.
 
-the same hosted index, scriptable. no database, and no key to pass once setup has
-stored it. every capability is a subcommand:
+---
+
+## CLI
+
+The same index, scriptable. Every capability is a subcommand.
 
 ```bash
+# Discovery
 lurq recommend "a form library for react"
-lurq verify jsonwebtoken
+lurq evaluate zod
 lurq compare date-fns dayjs moment
-lurq compat next react react-dom          # do these install together?
-lurq usage zod --known 3.22.4             # what changed in the api since? (--target pins a version)
-lurq plan ./project.md                    # a description in, a scored stack out
-lurq serve-http                           # run it as a rate-limited service of your own
-lurq weights                              # the exact ranking weights, printed
+lurq verify jsonwebtoken
+
+# API surfaces
+lurq usage zod --known 3.22.4              # what changed since the version you know
+lurq versions react                        # stored version timeline
+
+# Stacks
+lurq compat next react react-dom           # do these install together?
+lurq plan ./project.md                     # a description in, a scored stack out
+
+# Upgrades
+lurq upgrade-plan .                        # what's behind, and what each upgrade removes
+lurq check-upgrade . --plan lurq-plan.json --exit-code
+
+# Configuration & serving
+lurq weights                               # the exact ranking weights, printed
+lurq edit-weights --set composite.lambda=0.5
+lurq serve-http                            # run it as a rate-limited service of your own
 ```
 
-## where the evidence comes from
+Every read command takes `--json`.
 
-two sources, and the distinction is the whole point.
+---
 
-**readable**: npm, github, deps.dev, and osv, re-synced daily. downloads, release
-cadence, maintenance, advisories, deprecations, license, bundle cost. this is what
+## Autopilot
+
+lurq also keeps a repository's dependencies current **and rewrites the code an
+upgrade breaks.**
+
+Renovate and Dependabot open a PR that says *"bumped react-router 6→8"* and gate it
+on your test suite. If coverage misses the affected path, the PR merges green and
+breaks in production.
+
+lurq opens a PR that says *"bumped react-router 6→8, and rewrote the 14 call sites
+that used `useHistory`, which no longer exists"* — because it holds the
+symbol-level surface diff and intersects it with what your code references.
+
+**The gate needs no tests at all.**
+
+```
+blocking   a referenced symbol disappears      → the code will throw
+warning    a referenced symbol changed arity   → it may silently misbehave
+ok         nothing referenced is affected
+unverified could not be established            → never counted as safe
+```
+
+### The loop
+
+| Step | Runs on | Needs |
+|---|---|---|
+| 1. `lurq upgrade-plan` — drift + what each upgrade removes | your runner | lurq key |
+| 2. `lurq check-upgrade` — intersect with your source, `file:line` | your runner | nothing |
+| 3. `claude-code-action` — rewrite the named call sites, run your tests | your runner | Anthropic credential |
+| 4. `create-pull-request` — one branch, one PR | your runner | `GITHUB_TOKEN` |
+| 5. Outcomes post back — names and counts, never source | lurq | — |
+
+Steps 1–2 are the default. The generated workflow starts in `comment` mode: it
+plans, checks, and writes the brief to the run summary, changing nothing. Editing
+is opt-in per repository.
+
+### Trust model
+
+- **lurq's GitHub App is `Contents: read-only` and stays that way.** It cannot
+  write to any repository, ever.
+- **Every write uses your own `GITHUB_TOKEN`** — ephemeral, scoped to one repo,
+  limited to what the `permissions:` block in a file *you* committed declares.
+- **The agent cannot touch version control.** Its allowlist is
+  `Read,Edit,Write,Bash(<pkg-manager>:*)` — no `git`, no network. The model edits
+  files; the *workflow* commits. A prompt injection in a dependency's changelog
+  cannot push a branch.
+- **Revoking it is `git rm .github/workflows/lurq-upgrade.yml`.**
+
+Architecture and limits: [`docs/lurq-autopilot.md`](docs/lurq-autopilot.md).
+
+---
+
+## Where the evidence comes from
+
+Two sources, and the distinction is the whole point.
+
+**Readable** — npm, GitHub, deps.dev, and OSV, re-synced daily. Downloads, release
+cadence, maintenance, advisories, deprecations, license, bundle cost. This is what
 scoring runs on.
 
-**executed**: an isolated sandbox (e2b, with a local driver for trusted work) that
-installs a package version, imports it, and records what happened. co-installing a
+**Executed** — an isolated sandbox (E2B, with a local driver for trusted work) that
+installs a package version, imports it, and records what happened. Co-installing a
 set is how compatibility is established: a successful co-install is positive proof
 two versions coexist, a failure is proof they conflict, and the error is kept as
 evidence. `compat` and `plan` read those edges, which is why lurq can tell you a
 *stack* holds together rather than only that each package looks fine alone.
 
-facts of the second kind appear in no changelog and no model's training data, and
+Facts of the second kind appear in no changelog and no model's training data, and
 they go stale unless someone keeps re-running the experiment.
 
-## how the ranking works
+---
 
-deterministic, and public. no model sits in the ranking path. `recommend` is hybrid
-vector + full-text search over precomputed scores, which is why it's fast, cheap, and
-reproducible.
+## How ranking works
 
-- **health** = maintenance `0.35` · adoption `0.30` · reliability `0.25` · efficiency `0.10`
-- **quality** is a separate, adoption-independent axis (types, tests, docs, changelog,
-  dependency count, license, provenance) so a well-built new package isn't buried by an
-  old popular one
-- the two blend at a single tunable λ for the default sort
+Deterministic, and public. **No model sits in the ranking path** — `recommend` is
+hybrid vector + full-text search over precomputed scores, which is why it's fast,
+cheap, and reproducible.
 
-every weight lives in [`src/scoring/weights.ts`](src/scoring/weights.ts) and is printable with
-`lurq weights`. an answer an agent acts on is worth nothing if it can't be audited.
+```
+health  = maintenance 0.35 · adoption 0.30 · reliability 0.25 · efficiency 0.10
+quality = types · tests · docs · changelog · dep count · license · provenance
+composite = blend at a single tunable λ (default 0.35)
+```
 
-## outreach
+`quality` is a separate, **adoption-independent** axis, so a well-built new package
+isn't buried by an old popular one.
 
-for any inquiries, partnerships, or proposals, contact jaden ryu at jadenryu@gmail.com.
+Every weight lives in [`src/scoring/weights.ts`](src/scoring/weights.ts) and is
+printable with `lurq weights`. An answer an agent acts on is worth nothing if it
+can't be audited.
 
-## license
+---
 
-Apache License 2.0
+## Contact
+
+Inquiries, partnerships, or proposals: **jadenryu@gmail.com**
+
+## License
+
+[Apache-2.0](LICENSE)
