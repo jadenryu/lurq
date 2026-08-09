@@ -208,7 +208,7 @@ export function ToolsSection() {
                       {t.prompt}
                     </p>
                   </div>
-                  <p className="mt-3 font-mono text-[0.65rem] leading-relaxed text-muted-foreground/60">
+                  <p className="mt-3 font-mono text-[0.65rem] leading-relaxed text-ink-3">
                     {t.input}
                   </p>
                 </Panel>

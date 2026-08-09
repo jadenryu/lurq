@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyPolicy, check, hasRules } from '../src/policy/enforce';
+import { parseSelectionPolicy } from '../src/policy/parse';
 import { DEFAULT_SELECTION_POLICY, type SelectionPolicy } from '../src/policy/types';
 import type { Candidate, Confidence } from '../src/core/types';
 
@@ -135,5 +136,77 @@ describe('applyPolicy', () => {
     const { allowed, excluded } = applyPolicy(p, [candidate('a', 'unproven')], new Map());
     expect(allowed).toEqual([]);
     expect(excluded).toHaveLength(1);
+  });
+});
+
+describe('parseSelectionPolicy', () => {
+  const valid = {
+    allow: ['lodash'],
+    deny: [{ name: 'axios', reason: 'internal client' }],
+    minConfidence: 'proven',
+    licenses: ['MIT'],
+    blockDeprecated: true,
+  };
+
+  it('accepts a complete policy', () => {
+    expect(parseSelectionPolicy(valid)).toEqual(valid);
+  });
+
+  it('rejects rather than repairs a partial object', () => {
+    // Merging over the default would let a malformed request silently drop a
+    // rule — a denied package quietly becoming installable again.
+    const { blockDeprecated: _omitted, ...partial } = valid;
+    expect(parseSelectionPolicy(partial)).toBeNull();
+  });
+
+  it('rejects non-objects', () => {
+    for (const bad of [null, undefined, 'policy', 42, []]) {
+      expect(parseSelectionPolicy(bad)).toBeNull();
+    }
+  });
+
+  it('keeps null and [] distinct for licenses', () => {
+    expect(parseSelectionPolicy({ ...valid, licenses: null })?.licenses).toBeNull();
+    expect(parseSelectionPolicy({ ...valid, licenses: [] })?.licenses).toEqual([]);
+  });
+
+  it('treats a missing minConfidence as no rule, not as a failure', () => {
+    const { minConfidence: _omitted, ...rest } = valid;
+    expect(parseSelectionPolicy(rest)?.minConfidence).toBeNull();
+  });
+
+  it('rejects an unknown confidence level', () => {
+    expect(parseSelectionPolicy({ ...valid, minConfidence: 'excellent' })).toBeNull();
+  });
+
+  it('trims names and drops an empty reason rather than storing one', () => {
+    const out = parseSelectionPolicy({
+      ...valid,
+      allow: ['  lodash  '],
+      deny: [{ name: 'axios', reason: '   ' }],
+    });
+    expect(out?.allow).toEqual(['lodash']);
+    expect(out?.deny).toEqual([{ name: 'axios' }]);
+  });
+
+  it('rejects blank and oversized names', () => {
+    expect(parseSelectionPolicy({ ...valid, allow: ['   '] })).toBeNull();
+    expect(parseSelectionPolicy({ ...valid, allow: ['a'.repeat(215)] })).toBeNull();
+  });
+
+  it('rejects malformed deny entries', () => {
+    expect(parseSelectionPolicy({ ...valid, deny: ['axios'] })).toBeNull();
+    expect(parseSelectionPolicy({ ...valid, deny: [{ reason: 'no name' }] })).toBeNull();
+    expect(parseSelectionPolicy({ ...valid, deny: [{ name: 'a', reason: 1 }] })).toBeNull();
+  });
+
+  it('bounds list length', () => {
+    const huge = Array.from({ length: 501 }, (_, i) => `pkg-${i}`);
+    expect(parseSelectionPolicy({ ...valid, allow: huge })).toBeNull();
+  });
+
+  it('round-trips through the rule engine', () => {
+    const parsed = parseSelectionPolicy(valid);
+    expect(parsed && hasRules(parsed)).toBe(true);
   });
 });

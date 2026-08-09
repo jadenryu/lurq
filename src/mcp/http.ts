@@ -28,6 +28,8 @@ import { getOutcomesByOwner } from '../db/outcomes';
 import { getContributionsByOwner } from '../db/packages';
 import { listAlerts } from '../db/alerts';
 import { deleteRepo, getRepo, listRepos, setRepoPolicy, upsertRepos } from '../db/repos';
+import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
+import { parseSelectionPolicy } from '../policy/parse';
 import { getUsageByTool, getUsageSummary } from '../db/usage';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
@@ -636,6 +638,43 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('repo delete failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not disconnect repo.' });
+    }
+  });
+
+  // ── Selection policy (dashboard-authenticated) ─────────────────────────────
+  //
+  // Not behind `requireGithubApp`: selection policy governs what an agent may
+  // install through MCP, which works with no repository connected at all.
+  // Gating it on the GitHub App would make the rules unreachable for exactly the
+  // users who have only wired up the MCP server.
+
+  app.get('/selection-policy', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      res.status(200).json({ policy: await getSelectionPolicy(db, ownerId) });
+    } catch (err) {
+      logger.error('selection policy read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read policy.' });
+    }
+  });
+
+  app.put('/selection-policy', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const policy = parseSelectionPolicy((req.body ?? {}).policy);
+    if (!ownerId || !policy) {
+      res.status(400).json({ error: 'ownerId and a complete policy are required.' });
+      return;
+    }
+    try {
+      await setSelectionPolicy(db, ownerId, policy);
+      res.status(200).json({ policy });
+    } catch (err) {
+      logger.error('selection policy write failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not save policy.' });
     }
   });
 

@@ -86,7 +86,7 @@ export function GettingStarted({ hasKey, keyPrefix, connected }: Props) {
       <Panel padding="tight">
         <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
           <p className={eyebrow}>setup</p>
-          <p className="font-mono text-xs tabular-nums text-muted-foreground/70">{done}/3</p>
+          <p className="font-mono text-xs tabular-nums text-ink-3">{done}/3</p>
         </div>
 
         <Row done={hasKey} label="api key">
@@ -120,7 +120,7 @@ export function GettingStarted({ hasKey, keyPrefix, connected }: Props) {
         </Row>
 
         <Row done={false} label="first call" last>
-          <span className="font-mono text-xs text-muted-foreground/60">
+          <span className="font-mono text-xs text-ink-3">
             waiting for your agent
           </span>
         </Row>
@@ -133,7 +133,7 @@ export function GettingStarted({ hasKey, keyPrefix, connected }: Props) {
         >
           how to use lurq →
         </Link>
-        <span className="font-mono text-xs text-muted-foreground/50">
+        <span className="font-mono text-xs text-ink-3">
           usage, activity and contributions populate after your first call
         </span>
       </div>

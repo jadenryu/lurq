@@ -37,7 +37,7 @@ function TestsCell({ run }: { run: UpgradeRun }) {
   // failing suite — and worth showing, because it tells the reader how much the
   // green in the rest of the row is actually worth.
   if (run.testsPassed === null) {
-    return <span className="font-mono text-xs text-muted-foreground/50">no suite</span>;
+    return <span className="font-mono text-xs text-ink-3">no suite</span>;
   }
   return (
     <span className={`font-mono text-xs ${run.testsPassed ? "text-ok" : "text-bad"}`}>
@@ -94,7 +94,7 @@ export function UpgradeRuns({ runs }: { runs: UpgradeRun[] }) {
                     {run.packageName}
                   </TableCell>
                   <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
-                    {run.fromVersion} <span className="text-muted-foreground/50">→</span>{" "}
+                    {run.fromVersion} <span className="text-ink-3">→</span>{" "}
                     {run.toVersion}
                   </TableCell>
                   <TableCell>
@@ -105,7 +105,7 @@ export function UpgradeRuns({ runs }: { runs: UpgradeRun[] }) {
                       <span title={run.symbolsAffected.join(", ")}>
                         {run.callSites}
                         {run.symbolsAffected.length > 0 && (
-                          <span className="ml-1.5 text-muted-foreground/60">
+                          <span className="ml-1.5 text-ink-3">
                             {run.symbolsAffected.slice(0, 2).join(", ")}
                             {run.symbolsAffected.length > 2 &&
                               ` +${run.symbolsAffected.length - 2}`}
@@ -113,7 +113,7 @@ export function UpgradeRuns({ runs }: { runs: UpgradeRun[] }) {
                         )}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground/40">—</span>
+                      <span className="text-ink-3">—</span>
                     )}
                   </TableCell>
                   <TableCell>

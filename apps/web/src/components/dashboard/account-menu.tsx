@@ -68,12 +68,12 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium leading-tight">{name}</span>
               {email && (
-                <span className="block truncate font-mono text-[0.65rem] leading-tight text-muted-foreground/70">
+                <span className="block truncate font-mono text-[0.65rem] leading-tight text-ink-3">
                   {email}
                 </span>
               )}
             </span>
-            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground/50" />
+            <ChevronsUpDown className="size-3.5 shrink-0 text-ink-3" />
           </>
         )}
       </DropdownMenuTrigger>
@@ -82,7 +82,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
         <div className="px-2 py-2">
           <p className="truncate text-sm font-medium leading-tight">{name}</p>
           {email && (
-            <p className="truncate font-mono text-[0.65rem] leading-tight text-muted-foreground/70">
+            <p className="truncate font-mono text-[0.65rem] leading-tight text-ink-3">
               {email}
             </p>
           )}
