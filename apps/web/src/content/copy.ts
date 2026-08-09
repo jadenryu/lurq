@@ -55,7 +55,7 @@ export const STATUS_OK_LABEL = "api.lurq.run responding";
 
 export const EYEBROW_VERSION = `v${stats.npm.latestVersion}`;
 export const EYEBROW_NPM = "live on npm";
-export const EYEBROW_LICENSE = "Apache-2.0";
+export const EYEBROW_LICENSE = "MIT";
 export const NPM_PACKAGE_URL = "https://www.npmjs.com/package/lurqrun";
 
 export const HEADLINE_LINE_1 = "The verification layer";
@@ -210,4 +210,4 @@ export const CLOSING_SUB =
  * one column, and the third one was 23 words long.
  */
 export const FOOTER_BLURB = "One call, in the gap between the suggestion and the install.";
-export const FOOTER_RIGHTS = `\u00a9 ${new Date().getFullYear()} lurq \u00b7 Apache-2.0`;
+export const FOOTER_RIGHTS = `\u00a9 ${new Date().getFullYear()} lurq \u00b7 MIT`;

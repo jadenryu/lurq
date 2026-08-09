@@ -5,7 +5,7 @@ import { Prose } from "@/components/common/prose";
 
 export const metadata: Metadata = {
   title: "License | lurq",
-  description: "lurq is open source under the Apache License 2.0.",
+  description: "lurq is open source under the MIT License.",
 };
 
 const columns = [
@@ -16,19 +16,18 @@ const columns = [
       "Commercial use",
       "Modification",
       "Distribution",
-      "Patent use",
       "Private use",
     ],
   },
   {
     icon: FileText,
     title: "Conditions",
-    items: ["License & copyright notice", "State changes"],
+    items: ["License & copyright notice"],
   },
   {
     icon: Ban,
     title: "Limitations",
-    items: ["No trademark use", "No liability", "No warranty"],
+    items: ["No liability", "No warranty"],
   },
 ];
 
@@ -37,7 +36,7 @@ export default function LicensePage() {
     <PageShell
       eyebrow="Legal"
       title="License"
-      lead="lurq is open source, released under the Apache License, Version 2.0."
+      lead="lurq is open source, released under the MIT License."
     >
       <div className="grid gap-4 sm:grid-cols-3">
         {columns.map((c) => {
@@ -72,10 +71,10 @@ export default function LicensePage() {
         <h2>Summary</h2>
         <p>
           You may use, modify, and distribute lurq, including commercially,
-          provided you retain the copyright and license notices and state any
-          significant changes. The software is provided <strong>as is</strong>,
-          without warranty of any kind. This summary is for convenience only; the
-          full license text governs.
+          provided you retain the copyright notice and this permission notice.
+          The software is provided <strong>as is</strong>, without warranty of
+          any kind. This summary is for convenience only; the full license text
+          governs.
         </p>
 
         <h2>Full text</h2>
@@ -88,20 +87,12 @@ export default function LicensePage() {
           >
             LICENSE
           </a>{" "}
-          file in the repository, and is reproduced verbatim from the{" "}
-          <a
-            href="https://www.apache.org/licenses/LICENSE-2.0"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Apache Software Foundation
-          </a>
-          .
+          file in the repository.
         </p>
 
         <p>
-          <strong>Copyright © 2026 lurq.</strong> Licensed under the Apache
-          License, Version 2.0.
+          <strong>Copyright © 2026 Jaden Ryu.</strong> Licensed under the MIT
+          License.
         </p>
       </Prose>
     </PageShell>

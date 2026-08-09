@@ -523,6 +523,58 @@ export const upgradeRuns = pgTable(
   ],
 );
 
+/**
+ * A breaking release that landed on a package a connected repo depends on.
+ *
+ * This is the reactive half of the autopilot. The nightly scan answers "how far
+ * behind is this repo"; a row here answers "something broke *just now*", written
+ * within seconds of the publish by the `_changes` follower rather than up to a
+ * day later. The whole point is latency: a major that ships on Tuesday is no use
+ * to anyone if the repo hears about it on Monday.
+ *
+ * Deliberately derived from the manifests already stored on `repos` — emitting an
+ * alert costs one indexed query and zero GitHub calls, so a heavily-depended
+ * package publishing cannot fan out into thousands of API requests.
+ */
+export const repoAlerts = pgTable(
+  'repo_alerts',
+  {
+    id: serial('id').primaryKey(),
+    /** Clerk user id, copied from the repo — alerts are read owner-scoped. */
+    ownerId: text('owner_id').notNull(),
+    repoId: integer('repo_id').notNull(),
+    /** Denormalized so the feed renders without a join, as in `upgrade_runs`. */
+    repoFullName: text('repo_full_name').notNull(),
+    packageName: text('package_name').notNull(),
+    /** The range this repo declared when the release landed. */
+    range: text('range').notNull(),
+    /** What that range resolved to at the last scan. Null when the index had no
+     *  version timeline for the package yet — never guessed. */
+    fromVersion: text('from_version'),
+    /** The release that triggered this. */
+    toVersion: text('to_version').notNull(),
+    /**
+     * True when the declared range already admits `toVersion` — i.e. the next
+     * clean install silently takes the new major. That is the urgent case and the
+     * one no drift number expresses: the repo is not "behind", it is about to
+     * move on its own.
+     */
+    inRange: boolean('in_range').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('repo_alerts_owner_created_idx').on(table.ownerId, table.createdAt),
+    // One alert per repo per release. A re-sync of the same version — and the
+    // watcher re-syncs on every publish, including non-latest backports — must
+    // not re-notify.
+    uniqueIndex('repo_alerts_dedup_idx').on(
+      table.repoId,
+      table.packageName,
+      table.toVersion,
+    ),
+  ],
+);
+
 export type SyncStatus = 'running' | 'success' | 'partial' | 'failed';
 
 export interface SyncError {
@@ -744,3 +796,5 @@ export type RepoRow = typeof repos.$inferSelect;
 export type NewRepoRow = typeof repos.$inferInsert;
 export type UpgradeRunRow = typeof upgradeRuns.$inferSelect;
 export type NewUpgradeRunRow = typeof upgradeRuns.$inferInsert;
+export type RepoAlertRow = typeof repoAlerts.$inferSelect;
+export type NewRepoAlertRow = typeof repoAlerts.$inferInsert;

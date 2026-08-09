@@ -8,6 +8,7 @@
  */
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from './client';
+import { deleteAlertsForRepo } from './alerts';
 import { repos, type RepoRow } from './schema';
 import { DEFAULT_REPO_POLICY, type RepoDrift, type RepoManifest, type RepoPolicy } from '../github/types';
 
@@ -66,6 +67,30 @@ export async function listRepos(db: Database, ownerId: string): Promise<RepoRow[
  */
 export async function listAllRepos(db: Database): Promise<RepoRow[]> {
   return db.select().from(repos).orderBy(repos.installationId, repos.fullName);
+}
+
+/**
+ * Every connected repo whose stored manifests declare `name`, across all owners.
+ *
+ * The other deliberately unscoped read (see `listAllRepos`): its caller is the
+ * registry watcher reacting to a publish, which has no user context. Never
+ * reachable from an HTTP route.
+ *
+ * `jsonb_exists` rather than the `?` operator: the function form is identical in
+ * Postgres and does not collide with the driver's parameter placeholders. Only
+ * scanned repos can match, since `manifests` is null until the first scan — an
+ * unscanned repo has no declared set to compare against, which is correct.
+ */
+export async function reposDeclaring(db: Database, name: string): Promise<RepoRow[]> {
+  return db
+    .select()
+    .from(repos)
+    .where(
+      sql`exists (
+        select 1 from jsonb_array_elements(${repos.manifests}) as m
+        where jsonb_exists(m -> 'deps', ${name})
+      )`,
+    );
 }
 
 export async function getRepo(
@@ -135,6 +160,9 @@ export async function deleteRepo(
   ownerId: string,
   id: number,
 ): Promise<boolean> {
+  // Alerts first: they carry no foreign key, so leaving them would strand rows
+  // in the owner's feed naming a repo that no longer exists.
+  await deleteAlertsForRepo(db, ownerId, id);
   const deleted = await db
     .delete(repos)
     .where(and(eq(repos.ownerId, ownerId), eq(repos.id, id)))
