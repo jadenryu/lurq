@@ -98,7 +98,7 @@ export function SiteFooter() {
         <div className="border-t border-edge pt-12">
           <div className="flex flex-col gap-12 min-[720px]:flex-row min-[720px]:gap-16">
             <div className="min-[720px]:max-w-[280px]">
-              <Wordmark size={20} tagline />
+              <Wordmark size={20} />
               <p className="mt-4 text-[13px] leading-[1.6] text-ink-2">{FOOTER_BLURB}</p>
             </div>
 

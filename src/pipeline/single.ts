@@ -30,6 +30,7 @@ import {
   upsertPackageVersions,
 } from '../db/packages';
 import { packages, seedPackages, type PackageRow } from '../db/schema';
+import { emitPublishAlerts } from '../github/alerts';
 import { assemblePackageRow } from './sync';
 import { mineEdgesForPackage } from './mineEdges';
 // Safe module cycle: ingestQueue imports syncOnePackage from here, but both
@@ -168,7 +169,16 @@ export async function syncOnePackage(
   // Mint observed compat edges from this package's resolved closure (§4B
   // Trigger 1). Best-effort — mineEdgesForPackage swallows its own errors.
   await mineEdgesForPackage(db, name, signals.registry?.latestVersion ?? null, undefined, now);
-  return (await getPackageByName(db, name))!;
+
+  const row = (await getPackageByName(db, name))!;
+  // Every path that learns of a new release goes through here — the `_changes`
+  // follower, the daily re-sync, and on-demand ingest — so this is the one place
+  // that can tell connected repos a breaking version just landed. `existing` is
+  // the pre-sync state and is null for a first ingest, which correctly alerts
+  // nobody. Best-effort inside emitPublishAlerts: a notification must never fail
+  // the sync that produced it.
+  await emitPublishAlerts(db, name, existing, row);
+  return row;
 }
 
 export interface GetOrFetchResult {

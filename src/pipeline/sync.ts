@@ -38,10 +38,12 @@ import {
   getAllPackageNames,
   getSeedTargets,
   getStaleRefreshTargets,
+  latestVersionsFor,
   startSyncRun,
   upsertPackage,
   upsertPackageVersions,
 } from '../db/packages';
+import { emitPublishAlerts } from '../github/alerts';
 import { mineEdgesForPackage, remineAllClosures } from './mineEdges';
 import { isFrontendCategory } from '../core/types';
 import type { NewPackageRow, SyncError } from '../db/schema';
@@ -184,6 +186,13 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
     );
 
     // ── Pass 2: efficiency + composite + upsert ──────────────────────────────
+    //
+    // Snapshot what the index currently calls `latest` before the upsert below
+    // overwrites it. That "before" is the only way to tell a re-sync of a known
+    // version from a package that has just shipped a new major, which is what
+    // `emitPublishAlerts` notifies connected repos about. One query for the whole
+    // pass, and it must be read *before* the loop, not inside it.
+    const priorLatest = await latestVersionsFor(handle.db, ok.map((c) => c.target.name));
     let updated = 0;
     for (let i = 0; i < ok.length; i++) {
       const c = ok[i]!;
@@ -243,6 +252,16 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
       ).catch((err: unknown) => {
         logger.warn(`version timeline write failed for ${c.target.name}: ${String(err)}`);
       });
+      // Tell the repos that depend on this package if the release it just picked
+      // up is a new major. Cheap by construction: this returns immediately unless
+      // the major actually moved, so a sync of 5,000 unchanged packages costs 5,000
+      // version comparisons and no queries.
+      await emitPublishAlerts(
+        handle.db,
+        c.target.name,
+        { latestVersion: priorLatest.get(c.target.name) ?? null },
+        { latestVersion: c.signals.registry?.latestVersion ?? null },
+      );
       updated++;
     }
 

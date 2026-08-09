@@ -2,7 +2,7 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { and, desc, eq, isNotNull, isNull, lt, notExists, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, notExists, sql } from 'drizzle-orm';
 import { logger } from '../core/logger';
 import type { Category } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
@@ -18,6 +18,9 @@ import {
 
 /** How many rows to insert per statement (stays well under Postgres' param cap). */
 const VERSION_CHUNK = 500;
+
+/** How many names to bind per `IN` list, for the same reason. */
+const NAME_CHUNK = 500;
 
 export async function getSeedTargets(
   db: Database,
@@ -74,6 +77,30 @@ export async function getStaleRefreshTargets(
 export async function getPackageByName(db: Database, name: string) {
   const rows = await db.select().from(packages).where(eq(packages.name, name)).limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * The stored `latest_version` for a set of names, in one query.
+ *
+ * Read *before* a sync pass overwrites them, so the pass can tell whether a
+ * package moved onto a new major and alert the repos that depend on it. An
+ * absent key means the package is not in the index yet — distinct from a present
+ * key holding null, which means indexed with no known latest; neither is a
+ * release event, so both are treated the same downstream.
+ */
+export async function latestVersionsFor(
+  db: Database,
+  names: string[],
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  for (let i = 0; i < names.length; i += NAME_CHUNK) {
+    const rows = await db
+      .select({ name: packages.name, latestVersion: packages.latestVersion })
+      .from(packages)
+      .where(inArray(packages.name, names.slice(i, i + NAME_CHUNK)));
+    for (const row of rows) out.set(row.name, row.latestVersion);
+  }
+  return out;
 }
 
 /** Every tracked package name — the set the `_changes` follower filters against. */

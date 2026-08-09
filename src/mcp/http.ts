@@ -503,6 +503,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
   });
 
+  // Must stay above `/repos/:id` — Express matches in registration order, and
+  // `:id` would otherwise capture the literal "alerts" and 400 on Number('alerts').
+  app.get('/repos/alerts', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      res.status(200).json({ alerts: await listAlerts(db, ownerId) });
+    } catch (err) {
+      logger.error('alert list failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not list alerts.' });
+    }
+  });
+
   app.get('/repos/:id', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
     const ownerId = ownerFrom(req);
     const id = Number(req.params.id);

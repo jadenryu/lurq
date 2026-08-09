@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND_TAGLINE, WORDMARK } from "@/content/copy";
+import { WORDMARK } from "@/content/copy";
 
 /**
  * The lurq mark: two interlocking chevrons, one pointing back and one forward.
@@ -55,12 +55,10 @@ export function Wordmark({
   href,
   size = 16,
   className,
-  tagline = false,
 }: {
   href?: string;
   size?: number;
   className?: string;
-  tagline?: boolean;
 }) {
   const lockup = (
     <span className="inline-flex items-center gap-2">
@@ -78,14 +76,7 @@ export function Wordmark({
 
   if (!href) {
     return (
-      <span className={className}>
-        {lockup}
-        {tagline ? (
-          <span className="mt-3 block font-mono text-[11px] tracking-[0.08em] text-ink-3">
-            {BRAND_TAGLINE}
-          </span>
-        ) : null}
-      </span>
+      <span className={className}>{lockup}</span>
     );
   }
 

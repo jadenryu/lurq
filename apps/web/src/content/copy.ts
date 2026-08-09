@@ -38,8 +38,6 @@ export const COPIED_LABEL = "Copied";
 // ── nav ──────────────────────────────────────────────────────────────────────
 
 export const WORDMARK = "lurq";
-/** Sits under the lockup in the footer. Says the category, not the pitch. */
-export const BRAND_TAGLINE = "Verification for agent installs";
 export const NAV_DOCS = "Docs";
 export const NAV_CHANGELOG = "Changelog";
 export const NAV_GITHUB = "GitHub";
@@ -204,10 +202,6 @@ export const CLOSING_SUB =
 
 // ── footer ──────────────────────────────────────────────────────────
 
-/**
- * Not the lead again. This was LEAD copied word for word, sitting directly under
- * BRAND_TAGLINE, which already names the category. Three restatements stacked in
- * one column, and the third one was 23 words long.
- */
+/** Not the lead again — LEAD word for word under the lockup was one restatement too many. */
 export const FOOTER_BLURB = "One call, in the gap between the suggestion and the install.";
-export const FOOTER_RIGHTS = `\u00a9 ${new Date().getFullYear()} lurq \u00b7 MIT`;
+export const FOOTER_RIGHTS = `\u00a9 ${new Date().getFullYear()} lurq`;
