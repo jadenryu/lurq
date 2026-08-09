@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // The `usage` action lazily imports its handler; stub it so parsing is observable
 // without touching the DB. Same for `setup`, which would otherwise open a
@@ -99,5 +102,42 @@ describe('setup', () => {
     const help = buildProgram().helpInformation();
     expect(help).toContain('setup');
     expect(help).toContain('store your API key');
+  });
+});
+
+// `npx lurqrun` with no subcommand is the one command the docs and the site ask
+// people to run, so it has to land in the wizard on a fresh machine, and get out
+// of the way once the machine is configured.
+describe('bare invocation', () => {
+  const savedKey = process.env.LURQ_API_KEY;
+  const savedHome = process.env.LURQ_HOME;
+
+  beforeEach(() => {
+    runSetup.mockReset();
+    delete process.env.LURQ_API_KEY;
+    // An empty config dir stands in for a machine that has never run setup.
+    process.env.LURQ_HOME = mkdtempSync(join(tmpdir(), 'lurq-bare-'));
+  });
+
+  afterEach(() => {
+    if (savedKey) process.env.LURQ_API_KEY = savedKey;
+    else delete process.env.LURQ_API_KEY;
+    if (savedHome) process.env.LURQ_HOME = savedHome;
+    else delete process.env.LURQ_HOME;
+  });
+
+  it('runs setup when no key is configured yet', async () => {
+    await run([]);
+    expect(runSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it('prints help instead of re-running the wizard once a key exists', async () => {
+    process.env.LURQ_API_KEY = 'lurq_live_already_set_up';
+    const out: string[] = [];
+    const program = buildProgram().configureOutput({ writeOut: (s) => out.push(s) });
+
+    await program.parseAsync([], { from: 'user' });
+    expect(runSetup).not.toHaveBeenCalled();
+    expect(out.join('')).toContain('setup');
   });
 });

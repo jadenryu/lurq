@@ -1,10 +1,11 @@
 /**
- * One-time machine setup (`lurq setup`).
+ * One-time machine setup (`lurq setup`, and bare `npx lurqrun`).
  *
- * The whole point of this command is that a user runs `npm i -g lurqrun`, runs
- * `lurq setup` once, and is then done: the key is stored for the CLI itself, and
- * every detected assistant gets both an MCP entry and a standing-instructions
- * file. Nothing afterwards needs `npx`, a shell export, or a second command.
+ * The whole point of this command is that a user types one thing, `npx lurqrun`,
+ * and is then done: `lurq` is on their PATH, the key is stored for the CLI
+ * itself, and every detected assistant gets both an MCP entry and a
+ * standing-instructions file. Nothing afterwards needs `npx`, a shell export,
+ * or a second command.
  *
  * It opens the dashboard in a browser, walks the three steps in the terminal,
  * takes the pasted key, validates it against the endpoint, and writes:
@@ -14,7 +15,9 @@
  *
  * Fully non-interactive with `--yes` plus flags or env, for dotfiles and CI.
  */
-import { DEFAULT_ENDPOINT } from '../core/constants';
+import { spawnSync } from 'node:child_process';
+
+import { DEFAULT_ENDPOINT, PACKAGE_NAME } from '../core/constants';
 import { openInBrowser } from '../core/open';
 import {
   readUserConfig,
@@ -72,6 +75,47 @@ async function validateKey(url: string, apiKey: string): Promise<KeyCheck> {
   }
 }
 
+/**
+ * True when this process is running out of npm's throwaway npx cache
+ * (`~/.npm/_npx/<hash>/node_modules/…`) rather than an installed copy.
+ *
+ * npm puts every `npx <pkg>` there, prunes it later, and leaves nothing on PATH,
+ * so after the wizard exits the user would have a configured machine but no
+ * `lurq` command. That is the one case worth offering a global install in.
+ * Takes the URL as a parameter purely so it can be tested.
+ */
+export function runningFromNpx(moduleUrl: string = import.meta.url): boolean {
+  // File URLs are slash-separated on every platform, Windows included.
+  return moduleUrl.includes('/_npx/');
+}
+
+/**
+ * Put `lurq` on PATH. Never fatal: the wizard's real work is the key and the
+ * agent configs, and neither depends on this succeeding. A system-managed node
+ * hands out EACCES here, and the right answer to that is a printed hint rather
+ * than a dead setup: the user can keep using `npx lurqrun` in the meantime.
+ */
+function installGlobally(): void {
+  process.stdout.write(`  Installing ${PACKAGE_NAME} globally… `);
+  const res = spawnSync('npm', ['install', '--global', `${PACKAGE_NAME}@latest`], {
+    stdio: ['ignore', 'ignore', 'pipe'],
+    encoding: 'utf8',
+    // npm is a .cmd shim on Windows, which is not directly executable.
+    shell: process.platform === 'win32',
+  });
+
+  if (res.status === 0) {
+    console.log(green('ok'));
+    console.log(dim('  `lurq` now works in any terminal, no npx needed.'));
+    return;
+  }
+
+  console.log(yellow('skipped'));
+  const reason = (res.stderr || res.error?.message || '').trim().split('\n').pop();
+  if (reason) console.log(dim(`  ${reason}`));
+  console.log(dim(`  Setup continues. Run \`npm install -g ${PACKAGE_NAME}\` later if you want it.`));
+}
+
 export async function runSetup(opts: WizardOptions): Promise<void> {
   const interactive = !opts.yes;
   // Both of these fall back to what an earlier run stored, so re-running setup
@@ -88,6 +132,18 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
     // Always say which index, so a self-hoster can see at a glance that a
     // re-run did not quietly move them back onto the shared service.
     console.log(`  Endpoint: ${url}${selfHosted ? dim('  (your own server)') : ''}\n`);
+
+    // Straight from npx: nothing was installed, so offer to put the command on
+    // PATH first, while the user is still at the keyboard. Asked rather than
+    // done silently, because it writes outside their project.
+    if (runningFromNpx()) {
+      const goGlobal = await confirm({
+        message: `Install ${PACKAGE_NAME} globally, so \`lurq\` works without npx?`,
+        default: true,
+      });
+      if (goGlobal) installGlobally();
+      console.log('');
+    }
 
     if (apiKey && !opts.apiKey) {
       const stored = readUserConfig().apiKey === apiKey;
@@ -166,11 +222,11 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
         default: 'yes',
         choices: [
           {
-            name: others > 0 ? `Yes — set up all ${detected.length} detected agents` : `Yes — set up ${primary.label} for me`,
+            name: others > 0 ? `Yes, set up all ${detected.length} detected agents` : `Yes, set up ${primary.label} for me`,
             value: 'yes',
           },
-          { name: 'No — let me choose which agent(s)', value: 'other' },
-          { name: 'Cancel — change nothing', value: 'cancel' },
+          { name: 'No, let me choose which agent(s)', value: 'other' },
+          { name: 'Cancel, change nothing', value: 'cancel' },
         ],
       });
       if (choice === 'cancel') {

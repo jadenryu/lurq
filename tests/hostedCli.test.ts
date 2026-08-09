@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { indexSource } from '../src/cli/commands';
-import { runSetup } from '../src/cli/install';
+import { runningFromNpx, runSetup } from '../src/cli/install';
 import { callTool, RemoteError } from '../src/cli/remote';
 import { loadEnv } from '../src/core/config';
 import { DEFAULT_ENDPOINT } from '../src/core/constants';
@@ -304,5 +304,21 @@ describe('runSetup endpoint handling', () => {
   it('stores the key even when no agent is installed yet', async () => {
     await runSetup({ yes: true, apiKey: 'lurq_live_solo' });
     expect(readUserConfig().apiKey).toBe('lurq_live_solo');
+  });
+});
+
+// Getting this wrong is expensive in both directions: a false negative leaves an
+// npx user with a configured machine and no `lurq` command, and a false positive
+// runs `npm install --global` on someone who never asked for it.
+describe('npx detection', () => {
+  it('recognises npm’s npx cache and nothing else', () => {
+    expect(runningFromNpx('file:///Users/x/.npm/_npx/8f3a/node_modules/lurqrun/dist/bin/lurq.js')).toBe(true);
+    // Windows npx cache: still a slash-separated file URL.
+    expect(runningFromNpx('file:///C:/Users/x/AppData/npm-cache/_npx/1b2/node_modules/lurqrun/dist/bin/lurq.js')).toBe(true);
+
+    expect(runningFromNpx('file:///usr/local/lib/node_modules/lurqrun/dist/bin/lurq.js')).toBe(false);
+    expect(runningFromNpx('file:///Users/x/proj/node_modules/lurqrun/dist/bin/lurq.js')).toBe(false);
+    // A project that merely has "_npx" in a directory name is not an npx run.
+    expect(runningFromNpx('file:///Users/x/my_npx_experiments/dist/bin/lurq.js')).toBe(false);
   });
 });
