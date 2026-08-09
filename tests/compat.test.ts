@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalPair, compatSetKey } from '../src/db/compat';
-import { enumeratePairs, gradeOverall } from '../src/compat/check';
+import { edgeMatchesVersions, enumeratePairs, gradeOverall } from '../src/compat/check';
 import { deriveCompatEdges, fullyCovered, pairKey } from '../src/pipeline/compat';
 import type { SandboxSetResult } from '../src/sandbox/types';
 
@@ -168,5 +168,35 @@ describe('enumeratePairs (a verdict belongs to a pair, not a package)', () => {
     const pairs = enumeratePairs(['a', 'b'], [c, { ...c, detail: 'second' }]);
     expect(pairs).toHaveLength(1);
     expect(pairs[0]!.detail).toBe('first');
+  });
+});
+
+describe('edgeMatchesVersions (evidence is about exact versions)', () => {
+  const edge = { packageA: 'react', packageB: 'next', versionA: '18.3.1', versionB: '14.2.0' };
+
+  it('accepts an edge recorded at the versions under check', () => {
+    const at = new Map([['react', '18.3.1'], ['next', '14.2.0']]);
+    expect(edgeMatchesVersions(edge, at)).toBe(true);
+  });
+
+  it('rejects proof from a different major', () => {
+    // The regression this exists for: react@18 + next@14 co-installing is not
+    // evidence about react@19 + next@16, and a name-level match said it was.
+    const at = new Map([['react', '19.2.4'], ['next', '16.2.9']]);
+    expect(edgeMatchesVersions(edge, at)).toBe(false);
+  });
+
+  it('rejects a partial match', () => {
+    const at = new Map([['react', '18.3.1'], ['next', '16.2.9']]);
+    expect(edgeMatchesVersions(edge, at)).toBe(false);
+  });
+
+  it('rejects a member whose version we could not resolve', () => {
+    const at = new Map<string, string | null>([['react', '18.3.1'], ['next', null]]);
+    expect(edgeMatchesVersions(edge, at)).toBe(false);
+  });
+
+  it('rejects an edge naming a package not under check', () => {
+    expect(edgeMatchesVersions(edge, new Map([['react', '18.3.1']]))).toBe(false);
   });
 });

@@ -59,23 +59,45 @@ export async function checkCompat(
     provenance: edge.provenance,
     witnessCount: edge.witnessCount,
   }));
+  // What each member is actually being checked AT. A recorded edge is evidence
+  // about the exact two versions it co-installed, and nothing else.
+  const versionOf = new Map(members.map((m) => [m.name, m.version]));
+
+  const matchesCheckedVersions = (edge: (typeof edges)[number]): boolean =>
+    edgeMatchesVersions(edge, versionOf);
+
   for (const edge of edges) {
     if (edge.status === 'conflict') {
+      // Reported whether or not the versions match. A failed co-install at
+      // neighbouring versions is still the best information anyone has about
+      // this pair, and the detail names the exact versions so a reader can see
+      // it is not the pair they asked about. Suppressing it would be optimism.
+      const at = matchesCheckedVersions(edge)
+        ? ''
+        : ` (recorded at those versions; you are checking ${edge.packageA}@${versionOf.get(edge.packageA) ?? '?'} and ${edge.packageB}@${versionOf.get(edge.packageB) ?? '?'})`;
       conflicts.push({
         source: 'sandbox',
         packages: [edge.packageA, edge.packageB],
-        detail: `${edge.packageA}@${edge.versionA} and ${edge.packageB}@${edge.versionB} failed to co-install in the sandbox`,
+        detail: `${edge.packageA}@${edge.versionA} and ${edge.packageB}@${edge.versionB} failed to co-install in the sandbox${at}`,
       });
     }
   }
 
-  // Pairs backed by a *positive* (compatible) edge — verified or observed. A
-  // `conflict` edge is not positive evidence, so it's excluded here (it already
-  // pushed a conflict above). ponytail: name-level coverage; a version-matched
-  // check (edge versions == members' current versions) is the stricter follow-up.
+  // Pairs backed by a *positive* (compatible) edge — verified or observed, AND
+  // recorded at the versions under check.
+  //
+  // Version-matching is what makes `overall: compatible` mean what it says.
+  // Execution-verified compatibility is the whole differentiator here, and a
+  // name-level match let an edge proving react@18 + next@14 co-install stand as
+  // proof for react@19 + next@16 — precisely the major-boundary pair where it is
+  // most likely to be false. An unmatched pair now falls through to the
+  // self-heal queue below and gets a real answer on the next ask, which is the
+  // behaviour an uncovered pair should have had all along.
   const checkedNames = members.map((m) => m.name);
   const provenCompatible = new Set(
-    edges.filter((e) => e.status === 'compatible').map((e) => pairKey(e.packageA, e.packageB)),
+    edges
+      .filter((e) => e.status === 'compatible' && matchesCheckedVersions(e))
+      .map((e) => pairKey(e.packageA, e.packageB)),
   );
 
   // Self-heal (§4C): if any pair among the checked members lacks a positive edge,
@@ -102,6 +124,22 @@ export async function checkCompat(
     evidence,
     pairs: enumeratePairs(checkedNames, conflicts),
   };
+}
+
+/**
+ * Does a recorded compat edge describe the versions currently under check?
+ *
+ * A member with no resolved version cannot match anything: treating it as a
+ * match would claim an edge is about a version we could not even name. Same
+ * discipline as `unverified` everywhere else — not knowing is never evidence.
+ */
+export function edgeMatchesVersions(
+  edge: { packageA: string; packageB: string; versionA: string; versionB: string },
+  versionOf: Map<string, string | null>,
+): boolean {
+  const a = versionOf.get(edge.packageA);
+  const b = versionOf.get(edge.packageB);
+  return a != null && b != null && a === edge.versionA && b === edge.versionB;
 }
 
 /**
