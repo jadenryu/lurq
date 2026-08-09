@@ -236,9 +236,28 @@ export function ReposPanel({
                     <CoverageCell repo={repo} />
                   </TableCell>
                   <TableCell>
-                    <Chip tone={repo.policy.enabled ? "accent" : "neutral"}>
-                      {repo.policy.enabled ? repo.policy.scope : "off"}
-                    </Chip>
+                    {/* A chip that states a setting reads as a control, so it
+                        has to behave like one. The setting itself lives on the
+                        repo page (RepoPolicyPanel) because choosing a scope
+                        needs the explanation next to it, which does not fit a
+                        table cell — so this goes there rather than pretending
+                        to toggle in place. */}
+                    <Link
+                      href={`/dashboard/repos/${repo.id}#autopilot`}
+                      className="rounded-[var(--radius-chip)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                      title={
+                        repo.policy.enabled
+                          ? `Autopilot is on for ${repo.policy.scope} upgrades — change it`
+                          : "Autopilot is off — turn it on"
+                      }
+                    >
+                      <Chip
+                        tone={repo.policy.enabled ? "accent" : "neutral"}
+                        className="cursor-pointer transition-colors hover:border-edge-lit hover:text-ink"
+                      >
+                        {repo.policy.enabled ? repo.policy.scope : "off"}
+                      </Chip>
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <span

@@ -30,13 +30,17 @@ export function Panel({
   children,
   className,
   padding = "default",
+  id,
 }: {
   children: ReactNode;
   className?: string;
   padding?: "default" | "tight" | "none";
+  /** Anchor target, for pages that link to one panel in particular. */
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={cn(
         "panel-lit rounded-[var(--radius-panel)] border border-edge border-t-edge-lit",
         padding === "default" && "p-5 md:p-6",

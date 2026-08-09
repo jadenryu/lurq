@@ -93,7 +93,9 @@ export function RepoPolicyPanel({
   }
 
   return (
-    <Panel>
+    // Anchor target: the repos list links straight here, since the chip there
+    // states this setting without being able to change it.
+    <Panel id="autopilot" className="scroll-mt-24">
       <PanelHeader
         title="autopilot policy"
         trailing={
