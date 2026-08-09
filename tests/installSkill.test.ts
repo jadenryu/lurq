@@ -128,9 +128,13 @@ describe('agentSpecs', () => {
     // Ours alone, in a directory the agent scans.
     expect(byId['kiro']!.instructions).toMatchObject({ kind: 'file' });
     expect(byId['kiro']!.instructions!.path).toMatch(/\.kiro\/steering\/lurq\.md$/);
-    // Cursor's user rules live in its settings UI, not on disk. Writing a file
-    // would report success for something nothing reads.
+    // Two agents deliberately get no instructions file, because for both of them
+    // we cannot name a path that is actually read: Cursor's user rules live in
+    // its settings UI, and VS Code only auto-applies an .instructions.md with an
+    // `applyTo` glob, from folders its own docs leave to a setting rather than a
+    // default. Writing either would report success for something nothing loads.
     expect(byId['cursor']!.instructions).toBeUndefined();
+    expect(byId['copilot']!.instructions).toBeUndefined();
   });
 
   it('sends Antigravity to the same global GEMINI.md as the Gemini CLI', () => {
