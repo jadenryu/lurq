@@ -597,8 +597,20 @@ export interface SyncError {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // v2 graph (docs/lurq-v2-spec.md §5). Generic entity/claim/observation model,
-// running ALONGSIDE the npm-specific tables above — not replacing them yet. See
-// docs/lurq-v2-integration-plan.md §4 for why the migration is deferred.
+// running ALONGSIDE the npm-specific tables above — not replacing them yet.
+//
+// This duplication is a deliberate, dated decision, not drift. The spec's M1
+// says migrate npm onto this model; its own kill condition is "existing
+// functionality regresses", and the npm path is the only thing with users.
+// Rewriting it to prove a schema no second consumer has exercised is the
+// highest-risk, lowest-information move available.
+//
+//   TRIGGER TO MIGRATE: a second node type (per the plan, `mcp_server`) is
+//   storing verdicts here in production. That is what turns "the shape looks
+//   right" into "the shape held for something that is not npm". Until then the
+//   cost of carrying both is a few hundred rows of overlap and this comment.
+//
+// See docs/lurq-v2-integration-plan.md §4.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

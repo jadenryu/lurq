@@ -22,6 +22,8 @@
  *     touching a line. Editing is opt-in per repository.
  */
 
+import { PACKAGE_NAME, VERSION } from '../core/constants';
+
 export interface WorkflowOptions {
   /** Cron schedule. Default: Mondays 06:00 UTC. */
   cron?: string;
@@ -41,6 +43,25 @@ export interface WorkflowOptions {
 
 export const WORKFLOW_PATH = '.github/workflows/lurq-upgrade.yml';
 
+/**
+ * The CLI spec the generated workflow pins to.
+ *
+ * A bare `npx -y lurqrun` resolves to whatever is newest the moment the job
+ * runs, in a file that otherwise pins everything (`actions/checkout@v6`,
+ * `setup-node@v4`). That makes a bad publish an incident already executing in
+ * every user's CI rather than one that can be held back — and the workflow lives
+ * in *their* repository, so we cannot fix it for them.
+ *
+ * The range admits patches and stops before the first bump that is allowed to
+ * break. Pre-1.0 that bump is the minor, not the major (semver §4: "anything MAY
+ * change at any time" while 0.x), so the line to hold is `0.<minor>`; from 1.0
+ * the major is enough, which is the same shape as the action pins above it.
+ */
+export function cliSpec(version: string = VERSION): string {
+  const [major = '0', minor = '0'] = version.split('.');
+  return major === '0' ? `${PACKAGE_NAME}@${major}.${minor}` : `${PACKAGE_NAME}@${major}`;
+}
+
 const DEFAULT_CRON = '0 6 * * 1';
 
 /** Lockfile → install command. `npm ci` needs a lockfile, so fall back to install. */
@@ -58,6 +79,7 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const max = opts.maxUpgrades ?? 3;
   const mode = opts.armed ? 'pr' : 'comment';
   const autoMerge = opts.autoMerge ?? false;
+  const cli = cliSpec();
 
   return `# Managed by lurq, https://lurq.run
 #
@@ -106,19 +128,19 @@ jobs:
       - name: Plan
         env:
           LURQ_API_KEY: \${{ secrets.LURQ_API_KEY }}
-        run: npx -y lurqrun upgrade-plan . --json > lurq-plan.json
+        run: npx -y ${cli} upgrade-plan . --json > lurq-plan.json
 
       # 2. Narrow that to symbols THIS repo references. Runs entirely locally
       #    against both versions' npm tarballs, no API key, no test suite.
       - name: Check against this codebase
-        run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json
+        run: npx -y ${cli} check-upgrade . --plan lurq-plan.json --json > lurq-brief.json
 
       # The same report twice: once into the run summary, once as the body of
       # the pull request. Fenced, because the report is aligned plain text and
       # markdown would otherwise collapse its indentation into one paragraph.
       - name: Summarise
         run: |
-          npx -y lurqrun check-upgrade . --plan lurq-plan.json > lurq-report.txt
+          npx -y ${cli} check-upgrade . --plan lurq-plan.json > lurq-report.txt
           { echo '\`\`\`'; cat lurq-report.txt; echo '\`\`\`'; } > lurq-report.md
           cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
