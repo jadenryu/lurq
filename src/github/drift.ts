@@ -27,6 +27,7 @@ import {
   type TransitiveRisk,
 } from './types';
 import { buildAttribution } from './attribute';
+import { installKey, queryVulnerableInstalls } from '../ingestion/sources/osv';
 import { assembleMembers } from '../compat/members';
 import { resolveArchitectureCompat, type CompatMember } from '../compat/peerCompat';
 import type { CompatConflict } from '../core/types';
@@ -211,19 +212,33 @@ export async function computeTransitiveDrift(
 
   const indexed = await loadIndexed(db, [...new Set(transitives.map((d) => d.name))]);
 
+  // Which of these EXACT installs is actually vulnerable. `row.advisories` is a
+  // package-level count computed for the latest version, so on its own it says
+  // "this package has had advisories", not "yours is affected" — and a tree full
+  // of already-patched versions reads as a tree full of risk.
+  const { affected, complete } = await queryVulnerableInstalls(
+    transitives.map((d) => ({ name: d.name, version: d.version })),
+  );
+
   const risks: TransitiveRisk[] = [];
   let tracked = 0;
   for (const dep of transitives) {
     const row = indexed.get(dep.name);
     if (!row) continue; // untracked, no signal either way, never counted as clean
     tracked++;
-    if (row.advisories === 0 && !row.deprecated) continue;
+    const vulnIds = affected.get(installKey(dep.name, dep.version)) ?? [];
+    if (row.advisories === 0 && !row.deprecated && vulnIds.length === 0) continue;
     risks.push({
       name: dep.name,
       version: dep.version,
       latest: row.latestVersion,
       advisories: row.advisories,
       deprecated: row.deprecated,
+      // Empty when OSV cleared this version, which is the actionable difference
+      // from `advisories`: the package has a history, this install does not.
+      // Undefined when the lookup could not complete — never an empty array,
+      // which would read as a clean bill of health nobody established.
+      vulnerabilities: complete ? vulnIds : undefined,
       pulledInBy: attribution.parentsOf.get(dep.name) ?? [],
     });
   }
@@ -241,6 +256,10 @@ export async function computeTransitiveDrift(
     resolved: transitives.length,
     tracked,
     advisoryPackages: risks.filter((r) => r.advisories > 0).length,
+    // The number that can actually be acted on: installs OSV matched to a
+    // vulnerability at their exact version. Undefined when the lookup did not
+    // complete, so "not checked" never renders as zero.
+    vulnerableInstalls: complete ? risks.filter((r) => r.vulnerabilities?.length).length : undefined,
     deprecated: risks.filter((r) => r.deprecated).length,
     risks: risks.slice(0, TRANSITIVE_DETAIL_CAP),
     truncated,

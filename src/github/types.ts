@@ -52,12 +52,21 @@ export interface TransitiveRisk {
   /** Latest known release, so "how stale is this" is answerable. */
   latest: string | null;
   /**
-   * Advisories recorded against the PACKAGE, not proven against `version`.
-   * lurq does not store affected-version ranges, so this is "this package has
-   * known advisories", never "this install is vulnerable". The field name and
-   * every label built from it say so.
+   * Advisories recorded against the PACKAGE, computed for its latest version and
+   * NOT proven against `version`. Read it as "this package has known
+   * advisories", never "this install is vulnerable" — `vulnerabilities` is the
+   * field that answers the second question.
    */
   advisories: number;
+  /**
+   * OSV advisory ids matched to this EXACT version. An empty array is a real
+   * all-clear: the package has a history, this install is not affected by it.
+   *
+   * `undefined` means the lookup did not complete, and must render as "not
+   * checked" rather than as clean — same discipline as `transitive: null`. The
+   * distinction matters most here, where a false all-clear is a security claim.
+   */
+  vulnerabilities?: string[];
   deprecated: boolean;
   /**
    * Direct dependencies whose tree pulls this in — the actual upgrade targets.
@@ -84,6 +93,16 @@ export interface TransitiveDrift {
   tracked: number;
   /** Indexed transitives whose package has known advisories. */
   advisoryPackages: number;
+  /**
+   * Installs OSV matched to a vulnerability at their exact resolved version —
+   * the actionable count, as distinct from `advisoryPackages`, which counts
+   * packages with any advisory history. The two are deliberately not merged:
+   * one tells you to upgrade something, the other tells you a package has had
+   * problems, and summing them would produce a number meaning neither.
+   *
+   * `undefined` when the OSV lookup could not complete. Never 0 in that case.
+   */
+  vulnerableInstalls?: number;
   /** Indexed transitives whose package is deprecated upstream. */
   deprecated: number;
   /** The worst of them, ranked. Capped — see TRANSITIVE_DETAIL_CAP. */
