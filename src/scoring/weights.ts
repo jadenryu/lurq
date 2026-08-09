@@ -96,6 +96,40 @@ export const EFFICIENCY = {
   medianScore: 50,
 } as const;
 
+/**
+ * Field evidence (§3.1) — the outcome flywheel. Every other axis reads what the
+ * ecosystem *says* about a package; this one reads what happened when an agent
+ * actually installed it, which is the only signal here that no competitor can
+ * derive from public data.
+ *
+ * `weight` sits OUTSIDE `HEALTH_WEIGHTS` and is added to the denominator only
+ * when evidence exists. That is deliberate: the four existing weights keep
+ * summing to 1.0, so a package with no reports scores exactly what it scored
+ * before this shipped. A rebalance would have silently moved every score in the
+ * index on deploy, and "why did everything shift?" is not a question worth
+ * owing anyone.
+ */
+export const FIELD = {
+  /** Weight when evidence exists — ~9% of the blend (0.10 / 1.10). */
+  weight: 0.1,
+  /**
+   * Bayesian shrinkage strength: how many prior observations the neutral rate is
+   * worth. One failed report out of one is not a 0-scoring package, and a raw
+   * success rate would say it is. At m=12, a single failure lands near 69 rather
+   * than 0, and it takes real volume to move the number far — which is the
+   * correct epistemics for a signal users can trivially poison.
+   */
+  priorWeight: 12,
+  /**
+   * The prior success rate a package is assumed to have before anyone reports.
+   * Set at the observed base rate of "installs and builds fine", not 0.5:
+   * most packages do work, so 0.5 would penalise the first honest reporter.
+   */
+  priorRate: 0.75,
+  /** Reports at or above this cap the confidence note as fully-evidenced. */
+  wellEvidencedReports: 25,
+} as const;
+
 /** Proactive-discovery crawler tuning (§2B). The gate is quality-only — downloads
  *  are deliberately excluded so merit, not popularity, decides what graduates. */
 export const DISCOVERY = {

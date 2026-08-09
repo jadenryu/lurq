@@ -15,6 +15,7 @@ import {
   COMPOSITE,
   CONFIDENCE,
   EFFICIENCY,
+  FIELD,
   HEALTH_WEIGHTS,
   MAINTENANCE,
   MAINTENANCE_WEIGHTS,
@@ -253,25 +254,63 @@ export function computeQuality(input: ScoringInput): number | null {
 
 // ── Composite ───────────────────────────────────────────────────────────────
 
-/** Compose the health score, redistributing efficiency's weight when null.
- *  Weights default to HEALTH_WEIGHTS but can be overridden (§4 rescore). */
+/**
+ * Aggregated outcome reports for one package (§3.1). `successes` counts reports
+ * the agent both kept AND that did not fail to build — see `isSuccess`.
+ */
+export interface FieldEvidence {
+  reports: number;
+  successes: number;
+}
+
+/**
+ * Field-evidence score: the observed success rate, shrunk toward the prior by
+ * `FIELD.priorWeight` pseudo-observations.
+ *
+ *   score = 100 · (successes + m·p₀) / (reports + m)
+ *
+ * The shrinkage is the whole design. A raw rate makes the first report worth
+ * everything — one failure would zero a package, and one success would crown an
+ * unknown one — which is both statistically wrong and trivially gameable by
+ * anyone holding an API key. As reports accumulate the prior washes out and the
+ * number converges on the true rate, so volume, not noise, is what moves a
+ * score.
+ *
+ * Returns `null` at zero reports rather than the prior itself: the prior is a
+ * belief, not evidence, and scoring it as evidence would hand every un-reported
+ * package a free 75 in an axis it has not participated in.
+ */
+export function computeFieldScore(evidence: FieldEvidence | null): number | null {
+  if (!evidence || evidence.reports <= 0) return null;
+  const { reports, successes } = evidence;
+  const m = FIELD.priorWeight;
+  return clamp(Math.round((100 * (successes + m * FIELD.priorRate)) / (reports + m)));
+}
+
+/**
+ * Compose the health score, redistributing the weight of any axis that has no
+ * data — `efficiency` for backend categories, `field` until someone reports.
+ * Weights default to HEALTH_WEIGHTS but can be overridden (§4 rescore).
+ *
+ * `field` carries FIELD.weight from outside the overridable set: `edit-weights`
+ * tunes the four public axes, and letting a user zero the flywheel by editing a
+ * config would quietly disable the one signal that improves with use.
+ */
 export function computeHealthScore(
   breakdown: ScoreBreakdown,
   weights: typeof HEALTH_WEIGHTS | { maintenance: number; adoption: number; reliability: number; efficiency: number } = HEALTH_WEIGHTS,
 ): number {
-  const { maintenance, adoption, reliability, efficiency } = breakdown;
   const w = weights;
-  if (efficiency === null) {
-    const denom = w.maintenance + w.adoption + w.reliability;
-    return Math.round(
-      (w.maintenance * maintenance + w.adoption * adoption + w.reliability * reliability) / denom,
-    );
-  }
-  return Math.round(
-    w.maintenance * maintenance +
-      w.adoption * adoption +
-      w.reliability * reliability +
-      w.efficiency * efficiency,
+  return weightedAverage(
+    [
+      { value: breakdown.maintenance, weight: w.maintenance },
+      { value: breakdown.adoption, weight: w.adoption },
+      { value: breakdown.reliability, weight: w.reliability },
+      { value: breakdown.efficiency, weight: w.efficiency },
+      // `?? null` — a breakdown stored before field evidence shipped has the key
+      // absent, and undefined must redistribute, not score 0.
+      { value: breakdown.field ?? null, weight: FIELD.weight },
+    ].filter((c): c is { value: number; weight: number } => c.value !== null),
   );
 }
 

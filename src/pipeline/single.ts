@@ -15,6 +15,7 @@ import {
   computeAdoption,
   computeConfidence,
   computeEfficiency,
+  computeFieldScore,
   computeHealthScore,
   computeMaintenance,
   computeQuality,
@@ -23,6 +24,7 @@ import {
 } from '../scoring';
 import { buildEmbeddingText, createEmbeddingProvider } from '../search/embeddings';
 import type { Database } from '../db/client';
+import { getFieldEvidence } from '../db/outcomes';
 import {
   getPackageByName,
   stampFirstRequester,
@@ -117,12 +119,14 @@ export async function syncOnePackage(
 
   const median = category ? await getCategoryMedianBundle(db, category) : null;
   const quality = computeQuality(input);
+  const evidence = await getFieldEvidence(db, [name]);
   const breakdown: ScoreBreakdown = {
     maintenance: computeMaintenance(input, now),
     adoption: computeAdoption(input),
     reliability: computeReliability(input),
     efficiency: computeEfficiency(input.bundleMinGzipKb, category, median),
     quality,
+    field: computeFieldScore(evidence.get(name) ?? null),
   };
   const healthScore = computeHealthScore(breakdown);
   const confidence = computeConfidence(input, now, quality);

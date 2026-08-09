@@ -4,6 +4,7 @@ import {
   computeAdoption,
   computeReliability,
   computeEfficiency,
+  computeFieldScore,
   computeHealthScore,
   computeQuality,
   computeComposite,
@@ -140,6 +141,55 @@ describe('composite health score', () => {
     expect(
       computeHealthScore({ maintenance: 80, adoption: 60, reliability: 40, efficiency: null, quality: 10 }),
     ).toBe(62); // quality does not affect health either way
+  });
+});
+
+describe('field evidence (§3.1 outcome flywheel)', () => {
+  it('is null with no reports — the prior is a belief, not evidence', () => {
+    expect(computeFieldScore(null)).toBeNull();
+    expect(computeFieldScore({ reports: 0, successes: 0 })).toBeNull();
+  });
+
+  it('does not let one bad report zero a package', () => {
+    // 100 * (0 + 12*0.75) / (1 + 12) = 69.2. A raw rate would say 0.
+    expect(computeFieldScore({ reports: 1, successes: 0 })).toBe(69);
+  });
+
+  it('does not let one good report crown a package', () => {
+    // 100 * (1 + 9) / 13 = 76.9 — barely above the 75 prior.
+    expect(computeFieldScore({ reports: 1, successes: 1 })).toBe(77);
+  });
+
+  it('converges on the true rate as volume accumulates', () => {
+    expect(computeFieldScore({ reports: 100, successes: 100 })).toBe(97);
+    expect(computeFieldScore({ reports: 100, successes: 0 })).toBe(8);
+    // Sustained mediocrity lands near the real rate, not the prior.
+    expect(computeFieldScore({ reports: 200, successes: 100 })).toBe(51);
+  });
+
+  it('moves a score only in proportion to evidence', () => {
+    const bd = { maintenance: 80, adoption: 60, reliability: 40, efficiency: 50, quality: 90 };
+    const none = computeHealthScore(bd);
+    // One failed report is worth ~2 points, not a cliff.
+    const oneBad = computeHealthScore({ ...bd, field: computeFieldScore({ reports: 1, successes: 0 }) });
+    expect(none - oneBad).toBeLessThanOrEqual(2);
+    // A hundred failures is worth real damage.
+    const manyBad = computeHealthScore({ ...bd, field: computeFieldScore({ reports: 100, successes: 0 }) });
+    expect(none - manyBad).toBeGreaterThan(4);
+  });
+
+  it('carries FIELD.weight out of 1.10 when present', () => {
+    // (0.35*80 + 0.30*60 + 0.25*40 + 0.10*50 + 0.10*100) / 1.10 = 71/1.1 = 64.5
+    expect(
+      computeHealthScore({ maintenance: 80, adoption: 60, reliability: 40, efficiency: 50, quality: 90, field: 100 }),
+    ).toBe(65);
+  });
+
+  it('treats a breakdown stored before this shipped as no evidence, not as 0', () => {
+    const legacy = { maintenance: 80, adoption: 60, reliability: 40, efficiency: 50, quality: 90 };
+    expect(computeHealthScore(legacy)).toBe(computeHealthScore({ ...legacy, field: null }));
+    // The regression this guards: undefined scoring as 0 would drop it to 56.
+    expect(computeHealthScore(legacy)).toBe(61);
   });
 });
 

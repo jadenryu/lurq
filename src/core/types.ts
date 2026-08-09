@@ -272,6 +272,18 @@ export interface ScoreBreakdown {
   reliability: number;
   efficiency: number | null;
   quality: number | null;
+  /**
+   * Field evidence (§3.1) — how this package actually fared after agents
+   * installed it, from `recommendation_outcomes`. `null` means no reports yet
+   * and the weight is redistributed, exactly like `efficiency`.
+   *
+   * Optional rather than required because it postdates the rows already in
+   * `packages.score_breakdown`: a stored breakdown from before this shipped
+   * decodes with the key absent, and `undefined` must read as "no evidence",
+   * never as 0. Treating it as 0 would drop every un-reported package's health
+   * the moment this deployed.
+   */
+  field?: number | null;
 }
 
 /**
