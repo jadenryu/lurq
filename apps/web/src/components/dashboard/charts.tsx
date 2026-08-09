@@ -60,7 +60,10 @@ export function ColumnChart({
             below. Clamped away from the edges so it can't overflow the card. */}
         {active && hover !== null && (
           <div
-            className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[var(--radius-control)] border border-border bg-background px-2.5 py-1.5 shadow-lg"
+            // bg-popover, not bg-background: this floats over a panel, and
+            // --background is the page ground (darker than the panel it would
+            // be sitting on). --popover is the room's raised inset step.
+            className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[var(--radius-control)] border border-border bg-popover px-2.5 py-1.5 shadow-lg"
             style={{ left: `${Math.min(Math.max(((hover + 0.5) / n) * 100, 9), 91)}%` }}
           >
             <p className="font-mono text-[0.7rem] tabular-nums text-foreground">
@@ -156,13 +159,15 @@ export function Sparkline({ data, height = 40 }: { data: Point[]; height?: numbe
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
       />
-      {/* End marker with a 2px surface ring so it stays legible over the line. */}
+      {/* End marker with a 2px surface ring so it stays legible over the line.
+          The ring has to be the panel it is drawn on (--card), not --background:
+          that is the page ground and would punch a hole darker than the panel. */}
       <circle
         cx={x(data.length - 1)}
         cy={y(last.count)}
         r={4}
         fill="currentColor"
-        stroke="var(--background)"
+        stroke="var(--card)"
         strokeWidth={2}
         vectorEffect="non-scaling-stroke"
       />
@@ -204,7 +209,10 @@ export function BarList({
               <span className={label}>{t.label}</span>
               <span className={value}>{t.count.toLocaleString()}</span>
             </div>
-            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-sm bg-muted/50">
+            {/* Opaque --muted (= the room's --surface-2, its "inset rows" step),
+                not --muted/50. Half-strength over a panel that is now only one
+                ramp step below it leaves a track you cannot see. */}
+            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-sm bg-muted">
               <div
                 className="h-full rounded-r-[4px] bg-signal/80 transition-[width] duration-300 group-hover:bg-signal"
                 style={{ width: `${Math.max((t.count / max) * 100, 1)}%` }}
@@ -223,7 +231,7 @@ export function BarList({
           <span className={cn("w-24 shrink-0 truncate", label)} title={t.label}>
             {t.label}
           </span>
-          <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-muted/50">
+          <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-muted">
             <div
               className="h-full rounded-r-[4px] bg-signal/80 transition-[width] duration-300 group-hover:bg-signal"
               style={{ width: `${Math.max((t.count / max) * 100, 1)}%` }}
