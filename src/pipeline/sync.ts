@@ -13,6 +13,7 @@ import { pMap } from '../core/concurrency';
 import { formatError } from '../core/errors';
 import { setCacheBypassRead } from '../core/http';
 import { logger } from '../core/logger';
+import { classifyRuntimeTarget } from '../core/runtimeTarget';
 import type { Category, CategorySource, ScoreBreakdown } from '../core/types';
 import { collectSignals } from '../ingestion/collect';
 import { fetchBulkWeeklyDownloads } from '../ingestion/sources/npmDownloads';
@@ -397,6 +398,15 @@ export function assemblePackageRow(p: {
     peerDependencies: r?.peerDependencies ?? null,
     peerDependenciesMeta: r?.peerDependenciesMeta ?? null,
     engines: r?.engines ?? null,
+    runtimeTarget: r
+      ? classifyRuntimeTarget({
+          name: p.name,
+          hasBrowserField: r.hasBrowserField,
+          keywords: r.keywords,
+          engines: r.engines,
+          peerDependencies: r.peerDependencies,
+        })
+      : null,
     healthScore: p.healthScore,
     qualityScore: p.qualityScore,
     confidence: p.confidence,

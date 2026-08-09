@@ -26,6 +26,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { EMBEDDING_DIM } from '../core/constants';
 import type { SelectionPolicy } from '../policy/types';
+import type { RuntimeTarget } from '../core/runtimeTarget';
 
 /** Postgres full-text `tsvector` type for hybrid lexical search (§3). */
 const tsvector = customType<{ data: string; driverData: string }>({
@@ -105,6 +106,10 @@ export const packages = pgTable(
     peerDependencies: jsonb('peer_dependencies').$type<DependencyRanges>(),
     peerDependenciesMeta: jsonb('peer_dependencies_meta').$type<PeerMeta>(),
     engines: jsonb('engines').$type<DependencyRanges>(),
+    /** Where this package runs, classified from its own manifest at ingest.
+     *  Resolves the `framework` category's frontend/backend ambiguity for the
+     *  architecture diagram. Null = the manifest did not say clearly enough. */
+    runtimeTarget: text('runtime_target').$type<RuntimeTarget>(),
 
     // Computed outputs
     healthScore: integer('health_score'),

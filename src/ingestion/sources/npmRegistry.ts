@@ -93,6 +93,7 @@ export function parseNpmRegistry(json: any): NpmRegistryData {
     directDependenciesCount: countDeps(latestManifest?.dependencies),
     hasProvenance: detectProvenance(latestManifest),
     hasInstallScripts: detectInstallScripts(latestManifest),
+    hasBrowserField: latestManifest?.browser != null,
     peerDependencies: parseDepMap(latestManifest?.peerDependencies),
     peerDependenciesMeta: parsePeerMeta(latestManifest?.peerDependenciesMeta),
     engines: parseDepMap(latestManifest?.engines),

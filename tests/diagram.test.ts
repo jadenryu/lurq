@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { buildMermaid, handleDiagram } from '../src/mcp/diagram';
+import { classifyRuntimeTarget } from '../src/core/runtimeTarget';
 import type { Database } from '../src/db/client';
 
 describe('buildMermaid', () => {
+  // runtimeTarget is what handleDiagram reads off the packages row; a
+  // `framework` without it stays in Presentation, which is the safe default.
   const mermaid = buildMermaid([
-    { label: 'react', category: 'framework' },
+    { label: 'react', category: 'framework', runtimeTarget: 'browser' },
     { label: 'tailwindcss', category: 'styling' },
     { label: 'zustand', category: 'state-management' },
-    { label: 'express', category: 'framework' },
+    { label: 'express', category: 'framework', runtimeTarget: 'node' },
     { label: 'prisma', category: 'orm' },
   ]);
 
@@ -29,6 +32,44 @@ describe('buildMermaid', () => {
     expect(expressLine).toBeGreaterThan(backendIdx);
     expect(reactLine).toBeGreaterThan(presIdx);
     expect(reactLine).toBeLessThan(backendIdx);
+  });
+
+  it('places a backend framework lurq has never heard of', () => {
+    // The point of replacing the six-name list: a framework published tomorrow
+    // classifies from its own manifest, with nobody editing lurq.
+    expect(
+      classifyRuntimeTarget({
+        name: 'brand-new-server-framework',
+        hasBrowserField: false,
+        keywords: ['http-server', 'middleware', 'rest'],
+        engines: { node: '>=20' },
+        peerDependencies: null,
+      }),
+    ).toBe('node');
+  });
+
+  it('does not mistake a UI library for a server because it says `api`', () => {
+    expect(
+      classifyRuntimeTarget({
+        name: 'some-component-kit',
+        hasBrowserField: false,
+        keywords: ['api', 'components', 'ui'],
+        engines: null,
+        peerDependencies: { react: '^19' },
+      }),
+    ).toBe('browser');
+  });
+
+  it('refuses to guess when the manifest says nothing useful', () => {
+    expect(
+      classifyRuntimeTarget({
+        name: 'inscrutable',
+        hasBrowserField: false,
+        keywords: [],
+        engines: null,
+        peerDependencies: null,
+      }),
+    ).toBeNull();
   });
 
   it('connects from User down to the database', () => {

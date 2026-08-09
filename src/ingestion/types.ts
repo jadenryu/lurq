@@ -40,6 +40,9 @@ export interface NpmRegistryData {
   /** Declares preinstall/install/postinstall hooks — code that runs at install
    *  time, the primary supply-chain execution vector. */
   hasInstallScripts: boolean;
+  /** Declares a `browser` field — it ships a build meant for a document.
+   *  Feeds runtime-target classification (see core/runtimeTarget). */
+  hasBrowserField: boolean;
   /** Declared `peerDependencies` (name → semver range) of the latest version. */
   peerDependencies: DependencyRanges | null;
   /** `peerDependenciesMeta` — notably which peers are `optional`. */

@@ -11,18 +11,18 @@
  *   placed in an explicit `Unclassified` bucket — never silently dropped into a
  *   default layer. The note lists what couldn't be placed. Partial, not
  *   authoritative.
- * - KNOWN LIMITATION — front/back framework ambiguity: the taxonomy has a single
- *   `framework` category, so a `framework` package can't be told apart as
- *   frontend vs backend from its category alone. BACKEND_FRAMEWORKS is a
- *   hand-maintained band-aid that re-routes the common backend frameworks to the
- *   Backend layer; it degrades as the ecosystem adds new ones (an unlisted
- *   backend framework will be drawn in Presentation). The real fix is a taxonomy
- *   change (a distinct backend-framework category or a runtime/target flag on
- *   packages), which is out of scope for v1. Documented, not solved.
+ * - Front/back framework ambiguity is resolved by `packages.runtime_target`, a
+ *   flag classified from each package's own manifest at ingest (see
+ *   core/runtimeTarget). This replaced a hand-maintained set of six backend
+ *   framework names that mis-drew every server framework nobody had added to it.
+ *   A package whose manifest does not settle the question classifies as null and
+ *   keeps the Presentation default, which is the safe direction: `framework` is
+ *   a UI-leaning category to begin with.
  */
 import { inArray } from 'drizzle-orm';
 import type { Category } from '../core/types';
 import { inferCategory } from '../search/categoryInference';
+import { classifyRuntimeTarget, type RuntimeTarget } from '../core/runtimeTarget';
 import type { Database } from '../db/client';
 import { packages } from '../db/schema';
 
@@ -60,28 +60,27 @@ const LAYER_OF: Partial<Record<Category, string>> = {
 
 const FLOW_LAYERS = ['Presentation', 'Client Logic', 'Backend', 'Data'];
 
-/** Band-aid for the front/back framework ambiguity (see file header). Category
- *  `framework` alone can't distinguish frontend from backend, so these common
- *  backend frameworks are re-routed to the Backend layer. Hand-maintained;
- *  unlisted backend frameworks will be mis-drawn in Presentation. Not a real fix. */
-const BACKEND_FRAMEWORKS = new Set([
-  'express',
-  'fastify',
-  'koa',
-  'hono',
-  '@nestjs/core',
-  '@hapi/hapi',
-]);
 
 export interface Item {
   label: string;
   /** null = could not be classified (not in index, no category match). */
   category: Category | null;
+  /**
+   * Where the package runs, classified from its own manifest at ingest
+   * (core/runtimeTarget). This is what resolves `framework`'s frontend/backend
+   * ambiguity; null means the manifest did not say clearly enough, and a
+   * `framework` we cannot place stays in Presentation — the historical default,
+   * and the safe one, since the category itself is a UI-leaning guess.
+   */
+  runtimeTarget?: RuntimeTarget | null;
 }
 
 export function layerFor(item: Item): string {
   if (!item.category) return UNCLASSIFIED;
-  if (item.category === 'framework' && BACKEND_FRAMEWORKS.has(item.label)) return 'Backend';
+  // The one category that spans two layers. Everything else has exactly one
+  // architectural home, so asking about runtime for e.g. `styling` would be
+  // noise at best and a way to mis-place a known-good mapping at worst.
+  if (item.category === 'framework' && item.runtimeTarget === 'node') return 'Backend';
   return LAYER_OF[item.category] ?? UNCLASSIFIED;
 }
 
@@ -150,16 +149,36 @@ export async function handleDiagram(
   }
 
   const rows = await db
-    .select({ name: packages.name, category: packages.category })
+    .select({
+      name: packages.name,
+      category: packages.category,
+      runtimeTarget: packages.runtimeTarget,
+    })
     .from(packages)
     .where(inArray(packages.name, input.stack));
-  const known = new Map(rows.map((r) => [r.name, r.category]));
+  const known = new Map(rows.map((r) => [r.name, r]));
   // inferCategory is best-effort on a bare package name (it was built for NL
   // needs); a miss yields null, not a faked category. No silent 'other'.
-  const items: Item[] = input.stack.map((name) => ({
-    label: name,
-    category: known.get(name) ?? inferCategory(name),
-  }));
+  const items: Item[] = input.stack.map((name) => {
+    const row = known.get(name);
+    return {
+      label: name,
+      category: row?.category ?? inferCategory(name),
+      // Fall back to the name-only classifier for a package that predates the
+      // column or is not indexed at all: the curated overrides still resolve the
+      // frameworks people actually diagram, and an unclassifiable one keeps the
+      // old Presentation default rather than moving on a null.
+      runtimeTarget:
+        row?.runtimeTarget ??
+        classifyRuntimeTarget({
+          name,
+          hasBrowserField: false,
+          keywords: [],
+          engines: null,
+          peerDependencies: null,
+        }),
+    };
+  });
 
   const unclassified = items.filter((i) => layerFor(i) === UNCLASSIFIED).map((i) => i.label);
   const note = unclassified.length
