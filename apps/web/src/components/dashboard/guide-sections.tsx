@@ -261,6 +261,65 @@ export function ScoringSection() {
   );
 }
 
+// ── 04 · repositories ───────────────────────────────────────────────────────
+
+/** The four stages of the repo loop, in the order a user meets them. */
+const REPO_STEPS: { title: string; body: string }[] = [
+  {
+    title: "Connect the GitHub app",
+    body: "Read-only on contents and metadata. lurq reads your package.json files and your resolved dependency tree — never a source file, never a lockfile, never history.",
+  },
+  {
+    title: "It scans nightly",
+    body: "What you are behind on, which transitive packages carry advisories and which direct dependency pulls each one in, and whether your dependencies still agree with each other on their shared peers.",
+  },
+  {
+    title: "Commit the workflow to go further",
+    body: "A scheduled job in your own CI runs the half that needs your source: which of the removed symbols this repo actually references, at which file and line. That check needs no test suite, so an uncovered call site cannot slip past it.",
+  },
+  {
+    title: "Turn on pr mode when you trust it",
+    body: "The job starts in analyse-only and reports. Armed, it bumps every manifest declaring the dependency, rewrites the call sites the upgrade broke, runs your tests, drops anything that fails, and opens one pull request.",
+  },
+];
+
+export function ReposSection() {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 lg:grid-cols-2">
+        {REPO_STEPS.map((s, i) => (
+          <Panel key={s.title} padding="tight" className="flex gap-4">
+            <StepNumber n={i + 1} />
+            <div className="min-w-0 flex-1">
+              <p className="font-heading text-[0.95rem] font-medium tracking-tight">{s.title}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+            </div>
+          </Panel>
+        ))}
+      </div>
+      {/* The permission model is the objection every reviewer raises, so it is
+          answered on the page rather than left to the docs. */}
+      <Panel padding="tight">
+        <p className={eyebrow}>what lurq can and cannot do</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          lurq&apos;s GitHub app is read-only and can never write to your repository. Every commit,
+          branch and pull request in this loop is made by your own workflow&apos;s{" "}
+          <code className="font-mono text-foreground">GITHUB_TOKEN</code>, scoped to that one repo.
+          The agent that edits code runs on your runner with no network and no git access — it
+          changes files, the workflow does version control. You own the workflow file, so turning
+          the whole thing off is <code className="font-mono text-foreground">git rm</code>.
+        </p>
+      </Panel>
+      <Link
+        href="/dashboard/repos"
+        className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+      >
+        Connect a repository
+      </Link>
+    </div>
+  );
+}
+
 // ── 05 · cli ────────────────────────────────────────────────────────────────
 
 export function CliSection() {

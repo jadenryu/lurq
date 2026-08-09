@@ -11,6 +11,10 @@
  *  - confidence labels ....... src/core/types.ts + src/scoring/
  *
  * If a tool's signature changes on the server, update it here in the same commit.
+ * That instruction alone was not enough — `resolve_surface` and `diff_surface`
+ * shipped and this file did not learn about them — so tests/guideCoverage.test.ts
+ * now fails when the two lists disagree. Prose asking for discipline is not a
+ * mechanism; the test is.
  */
 
 export interface GuideTool {
@@ -21,7 +25,7 @@ export interface GuideTool {
   prompt: string;
   /** Condensed input contract, matching the zod schema on the server. */
   input: string;
-  group: "choose" | "check" | "detail" | "extra";
+  group: "choose" | "check" | "detail" | "upkeep" | "extra";
 }
 
 export const TOOL_GROUPS: { id: GuideTool["group"]; label: string; blurb: string }[] = [
@@ -39,6 +43,12 @@ export const TOOL_GROUPS: { id: GuideTool["group"]; label: string; blurb: string
     id: "detail",
     label: "getting the details right",
     blurb: "Version-exact evidence, for when the model's recollection of an API is stale.",
+  },
+  {
+    id: "upkeep",
+    label: "keeping code working",
+    blurb:
+      "What a version really exports, and what an upgrade takes away. These are the ones that catch a break the compiler will not.",
   },
   { id: "extra", label: "extras", blurb: "Optional, and safe to skip." },
 ];
@@ -100,6 +110,22 @@ export const TOOLS: GuideTool[] = [
     input: "package · optional version · optional knownVersion",
   },
   {
+    name: "resolve_surface",
+    group: "upkeep",
+    purpose:
+      "What a version ACTUALLY exports at runtime, read out of its shipped JavaScript rather than its documentation or the model's memory. Runtime existence is what decides whether an import throws — a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction; UNKNOWN never means the symbol is absent.",
+    prompt: "does react-router still export useHistory?",
+    input: "package · optional version (omit for the latest extracted)",
+  },
+  {
+    name: "diff_surface",
+    group: "upkeep",
+    purpose:
+      "What an upgrade removes, adds, and re-shapes between two versions. Removals break node; type-only removals come back separately because they break tsc instead. Answers \"when did this stop working\" from static comparison, with nothing installed and nothing run.",
+    prompt: "what breaks if I go from puppeteer 21 to 24?",
+    input: "package · fromVersion · toVersion",
+  },
+  {
     name: "diagram",
     group: "extra",
     purpose:
@@ -149,6 +175,16 @@ export const TRIGGERS: { when: string; then: string; tool: string }[] = [
     then: "Get the version-exact symbols, and the delta from the version you know.",
     tool: "usage",
   },
+  {
+    when: "You're about to bump a dependency",
+    then: "See what the new version stops exporting before the upgrade lands, not after.",
+    tool: "diff_surface",
+  },
+  {
+    when: "Something broke after an upgrade and the build was green",
+    then: "Compare the two surfaces — a symbol that survives in the types and not at runtime typechecks fine and throws.",
+    tool: "diff_surface",
+  },
 ];
 
 export const ASSISTANTS = [
@@ -196,6 +232,14 @@ export const CLI_COMMANDS = [
   { cmd: "lurq usage <package>", does: "Version-exact API surface (--target, --known for the delta)" },
   { cmd: "lurq versions <package>", does: "Stored version timeline" },
   { cmd: "lurq plan <file>", does: "Markdown spec → scored plan (--optimize, --html)" },
+  {
+    cmd: "lurq upgrade-plan [dir]",
+    does: "What this project is behind on, and what each upgrade removes from its API (--json feeds check-upgrade)",
+  },
+  {
+    cmd: "lurq check-upgrade [dir]",
+    does: "Do those upgrades remove symbols your code actually references? Runs locally, needs no key and no test suite (--exit-code for CI)",
+  },
   { cmd: "lurq weights", does: "Show the scoring model" },
   { cmd: "lurq install", does: "Guided setup for your assistants" },
 ];

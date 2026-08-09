@@ -3,10 +3,12 @@ import {
   CliSection,
   ConnectSection,
   GuideSection,
+  ReposSection,
   ScoringSection,
   ToolsSection,
   TriggersSection,
 } from "@/components/dashboard/guide-sections";
+import { TOOLS } from "@/content/guide";
 import { loadKeys } from "@/lib/dashboard-data";
 
 /**
@@ -47,13 +49,22 @@ export default async function DashboardGuidePage() {
           index={3}
           label="the tools"
           title="What your agent can call"
-          intro="Nine tools over MCP."
+          intro={`${TOOLS.length} tools over MCP.`}
         >
           <ToolsSection />
         </GuideSection>
 
         <GuideSection
           index={4}
+          label="repositories"
+          title="Keeping a repo current after you've shipped it"
+          intro="The half that runs without you: lurq watches what you already merged."
+        >
+          <ReposSection />
+        </GuideSection>
+
+        <GuideSection
+          index={5}
           label="scoring"
           title="How lurq decides what's good"
           intro="Computed from public signals, never editorial."
@@ -62,7 +73,7 @@ export default async function DashboardGuidePage() {
         </GuideSection>
 
         <GuideSection
-          index={5}
+          index={6}
           label="terminal"
           title="Or use it directly"
           intro="Same index, same handlers, no agent in the loop."
