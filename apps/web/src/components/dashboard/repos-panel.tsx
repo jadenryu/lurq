@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Chip, EmptyState, InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
+import { TableToolbar } from "@/components/dashboard/table-toolbar";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -26,7 +27,7 @@ import { cn } from "@/lib/utils";
 function DriftCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
   if (!drift) {
-    return <span className="font-mono text-xs text-muted-foreground/60">not scanned</span>;
+    return <span className="font-mono text-xs text-ink-2/60">not scanned</span>;
   }
   if (drift.majorDrift === 0 && drift.anyDrift === 0) {
     return <Chip tone="good">current</Chip>;
@@ -52,12 +53,12 @@ function DriftCell({ repo }: { repo: DashboardRepo }) {
  */
 function RiskCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
-  if (!drift) return <span className="text-muted-foreground/50">—</span>;
+  if (!drift) return <span className="text-ink-2/50">—</span>;
   const transitive = drift.transitive?.advisoryPackages ?? 0;
   if (drift.advisories === 0 && drift.deprecated === 0 && transitive === 0) {
     // "not read" is not "none": say so when the tree was never visible.
     return (
-      <span className="text-muted-foreground/50">
+      <span className="text-ink-2/50">
         {drift.transitive ? "none" : "direct only"}
       </span>
     );
@@ -79,14 +80,14 @@ function RiskCell({ repo }: { repo: DashboardRepo }) {
  */
 function CoverageCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
-  if (!drift) return <span className="text-muted-foreground/50">—</span>;
+  if (!drift) return <span className="text-ink-2/50">—</span>;
   const uncovered = drift.depsDeclared - drift.depsTracked;
   return (
     <span className="font-mono text-xs tabular-nums">
       {drift.depsTracked}
-      <span className="text-muted-foreground/50">/{drift.depsDeclared}</span>
+      <span className="text-ink-2/50">/{drift.depsDeclared}</span>
       {uncovered > 0 && (
-        <span className="ml-1.5 text-muted-foreground/50">({uncovered} unknown)</span>
+        <span className="ml-1.5 text-ink-2/50">({uncovered} unknown)</span>
       )}
     </span>
   );
@@ -134,6 +135,21 @@ export function ReposPanel({
   installUrl: string | null;
 }) {
   const armed = repos.filter((r) => r.policy.enabled).length;
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+
+  /**
+   * Filter by the two questions someone opening this page is actually asking:
+   * which of these is behind, and which of these is armed to do something about
+   * it. Not a chip per field — a chip nobody clicks costs the same room as one
+   * everybody does.
+   */
+  const shown = repos.filter((repo) => {
+    if (query && !repo.fullName.toLowerCase().includes(query.toLowerCase())) return false;
+    if (filter === "behind") return (repo.drift?.majorDrift ?? 0) > 0;
+    if (filter === "armed") return repo.policy.enabled;
+    return true;
+  });
 
   if (repos.length === 0) {
     return (
@@ -157,12 +173,26 @@ export function ReposPanel({
 
   return (
     <div className="space-y-4">
+      <TableToolbar
+        query={query}
+        onQueryChange={setQuery}
+        placeholder="Search repositories…"
+        filters={[
+          { id: "all", label: "All" },
+          { id: "behind", label: "Behind" },
+          { id: "armed", label: "Armed" },
+        ]}
+        activeFilter={filter}
+        onFilterChange={setFilter}
+        count={shown.length}
+        noun="repository"
+      />
       <Panel padding="none" className="overflow-hidden">
         <PanelHeader
           title="connected repositories"
           className="px-5 pt-5 md:px-6 md:pt-6"
           trailing={
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-ink-2">
               {armed} of {repos.length} armed
             </span>
           }
@@ -170,7 +200,7 @@ export function ReposPanel({
         <div className="mt-4">
           <Table>
             <TableHeader>
-              <TableRow className="border-border">
+              <TableRow className="border-edge">
                 <TableHead className="pl-5 md:pl-6">repository</TableHead>
                 <TableHead>drift</TableHead>
                 <TableHead>risk</TableHead>
@@ -181,8 +211,8 @@ export function ReposPanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {repos.map((repo) => (
-                <TableRow key={repo.id} className="border-border">
+              {shown.map((repo) => (
+                <TableRow key={repo.id} className="border-edge">
                   <TableCell className="pl-5 md:pl-6">
                     <Link
                       href={`/dashboard/repos/${repo.id}`}
@@ -191,7 +221,7 @@ export function ReposPanel({
                       {repo.fullName}
                     </Link>
                     {repo.isPrivate && (
-                      <span className="ml-2 font-mono text-[0.65rem] text-muted-foreground/50">
+                      <span className="ml-2 font-mono text-[0.65rem] text-ink-2/50">
                         private
                       </span>
                     )}
@@ -214,7 +244,7 @@ export function ReposPanel({
                     <span
                       className={cn(
                         "font-mono text-xs",
-                        repo.lastScanError ? "text-bad" : "text-muted-foreground",
+                        repo.lastScanError ? "text-bad" : "text-ink-2",
                       )}
                     >
                       {repo.lastScanError

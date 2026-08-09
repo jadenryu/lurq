@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { EmptyState, InlineError, eyebrow } from "@/components/dashboard/panel";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { ReposPanel } from "@/components/dashboard/repos-panel";
+import { DriftMeter } from "@/components/dashboard/drift-meter";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
 import { loadImpact, loadRepos } from "@/lib/dashboard-data";
@@ -125,10 +126,10 @@ export default async function ReposPage({
                   value={totals.major}
                   hint="the upgrade backlog"
                 />
-                <StatTile
-                  label="advisories"
-                  value={totals.advisories}
-                  hint={`${totals.deprecated} deprecated`}
+                <DriftMeter
+                  behind={totals.major}
+                  tracked={totals.deps}
+                  deprecated={totals.deprecated}
                 />
               </div>
             )}

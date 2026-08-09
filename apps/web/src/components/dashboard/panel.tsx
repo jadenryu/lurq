@@ -11,7 +11,20 @@ import { cn } from "@/lib/utils";
  * Corners use `--radius-panel` (8px), not the marketing `--radius-xl` (~17px).
  */
 
-export const eyebrow = "font-mono text-xs uppercase tracking-[0.16em] text-muted-foreground/70";
+/**
+ * A label, set like the rest of the page.
+ *
+ * This was mono, uppercase, on a 0.16em track — the treatment the marketing
+ * side removed in f4babe7 for the reason it applies here too: small-caps mono
+ * labels read as chrome from a template rather than as this product's voice,
+ * and stacked above every panel they were the loudest type on screen after the
+ * numbers they were supposed to be subordinate to.
+ *
+ * Geist at 12px, medium, at --ink-3. The hierarchy is carried by weight and
+ * value, which is what the variable font is for, and it matches the drift
+ * board's headers exactly.
+ */
+export const eyebrow = "text-[12px] font-medium tracking-[-0.005em] text-ink-3";
 
 export function Panel({
   children,
@@ -25,7 +38,7 @@ export function Panel({
   return (
     <div
       className={cn(
-        "panel-lit rounded-[var(--radius-panel)] border border-border",
+        "panel-lit rounded-[var(--radius-panel)] border border-edge border-t-edge-lit",
         padding === "default" && "p-5 md:p-6",
         padding === "tight" && "p-4 md:p-5",
         className,
@@ -74,7 +87,7 @@ export function Chip({
     <span
       className={cn(
         "inline-flex shrink-0 items-center whitespace-nowrap rounded-[var(--radius-chip)] border px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wide",
-        tone === "neutral" && "border-border text-muted-foreground",
+        tone === "neutral" && "border-edge text-ink-2",
         tone === "good" && "border-ok/35 text-ok",
         tone === "bad" && "border-bad/40 text-bad",
         tone === "warn" && "border-warn/40 text-warn",
@@ -91,7 +104,7 @@ export function Chip({
             tone === "bad" && "bg-bad",
             tone === "warn" && "bg-warn",
             tone === "accent" && "bg-signal",
-            tone === "neutral" && "bg-muted-foreground",
+            tone === "neutral" && "bg-ink-3",
           )}
         />
       )}
@@ -115,11 +128,11 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[var(--radius-control)] border border-border bg-muted/20 px-5 py-6">
+    <div className="relative overflow-hidden rounded-[var(--radius-control)] border border-edge bg-surface-2 px-5 py-6">
       <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-signal/40" />
       <p className="font-heading text-base font-medium tracking-tight">{title}</p>
       {children && (
-        <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">{children}</p>
+        <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-ink-2">{children}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -134,9 +147,9 @@ export function EmptyState({
  */
 export function InlineError({ children }: { children: ReactNode }) {
   return (
-    <div className="relative overflow-hidden rounded-[var(--radius-control)] border border-border bg-muted/20 px-4 py-3">
+    <div className="relative overflow-hidden rounded-[var(--radius-control)] border border-edge bg-surface-2 px-4 py-3">
       <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-bad" />
-      <p className="text-sm text-muted-foreground">{children}</p>
+      <p className="text-sm text-ink-2">{children}</p>
     </div>
   );
 }

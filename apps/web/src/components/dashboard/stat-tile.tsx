@@ -27,10 +27,10 @@ export function StatTile({
     <Panel padding="tight" className="flex flex-col justify-between">
       <p className={eyebrow}>{label}</p>
       <div className="mt-3">
-        <p className="font-heading text-2xl font-medium tracking-tight md:text-3xl">
+        <p className="font-sans text-2xl font-medium tracking-[-0.02em] text-ink md:text-3xl">
           {typeof value === "number" ? value.toLocaleString() : value}
         </p>
-        {hint && <p className="mt-1 font-mono text-[0.65rem] text-muted-foreground/60">{hint}</p>}
+        {hint && <p className="mt-1 font-mono text-[0.65rem] text-ink-3">{hint}</p>}
       </div>
       {trend && <div className="mt-3">{trend}</div>}
     </Panel>
@@ -57,13 +57,13 @@ export function HeroFigure({
       <p className={eyebrow}>{label}</p>
       <p
         className={cn(
-          "mt-2 font-heading font-medium tracking-tight",
+          "mt-2 font-sans font-medium tracking-[-0.025em] text-ink",
           "text-[2.75rem] leading-none md:text-[3.25rem]",
         )}
       >
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
-      {hint && <p className="mt-2 text-sm text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-2 text-sm text-ink-2">{hint}</p>}
     </div>
   );
 }
@@ -81,7 +81,7 @@ export function RailStat({
   return (
     <div>
       <p className={eyebrow}>{label}</p>
-      <p className="mt-1.5 font-heading text-xl font-medium tracking-tight">
+      <p className="mt-1.5 font-sans text-xl font-medium tracking-[-0.02em] text-ink">
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
       {children && <div className="mt-2">{children}</div>}
