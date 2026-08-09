@@ -17,19 +17,38 @@ lurq recommends and explains packages; your agent writes the code. responses are
 > **lurq is live.** [create a free account](https://lurq.run/sign-up) to generate
 > your API key, then connect your coding agent with the guided installer below.
 
-lurq is a **hosted service**: you don't run a database or a sync. get an API key,
-then run the guided installer:
+lurq is a **hosted service**: you don't run a database or a sync. install the cli
+once, then run setup once:
 
 ```bash
-npx lurqrun install
+npm i -g lurqrun
+lurq setup
 ```
 
-it prompts for your key, validates it, detects your installed assistants
-(claude code, cursor, windsurf, vscode/copilot, codex, gemini cli, antigravity,
-kiro), and writes a keyed
-remote mcp entry:
-`{ "type": "http", "url": "https://api.lurq.run/mcp", "headers": { "Authorization": "Bearer …" } }`.
+setup opens the dashboard so you can grab an api key, validates it, and then does
+everything else in one pass:
+
+- **stores the key** in `~/.lurq/config.json` (mode 0600), so `lurq recommend`,
+  `verify`, `compare`, `usage` and the rest work in any directory, with no
+  `LURQ_API_KEY` to export
+- **registers the mcp server** in every assistant it finds (claude code, cursor,
+  windsurf, vscode/copilot, codex, gemini cli, antigravity, kiro), as a keyed
+  remote entry:
+  `{ "type": "http", "url": "https://api.lurq.run/mcp", "headers": { "Authorization": "Bearer …" } }`
+- **installs the agent skill**, so the model reaches for lurq on its own instead of
+  answering about a package from memory: a real skill at
+  `~/.claude/skills/lurq/SKILL.md` for claude code, and the equivalent rules or
+  steering file for the others
+
 **no database credentials ever touch your machine.** restart your agent afterward.
+one machine, one setup: there's no per-project step and nothing to re-run.
+
+`lurq install` and `lurq login` are aliases for `lurq setup`.
+
+our servers are the default, not the only option. running your own `lurq
+serve-http`? point setup at it with `lurq setup --url https://your.host/mcp`, and
+issue the key on that machine with `lurq keys create`. the endpoint is stored
+alongside the key, so later re-runs stay on your server.
 
 ## what your agent gets (mcp tools)
 
@@ -48,7 +67,8 @@ carries a `dataAsOf` timestamp.
 
 ## cli
 
-the same index, scriptable. every capability is a subcommand:
+the same hosted index, scriptable. no database, and no key to pass once setup has
+stored it. every capability is a subcommand:
 
 ```bash
 lurq recommend "a form library for react"

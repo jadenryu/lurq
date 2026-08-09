@@ -98,13 +98,14 @@ export function ConnectSection({ hasKey }: { hasKey: boolean }) {
             <StepNumber n={2} />
             <div className="min-w-0 flex-1">
               <p className="font-heading text-[0.95rem] font-medium tracking-tight">
-                Run the installer in your project
+                Install the CLI and run setup
               </p>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                Detects your assistants and writes the MCP entry. Works with:
+                Stores your key, then writes an MCP entry and a skill file for every assistant
+                it finds. Once per machine, not once per project. Works with:
               </p>
               <div className="mt-3">
-                <CopyableCommand command="npx lurqrun install" />
+                <CopyableCommand command="npm i -g lurqrun && lurq setup" />
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
                 {ASSISTANTS.map((a) => (

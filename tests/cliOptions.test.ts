@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // The `usage` action lazily imports its handler; stub it so parsing is observable
-// without touching the DB.
+// without touching the DB. Same for `setup`, which would otherwise open a
+// browser and prompt.
 vi.mock('../src/cli/commands', () => ({ runUsage: vi.fn() }));
+vi.mock('../src/cli/install', () => ({ runSetup: vi.fn() }));
 
 import { buildProgram } from '../src/cli/index';
 import * as commands from '../src/cli/commands';
+import * as install from '../src/cli/install';
 import { VERSION } from '../src/core/constants';
 
 const runUsage = vi.mocked(commands.runUsage);
+const runSetup = vi.mocked(install.runSetup);
 
 /** Parse an argv as a user would type it (no node/script prefix). */
 function run(argv: string[]): Promise<unknown> {
@@ -65,5 +69,35 @@ describe('usage target version (§13)', () => {
     });
     expect(out.join('')).toContain(VERSION);
     expect(runUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe('setup', () => {
+  beforeEach(() => runSetup.mockReset());
+
+  // `npx lurqrun install` is in published docs, dashboard copy and people's
+  // notes. Renaming the command to `setup` must not break any of them.
+  it('keeps `install` and `login` working as aliases', async () => {
+    for (const name of ['setup', 'install', 'login']) {
+      runSetup.mockReset();
+      await run([name, '--api-key', 'lurq_live_abc', '--yes']);
+      expect(runSetup).toHaveBeenCalledTimes(1);
+      expect(runSetup.mock.calls[0]![0]).toMatchObject({ apiKey: 'lurq_live_abc', yes: true });
+    }
+  });
+
+  it('defaults to opening a browser, and honours --no-open for headless boxes', async () => {
+    await run(['setup', '--yes']);
+    expect(runSetup.mock.calls[0]![0]).toMatchObject({ noOpen: false });
+
+    runSetup.mockReset();
+    await run(['setup', '--yes', '--no-open']);
+    expect(runSetup.mock.calls[0]![0]).toMatchObject({ noOpen: true });
+  });
+
+  it('advertises setup, not install, in the top-level help', () => {
+    const help = buildProgram().helpInformation();
+    expect(help).toContain('setup');
+    expect(help).toContain('store your API key');
   });
 });

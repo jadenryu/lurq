@@ -51,17 +51,17 @@ export const SURFACES_HEAD = "Four ways in, and the same index behind them.";
 export const SURFACES: Surface[] = [
   {
     id: "install",
-    name: "Guided install",
-    blurb: "One command finds what you already have.",
-    command: "npx lurqrun install",
-    chrome: "lurq · install",
+    name: "One-time setup",
+    blurb: "Install once, and it finds what you already have.",
+    command: "npm i -g lurqrun && lurq setup",
+    chrome: "lurq · setup",
     detail:
-      "After lurq asks for your API key, we work out which assistants are installed on the machine and write a keyed entry for each. Nothing else about your setup changes, and you don't need any database credentials.",
+      "Setup opens the dashboard for your key, then works out which assistants are installed and writes both a keyed MCP entry and a skill file for each. Your key is stored for the CLI too, so there is no second command and nothing to export.",
     lines: [
-      { kind: "cmd", text: "npx lurqrun install" },
-      { kind: "ok", text: "key validated" },
+      { kind: "cmd", text: "lurq setup" },
+      { kind: "ok", text: "key validated · saved to ~/.lurq/config.json" },
       { kind: "ok", text: "detected Claude Code, Cursor, VS Code" },
-      { kind: "ok", text: "wrote 3 keyed MCP entries" },
+      { kind: "ok", text: "wrote 3 keyed MCP entries + 2 skill files" },
       { kind: "note", text: "no database credentials written" },
       { kind: "next", text: "restart your agent to finish" },
     ],
@@ -70,12 +70,12 @@ export const SURFACES: Surface[] = [
     id: "mcp",
     name: "MCP server",
     blurb: "The tools your editor gets.",
-    command: "npx lurqrun install-skill --agent claude-code",
+    command: "lurq setup --agent claude-code",
     chrome: "lurq · mcp",
     detail:
-      "MCP is the standard way an editor hands a model a new tool. Register lurq once and everything in that editor can reach it.",
+      "MCP is the standard way an editor hands a model a new tool. Register lurq once and everything in that editor can reach it. Setup also drops a skill file, so the model reaches for it without being asked.",
     lines: [
-      { kind: "cmd", text: "npx lurqrun install-skill --agent claude-code" },
+      { kind: "cmd", text: "lurq setup --agent claude-code" },
       { kind: "ok", text: "connected · https://api.lurq.run/mcp" },
       { kind: "out", text: "tools: recommend evaluate compare verify compat" },
       { kind: "out", text: "       plan diagram usage report_outcome" },
@@ -89,7 +89,7 @@ export const SURFACES: Surface[] = [
     command: "npm i -g lurqrun",
     chrome: "lurq · cli",
     detail:
-      "Every capability is a subcommand, so the check that settles a question mid-task can prevent a bad CI job on the way out.",
+      "Every capability is a subcommand, reading the same hosted index as your editor. No database, no API key to pass: setup stored it once.",
     lines: [
       { kind: "cmd", text: "lurq verify jsonwebtoken" },
       { kind: "cmd", text: "lurq compare date-fns dayjs moment" },

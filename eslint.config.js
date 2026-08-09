@@ -19,6 +19,13 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Plain-JS Node scripts (the npm lifecycle hooks, which must run without
+    // tsx). typescript-eslint switches `no-undef` off for .ts files, so only
+    // these need the Node globals spelled out.
+    files: ['**/*.mjs', '**/*.cjs'],
+    languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'off',

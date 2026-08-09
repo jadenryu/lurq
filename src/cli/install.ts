@@ -1,11 +1,28 @@
 /**
- * Guided install wizard (`lurq install`, i.e. `npx lurqrun install`). Walks a user
- * through connecting lurq's hosted MCP service to their AI assistant(s): collects
- * the API key, optionally validates it against the endpoint, detects installed
- * agents, and writes the keyed remote config — no DATABASE_URL ever on their
- * machine. Fully non-interactive with `--yes` + flags/env for scripting.
+ * One-time machine setup (`lurq setup`).
+ *
+ * The whole point of this command is that a user runs `npm i -g lurqrun`, runs
+ * `lurq setup` once, and is then done: the key is stored for the CLI itself, and
+ * every detected assistant gets both an MCP entry and a standing-instructions
+ * file. Nothing afterwards needs `npx`, a shell export, or a second command.
+ *
+ * It opens the dashboard in a browser, walks the three steps in the terminal,
+ * takes the pasted key, validates it against the endpoint, and writes:
+ *   - `~/.lurq/config.json`: so `lurq recommend` &c. work in any directory
+ *   - each agent's MCP config: a keyed HTTP entry, no DATABASE_URL anywhere
+ *   - each agent's skill / rules file: so it reaches for lurq unprompted
+ *
+ * Fully non-interactive with `--yes` plus flags or env, for dotfiles and CI.
  */
 import { DEFAULT_ENDPOINT } from '../core/constants';
+import { openInBrowser } from '../core/open';
+import {
+  readUserConfig,
+  resolveApiKey,
+  resolveEndpoint,
+  writeUserConfig,
+} from '../core/userConfig';
+import { bold, dim, green, yellow } from './format';
 import {
   agentSpecs,
   installAgent,
@@ -21,10 +38,12 @@ export interface WizardOptions {
   url?: string;
   agent?: string;
   yes?: boolean;
+  /** Skip launching a browser (headless boxes, SSH sessions, CI). */
+  noOpen?: boolean;
 }
 
-/** Where users obtain a key (operator-issued for now; self-serve dashboard later). */
-const GET_KEY_URL = 'https://lurq.run';
+/** Where a signed-in user creates a key. */
+const KEYS_URL = 'https://lurq.run/dashboard/keys';
 
 /**
  * Lightweight MCP `tools/list` ping to confirm the key authenticates.
@@ -53,18 +72,50 @@ async function validateKey(url: string, apiKey: string): Promise<KeyCheck> {
   }
 }
 
-export async function runInstallWizard(opts: WizardOptions): Promise<void> {
+export async function runSetup(opts: WizardOptions): Promise<void> {
   const interactive = !opts.yes;
-  const url = opts.url ?? process.env.LURQ_ENDPOINT ?? DEFAULT_ENDPOINT;
-  let apiKey = (opts.apiKey ?? process.env.LURQ_API_KEY)?.trim();
+  // Both of these fall back to what an earlier run stored, so re-running setup
+  // to add a newly-installed editor neither asks for the key again nor quietly
+  // moves a self-hoster off their own endpoint and back onto ours.
+  const url = resolveEndpoint(opts.url) ?? DEFAULT_ENDPOINT;
+  let apiKey = resolveApiKey(opts.apiKey);
+  const selfHosted = url !== DEFAULT_ENDPOINT;
 
   if (interactive) {
     const { input, checkbox, confirm, select } = await import('@inquirer/prompts');
 
-    console.log('\n  lurq — connect your coding agent to the hosted package index.\n');
+    console.log(`\n  ${bold('lurq setup')}: connect this machine to the package index.\n`);
+    // Always say which index, so a self-hoster can see at a glance that a
+    // re-run did not quietly move them back onto the shared service.
+    console.log(`  Endpoint: ${url}${selfHosted ? dim('  (your own server)') : ''}\n`);
+
+    if (apiKey && !opts.apiKey) {
+      const stored = readUserConfig().apiKey === apiKey;
+      const reuse = await confirm({
+        message: `Use the API key already configured${stored ? ' on this machine' : ' in your environment'}?`,
+        default: true,
+      });
+      if (!reuse) apiKey = undefined;
+    }
 
     if (!apiKey) {
-      console.log(`  Need a key? Get one at ${GET_KEY_URL}\n`);
+      if (selfHosted) {
+        // Sending them to our dashboard would hand them a key their own server
+        // has never issued and cannot validate.
+        console.log(`  Issue a key on the machine running ${url}:\n`);
+        console.log(`    ${bold('lurq keys create --label my-laptop')}\n`);
+        console.log('  Then paste it below.\n');
+      } else {
+        if (!opts.noOpen) {
+          console.log(`  Opening ${KEYS_URL}\n`);
+          openInBrowser(KEYS_URL);
+        } else {
+          console.log(`  Open ${KEYS_URL}\n`);
+        }
+        console.log('  1. Sign in, or create an account. It takes a moment.');
+        console.log('  2. Create an API key and copy it.');
+        console.log('  3. Paste it below.\n');
+      }
       apiKey = (
         await input({
           message: 'Paste your lurq API key',
@@ -77,7 +128,7 @@ export async function runInstallWizard(opts: WizardOptions): Promise<void> {
     process.stdout.write('  Validating key… ');
     const check = await validateKey(url, apiKey);
     console.log(
-      check === 'valid' ? 'ok' : check === 'invalid' ? 'rejected' : 'could not reach endpoint',
+      check === 'valid' ? green('ok') : check === 'invalid' ? yellow('rejected') : yellow('could not reach endpoint'),
     );
     if (check !== 'valid') {
       const proceed = await confirm({
@@ -100,10 +151,9 @@ export async function runInstallWizard(opts: WizardOptions): Promise<void> {
 
     const specs = agentSpecs();
     // Natural-language quick path: if we spot likely agents, offer a one-tap
-    // connect before falling back to the full multi-select. Mirrors the simplified
-    // "connect to Claude Code? (y/n/other)" flow in docs/lurq-demo.md. "Yes" wires
-    // up EVERY detected agent (the prior multi-select pre-checked them all), so a
-    // user with two editors doesn't silently leave one unconnected.
+    // connect before falling back to the full multi-select. "Yes" wires up EVERY
+    // detected agent (the prior multi-select pre-checked them all), so a user
+    // with two editors doesn't silently leave one unconnected.
     const detected = specs.filter((s) => s.detected);
     const primary = detected.find((s) => s.id === 'claude-code') ?? detected[0];
     if (primary) {
@@ -124,7 +174,7 @@ export async function runInstallWizard(opts: WizardOptions): Promise<void> {
         ],
       });
       if (choice === 'cancel') {
-        console.log('No problem — nothing was changed. Run `lurq install` again anytime.');
+        console.log('No problem. Nothing was changed; run `lurq setup` again anytime.');
         return;
       }
       if (choice === 'yes') {
@@ -158,16 +208,38 @@ export async function runInstallWizard(opts: WizardOptions): Promise<void> {
   await finish(selected, { url, apiKey });
 }
 
+/**
+ * Store the credential, wire up the selected agents, and report.
+ *
+ * The key is saved even when no agent was selected: on a machine with no editor
+ * installed yet (a fresh container, a server) the CLI itself is still the point,
+ * and making the user re-paste the key later would be the wrong lesson.
+ */
 async function finish(
   selected: AgentSpec[],
   remote: { url: string; apiKey: string },
 ): Promise<void> {
+  const configPath = writeUserConfig({
+    apiKey: remote.apiKey,
+    // Only persist a non-default endpoint. Storing the default would pin this
+    // machine to today's URL and quietly ignore a later change to the built-in.
+    endpoint: remote.url === DEFAULT_ENDPOINT ? undefined : remote.url,
+  });
+  console.log(`\n${green('✓')} API key saved to ${configPath} ${dim('(mode 0600)')}`);
+  console.log(
+    `${green('✓')} Pointed at ${remote.url}${
+      remote.url === DEFAULT_ENDPOINT ? '' : dim('  (your own server)')
+    }`,
+  );
+  console.log(dim('  `lurq recommend`, `evaluate`, `compare`, `verify`, `usage` now work anywhere.'));
+
   if (selected.length === 0) {
     console.log(
-      '\nNo agents selected or detected. Re-run with --agent <id>, or install an assistant first.',
+      '\nNo agents selected or detected. Re-run `lurq setup --agent <id>` once your assistant is installed.',
     );
     return;
   }
+
   const mode: InstallMode = { kind: 'remote', ...remote };
   const results = selected.map((s) => installAgent(s, mode));
   const instructionsPath = installInstructionsFile();

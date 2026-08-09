@@ -138,7 +138,7 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
       {keys.length === 0 ? (
         <EmptyState title="No keys yet">
           Create one with <span className="text-foreground">New key</span>, then run{" "}
-          <code className="font-mono text-foreground">npx lurqrun install</code>.
+          <code className="font-mono text-foreground">npm i -g lurqrun && lurq setup</code>.
         </EmptyState>
       ) : visible.length === 0 ? (
         <EmptyState title="No matches" />

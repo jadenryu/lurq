@@ -31,7 +31,51 @@ export function buildProgram(): Command {
     // *after* a subcommand, so `lurq usage pkg --version 24.14.0` printed the
     // lurq version and exited instead of running the command — shadowing the
     // per-command version options on `usage` and (operator plane) `oracle`.
-    .enablePositionalOptions();
+    .enablePositionalOptions()
+    .addHelpText(
+      'after',
+      '\nNew here? Run `lurq setup` once: it stores your API key and connects every\n' +
+        'coding agent on this machine. Get a key at https://lurq.run/dashboard/keys\n',
+    );
+
+  // ── Setup ─────────────────────────────────────────────────────────────────
+  // `install` and `login` are kept as aliases: `npx lurqrun install` is in
+  // published docs, dashboard copy and people's notes, and silently breaking it
+  // would be worse than carrying two extra words here.
+  program
+    .command('setup')
+    .aliases(['install', 'login'])
+    .description('one-time setup: store your API key, wire up your assistants and skills')
+    .option('--api-key <key>', 'hosted API key (skips the prompt)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--agent <agent>', AGENT_CHOICES)
+    .option('--yes', 'non-interactive: use flags/env and detected agents without prompting')
+    .option('--no-open', "don't launch a browser (headless boxes, SSH, CI)")
+    .action(
+      async (opts: {
+        apiKey?: string;
+        url?: string;
+        agent?: string;
+        yes?: boolean;
+        open?: boolean;
+      }) => {
+        const { runSetup } = await import('./install');
+        await runSetup({ ...opts, noOpen: opts.open === false });
+      },
+    );
+
+  program
+    .command('logout')
+    .description('remove the stored API key from this machine')
+    .action(async () => {
+      const { clearUserConfig, userConfigPath } = await import('../core/userConfig');
+      const path = userConfigPath();
+      console.log(
+        clearUserConfig()
+          ? `Removed ${path}. Agent MCP configs still hold the key; re-run \`lurq setup\` to change them.`
+          : 'No stored API key on this machine.',
+      );
+    });
 
   program
     .command('serve')
@@ -211,18 +255,6 @@ export function buildProgram(): Command {
         await runCheckUpgrade(dir, opts);
       },
     );
-
-  program
-    .command('install')
-    .description('guided setup: connect lurq to your AI assistant(s)')
-    .option('--api-key <key>', 'hosted API key (skips the prompt)')
-    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
-    .option('--agent <agent>', AGENT_CHOICES)
-    .option('--yes', 'non-interactive: use flags/env and detected agents without prompting')
-    .action(async (opts: { apiKey?: string; url?: string; agent?: string; yes?: boolean }) => {
-      const { runInstallWizard } = await import('./install');
-      await runInstallWizard(opts);
-    });
 
   program
     .command('install-skill')

@@ -1,30 +1,33 @@
 ---
 title: Quick start
-description: Connect lurq to your coding agent in under a minute.
+description: Install lurq once, run setup once, and you're done.
 ---
 
 lurq is a **hosted service** — you don't run a database or a sync to use it. You
-get an API key, then point your agent at the hosted MCP endpoint.
-
-## 1. Run the guided installer
+install the CLI, run setup once, and it wires up both your terminal and every
+coding agent on the machine.
 
 <Callout type="info">
   The package ships on npm as **`lurqrun`** (the bare name `lurq` is taken). The
   command you invoke is still `lurq` once installed.
 </Callout>
 
+## 1. Install and set up
+
 ```bash
-npx lurqrun install
+npm i -g lurqrun
+lurq setup
 ```
 
-The installer:
+Setup opens [the dashboard](https://lurq.run/dashboard/keys) in your browser so
+you can sign in and create an API key, then walks you through pasting it back.
+From there it does everything in one pass:
 
-1. prompts for your API key and validates it,
-2. detects your installed assistants (Claude Code, Cursor, Windsurf,
-   VS Code / Copilot, Codex),
-3. writes a keyed remote MCP entry for each one.
-
-The entry it writes looks like this:
+1. **Validates the key** against the hosted endpoint.
+2. **Stores it** in `~/.lurq/config.json`, owner-readable only (mode `0600`).
+3. **Detects your assistants**: Claude Code, Cursor, Windsurf, VS Code /
+   Copilot, Codex, Gemini CLI, Antigravity, Kiro.
+4. **Writes a keyed remote MCP entry** for each one:
 
 ```json
 {
@@ -34,31 +37,105 @@ The entry it writes looks like this:
 }
 ```
 
-**No database credentials ever touch your machine.** Restart your agent
-afterward so it picks up the new MCP server.
+5. **Installs the agent skill**, so the model reaches for lurq on its own rather
+   than answering about a package from memory.
 
-## 2. Non-interactive install
+**No database credentials ever touch your machine.** Restart your agent afterward
+so it picks up the new MCP server.
 
-For scripted setups (CI, dotfiles, provisioning), skip the prompts:
+This is a per-machine step, not a per-project one. There is nothing to add to a
+repo and nothing to re-run when you start a new project.
+
+<Callout type="info">
+  `lurq install` and `lurq login` both still work as aliases for `lurq setup`.
+</Callout>
+
+## 2. Use it from the terminal
+
+The stored key is what makes the CLI work anywhere, with no `LURQ_API_KEY` to
+export and no database:
 
 ```bash
-npx lurqrun install-skill --agent claude-code --api-key <key>
+lurq verify jsonwebtoken
+lurq recommend "a form library for react"
+lurq compare date-fns dayjs moment
+lurq usage zod --known 3.22.4
 ```
 
-Use `--agent all` to configure every detected assistant at once.
+See the [CLI reference](/docs/cli) for the full set.
 
-## 3. Verify it's connected
+## 3. Verify your agent is connected
 
-Ask your agent something dependency-shaped, for example:
+Ask it something dependency-shaped, for example:
 
-> "What's the best current form library for React? Use lurq."
+> "What's the best current form library for React?"
 
 You should see it call the `recommend` tool and return a short, scored list with
 a `dataAsOf` timestamp. If nothing happens, confirm the agent was restarted and
 that the MCP server shows up in its tool list.
 
+## Non-interactive setup
+
+For scripted setups (CI, dotfiles, provisioning), skip the prompts and the
+browser:
+
+```bash
+lurq setup --yes --no-open --api-key <key>
+```
+
+Use `--agent all` to configure every detected assistant, or `--agent claude-code`
+for one. With `--yes`, the key can also come from `LURQ_API_KEY`.
+
+## Pointing at your own server
+
+The hosted service at `api.lurq.run` is the default, not the only option. If you
+run your own `lurq serve-http` (see [Self-hosting](/docs/self-hosting)), point
+setup at it:
+
+```bash
+lurq setup --url https://lurq.internal/mcp
+```
+
+Setup then issues its instructions for your server instead of ours: it won't open
+our dashboard, because a key from there is one your server has never issued.
+Create the key on the machine running the service:
+
+```bash
+lurq keys create --label my-laptop
+```
+
+The endpoint is stored alongside the key, so a later bare `lurq setup` (to wire
+up a newly-installed editor, say) stays on your server. Setup always prints which
+endpoint it used, so you can see at a glance where a machine points. To move back:
+
+```bash
+lurq setup --url https://api.lurq.run/mcp
+```
+
+For a one-off against a different endpoint without changing what's stored, set
+`LURQ_ENDPOINT` for that command.
+
+If you'd rather your agent talk to a local `lurq serve` over stdio against your
+own Postgres, with no HTTP service at all, use `lurq install-skill --local`
+instead. That path needs `DATABASE_URL` and no API key.
+
+## Where things get written
+
+| Path | What |
+| --- | --- |
+| `~/.lurq/config.json` | Your API key, for the CLI (mode `0600`) |
+| `~/.lurq/skill-instructions.md` | The full guide, as a readable reference |
+| `~/.claude.json` &c. | The MCP server entry, one per assistant |
+| `~/.claude/skills/lurq/SKILL.md` | Claude Code skill |
+| `~/.kiro/steering/lurq.md` | Kiro steering file |
+| `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md` | A marked `<!-- lurq:start -->` block, merged into your own rules |
+
+Shared files are merged, never overwritten: re-running setup replaces our block
+and leaves everything you wrote alone.
+
+To remove the stored key from a machine, run `lurq logout`.
+
 ## Next steps
 
 - Learn what each tool does in the [MCP tools reference](/docs/mcp-tools).
-- Prefer the terminal? See the [CLI reference](/docs/cli).
 - Curious how scores are derived? Read [How it works](/docs/how-it-works).
