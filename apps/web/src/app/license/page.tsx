@@ -5,7 +5,7 @@ import { Prose } from "@/components/common/prose";
 
 export const metadata: Metadata = {
   title: "License | lurq",
-  description: "lurq is open source under the MIT License.",
+  description: "lurq is open source under the Apache License 2.0.",
 };
 
 const columns = [
@@ -16,18 +16,19 @@ const columns = [
       "Commercial use",
       "Modification",
       "Distribution",
+      "Patent use",
       "Private use",
     ],
   },
   {
     icon: FileText,
     title: "Conditions",
-    items: ["License & copyright notice"],
+    items: ["License & copyright notice", "State changes"],
   },
   {
     icon: Ban,
     title: "Limitations",
-    items: ["No liability", "No warranty"],
+    items: ["No trademark use", "No liability", "No warranty"],
   },
 ];
 
@@ -36,7 +37,7 @@ export default function LicensePage() {
     <PageShell
       eyebrow="Legal"
       title="License"
-      lead="lurq is open source, released under the MIT License."
+      lead="lurq is open source, released under the Apache License 2.0."
     >
       <div className="grid gap-4 sm:grid-cols-3">
         {columns.map((c) => {
@@ -70,11 +71,12 @@ export default function LicensePage() {
       <Prose className="mt-12">
         <h2>Summary</h2>
         <p>
-          You may use, modify, and distribute lurq, including commercially,
-          provided you retain the copyright notice and this permission notice.
-          The software is provided <strong>as is</strong>, without warranty of
-          any kind. This summary is for convenience only; the full license text
-          governs.
+          You may use, modify, and distribute lurq, including commercially, and
+          the license grants you a patent license from the contributors. In
+          return you retain the copyright and license notices, and state the
+          changes you made to any file you redistribute. The software is
+          provided <strong>as is</strong>, without warranty of any kind. This
+          summary is for convenience only; the full license text governs.
         </p>
 
         <h2>Full text</h2>
@@ -91,8 +93,8 @@ export default function LicensePage() {
         </p>
 
         <p>
-          <strong>Copyright © 2026 Jaden Ryu.</strong> Licensed under the MIT
-          License.
+          <strong>Copyright © 2026 Jaden Ryu.</strong> Licensed under the Apache
+          License, Version 2.0.
         </p>
       </Prose>
     </PageShell>
