@@ -40,6 +40,9 @@ import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
+import { applyPolicy, hasRules, check as checkPolicy } from '../policy/enforce';
+import { getSelectionPolicy, loadPolicyFacts } from '../db/selectionPolicy';
+import type { PolicyVerdict } from '../policy/types';
 import { assessRisk } from '../security/risk';
 import { detectTyposquat, typosquatCorpus } from '../security/typosquat';
 
@@ -131,8 +134,17 @@ function cacheKey(parts: unknown): string {
   return createHash('sha1').update(JSON.stringify(parts)).digest('hex').slice(0, 24);
 }
 
-export async function handleRecommend(db: Database, input: RecommendInput) {
-  return cached(
+export async function handleRecommend(
+  db: Database,
+  input: RecommendInput,
+  ownerId: string | null = null,
+) {
+  // The search itself is owner-independent, so it stays in the shared cache —
+  // embeddings and hybrid retrieval are the expensive part and every owner asking
+  // the same question deserves the same hit. Policy is applied *after* the cache,
+  // over at most five candidates. Folding the owner into the cache key instead
+  // would shard the cache per user to save a lookup that costs one indexed query.
+  const base = await cached(
     'rec',
     cacheKey([input.need, input.category ?? null, input.constraints ?? null]),
     async () => {
@@ -147,6 +159,17 @@ export async function handleRecommend(db: Database, input: RecommendInput) {
     // Don't cache empty results — the index may still be populating.
     { skipCache: (r) => r.candidates.length === 0 },
   );
+
+  const policy = await getSelectionPolicy(db, ownerId);
+  if (!hasRules(policy)) return base;
+
+  const facts = await loadPolicyFacts(db, base.candidates.map((c) => c.name));
+  const { allowed, excluded } = applyPolicy(policy, base.candidates, facts);
+
+  // `excluded` is always present once a policy is in force, even when empty —
+  // an agent that sees the field knows the list was filtered and that silence
+  // means nothing was refused, rather than that nothing was checked.
+  return { ...base, candidates: allowed, excluded };
 }
 
 // ── evaluate ────────────────────────────────────────────────────────────────
@@ -155,7 +178,10 @@ export async function handleEvaluate(
   db: Database,
   input: { package: string },
   ownerId: string | null = null,
-): Promise<EvaluateOutput | { tracked: false; suggestion: string }> {
+): Promise<
+  | (EvaluateOutput & { policy?: PolicyVerdict })
+  | { tracked: false; suggestion: string }
+> {
   const out = await cached(
     'eval',
     cacheKey([input.package]),
@@ -183,8 +209,25 @@ export async function handleEvaluate(
     // Don't cache "not found / not scored yet" — it may resolve on a later fetch.
     { skipCache: (r) => 'tracked' in r },
   );
+  if ('tracked' in out) return out;
   // Re-derive the time-based stale hint, which a cached row would otherwise freeze.
-  return 'tracked' in out ? out : refreshStale(out);
+  const evaluated = refreshStale(out);
+
+  // Policy verdict on a package the agent has usually already chosen. This is
+  // the higher-leverage half of enforcement: `recommend` shapes a list the agent
+  // asked lurq to build, but `evaluate` is the call it makes about a package it
+  // found on its own — from training, a blog post, or a human's suggestion — and
+  // it is the last point before the install where a rule can still apply.
+  const policy = await getSelectionPolicy(db, ownerId);
+  if (!hasRules(policy)) return evaluated;
+
+  const facts = await loadPolicyFacts(db, [evaluated.name]);
+  const exclusion = checkPolicy(
+    policy,
+    { name: evaluated.name, confidence: evaluated.confidence },
+    facts.get(evaluated.name),
+  );
+  return { ...evaluated, policy: exclusion ? { allowed: false, ...exclusion } : { allowed: true } };
 }
 
 // ── compare ─────────────────────────────────────────────────────────────────

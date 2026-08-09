@@ -25,6 +25,7 @@ import {
   vector,
 } from 'drizzle-orm/pg-core';
 import { EMBEDDING_DIM } from '../core/constants';
+import type { SelectionPolicy } from '../policy/types';
 
 /** Postgres full-text `tsvector` type for hybrid lexical search (§3). */
 const tsvector = customType<{ data: string; driverData: string }>({
@@ -773,6 +774,21 @@ export type SurfaceQueueRow = typeof surfaceQueue.$inferSelect;
 export type NewSymbolRow = typeof symbols.$inferInsert;
 export type NewObservationRow = typeof observations.$inferInsert;
 export type SeedPackageRow = typeof seedPackages.$inferSelect;
+/**
+ * Per-owner selection policy — the rules governing what an agent may *add*.
+ *
+ * One row per owner, keyed by the Clerk id already used by `api_keys.owner_id`
+ * and `repos.owner_id`. Clerk namespaces ids by prefix, so when organisations
+ * are switched on this column holds an `org_…` id with no migration and no
+ * membership tables. See policy/types for why that is the right amount of
+ * structure to build today.
+ */
+export const selectionPolicies = pgTable('selection_policies', {
+  ownerId: text('owner_id').primaryKey(),
+  policy: jsonb('policy').$type<SelectionPolicy>().notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
 export type SyncRunRow = typeof syncRuns.$inferSelect;
 export type DiscoveryQueueRow = typeof discoveryQueue.$inferSelect;
 export type CompatVerifyQueueRow = typeof compatVerifyQueue.$inferSelect;
@@ -798,3 +814,5 @@ export type UpgradeRunRow = typeof upgradeRuns.$inferSelect;
 export type NewUpgradeRunRow = typeof upgradeRuns.$inferInsert;
 export type RepoAlertRow = typeof repoAlerts.$inferSelect;
 export type NewRepoAlertRow = typeof repoAlerts.$inferInsert;
+export type SelectionPolicyRow = typeof selectionPolicies.$inferSelect;
+export type NewSelectionPolicyRow = typeof selectionPolicies.$inferInsert;

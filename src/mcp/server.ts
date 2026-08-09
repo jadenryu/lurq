@@ -108,7 +108,8 @@ export function buildMcpServer(
         constraints: constraintsSchema,
       },
     },
-    async (args) => json(await run('recommend', () => handleRecommend(db, args))),
+    async (args) =>
+      json(await run('recommend', () => handleRecommend(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
