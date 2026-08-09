@@ -346,7 +346,7 @@ export async function scoreCase(
       return {
         ...base,
         unverifiable:
-          'no module-surface claims — only default/member access, which tier A cannot verify',
+          'no module-surface claims, only default/member access, which tier A cannot verify',
         ...(opts.keepCode ? { code } : {}),
       };
     }

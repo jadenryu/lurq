@@ -105,7 +105,7 @@ export function ConnectSection({ hasKey }: { hasKey: boolean }) {
                 it finds. Once per machine, not once per project. Works with:
               </p>
               <div className="mt-3">
-                <CopyableCommand command="npm i -g lurqrun && lurq setup" />
+                <CopyableCommand command="npx lurqrun" />
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
                 {ASSISTANTS.map((a) => (
@@ -250,8 +250,8 @@ export function ScoringSection() {
         <ul className="mt-3 space-y-2.5 text-sm leading-relaxed text-muted-foreground">
           <li>npm registry, downloads and search</li>
           <li>GitHub stars, issues, releases</li>
-          <li>deps.dev — OpenSSF scorecard, advisories</li>
-          <li>Bundlephobia — bundle size</li>
+          <li>deps.dev, OpenSSF scorecard, advisories</li>
+          <li>Bundlephobia, bundle size</li>
         </ul>
         <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
           Every response carries a <code className="font-mono text-foreground">dataAsOf</code>{" "}
@@ -268,7 +268,7 @@ export function ScoringSection() {
 const REPO_STEPS: { title: string; body: string }[] = [
   {
     title: "Connect the GitHub app",
-    body: "Read-only on contents and metadata. lurq reads your package.json files and your resolved dependency tree — never a source file, never a lockfile, never history.",
+    body: "Read-only on contents and metadata. lurq reads your package.json files and your resolved dependency tree, never a source file, never a lockfile, never history.",
   },
   {
     title: "It scans nightly",
@@ -306,7 +306,7 @@ export function ReposSection() {
           lurq&apos;s GitHub app is read-only and can never write to your repository. Every commit,
           branch and pull request in this loop is made by your own workflow&apos;s{" "}
           <code className="font-mono text-foreground">GITHUB_TOKEN</code>, scoped to that one repo.
-          The agent that edits code runs on your runner with no network and no git access — it
+          The agent that edits code runs on your runner with no network and no git access, it
           changes files, the workflow does version control. You own the workflow file, so turning
           the whole thing off is <code className="font-mono text-foreground">git rm</code>.
         </p>

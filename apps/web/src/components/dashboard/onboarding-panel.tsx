@@ -4,10 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 
-const INSTALL_COMMAND = "npm i -g lurqrun && lurq setup";
+const INSTALL_COMMAND = "npx lurqrun";
 
 /**
- * Shown when every one of the user's keys is unused — nudges them to finish setup.
+ * Shown when every one of the user's keys is unused, nudges them to finish setup.
  *
  * No icon tile: a glyph in a rounded box beside a heading is decoration, and it
  * made the panel read like a generic marketing callout. The command itself is the

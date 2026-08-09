@@ -49,7 +49,7 @@ export async function resolveSet(
     const msg =
       (err as { stderr?: string }).stderr ?? (err as Error).message ?? '';
     if (/ERESOLVE/i.test(msg)) return { resolved: false, reason: 'ERESOLVE' };
-    throw err; // network / timeout / other — inconclusive, not a proven conflict
+    throw err; // network / timeout / other, inconclusive, not a proven conflict
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }

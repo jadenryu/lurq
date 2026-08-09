@@ -263,7 +263,7 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
     const deferred = scored.slice(cap);
     if (deferred.length > 0) {
       logger.info(
-        `Discovery: per-run cap ${cap} reached — ${deferred.length} eligible candidate(s) deferred to the next run: ${deferred.map((d) => d.name).join(', ')}`,
+        `Discovery: per-run cap ${cap} reached, ${deferred.length} eligible candidate(s) deferred to the next run: ${deferred.map((d) => d.name).join(', ')}`,
       );
     }
 

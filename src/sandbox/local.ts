@@ -186,7 +186,7 @@ export class LocalSandbox implements Sandbox {
           stderr: typeof e.stderr === 'string' ? e.stderr : stderrOf(err),
         };
       }
-      throw err; // timeout / spawn failure — infrastructure, not the subject
+      throw err; // timeout / spawn failure, infrastructure, not the subject
     } finally {
       await rm(dir, { recursive: true, force: true }).catch(() => {});
     }

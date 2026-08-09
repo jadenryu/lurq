@@ -95,11 +95,11 @@ export default async function RepoDetailPage({
               }
             />
             <StatTile label="deprecated" value={drift.deprecated} />
-            {/* "—" rather than 0 when the scan predates the check: an unrun check
+            {/* "-" rather than 0 when the scan predates the check: an unrun check
                 must never occupy the same cell as one that found nothing. */}
             <StatTile
               label="conflicts"
-              value={drift.conflicts ?? "—"}
+              value={drift.conflicts ?? "-"}
               hint={drift.conflicts === null ? "rescan to check" : "at latest versions"}
             />
           </div>

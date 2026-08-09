@@ -166,7 +166,7 @@ export async function handlePlan(
   const hasPins = Boolean(input.using?.length);
   if ((!decomposed || decomposed.needs.length === 0) && !hasPins) {
     return {
-      note: 'Provide a `document` (a detailed description of your program), a `needs` array, or a `using` list of packages you have already chosen. lurq recommends evidence-scored packages per component — it does not invent an architecture from a bare prompt.',
+      note: 'Provide a `document` (a detailed description of your program), a `needs` array, or a `using` list of packages you have already chosen. lurq recommends evidence-scored packages per component, it does not invent an architecture from a bare prompt.',
     };
   }
 
@@ -388,12 +388,12 @@ function planNote(
 ): string {
   const base =
     source === 'heuristic'
-      ? 'Components were extracted from your document with a keyword heuristic (no summary LLM configured) — coarse; pass a `needs` array or set SUMMARY_API_KEY for sharper decomposition.'
+      ? 'Components were extracted from your document with a keyword heuristic (no summary LLM configured), coarse; pass a `needs` array or set SUMMARY_API_KEY for sharper decomposition.'
       : source === 'llm'
         ? 'Components were extracted from your document by the summary model.'
         : 'Components taken from the supplied needs.';
   const grounding =
-    ' Each package is recommended from lurq’s scored index — a labeled, evidence-backed starting point, not a validated architecture.';
+    ' Each package is recommended from lurq’s scored index, a labeled, evidence-backed starting point, not a validated architecture.';
   const ctx = framework
     ? ` Anchored to the ${framework} ecosystem so sibling libraries stay coherent across the stack.`
     : '';

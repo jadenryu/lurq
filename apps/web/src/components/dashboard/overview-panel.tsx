@@ -20,7 +20,7 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
 
 /**
  * The dashboard's front door: four counters, the volume trend, what the agent has
- * been calling, and the two most recent feeds — enough to answer "is lurq working
+ * been calling, and the two most recent feeds, enough to answer "is lurq working
  * for me?" without navigating.
  */
 export function OverviewPanel({ data, days }: { data: OverviewData; days: number }) {
@@ -45,7 +45,7 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
         <StatTile label="packages added" value={contributions.total} hint="first requested by you" />
         <StatTile
           label="acceptance"
-          value={acceptance === null ? "—" : `${acceptance}%`}
+          value={acceptance === null ? "-" : `${acceptance}%`}
           hint={decided > 0 ? `${accepted}/${decided} recommendations` : "no outcomes yet"}
         />
       </div>
@@ -140,7 +140,7 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
                     <span className="min-w-0 flex-1 truncate font-mono text-sm">{p.name}</span>
                     {p.category && <Chip>{p.category}</Chip>}
                     <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                      {p.healthScore ?? "—"}
+                      {p.healthScore ?? "-"}
                     </span>
                   </li>
                 ))}

@@ -54,7 +54,7 @@ export default function AboutPage() {
         <p>
           The cost lands on you: a dependency that looked fine in the diff but
           hasn&apos;t shipped a release in three years, carries an open advisory,
-          or never existed at all. That last one is measurable — published
+          or never existed at all. That last one is measurable, published
           research puts hallucinated package names at over 5% of commercial-model
           recommendations, and the same fake names recur across runs, which is
           what makes them registrable by an attacker.
@@ -78,7 +78,7 @@ export default function AboutPage() {
           Most of what you can know about a package is readable: downloads,
           release cadence, advisories, bundle size. Some of it is not. Whether a
           package installs cleanly, whether it imports without throwing, whether
-          two versions can coexist in one tree — those are only knowable by
+          two versions can coexist in one tree, those are only knowable by
           running them. So lurq runs them, in an isolated sandbox, and keeps the
           result alongside the score.
         </p>
@@ -93,8 +93,8 @@ export default function AboutPage() {
         <p>
           Packages are the beachhead: the largest registry, the fastest churn,
           the most agent traffic. The same approach extends to everything else an
-          agent depends on and can be wrong about — MCP servers, HTTP APIs, CLI
-          tools — anywhere a claim can be settled by running something rather
+          agent depends on and can be wrong about, MCP servers, HTTP APIs, CLI
+          tools: anywhere a claim can be settled by running something rather
           than by asking around.
         </p>
       </Prose>

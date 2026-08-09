@@ -101,7 +101,7 @@ export function buildMcpServer(
     {
       title: 'Recommend packages',
       description:
-        'Recommend the best current npm packages for a described need — fresh, objectively scored, with confidence labels. Call before choosing or hand-rolling a dependency.',
+        'Recommend the best current npm packages for a described need, fresh, objectively scored, with confidence labels. Call before choosing or hand-rolling a dependency.',
       inputSchema: {
         need: z.string().min(1).describe('Natural-language description of what you need'),
         category: categoryEnum.optional().describe('Optional taxonomy category to restrict to'),
@@ -168,7 +168,7 @@ export function buildMcpServer(
     {
       title: 'Version-exact API surface + drift',
       description:
-        "Get a package version's real public API — the exported symbols and signatures extracted from its shipped .d.ts, exact to the version, none of it in the model's training data. Pass knownVersion (e.g. the version you were trained on) to get the precise delta: what was added, removed, renamed, or changed. Also returns the version's declared engines (Node/runtime floor) so you don't write code against a version the target runtime cannot install. Use before writing code against a package whose API may have moved. For framework file/convention changes (not exported symbols), consult the official migration guide / Context7 instead.",
+        "Get a package version's real public API, the exported symbols and signatures extracted from its shipped .d.ts, exact to the version, none of it in the model's training data. Pass knownVersion (e.g. the version you were trained on) to get the precise delta: what was added, removed, renamed, or changed. Also returns the version's declared engines (Node/runtime floor) so you don't write code against a version the target runtime cannot install. Use before writing code against a package whose API may have moved. For framework file/convention changes (not exported symbols), consult the official migration guide / Context7 instead.",
       inputSchema: {
         package: npmName.describe('npm package name'),
         version: z.string().optional().describe('Target version (defaults to latest)'),
@@ -186,7 +186,7 @@ export function buildMcpServer(
     {
       title: 'Reference architecture diagram',
       description:
-        'Emit a reference-architecture Mermaid diagram for a stack you have already chosen (package names). A labeled starting point keyed by layer — not a validated architecture, and not an architecture designer.',
+        'Emit a reference-architecture Mermaid diagram for a stack you have already chosen (package names). A labeled starting point keyed by layer, not a validated architecture, and not an architecture designer.',
       inputSchema: {
         stack: z
           .array(npmName)
@@ -237,7 +237,7 @@ export function buildMcpServer(
     {
       title: 'Version-exact runtime surface',
       description:
-        "What a package version ACTUALLY exports at runtime, extracted from its shipped JavaScript rather than from documentation or the model's memory. Call before writing code against a package whose API may have moved. Runtime existence is what decides whether an import throws; a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction — UNKNOWN never means the symbol is absent.",
+        "What a package version ACTUALLY exports at runtime, extracted from its shipped JavaScript rather than from documentation or the model's memory. Call before writing code against a package whose API may have moved. Runtime existence is what decides whether an import throws; a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction, UNKNOWN never means the symbol is absent.",
       inputSchema: {
         package: npmName.describe('npm package name'),
         version: z.string().optional().describe('Exact version; omit for the latest extracted'),
@@ -266,7 +266,7 @@ export function buildMcpServer(
     {
       title: 'Report a recommendation outcome',
       description:
-        'Opt-in feedback after acting on a lurq recommendation: report whether you went with the package and whether it built. No source code — only the coarse decision + a build signal. Helps lurq learn which packages agents actually succeed with; safe to skip.',
+        'Opt-in feedback after acting on a lurq recommendation: report whether you went with the package and whether it built. No source code, only the coarse decision + a build signal. Helps lurq learn which packages agents actually succeed with; safe to skip.',
       inputSchema: {
         package: npmName.describe('The package that was recommended'),
         accepted: z.boolean().describe('Did you go with this package?'),

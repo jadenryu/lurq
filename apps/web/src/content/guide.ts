@@ -11,8 +11,8 @@
  *  - confidence labels ....... src/core/types.ts + src/scoring/
  *
  * If a tool's signature changes on the server, update it here in the same commit.
- * That instruction alone was not enough — `resolve_surface` and `diff_surface`
- * shipped and this file did not learn about them — so tests/guideCoverage.test.ts
+ * That instruction alone was not enough, `resolve_surface` and `diff_surface`
+ * shipped and this file did not learn about them, so tests/guideCoverage.test.ts
  * now fails when the two lists disagree. Prose asking for discipline is not a
  * mechanism; the test is.
  */
@@ -58,7 +58,7 @@ export const TOOLS: GuideTool[] = [
     name: "recommend",
     group: "choose",
     purpose:
-      "Best current packages for a need you describe, up to five, each scored with a confidence label. The one to call before settling on anything from memory — or before hand-rolling something that already exists.",
+      "Best current packages for a need you describe, up to five, each scored with a confidence label. The one to call before settling on anything from memory, or before hand-rolling something that already exists.",
     prompt: "what should I use for form validation in a React app?",
     input: "need · optional category · optional constraints (runtime, license, max bundle KB, min confidence)",
   },
@@ -74,7 +74,7 @@ export const TOOLS: GuideTool[] = [
     group: "choose",
     purpose:
       "A spec or README becomes an evidence-scored build plan: one lurq-scored package per component, plus a Mermaid roadmap. Pin what you've already decided and it recommends only the gaps, then optimizes the whole stack around your picks.",
-    prompt: "here's my project spec — plan the stack, I'm already using Next.js and Postgres",
+    prompt: "here's my project spec, plan the stack, I'm already using Next.js and Postgres",
     input: "document and/or needs[] · optional using[] · optimize: speed | balanced",
   },
   {
@@ -89,7 +89,7 @@ export const TOOLS: GuideTool[] = [
     name: "compat",
     group: "check",
     purpose:
-      "Does this set form a coherent stack? Peer-dependency and engine-range math across the whole set, plus any sandbox-verified conflicts already on record. Returns the exact clashing constraints. Read-only — it never runs an install.",
+      "Does this set form a coherent stack? Peer-dependency and engine-range math across the whole set, plus any sandbox-verified conflicts already on record. Returns the exact clashing constraints. Read-only, it never runs an install.",
     prompt: "will these versions actually work together on Node 20?",
     input: "packages (2–8) · optional exact versions · optional target Node version",
   },
@@ -105,7 +105,7 @@ export const TOOLS: GuideTool[] = [
     name: "usage",
     group: "detail",
     purpose:
-      "A version's real public API, extracted from its shipped .d.ts — exported symbols and signatures, exact to the version, none of it from the model's training data. Pass the version you were trained on and you get the precise delta: added, removed, renamed, changed.",
+      "A version's real public API, extracted from its shipped .d.ts, exported symbols and signatures, exact to the version, none of it from the model's training data. Pass the version you were trained on and you get the precise delta: added, removed, renamed, changed.",
     prompt: "what changed in the zod API since v3?",
     input: "package · optional version · optional knownVersion",
   },
@@ -113,7 +113,7 @@ export const TOOLS: GuideTool[] = [
     name: "resolve_surface",
     group: "upkeep",
     purpose:
-      "What a version ACTUALLY exports at runtime, read out of its shipped JavaScript rather than its documentation or the model's memory. Runtime existence is what decides whether an import throws — a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction; UNKNOWN never means the symbol is absent.",
+      "What a version ACTUALLY exports at runtime, read out of its shipped JavaScript rather than its documentation or the model's memory. Runtime existence is what decides whether an import throws, a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction; UNKNOWN never means the symbol is absent.",
     prompt: "does react-router still export useHistory?",
     input: "package · optional version (omit for the latest extracted)",
   },
@@ -137,13 +137,13 @@ export const TOOLS: GuideTool[] = [
     name: "report_outcome",
     group: "extra",
     purpose:
-      "Opt-in feedback after you act on a recommendation: did you use it, and did it build? No source code leaves your machine — only the coarse decision and a build signal. This is what fills your activity feed.",
+      "Opt-in feedback after you act on a recommendation: did you use it, and did it build? No source code leaves your machine, only the coarse decision and a build signal. This is what fills your activity feed.",
     prompt: "(your agent calls this on its own after a build)",
     input: "package · accepted · optional buildSignal · optional need",
   },
 ];
 
-/** From templates/skill-instructions.md — the moments lurq is meant to intercept. */
+/** From templates/skill-instructions.md, the moments lurq is meant to intercept. */
 export const TRIGGERS: { when: string; then: string; tool: string }[] = [
   {
     when: "You're about to pick a library for a need",
@@ -152,7 +152,7 @@ export const TRIGGERS: { when: string; then: string; tool: string }[] = [
   },
   {
     when: "You're about to hand-roll something",
-    then: "Debounce, deep clone, date parsing — check first, don't rebuild a proven package.",
+    then: "Debounce, deep clone, date parsing, check first, don't rebuild a proven package.",
     tool: "recommend",
   },
   {
@@ -182,7 +182,7 @@ export const TRIGGERS: { when: string; then: string; tool: string }[] = [
   },
   {
     when: "Something broke after an upgrade and the build was green",
-    then: "Compare the two surfaces — a symbol that survives in the types and not at runtime typechecks fine and throws.",
+    then: "Compare the two surfaces, a symbol that survives in the types and not at runtime typechecks fine and throws.",
     tool: "diff_surface",
   },
 ];
@@ -213,7 +213,7 @@ export const CONFIDENCE = [
   {
     label: "promising",
     tone: "warn" as const,
-    meaning: "High intrinsic quality — types, tests, docs — but young or lightly used.",
+    meaning: "High intrinsic quality (types, tests, docs) but young or lightly used.",
   },
   {
     label: "unproven",

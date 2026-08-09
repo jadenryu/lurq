@@ -6,7 +6,7 @@ import { Chip } from "@/components/dashboard/panel";
  * primary action on the right, with a hairline divider beneath.
  *
  * `demo` renders a chip next to the title. It's deliberately always visible when
- * fixtures are in play — fake numbers that look exactly like real ones are worse
+ * fixtures are in play: fake numbers that look exactly like real ones are worse
  * than no numbers, especially if this branch ever ships.
  */
 export function PageHeader({

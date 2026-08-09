@@ -30,7 +30,7 @@ const SUPPORT: NavItem[] = [
   { href: "/#contact", label: "support" },
 ];
 
-/** `/dashboard` is only active on an exact match — every other route is a prefix. */
+/** `/dashboard` is only active on an exact match, every other route is a prefix. */
 function isActive(pathname: string, href: string): boolean {
   return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 }

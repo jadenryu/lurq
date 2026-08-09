@@ -215,7 +215,7 @@ export async function computeTransitiveDrift(
   let tracked = 0;
   for (const dep of transitives) {
     const row = indexed.get(dep.name);
-    if (!row) continue; // untracked — no signal either way, never counted as clean
+    if (!row) continue; // untracked, no signal either way, never counted as clean
     tracked++;
     if (row.advisories === 0 && !row.deprecated) continue;
     risks.push({
@@ -322,7 +322,7 @@ export async function computeDrift(
   const deps: DepDrift[] = [];
   for (const [name, entry] of declared) {
     const row = indexed.get(name);
-    if (!row) continue; // untracked — counted via depsDeclared - depsTracked
+    if (!row) continue; // untracked, counted via depsDeclared - depsTracked
     deps.push(depDrift(name, entry, row, versions.get(name) ?? []));
   }
 

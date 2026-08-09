@@ -1,4 +1,4 @@
-// ponytail: in-memory fixed-window limiter — per serverless instance, so it
+// ponytail: in-memory fixed-window limiter, per serverless instance, so it
 // resets on cold start and doesn't share counts across instances. It throttles
 // bursts from a single instance, which is what a marketing form needs. Swap for
 // @upstash/ratelimit (durable, cross-instance) if abuse outgrows this.

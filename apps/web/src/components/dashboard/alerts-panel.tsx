@@ -4,7 +4,7 @@ import { relativeTime } from "@/lib/format";
 import type { RepoAlert } from "@/lib/lurq-issuer";
 
 /**
- * "What broke lately" — the reactive counterpart to the drift table below it.
+ * "What broke lately", the reactive counterpart to the drift table below it.
  *
  * Drift answers a standing question ("how far behind is this repo") and is
  * therefore always on screen. This answers an event ("stripe shipped a major two
@@ -20,7 +20,7 @@ import type { RepoAlert } from "@/lib/lurq-issuer";
 
 /**
  * The distinction the whole feed turns on. A caret range means the repo is now a
- * major behind — bad, static, and the drift table would have said so anyway. An
+ * major behind: bad, static, and the drift table would have said so anyway. An
  * open range means the repo is not behind at all and its next clean install
  * moves it onto the new major unprompted, which no drift number expresses.
  */
@@ -81,7 +81,7 @@ export function AlertsPanel({ alerts }: { alerts: RepoAlert[] }) {
       </ul>
       <p className="mt-4 text-xs text-ink-2/70">
         Detected when the release landed, not at the next scan. Open a repository for the
-        migration brief — which exports the upgrade actually removes.
+        migration brief: which exports the upgrade actually removes.
       </p>
     </Panel>
   );

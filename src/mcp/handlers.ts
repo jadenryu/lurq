@@ -196,7 +196,7 @@ export async function handleEvaluate(
         return {
           tracked: false as const,
           suggestion: existsOnNpm
-            ? `🎉 Congrats — you're the first to add "${input.package}" to lurq's registry! It's being fetched and scored now; retry in a few seconds for the full evidence read.`
+            ? `🎉 Congrats, you're the first to add "${input.package}" to lurq's registry! It's being fetched and scored now; retry in a few seconds for the full evidence read.`
             : `"${input.package}" was not found on the npm registry. Check the package name.`,
         };
       }

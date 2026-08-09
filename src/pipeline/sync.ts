@@ -96,7 +96,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
   logger.info(`Summary provider: ${provider.kind}`);
   if (!config.GITHUB_TOKEN) {
     logger.warn(
-      'GITHUB_TOKEN not set — GitHub signals (stars, issues, release cadence) will be ' +
+      'GITHUB_TOKEN not set, GitHub signals (stars, issues, release cadence) will be ' +
         'skipped, degrading maintenance/adoption scores. Set it for accurate scoring.',
     );
   }

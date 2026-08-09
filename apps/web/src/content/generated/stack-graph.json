@@ -484,7 +484,7 @@
       "a": "framer-motion",
       "b": "react-hook-form",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat framer-motion react-hook-form"
     },
@@ -492,7 +492,7 @@
       "a": "framer-motion",
       "b": "next",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat framer-motion next"
     },
@@ -508,7 +508,7 @@
       "a": "framer-motion",
       "b": "@auth/core",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 4 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 4 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 4,
       "reproduce": "npx lurqrun compat framer-motion @auth/core"
     },
@@ -516,7 +516,7 @@
       "a": "framer-motion",
       "b": "drizzle-orm",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat framer-motion drizzle-orm"
     },
@@ -524,7 +524,7 @@
       "a": "framer-motion",
       "b": "tailwindcss",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat framer-motion tailwindcss"
     },
@@ -540,7 +540,7 @@
       "a": "framer-motion",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 6 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 6 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 6,
       "reproduce": "npx lurqrun compat framer-motion zod"
     },
@@ -548,7 +548,7 @@
       "a": "framer-motion",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 3,
       "reproduce": "npx lurqrun compat framer-motion @tanstack/react-query"
     },
@@ -556,7 +556,7 @@
       "a": "framer-motion",
       "b": "next-auth",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat framer-motion next-auth"
     },
@@ -572,7 +572,7 @@
       "a": "react-hook-form",
       "b": "tailwindcss",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat react-hook-form tailwindcss"
     },
@@ -580,7 +580,7 @@
       "a": "react-hook-form",
       "b": "react-dom",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat react-hook-form react-dom"
     },
@@ -588,7 +588,7 @@
       "a": "react-hook-form",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 5 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 5 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 5,
       "reproduce": "npx lurqrun compat react-hook-form zod"
     },
@@ -596,7 +596,7 @@
       "a": "react-hook-form",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat react-hook-form @tanstack/react-query"
     },
@@ -612,7 +612,7 @@
       "a": "postgres",
       "b": "prisma",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 44 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 44 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 44,
       "reproduce": "npx lurqrun compat postgres prisma"
     },
@@ -620,7 +620,7 @@
       "a": "postgres",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 11 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 11 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 11,
       "reproduce": "npx lurqrun compat postgres zod"
     },
@@ -628,7 +628,7 @@
       "a": "next",
       "b": "vite",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat next vite"
     },
@@ -644,7 +644,7 @@
       "a": "next",
       "b": "@auth/core",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat next @auth/core"
     },
@@ -652,7 +652,7 @@
       "a": "next",
       "b": "drizzle-orm",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 3,
       "reproduce": "npx lurqrun compat next drizzle-orm"
     },
@@ -660,7 +660,7 @@
       "a": "next",
       "b": "tailwindcss",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat next tailwindcss"
     },
@@ -676,7 +676,7 @@
       "a": "next",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 5 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 5 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 5,
       "reproduce": "npx lurqrun compat next zod"
     },
@@ -684,7 +684,7 @@
       "a": "next",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat next @tanstack/react-query"
     },
@@ -716,7 +716,7 @@
       "a": "vite",
       "b": "eslint",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat vite eslint"
     },
@@ -724,7 +724,7 @@
       "a": "vite",
       "b": "react",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat vite react"
     },
@@ -732,7 +732,7 @@
       "a": "vite",
       "b": "react-dom",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat vite react-dom"
     },
@@ -740,7 +740,7 @@
       "a": "vite",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 73 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 73 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 73,
       "reproduce": "npx lurqrun compat vite zod"
     },
@@ -748,7 +748,7 @@
       "a": "vite",
       "b": "@typescript-eslint/eslint-plugin",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat vite @typescript-eslint/eslint-plugin"
     },
@@ -756,7 +756,7 @@
       "a": "eslint",
       "b": "react",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat eslint react"
     },
@@ -764,7 +764,7 @@
       "a": "eslint",
       "b": "typescript",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 24 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 24 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 24,
       "reproduce": "npx lurqrun compat eslint typescript"
     },
@@ -772,7 +772,7 @@
       "a": "eslint",
       "b": "react-dom",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat eslint react-dom"
     },
@@ -780,7 +780,7 @@
       "a": "eslint",
       "b": "prisma",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat eslint prisma"
     },
@@ -788,7 +788,7 @@
       "a": "eslint",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat eslint zod"
     },
@@ -804,7 +804,7 @@
       "a": "react",
       "b": "typescript",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 43 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 43 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 43,
       "reproduce": "npx lurqrun compat react typescript"
     },
@@ -812,7 +812,7 @@
       "a": "react",
       "b": "@auth/core",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat react @auth/core"
     },
@@ -820,7 +820,7 @@
       "a": "react",
       "b": "drizzle-orm",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 3,
       "reproduce": "npx lurqrun compat react drizzle-orm"
     },
@@ -828,7 +828,7 @@
       "a": "react",
       "b": "tailwindcss",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat react tailwindcss"
     },
@@ -844,7 +844,7 @@
       "a": "react",
       "b": "prisma",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat react prisma"
     },
@@ -852,7 +852,7 @@
       "a": "react",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 53 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 53 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 53,
       "reproduce": "npx lurqrun compat react zod"
     },
@@ -876,7 +876,7 @@
       "a": "react",
       "b": "@typescript-eslint/eslint-plugin",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat react @typescript-eslint/eslint-plugin"
     },
@@ -884,7 +884,7 @@
       "a": "typescript",
       "b": "react-dom",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 39 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 39 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 39,
       "reproduce": "npx lurqrun compat typescript react-dom"
     },
@@ -900,7 +900,7 @@
       "a": "typescript",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 16 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 16 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 16,
       "reproduce": "npx lurqrun compat typescript zod"
     },
@@ -908,7 +908,7 @@
       "a": "typescript",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat typescript @tanstack/react-query"
     },
@@ -916,7 +916,7 @@
       "a": "typescript",
       "b": "@playwright/test",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat typescript @playwright/test"
     },
@@ -932,7 +932,7 @@
       "a": "@auth/core",
       "b": "drizzle-orm",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat @auth/core drizzle-orm"
     },
@@ -940,7 +940,7 @@
       "a": "@auth/core",
       "b": "react-dom",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat @auth/core react-dom"
     },
@@ -948,7 +948,7 @@
       "a": "@auth/core",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 6 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 6 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 6,
       "reproduce": "npx lurqrun compat @auth/core zod"
     },
@@ -956,7 +956,7 @@
       "a": "@auth/core",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat @auth/core @tanstack/react-query"
     },
@@ -972,7 +972,7 @@
       "a": "drizzle-orm",
       "b": "tailwindcss",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat drizzle-orm tailwindcss"
     },
@@ -980,7 +980,7 @@
       "a": "drizzle-orm",
       "b": "react-dom",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat drizzle-orm react-dom"
     },
@@ -988,7 +988,7 @@
       "a": "drizzle-orm",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 12 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 12 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 12,
       "reproduce": "npx lurqrun compat drizzle-orm zod"
     },
@@ -996,7 +996,7 @@
       "a": "drizzle-orm",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat drizzle-orm @tanstack/react-query"
     },
@@ -1004,7 +1004,7 @@
       "a": "drizzle-orm",
       "b": "next-auth",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat drizzle-orm next-auth"
     },
@@ -1012,7 +1012,7 @@
       "a": "tailwindcss",
       "b": "react-dom",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat tailwindcss react-dom"
     },
@@ -1020,7 +1020,7 @@
       "a": "tailwindcss",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 4 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 4 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 4,
       "reproduce": "npx lurqrun compat tailwindcss zod"
     },
@@ -1028,7 +1028,7 @@
       "a": "tailwindcss",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat tailwindcss @tanstack/react-query"
     },
@@ -1036,7 +1036,7 @@
       "a": "tailwindcss",
       "b": "next-auth",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat tailwindcss next-auth"
     },
@@ -1044,7 +1044,7 @@
       "a": "react-dom",
       "b": "prisma",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat react-dom prisma"
     },
@@ -1052,7 +1052,7 @@
       "a": "react-dom",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 6 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 6 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 6,
       "reproduce": "npx lurqrun compat react-dom zod"
     },
@@ -1060,7 +1060,7 @@
       "a": "react-dom",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 3,
       "reproduce": "npx lurqrun compat react-dom @tanstack/react-query"
     },
@@ -1076,7 +1076,7 @@
       "a": "react-dom",
       "b": "@typescript-eslint/eslint-plugin",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat react-dom @typescript-eslint/eslint-plugin"
     },
@@ -1084,7 +1084,7 @@
       "a": "prisma",
       "b": "zod",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 1 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 1,
       "reproduce": "npx lurqrun compat prisma zod"
     },
@@ -1092,7 +1092,7 @@
       "a": "prisma",
       "b": "@typescript-eslint/eslint-plugin",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 42 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 42,
       "reproduce": "npx lurqrun compat prisma @typescript-eslint/eslint-plugin"
     },
@@ -1100,7 +1100,7 @@
       "a": "zod",
       "b": "@tanstack/react-query",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 3,
       "reproduce": "npx lurqrun compat zod @tanstack/react-query"
     },
@@ -1108,7 +1108,7 @@
       "a": "zod",
       "b": "next-auth",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 3 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 3,
       "reproduce": "npx lurqrun compat zod next-auth"
     },
@@ -1116,7 +1116,7 @@
       "a": "zod",
       "b": "@typescript-eslint/eslint-plugin",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat zod @typescript-eslint/eslint-plugin"
     },
@@ -1124,7 +1124,7 @@
       "a": "@tanstack/react-query",
       "b": "next-auth",
       "level": "co-occurs",
-      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side — co-occurrence, not a verified install.",
+      "detail": "Neither package declares the other. 2 public dependency graphs resolve them side by side: co-occurrence, not a verified install.",
       "witnesses": 2,
       "reproduce": "npx lurqrun compat @tanstack/react-query next-auth"
     }

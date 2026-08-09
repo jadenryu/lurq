@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * They did not: the footer ran a separate component with a fully saturated
  * rainbow, which on this ground read as a light leak rather than as atmosphere.
  *
- * What is fixed here is the register — the polygon, the gradient, the blur and
+ * What is fixed here is the register, the polygon, the gradient, the blur and
  * the opacity. Callers only choose placement. That split is the point: a second
  * call site that wants its own colour is not a new prop, it is the thing that
  * made the footer look like a different site.

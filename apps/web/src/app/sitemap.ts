@@ -4,7 +4,7 @@ import { siteUrl as url } from "@/lib/site";
 // Canonical host: the apex (lurq.run) 308-redirects to www, so www is canonical.
 // `siteUrl` normalizes the apex to www so no <loc> points at the redirecting host.
 
-// Public marketing pages only — /dashboard and the auth routes are intentionally
+// Public marketing pages only: /dashboard and the auth routes are intentionally
 // excluded (and disallowed in robots.ts).
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();

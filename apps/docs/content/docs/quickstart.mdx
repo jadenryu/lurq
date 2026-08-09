@@ -1,11 +1,11 @@
 ---
 title: Quick start
-description: Install lurq once, run setup once, and you're done.
+description: One command, once per machine, and you're done.
 ---
 
-lurq is a **hosted service** — you don't run a database or a sync to use it. You
-install the CLI, run setup once, and it wires up both your terminal and every
-coding agent on the machine.
+lurq is a **hosted service**: you don't run a database or a sync to use it. One
+command installs the CLI and wires up both your terminal and every coding agent
+on the machine.
 
 <Callout type="info">
   The package ships on npm as **`lurqrun`** (the bare name `lurq` is taken). The
@@ -15,13 +15,14 @@ coding agent on the machine.
 ## 1. Install and set up
 
 ```bash
-npm i -g lurqrun
-lurq setup
+npx lurqrun
 ```
 
-Setup opens [the dashboard](https://lurq.run/dashboard/keys) in your browser so
-you can sign in and create an API key, then walks you through pasting it back.
-From there it does everything in one pass:
+That runs the setup wizard. It offers to install `lurqrun` globally first, so
+`lurq` works in any terminal without npx, then opens
+[the dashboard](https://lurq.run/dashboard/keys) in your browser so you can sign
+in and create an API key, and walks you through pasting it back. From there it
+does everything in one pass:
 
 1. **Validates the key** against the hosted endpoint.
 2. **Stores it** in `~/.lurq/config.json`, owner-readable only (mode `0600`).
@@ -47,7 +48,8 @@ This is a per-machine step, not a per-project one. There is nothing to add to a
 repo and nothing to re-run when you start a new project.
 
 <Callout type="info">
-  `lurq install` and `lurq login` both still work as aliases for `lurq setup`.
+  `lurq setup` re-runs the same wizard later, after installing a new editor or to
+  swap in a different key. `lurq install` and `lurq login` are aliases for it.
 </Callout>
 
 ## 2. Use it from the terminal

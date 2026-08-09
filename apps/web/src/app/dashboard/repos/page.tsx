@@ -13,7 +13,7 @@ const IMPACT_DAYS = 30;
 
 /** Redirect statuses set by /api/github/callback. */
 const CONNECT_MESSAGES: Record<string, string> = {
-  ok: "Repositories connected. The first scan is running now — drift appears as it finishes.",
+  ok: "Repositories connected. The first scan is running now, drift appears as it finishes.",
   empty: "The app installed, but no repositories were shared with it.",
   invalid: "That connection link was not valid. Start the install from this page.",
   failed: "GitHub connected, but lurq could not read the installation. Try again.",
@@ -83,7 +83,7 @@ export default async function ReposPage({
           </EmptyState>
         ) : failed ? (
           <InlineError>
-            Could not reach the repository service. Your connected repositories are safe — this is
+            Could not reach the repository service. Your connected repositories are safe, this is
             a read failure, not a disconnection.
           </InlineError>
         ) : (

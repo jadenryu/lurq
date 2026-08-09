@@ -67,7 +67,7 @@ export function registerOperatorCommands(program: Command): void {
           const dep = surface.symbols.filter((x) => x.deprecated);
           console.log(`  tier C · ${surface.symbols.length} declared symbol(s), ${dep.length} @deprecated`);
           if (dep.length) console.log(`  deprecated: ${dep.map((x) => x.path).join(', ')}`);
-          console.log('  NOTE: type-level only — never evidence of runtime existence');
+          console.log('  NOTE: type-level only, never evidence of runtime existence');
         }
         if (surface.undeclaredReason) console.log(`  UNDECLARED: ${surface.undeclaredReason}`);
       }
@@ -89,7 +89,7 @@ export function registerOperatorCommands(program: Command): void {
   program
     .command('replay')
     .argument('<dirs...>', 'repository checkouts to replay')
-    .description('M0 human baseline — do real repos reference symbols their pinned versions lack?')
+    .description('M0 human baseline, do real repos reference symbols their pinned versions lack?')
     .option('--include-dev', 'also score devDependencies')
     .option('--fetch-missing', 'fetch uninstalled deps from the registry')
     .option('--json', 'output the full report as JSON')
@@ -126,14 +126,14 @@ export function registerOperatorCommands(program: Command): void {
         }
         const overall = ref ? ((miss / ref) * 100).toFixed(1) : 'n/a';
         console.log(`\n  HUMAN BASELINE: ${overall}% symbol miss rate (${miss}/${ref}) over ${reports.length} repo(s)`);
-        console.log('  Compare against the agent arm from `miss-rate` — that comparison is M0.');
+        console.log('  Compare against the agent arm from `miss-rate`, that comparison is M0.');
       },
     );
 
   program
     .command('miss-rate')
-    .description('M0 controlled arm — how often does model-authored code reference absent symbols?')
-    .option('--model <name>', 'model id — gpt-* | claude-* | gemini-* (default gpt-4o-mini)')
+    .description('M0 controlled arm, how often does model-authored code reference absent symbols?')
+    .option('--model <name>', 'model id, gpt-* | claude-* | gemini-* (default gpt-4o-mini)')
     .option('--samples <n>', 'samples per case; >1 is required for a meaningful number', (v) => parseInt(v, 10))
     .option('--suite <path>', 'case file (default tests/benchmark/miss-rate-v1.json)')
     .option('--limit <n>', 'run only the first N cases (pilot)', (v) => parseInt(v, 10))
@@ -170,7 +170,7 @@ export function registerOperatorCommands(program: Command): void {
         );
         for (const r of report.results) {
           if (r.unverifiable) {
-            console.log(`  —      ${r.id.padEnd(20)} unverifiable: ${r.unverifiable}`);
+            console.log(`  ${r.id.padEnd(20)} unverifiable: ${r.unverifiable}`);
           } else {
             const mark = r.missing.length ? 'MISS  ' : 'ok    ';
             console.log(
@@ -181,7 +181,7 @@ export function registerOperatorCommands(program: Command): void {
         }
         const pct = (n: number | null) => (n === null ? 'n/a' : `${(n * 100).toFixed(1)}%`);
         console.log(`\n  symbol miss rate: ${pct(report.symbolMissRate)} (${report.totalMissing}/${report.totalReferenced})`);
-        console.log(`  case miss rate:   ${pct(report.caseMissRate)} — samples with >=1 absent symbol`);
+        console.log(`  case miss rate:   ${pct(report.caseMissRate)}, samples with >=1 absent symbol`);
         console.log(
           `  symbols/sample:   ${report.symbolsPerCase?.toFixed(1) ?? 'n/a'} referenced (the exposure N)`,
         );
@@ -257,7 +257,7 @@ export function registerOperatorCommands(program: Command): void {
       );
       console.log(`symbols: ${report.totalConfirmed}/${report.totalClaimed} confirmed at tier B\n`);
       for (const g of report.gates) {
-        const mark = g.pass === null ? '—' : g.pass ? 'PASS' : 'FAIL';
+        const mark = g.pass === null ? '-' : g.pass ? 'PASS' : 'FAIL';
         console.log(`  [${mark}] ${g.name}: ${g.actual} (target ${g.target})`);
       }
       const bad = report.perPackage.filter((p) => p.precision !== null && p.precision < 1);
@@ -430,7 +430,7 @@ export function registerOperatorCommands(program: Command): void {
       if (!githubAppCredentials()) {
         // Not an error: most deployments have no GitHub App, and the daily cron
         // chains this after `sync`. Exiting non-zero would fail the whole run.
-        console.log('GitHub App not configured — nothing to scan.');
+        console.log('GitHub App not configured, nothing to scan.');
         return;
       }
       const { createDb } = await import('../db/client');

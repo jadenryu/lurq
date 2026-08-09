@@ -3,7 +3,7 @@ import { Panel, eyebrow } from "@/components/dashboard/panel";
 import { cn } from "@/lib/utils";
 
 /**
- * Stat tiles and the hero figure — the right form when the answer is one number
+ * Stat tiles and the hero figure: the right form when the answer is one number
  * rather than a distribution (a one-bar bar chart is never the answer).
  *
  * Both use the brand heading face at **proportional** figures. `tabular-nums`
@@ -38,7 +38,7 @@ export function StatTile({
 }
 
 /**
- * The single number a view leads with. Exactly one per page — a second one just
+ * The single number a view leads with. Exactly one per page, a second one just
  * makes both smaller.
  */
 export function HeroFigure({

@@ -24,7 +24,7 @@
  */
 import stats from "@/content/generated/stats.json";
 
-export const INSTALL_COMMAND = "npm i -g lurqrun";
+export const INSTALL_COMMAND = "npx lurqrun";
 
 /**
  * The copy affordance, kept out of the label. The visible text of a control has
@@ -53,7 +53,7 @@ export const STATUS_OK_LABEL = "api.lurq.run responding";
 
 export const EYEBROW_VERSION = `v${stats.npm.latestVersion}`;
 export const EYEBROW_NPM = "live on npm";
-export const EYEBROW_LICENSE = "MIT";
+export const EYEBROW_LICENSE = "Apache 2.0";
 export const NPM_PACKAGE_URL = "https://www.npmjs.com/package/lurqrun";
 
 export const HEADLINE_LINE_1 = "The verification layer";
@@ -202,6 +202,6 @@ export const CLOSING_SUB =
 
 // ── footer ──────────────────────────────────────────────────────────
 
-/** Not the lead again — LEAD word for word under the lockup was one restatement too many. */
+/** Not the lead again: LEAD word for word under the lockup was one restatement too many. */
 export const FOOTER_BLURB = "One call, in the gap between the suggestion and the install.";
 export const FOOTER_RIGHTS = `\u00a9 ${new Date().getFullYear()} lurq`;

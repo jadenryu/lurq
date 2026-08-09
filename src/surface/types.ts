@@ -13,11 +13,11 @@
  * runtime symbol breaks `node`.
  */
 export type ExtractionTier =
-  | 'shipped_js_ast' // A — primary
-  | 'runtime_import' // B — sandboxed require/import; the cost driver
-  | 'bundled_dts' // C — secondary, signatures + deprecation only
-  | 'types_package' // D — DefinitelyTyped; drifts from the real package
-  | 'jsdoc_generated'; // E — rarely reached
+  | 'shipped_js_ast' // A, primary
+  | 'runtime_import' // B, sandboxed require/import; the cost driver
+  | 'bundled_dts' // C, secondary, signatures + deprecation only
+  | 'types_package' // D, DefinitelyTyped; drifts from the real package
+  | 'jsdoc_generated'; // E, rarely reached
 
 export type SymbolKind = 'function' | 'class' | 'object' | 'primitive' | 'type_only';
 

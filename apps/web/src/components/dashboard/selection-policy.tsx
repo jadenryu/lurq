@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * Every control here states its blast radius next to itself, the same standard
  * the autopilot panel is held to: a rule whose consequence you have to infer is
  * not a decision you made. The difference is what "off" means. Autopilot off is
- * safe — lurq does nothing. Selection policy off means every recommendation goes
+ * safe: lurq does nothing. Selection policy off means every recommendation goes
  * through unfiltered, so this panel says "not enforcing" rather than "off", and
  * never renders an empty rule list as a settled state.
  */
@@ -216,7 +216,7 @@ export function SelectionPolicyPanel({
       <div className="mt-5 space-y-5">
         <Row
           label="Blocked packages"
-          description="Never recommended, and flagged when an agent evaluates one it found on its own. The reason is handed to the agent verbatim — “use the internal http client” redirects it; “denied” just makes it try again."
+          description="Never recommended, and flagged when an agent evaluates one it found on its own. The reason is handed to the agent verbatim, “use the internal http client” redirects it; “denied” just makes it try again."
         />
         <div className="-mt-3">
           <DenyEditor
@@ -228,7 +228,7 @@ export function SelectionPolicyPanel({
 
         <Row
           label="Always allowed"
-          description="Exceptions that beat every rule below. For the package you have deliberately accepted despite the rules — without this, any rule strict enough to be useful gets switched off the first time it is inconvenient."
+          description="Exceptions that beat every rule below. For the package you have deliberately accepted despite the rules, without this, any rule strict enough to be useful gets switched off the first time it is inconvenient."
         />
         <div className="-mt-3">
           <NameList
@@ -243,7 +243,7 @@ export function SelectionPolicyPanel({
 
         <Row
           label="Refuse deprecated packages"
-          description="Blocks anything npm has marked deprecated. Packages lurq has not indexed are never blocked by this — an unknown is not a violation."
+          description="Blocks anything npm has marked deprecated. Packages lurq has not indexed are never blocked by this, an unknown is not a violation."
         >
           <Toggle
             on={policy.blockDeprecated}
@@ -258,7 +258,7 @@ export function SelectionPolicyPanel({
               <p className="text-sm font-medium text-ink">Minimum evidence</p>
               <p className="mt-1 text-sm leading-relaxed text-ink-2">
                 How much track record a package needs before lurq will suggest it. Off by
-                default — a floor you did not set should not quietly hide half the index
+                default: a floor you did not set should not quietly hide half the index
                 from your agent.
               </p>
             </div>
@@ -308,7 +308,7 @@ export function SelectionPolicyPanel({
               <p className="text-sm font-medium text-ink">Allowed licenses</p>
               <p className="mt-1 text-sm leading-relaxed text-ink-2">
                 An allowlist, so anything not on it is refused. A package whose license
-                lurq has not recorded passes — the rule needs a fact to act on, and “we
+                lurq has not recorded passes: the rule needs a fact to act on, and “we
                 did not look” is not one.
               </p>
             </div>
@@ -327,7 +327,7 @@ export function SelectionPolicyPanel({
                 items={policy.licenses}
                 placeholder="SPDX id, then Enter"
                 disabled={locked}
-                empty="nothing allowed — every package with a known license is refused"
+                empty="nothing allowed, every package with a known license is refused"
                 onAdd={(name) => patch({ licenses: [...(policy.licenses ?? []), name] })}
                 onRemove={(name) =>
                   patch({ licenses: (policy.licenses ?? []).filter((l) => l !== name) })
@@ -396,7 +396,7 @@ function DenyEditor({
                 <span className="ml-2 text-xs text-ink-2">
                   {rule.reason ?? (
                     <span className="text-ink-3">
-                      no reason given — the agent will only be told it is blocked
+                      no reason given: the agent will only be told it is blocked
                     </span>
                   )}
                 </span>

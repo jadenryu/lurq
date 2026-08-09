@@ -34,7 +34,7 @@ const STATUS: Record<UpgradeRun["status"], { label: string; tone: "bad" | "warn"
 
 function TestsCell({ run }: { run: UpgradeRun }) {
   // Null is "this repo has no test script", which is genuinely different from a
-  // failing suite — and worth showing, because it tells the reader how much the
+  // failing suite, and worth showing, because it tells the reader how much the
   // green in the rest of the row is actually worth.
   if (run.testsPassed === null) {
     return <span className="font-mono text-xs text-ink-3">no suite</span>;
@@ -50,7 +50,7 @@ export function UpgradeRuns({ runs }: { runs: UpgradeRun[] }) {
   if (runs.length === 0) {
     return (
       <EmptyState title="No autopilot runs yet">
-        Once the workflow runs, every upgrade it considers appears here — what it concluded, what
+        Once the workflow runs, every upgrade it considers appears here, what it concluded, what
         it changed, and whether your tests passed.
       </EmptyState>
     );
@@ -113,7 +113,7 @@ export function UpgradeRuns({ runs }: { runs: UpgradeRun[] }) {
                         )}
                       </span>
                     ) : (
-                      <span className="text-ink-3">—</span>
+                      <span className="text-ink-3">-</span>
                     )}
                   </TableCell>
                   <TableCell>

@@ -52,7 +52,7 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const max = opts.maxUpgrades ?? 3;
   const mode = opts.armed ? 'pr' : 'comment';
 
-  return `# Managed by lurq — https://lurq.run
+  return `# Managed by lurq, https://lurq.run
 #
 # Keeps this repository's dependencies current and rewrites the call sites an
 # upgrade breaks. lurq itself has read-only access to your code; every write
@@ -102,7 +102,7 @@ jobs:
         run: npx -y lurqrun upgrade-plan . --json > lurq-plan.json
 
       # 2. Narrow that to symbols THIS repo references. Runs entirely locally
-      #    against both versions' npm tarballs — no API key, no test suite.
+      #    against both versions' npm tarballs, no API key, no test suite.
       - name: Check against this codebase
         run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json
 
@@ -116,7 +116,7 @@ jobs:
           cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
       # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
-      #    changed nothing — the brief is in the run summary above, and no
+      #    changed nothing, the brief is in the run summary above, and no
       #    Anthropic credential is needed to get this far.
       - name: Check agent credentials
         if: env.LURQ_MODE == 'pr'
@@ -151,13 +151,13 @@ jobs:
             exact file and line where this repository uses it.
 
             lurq-plan.json carries two more things per upgrade:
-              · "declaredIn" — EVERY package.json declaring that dependency.
+              · "declaredIn", EVERY package.json declaring that dependency.
                 Bump all of them. Bumping only the root leaves a workspace
                 pinned to the old major, which typechecks and breaks on install.
-              · "hops" — the migration sequence when the upgrade crosses two or
+              · "hops", the migration sequence when the upgrade crosses two or
                 more majors, with what each step removes. Work the steps in
                 order; do not jump straight to the target version. When
-                "sequenceNote" is present, the sequence could not be planned —
+                "sequenceNote" is present, the sequence could not be planned,
                 treat that dependency as a migration and skip it.
 
             Take at most \${{ env.MAX_UPGRADES }} entries, hardest first:
@@ -169,19 +169,19 @@ jobs:
                and anything you read from it describes the API you are leaving.
             3. Rewrite every listed call site. "newExports" on each entry names
                the exports the target version ADDED, extracted from its shipped
-               JavaScript — that is where the replacement for a removed symbol
+               JavaScript: that is where the replacement for a removed symbol
                comes from. Confirm each one against the freshly installed package
                under node_modules before you call it. You have NO network access
                and no documentation: an API in neither the brief nor node_modules
                is one you cannot verify, and writing it anyway is the failure
                this whole job exists to prevent. Revert that dependency instead.
             4. Run the repository's test script. If it fails and you cannot fix
-               it from the upgrade itself, revert that dependency and move on —
+               it from the upgrade itself, revert that dependency and move on,
                a reverted upgrade is a fine outcome, a broken build is not.
             5. Leave the working tree with only the upgrades that pass.
 
             Do not touch unrelated files. Do not change CI configuration. Do not
-            run git commands — the workflow handles version control.
+            run git commands: the workflow handles version control.
           claude_args: |
             --allowedTools "Read,Edit,Write,Bash(${install.split(' ')[0]}:*)"
 

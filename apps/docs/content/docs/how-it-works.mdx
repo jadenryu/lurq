@@ -3,7 +3,7 @@ title: How it works
 description: How lurq turns public signals into scores, confidence, and search.
 ---
 
-lurq's scores are computed from public signals — **never hand-written**. This
+lurq's scores are computed from public signals, **never hand-written**. This
 page sketches the pipeline from raw data to the answer your agent receives.
 
 ## The pipeline
@@ -25,15 +25,15 @@ upstream API degrades one signal rather than failing the whole index.
 
 A package's composite score blends two axes:
 
-- **Health** — signals like maintenance cadence, adoption, reliability, and
+- **Health**: signals like maintenance cadence, adoption, reliability, and
   efficiency, drawn from release history, issue activity, dependents, and bundle
   size.
-- **Quality** — a complementary axis so a brand-new but well-built package
+- **Quality**: a complementary axis so a brand-new but well-built package
   isn't penalized purely for being young.
 
 The two are combined with a tunable weight (`composite.lambda`). Operators can
 inspect the model with `lurqrun weights` and adjust it with
-`lurqrun edit-weights` — see the [CLI reference](/docs/cli#scoring-controls).
+`lurqrun edit-weights`, see the [CLI reference](/docs/cli#scoring-controls).
 
 ## Confidence
 

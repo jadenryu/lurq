@@ -138,7 +138,7 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
       {keys.length === 0 ? (
         <EmptyState title="No keys yet">
           Create one with <span className="text-foreground">New key</span>, then run{" "}
-          <code className="font-mono text-foreground">npm i -g lurqrun && lurq setup</code>.
+          <code className="font-mono text-foreground">npx lurqrun</code>.
         </EmptyState>
       ) : visible.length === 0 ? (
         <EmptyState title="No matches" />
@@ -160,7 +160,7 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
               <TableBody>
                 {visible.map((key) => (
                   <TableRow key={key.id} className="border-border/60">
-                    <TableCell className="font-medium">{key.label || "—"}</TableCell>
+                    <TableCell className="font-medium">{key.label || "-"}</TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
                       {key.prefix}…
                     </TableCell>
@@ -243,7 +243,7 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
           <DialogHeader>
             <DialogTitle>Your rotated key</DialogTitle>
             <DialogDescription>
-              Copy it now — it won&apos;t be shown again. The old key stopped working.
+              Copy it now: it won&apos;t be shown again. The old key stopped working.
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2">

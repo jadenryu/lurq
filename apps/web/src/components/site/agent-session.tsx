@@ -275,7 +275,7 @@ export function AgentSession() {
   //
   // Measured rather than assumed. The correction used to be a flat
   // `scrollY - height`, which is right only if the browser leaves the scroll
-  // alone — and it does not: shrinking content around the viewport is exactly
+  // alone, and it does not: shrinking content around the viewport is exactly
   // what CSS scroll anchoring exists to compensate for, and when it fires first
   // the flat correction is applied a second time and throws the reader a whole
   // track back up, into the section they had just scrolled out of. Reading the

@@ -7,12 +7,12 @@
  * `registerTool` calls in `src/mcp/server.ts`.
  *
  * Two things this file must never say: that rankings respond to reported
- * outcomes (they don't — outcomes are captured and go nowhere near the score),
+ * outcomes (they don't, outcomes are captured and go nowhere near the score),
  * and that any compatibility edge has been verified by installing anything (no
  * pair on this page has been co-installed; every edge is declared metadata).
  */
 
-export const INSTALL_COMMAND = "npm i -g lurqrun && lurq setup";
+export const INSTALL_COMMAND = "npx lurqrun";
 export const MCP_ENDPOINT = "https://api.lurq.run/mcp";
 export const HEALTH_ENDPOINT = "https://api.lurq.run/healthz";
 export const REPO_URL = "https://github.com/jadenryu/lurq";
@@ -78,7 +78,7 @@ export const EDITOR_LOGOS = [
 ] as const;
 
 /**
- * What we don't do yet (§18). Same visual weight as everything else — this is
+ * What we don't do yet (§18). Same visual weight as everything else, this is
  * what makes the rest of the page believable, so it isn't softened and it isn't
  * styled as a roadmap tease.
  */
@@ -118,11 +118,11 @@ export const FAQS: Faq[] = [
   },
   {
     q: "How is this different from just asking the model?",
-    a: "A model answers from text written before its cutoff. When a library ships a breaking major, every one of those texts is wrong and the model has no way to know — it writes clean, confident, non-existent code. lurq reads the package's own metadata and its shipped type declarations, so the answer moves when the package moves.",
+    a: "A model answers from text written before its cutoff. When a library ships a breaking major, every one of those texts is wrong and the model has no way to know, it writes clean, confident, non-existent code. lurq reads the package's own metadata and its shipped type declarations, so the answer moves when the package moves.",
   },
   {
     q: "What does 'declared' mean on the graph?",
-    a: "That the finding comes from the packages' own metadata — peer-dependency ranges and engine fields, solved with semver — and not from installing anything. It is deterministic and it is instant, and it is also strictly weaker than running the install. We label it declared everywhere so the difference stays visible.",
+    a: "That the finding comes from the packages' own metadata (peer-dependency ranges and engine fields, solved with semver) and not from installing anything. It is deterministic and it is instant, and it is also strictly weaker than running the install. We label it declared everywhere so the difference stays visible.",
   },
   {
     q: "So you haven't actually installed these together?",
@@ -130,7 +130,7 @@ export const FAQS: Faq[] = [
   },
   {
     q: "Can a maintainer pay for placement?",
-    a: "No, and it is structural rather than a policy we might revisit. The score is computed from public signals — release activity, open advisories, deprecation, maintenance, install size — by code you can read in the repo. There is no ad slot, no sponsored result, and no field in the schema for one.",
+    a: "No, and it is structural rather than a policy we might revisit. The score is computed from public signals (release activity, open advisories, deprecation, maintenance, install size) by code you can read in the repo. There is no ad slot, no sponsored result, and no field in the schema for one.",
   },
   {
     q: "Do reported outcomes change the ranking?",
@@ -138,14 +138,14 @@ export const FAQS: Faq[] = [
   },
   {
     q: "Which tools does it work with?",
-    a: "One command writes MCP config for Claude Code, Cursor, Windsurf, VS Code / Copilot, and the Codex CLI — it edits the config file each one already reads. Anything else that speaks MCP can point at the hosted endpoint directly, and the CLI works on its own in any terminal.",
+    a: "One command writes MCP config for Claude Code, Cursor, Windsurf, VS Code / Copilot, and the Codex CLI, it edits the config file each one already reads. Anything else that speaks MCP can point at the hosted endpoint directly, and the CLI works on its own in any terminal.",
   },
   {
     q: "What if a package isn't in the index?",
-    a: "The safety check always hits the live npm registry, so a name we have never seen still gets a real answer — that is the point of it, since hallucinated package names are new by definition. Deeper reads fetch and score on demand, then keep the package in the daily sync.",
+    a: "The safety check always hits the live npm registry, so a name we have never seen still gets a real answer, that is the point of it, since hallucinated package names are new by definition. Deeper reads fetch and score on demand, then keep the package in the daily sync.",
   },
   {
     q: "Is it free?",
-    a: "Yes, today. The CLI and the hosted server are free, the source is MIT-licensed, and there is no paid tier to buy. How this eventually pays for itself is not decided; whatever the answer turns out to be, it will not be sellers buying rank.",
+    a: "Yes, today. The CLI and the hosted server are free, the source is Apache 2.0 licensed, and there is no paid tier to buy. How this eventually pays for itself is not decided; whatever the answer turns out to be, it will not be sellers buying rank.",
   },
 ];

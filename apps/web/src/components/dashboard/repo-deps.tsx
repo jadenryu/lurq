@@ -34,7 +34,7 @@ function matches(dep: DashboardDep, filter: string): boolean {
 }
 
 /**
- * Three versions per row — declared range, what it resolves to, what's current —
+ * Three versions per row (declared range, what it resolves to, what's current)
  * because the gap between the middle and right column IS the drift, and showing
  * only "latest" next to a caret range makes every repo look out of date.
  */
@@ -90,10 +90,10 @@ export function RepoDeps({ deps }: { deps: DashboardDep[] }) {
                   {dep.range}
                 </TableCell>
                 <TableCell className="font-mono text-xs tabular-nums">
-                  {dep.resolved ?? "—"}
+                  {dep.resolved ?? "-"}
                 </TableCell>
                 <TableCell className="font-mono text-xs tabular-nums">
-                  {dep.latest ?? "—"}
+                  {dep.latest ?? "-"}
                 </TableCell>
                 <TableCell className="pr-5 md:pr-6">
                   <span className="flex flex-wrap items-center gap-1.5">

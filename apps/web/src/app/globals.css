@@ -5,7 +5,7 @@
 /* components/site has to be registered by hand.
    The root .gitignore carries `/site` from a stock mkdocs block (line ~192).
    Git reads that as anchored to the repo root, so `apps/web/src/components/site`
-   is correctly tracked — but Tailwind's automatic source detection matches the
+   is correctly tracked, but Tailwind's automatic source detection matches the
    bare directory name anywhere in the tree and skips it, so every class used
    only in there silently fails to compile. Registering the path explicitly is
    the documented escape hatch, the same one that pulls classes out of an
@@ -18,7 +18,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   /* Geist for body copy; Commit Mono gives the site its terminal-native
-     identity — it powers all headings and every mono/code surface. */
+     identity: it powers all headings and every mono/code surface. */
   --font-sans: var(--font-geist);
   --font-mono: var(--font-commit-mono), ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
   --font-heading: var(--font-commit-mono), ui-monospace, "SF Mono", Menlo, monospace;
@@ -53,7 +53,7 @@
   --color-bad: var(--bad);
   --color-warn: var(--warn);
   /* Marketing surface (see "light page, dark instrument" below). Fixed values,
-     not theme-dependent — the landing page reads as a document in daylight while
+     not theme-dependent: the landing page reads as a document in daylight while
      every product artifact sits on the dark viewport. */
   --color-paper: var(--paper);
   --color-paper-2: var(--paper-2);
@@ -76,7 +76,7 @@
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
   --color-held: var(--held);
-  /* Verdicts — the only saturated colour on the marketing page. Used in the
+  /* Verdicts, the only saturated colour on the marketing page. Used in the
      graph, in verdict badges, in the diff markers, and nowhere else. The `-lift`
      variants are the same hues raised for the dark surfaces. */
   --color-verified: var(--verified);
@@ -135,17 +135,17 @@
    Marketing surface: a proof sheet.
 
    The page is about checking something before you commit to it, which is
-   proofing — printer's proofs, blueline prints, an editor's marks in the margin.
+   proofing: printer's proofs, blueline prints, an editor's marks in the margin.
    So: paper stock, ink, and marks made on top of it. Three dark moments (the
    graph, the install band, the closing line) break the page up; everything else
    is paper.
 
    Three rules hold the palette together:
-     · the three verdict colours only ever mean a verdict — never a button,
+     · the three verdict colours only ever mean a verdict, never a button,
        never a heading, never decoration
      · --mark is never a verdict. It is links, focus, hover, active tabs, the
        copy-confirm state: the one colour on the page that isn't data
-     · deep pine and vermilion rather than CI green and red — darker, less
+     · deep pine and vermilion rather than CI green and red, darker, less
        saturated, easier to separate with a red-green deficiency, and always
        paired with a glyph or a word rather than carrying meaning alone
    ───────────────────────────────────────────────────────────────────────────── */
@@ -156,10 +156,10 @@
   --ink-soft: #5c5c56;
   --rule: #e0e0da;
 
-  --verified: #1b5e4a; /* deep pine — checked and held */
-  --conflict: #c1440e; /* vermilion — flagged */
-  --declared: #8a8a82; /* graphite — stated, not tested */
-  --mark: #2b4c7e; /* prussian blue — interaction only */
+  --verified: #1b5e4a; /* deep pine, checked and held */
+  --conflict: #c1440e; /* vermilion, flagged */
+  --declared: #8a8a82; /* graphite, stated, not tested */
+  --mark: #2b4c7e; /* prussian blue, interaction only */
 
   /* The dark surfaces are the same ink family, not a second palette: a press
      plate rather than a screen. */
@@ -228,7 +228,7 @@
    These used to be their own palette: a cool charcoal ramp (oklch ~0.175→0.28
    at 0.005 chroma) with `--muted-foreground` at oklch(0.7 0 0), i.e. dead
    neutral grey. That is shadcn's stock dark theme with the numbers nudged, and
-   it is why the dashboard read as generated while the marketing page did not —
+   it is why the dashboard read as generated while the marketing page did not,
    the product surface was wearing the template's colours and the room's were
    sitting one import away, unused. The dashboard has ~99 `text-muted-foreground`
    against ~17 `text-ink-*`, so the template palette was, in practice, the
@@ -271,7 +271,7 @@
   --ok: var(--held);
   --bad: var(--conflict);
   /* Deliberately still a literal. The room runs on three verdict colours and
-     "needs attention" is not one of them — it is the demo-data chip and the
+     "needs attention" is not one of them, it is the demo-data chip and the
      revoked-key warning, which are notices about the page rather than findings
      in the data. A fourth hue that only ever appears on chrome. */
   --warn: #e6c07a;
@@ -427,7 +427,7 @@ html {
    Marketing page: type scale, rhythm, and the dark instrument surface.
 
    Seven type sizes, no eighth. If something needs a size that isn't here it's
-   the wrong element. Headlines stay lowercase throughout — a real choice, kept
+   the wrong element. Headlines stay lowercase throughout, a real choice, kept
    consistent, never broken for emphasis.
    ───────────────────────────────────────────────────────────────────────────── */
 [data-surface="paper"] {
@@ -449,7 +449,7 @@ body:has([data-surface="paper"]) {
    Type.
 
    Headlines are Geist in sentence case. Monospace is reserved for the things that
-   are literally monospace — package names, versions, commands, and the data in an
+   are literally monospace: package names, versions, commands, and the data in an
    artifact. Lowercase mono headings and FIG markers read as a paper rather than a
    product, which is not what this is.
 

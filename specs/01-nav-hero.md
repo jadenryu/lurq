@@ -168,7 +168,7 @@ Corner registration marks: keep, 13px, `--edge`, inset 24px, hidden below 620px.
 ### Eyebrow
 
 Unchanged from v2. Mono 11px, `--ink-3`, hairline rules either side.
-`v0.0.6 · live on npm ↗ · MIT`, with `live on npm ↗` linking to
+`v0.0.6 · live on npm ↗ · Apache 2.0`, with `live on npm ↗` linking to
 `https://www.npmjs.com/package/lurqrun`.
 
 ### Headline — two lines, forced
@@ -199,7 +199,7 @@ the versions agree, and the stack runs where you deploy.
 
 ### CTAs
 
-Unchanged from v2. Primary is the copyable `npm i -g lurqrun` in mono with a copy glyph;
+Unchanged from v2. Primary is the copyable `npx lurqrun` in mono with a copy glyph;
 secondary is `Read the docs`.
 
 ### Note line

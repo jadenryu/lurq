@@ -419,7 +419,7 @@ for (let i = 0; i < members.length; i++) {
         a,
         b,
         level: 'co-occurs',
-        detail: `Neither package declares the other. ${witness.witnesses.toLocaleString('en-US')} public dependency graphs resolve them side by side — co-occurrence, not a verified install.`,
+        detail: `Neither package declares the other. ${witness.witnesses.toLocaleString('en-US')} public dependency graphs resolve them side by side: co-occurrence, not a verified install.`,
         witnesses: witness.witnesses,
         reproduce: reproduce(a, b),
       });

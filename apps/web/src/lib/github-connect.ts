@@ -5,7 +5,7 @@
  * binding it to an identity, an attacker could hand a signed-in user a crafted
  * callback URL carrying the *attacker's* installation id and have the victim's
  * account adopt repos they don't own. So state is an HMAC of the Clerk user id
- * under the issuer secret, verified on return — the same secret already trusted
+ * under the issuer secret, verified on return, the same secret already trusted
  * as the web↔backend boundary, so this adds no new key to manage.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";

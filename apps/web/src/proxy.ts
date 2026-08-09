@@ -1,11 +1,11 @@
 // Next.js 16 renamed `middleware.ts` → `proxy.ts`. Clerk needs this to run on
-// every request so the client SDK can hydrate auth state — without it,
+// every request so the client SDK can hydrate auth state, without it,
 // <SignInButton>/<SignUpButton> and useAuth() silently do nothing.
 //
 // There must be exactly ONE proxy file. Next 16 accepts it at `/proxy.ts` OR
 // `/src/proxy.ts` (PROXY_LOCATION_REGEXP = `(?:src/)?proxy`); having both is
 // ambiguous and the proxy may not run at all. Since `app` lives in `src/app`,
-// this is the canonical spot — do not re-add a root-level proxy.ts.
+// this is the canonical spot: do not re-add a root-level proxy.ts.
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 // Default-public; protect by exception. Only the dashboard requires auth.

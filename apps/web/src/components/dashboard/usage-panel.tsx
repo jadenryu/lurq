@@ -16,7 +16,7 @@ export function UsagePanel({ usage, days }: { usage: DashboardUsage; days: numbe
     (best, p) => (best === null || p.count > best.count ? p : best),
     null,
   );
-  // Average over the window, not over active days — "calls per day" should count
+  // Average over the window, not over active days, "calls per day" should count
   // the quiet days too, otherwise it overstates steady-state volume.
   const perDay = usage.series.length > 0 ? total / usage.series.length : 0;
 
@@ -56,7 +56,7 @@ export function UsagePanel({ usage, days }: { usage: DashboardUsage; days: numbe
           <div className="h-px w-full bg-border" />
           <RailStat
             label="busiest day"
-            value={peak ? peak.count.toLocaleString() : "—"}
+            value={peak ? peak.count.toLocaleString() : "-"}
           >
             {peak && <p className={eyebrow}>{fmtDay(peak.date)}</p>}
           </RailStat>

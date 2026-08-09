@@ -1,7 +1,7 @@
 /**
  * Server-only client for the hosted MCP server's dashboard-authenticated routes
  * (`/keys`, `/outcomes` on src/mcp/http.ts). The web app never talks to Postgres
- * directly — every dashboard read/write goes through here, authenticated with
+ * directly: every dashboard read/write goes through here, authenticated with
  * the shared LURQ_ISSUER_SECRET. Never import this from a "use client" file.
  */
 
@@ -138,13 +138,13 @@ export async function fetchUsage(ownerId: string, days = 30): Promise<DashboardU
 
 /**
  * The resolved tree beyond the manifest. `null` on a repo means GitHub's
- * dependency graph is off there — "we could not look", which the UI renders
+ * dependency graph is off there: "we could not look", which the UI renders
  * differently from "nothing found".
  */
 export interface TransitiveSummary {
   resolved: number;
   tracked: number;
-  /** Transitives whose PACKAGE has known advisories — not proven against the
+  /** Transitives whose PACKAGE has known advisories, not proven against the
    *  installed version, since lurq stores no affected-version ranges. */
   advisoryPackages: number;
   deprecated: number;
@@ -160,7 +160,7 @@ export interface TransitiveRisk {
   latest: string | null;
   advisories: number;
   deprecated: boolean;
-  /** Direct dependencies that pull this in — the real upgrade targets. Empty
+  /** Direct dependencies that pull this in, the real upgrade targets. Empty
    *  means unattributed, never "nothing depends on it". */
   pulledInBy: string[];
 }
@@ -216,7 +216,7 @@ export interface DashboardDep {
 /**
  * A 404 from any repo route means the backend has no GitHub App configured, not
  * that the request was wrong. Callers render the "connect GitHub" state for it
- * rather than an error — it is the pre-setup case, not a failure.
+ * rather than an error: it is the pre-setup case, not a failure.
  */
 export class GithubNotConfiguredError extends LurqIssuerError {
   constructor() {
@@ -250,7 +250,7 @@ export interface RepoAlert {
   /** What that range resolved to at the last scan. Null when unknown. */
   fromVersion: string | null;
   toVersion: string;
-  /** True when the declared range already admits the new major — the next clean
+  /** True when the declared range already admits the new major, the next clean
    *  install takes it without anyone editing a manifest. */
   inRange: boolean;
   createdAt: string;

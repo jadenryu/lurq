@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /**
- * The dark room. This route group holds only `/`, so the surface stops here —
+ * The dark room. This route group holds only `/`, so the surface stops here,
  * the dashboard and the auth pages share the root layout and are untouched.
  *
  * Background is flat `--ground` for the whole route. Sections that want the

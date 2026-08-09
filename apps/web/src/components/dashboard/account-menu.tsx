@@ -14,8 +14,8 @@ import { cn } from "@/lib/utils";
 /**
  * Our own account control, replacing Clerk's `<UserButton>`.
  *
- * The stock widget renders Clerk's own popover — its border radius, its type
- * scale, a "Secured by Clerk" footer and a "Development mode" badge — none of
+ * The stock widget renders Clerk's own popover, its border radius, its type
+ * scale, a "Secured by Clerk" footer and a "Development mode" badge, none of
  * which we can bring in line with the rest of the dashboard. This keeps the
  * same capabilities (profile, sign out) using our dropdown primitive, so the
  * chrome is ours end to end. Clerk's account modal is still what opens for

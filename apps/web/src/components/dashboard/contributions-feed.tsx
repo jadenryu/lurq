@@ -71,11 +71,11 @@ export function ContributionsFeed({ packages }: { packages: DashboardContributio
                       {p.category ? (
                         <Chip>{p.category}</Chip>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm tabular-nums text-muted-foreground">
-                      {p.healthScore ?? "—"}
+                      {p.healthScore ?? "-"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
                       {formatDate(p.firstRequestedAt)}

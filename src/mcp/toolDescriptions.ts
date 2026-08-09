@@ -22,13 +22,13 @@
  */
 
 export const PLAN_DESCRIPTION =
-  'Turn a detailed program description (spec/README) or a list of component needs into an evidence-scored build plan: a real, lurq-scored package recommended per component, plus a Mermaid roadmap other agents can parse. Recommends building blocks slot-by-slot from the index — it does not invent an architecture from a bare prompt.';
+  'Turn a detailed program description (spec/README) or a list of component needs into an evidence-scored build plan: a real, lurq-scored package recommended per component, plus a Mermaid roadmap other agents can parse. Recommends building blocks slot-by-slot from the index, it does not invent an architecture from a bare prompt.';
 
 export const VERIFY_DESCRIPTION =
-  'Confirm an npm package is real, healthy, and not risky before installing — guards against hallucinated or typosquatted dependency names. Checks the live registry.';
+  'Confirm an npm package is real, healthy, and not risky before installing, guards against hallucinated or typosquatted dependency names. Checks the live registry.';
 
 export const COMPAT_DESCRIPTION =
-  'Check whether a set of packages forms a coherent stack: peer-dependency and engine-range compatibility across the whole set (instant, from declared metadata), plus any recorded sandbox-verified conflicts. Returns the exact clashing constraints. Read-only — does not run installs. Call before committing to a multi-package stack.';
+  'Check whether a set of packages forms a coherent stack: peer-dependency and engine-range compatibility across the whole set (instant, from declared metadata), plus any recorded sandbox-verified conflicts. Returns the exact clashing constraints. Read-only, does not run installs. Call before committing to a multi-package stack.';
 
 /**
  * The `packages` parameter carries the batching instruction, not just the
@@ -37,7 +37,7 @@ export const COMPAT_DESCRIPTION =
  * actually did before this said otherwise.
  */
 export const COMPAT_PACKAGES_DESCRIPTION =
-  'The full candidate stack to check together, 2–8 npm package names. Pass every package in one call — checking pairs separately misses conflicts that only appear across the whole set, and costs a round trip each.';
+  'The full candidate stack to check together, 2–8 npm package names. Pass every package in one call, checking pairs separately misses conflicts that only appear across the whole set, and costs a round trip each.';
 
 export const COMPAT_VERSIONS_DESCRIPTION =
   'Optional exact versions keyed by package name (use when not checking latest)';

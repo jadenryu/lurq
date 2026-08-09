@@ -360,7 +360,7 @@ const REPORT_CANDIDATE_CAP = 8;
 
 /** The §9.0 report: fits on one screen, names files and lines. */
 export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade check'): string {
-  const out: string[] = [`lurq — ${title}`, ''];
+  const out: string[] = [`lurq, ${title}`, ''];
 
   for (const b of report.breaking.sort((a, z) => (a.severity === 'blocking' ? -1 : 1))) {
     const label = b.severity === 'blocking' ? 'BLOCKING' : 'WARNING ';
@@ -392,13 +392,13 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
   }
 
   if (report.unverified.length) {
-    out.push(`UNVERIFIED  ${report.unverified.length} package(s) — not checked, NOT declared safe:`);
+    out.push(`UNVERIFIED  ${report.unverified.length} package(s), not checked, NOT declared safe:`);
     for (const u of report.unverified) out.push(`    · ${u.package}: ${u.reason}`);
     out.push('');
   }
 
   if (report.ok.length) {
-    out.push(`OK        ${report.ok.length} package(s) — no referenced symbols removed`);
+    out.push(`OK        ${report.ok.length} package(s), no referenced symbols removed`);
   }
   if (!report.breaking.length && !report.unverified.length) {
     out.push('', 'No referenced symbols are removed by these upgrades.');

@@ -152,7 +152,7 @@ const cell = "px-3 py-3.5 font-sans text-[13px] tabular-nums whitespace-nowrap";
  * Regular weight, though, not medium. Medium is now the board's emphasis, and
  * it is spent on exactly three things: the package name and the two columns
  * that carry the argument. A header row at the same weight as the finding was
- * half of why the whole board read as one flat grey field — the loudest type in
+ * half of why the whole board read as one flat grey field, the loudest type in
  * the panel was its own furniture.
  *
  * No second family anywhere in this section. Every word here is Geist, and the
@@ -201,8 +201,8 @@ function Caret() {
  *
  * So it is an axis: the cutoff at the left edge, the last sync at the right, and
  * the month boundaries between them marked and named. The geometry is shared
- * with the rows below on purpose — same flex row, same gap, same trailing 54px
- * column — so every tick lands exactly on the rule drawn through all eight
+ * with the rows below on purpose: same flex row, same gap, same trailing 54px
+ * column, so every tick lands exactly on the rule drawn through all eight
  * lanes, and a reader can put a straightedge down the column. The lane rules are
  * generated from these same positions (see --drift-grid), so the two cannot
  * drift apart.
@@ -359,7 +359,7 @@ const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : us
  * FLIP, in the browser's own animation engine. The positions are read in a
  * layout effect after React has committed the new order but before paint, each
  * row is offset back to where it just was, and the offset is animated away. So
- * the DOM is only ever in the correct, sorted order — the movement is a paint
+ * the DOM is only ever in the correct, sorted order, the movement is a paint
  * detail on top of it, which is why nothing here has to touch `rows`, the
  * keys, or the rank numbers.
  *
@@ -485,8 +485,8 @@ export function DriftBoard() {
     // rather than an empty one.
     //
     // It keeps observing after the first crossing, which it did not used to.
-    // `shown` is still a one-way latch — the lanes draw once, it is a
-    // leaderboard and not a loop — but the picker below needs to know whether
+    // `shown` is still a one-way latch, the lanes draw once, it is a
+    // leaderboard and not a loop, but the picker below needs to know whether
     // the board is actually on screen, and a timer advancing a section nobody
     // is looking at burns a render every five seconds to change a chart in an
     // empty room.
@@ -508,13 +508,13 @@ export function DriftBoard() {
    * Six models are on that row and the default is the newest, which is the one
    * with the least to show: a visitor who never touches the chips reads the
    * mildest version of the argument and leaves. Cycling makes the section state
-   * its own case — the same eight-row board rebuilt against a cutoff eighteen
-   * months older, with the percentage climbing as it goes — and it advertises
+   * its own case: the same eight-row board rebuilt against a cutoff eighteen
+   * months older, with the percentage climbing as it goes, and it advertises
    * that the chips are live, which a row of quiet pills does not.
    *
    * Three things stop it, and all three are the same rule: it runs only while
    * nobody is engaged with it. Off screen, under a pointer, or with focus
-   * anywhere inside the section, it holds. Choosing a model ends it outright —
+   * anywhere inside the section, it holds. Choosing a model ends it outright,
    * once a reader has said which model is theirs, moving the board off it is
    * taking the answer away.
    *
@@ -557,7 +557,7 @@ export function DriftBoard() {
             }}
           >
             {/* The emphasis is on the second line, which is the claim. It used
-                to be the dim one — a two-tone headline that faded out exactly
+                to be the dim one: a two-tone headline that faded out exactly
                 where the sentence started saying something. */}
             <span className="block text-ink-2">{DRIFT_HEAD_1}</span>
             <span className="block">{DRIFT_HEAD_2}</span>

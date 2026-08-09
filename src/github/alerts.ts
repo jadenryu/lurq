@@ -123,7 +123,7 @@ export async function emitPublishAlerts(
 
     const written = await insertAlerts(db, rows);
     if (written > 0) {
-      logger.info(`alerts: ${name}@${toVersion} is a new major — notified ${written} repo(s)`);
+      logger.info(`alerts: ${name}@${toVersion} is a new major, notified ${written} repo(s)`);
     }
     return written;
   } catch (err) {

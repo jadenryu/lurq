@@ -1,4 +1,4 @@
-// Next.js auto-loads this on the client — no provider component needed.
+// Next.js auto-loads this on the client, no provider component needed.
 // Events route through the /ingest reverse proxy (next.config.ts) so ad-blockers
 // can't drop them. `web_vitals: true` is the client half of web-vitals autocapture;
 // the other half is the toggle in PostHog project settings → Web analytics.
