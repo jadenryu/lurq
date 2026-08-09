@@ -69,9 +69,9 @@ function HopPath({ from, hops }: { from: string; hops: UpgradeHop[] }) {
       <ol className="mt-2 space-y-1.5">
         {hops.map((hop, i) => (
           <li key={`${hop.fromVersion}-${hop.toVersion}`} className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-mono text-[0.65rem] text-muted-foreground/50">{i + 1}</span>
+            <span className="font-mono text-[0.65rem] text-ink-3">{i + 1}</span>
             <span className="font-mono text-xs tabular-nums">
-              {hop.fromVersion} <span className="text-muted-foreground/50">→</span> {hop.toVersion}
+              {hop.fromVersion} <span className="text-ink-3">→</span> {hop.toVersion}
             </span>
             <span className="font-mono text-xs text-muted-foreground">
               {hop.removed.length > 0
@@ -83,7 +83,7 @@ function HopPath({ from, hops }: { from: string; hops: UpgradeHop[] }) {
           </li>
         ))}
       </ol>
-      <p className="mt-2 font-mono text-[0.65rem] text-muted-foreground/60">
+      <p className="mt-2 font-mono text-[0.65rem] text-ink-3">
         starting from {from}
       </p>
     </div>
@@ -107,7 +107,7 @@ function BriefCard({ upgrade }: { upgrade: UpgradeBrief }) {
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-mono text-sm">{upgrade.package}</span>
           <span className="font-mono text-xs tabular-nums text-muted-foreground">
-            {upgrade.fromVersion} <span className="text-muted-foreground/50">→</span>{" "}
+            {upgrade.fromVersion} <span className="text-ink-3">→</span>{" "}
             {upgrade.toVersion}
           </span>
         </div>
@@ -234,7 +234,7 @@ export function MigrationBrief({ brief, failed }: { brief: RepoBrief; failed: bo
 
       {/* Never let a cap read as complete coverage. */}
       {(brief.omitted > 0 || brief.pending > 0) && (
-        <p className="font-mono text-xs text-muted-foreground/70">
+        <p className="font-mono text-xs text-ink-3">
           {brief.omitted > 0 && `${brief.omitted} further upgrade(s) not shown. `}
           {brief.pending > 0 &&
             `${brief.pending} awaiting surface extraction — queued, and they fill in on the next visit.`}

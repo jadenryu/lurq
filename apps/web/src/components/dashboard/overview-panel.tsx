@@ -10,7 +10,7 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted-foreground/60 transition-colors hover:text-foreground"
+      className="inline-flex items-center gap-1 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3 transition-colors hover:text-foreground"
     >
       {children}
       <ArrowUpRight className="size-3" />
@@ -110,7 +110,7 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
                     <Chip tone={o.accepted ? "good" : "neutral"} dot>
                       {o.accepted ? "accepted" : "passed"}
                     </Chip>
-                    <span className="w-16 shrink-0 text-right font-mono text-[0.65rem] tabular-nums text-muted-foreground/60">
+                    <span className="w-16 shrink-0 text-right font-mono text-[0.65rem] tabular-nums text-ink-3">
                       {relativeTime(o.createdAt)}
                     </span>
                   </li>

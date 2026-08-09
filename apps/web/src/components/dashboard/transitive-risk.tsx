@@ -125,7 +125,7 @@ export function TransitiveRiskPanel({
                         ))}
                       </span>
                     ) : (
-                      <span className="font-mono text-xs text-muted-foreground/50">
+                      <span className="font-mono text-xs text-ink-3">
                         unattributed
                       </span>
                     )}
@@ -138,7 +138,7 @@ export function TransitiveRiskPanel({
       )}
 
       {summary.truncated && (
-        <p className="font-mono text-xs text-muted-foreground/70">
+        <p className="font-mono text-xs text-ink-3">
           The resolved tree was larger than lurq reads in one pass, so these figures are a lower
           bound.
         </p>

@@ -432,3 +432,39 @@ export async function fetchContributions(
   const data = (await res.json()) as { total?: number; packages?: DashboardContribution[] };
   return { total: data.total ?? 0, packages: data.packages ?? [] };
 }
+
+/** Rules governing what an agent may *add*, as opposed to what it may upgrade. */
+export interface SelectionPolicy {
+  allow: string[];
+  deny: { name: string; reason?: string }[];
+  minConfidence: "unproven" | "promising" | "emerging" | "proven" | null;
+  licenses: string[] | null;
+  blockDeprecated: boolean;
+}
+
+export const EMPTY_SELECTION_POLICY: SelectionPolicy = {
+  allow: [],
+  deny: [],
+  minConfidence: null,
+  licenses: null,
+  blockDeprecated: false,
+};
+
+export async function fetchSelectionPolicy(ownerId: string): Promise<SelectionPolicy> {
+  const res = await issuerFetch(`/selection-policy?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read policy.", 502);
+  const data = (await res.json()) as { policy: SelectionPolicy };
+  return data.policy;
+}
+
+export async function updateSelectionPolicy(
+  ownerId: string,
+  policy: SelectionPolicy,
+): Promise<void> {
+  const res = await issuerFetch("/selection-policy", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, policy }),
+  });
+  if (!res.ok) throw new LurqIssuerError("Could not save policy.", 502);
+}

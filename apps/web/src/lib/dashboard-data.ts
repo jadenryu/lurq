@@ -52,6 +52,9 @@ import {
   type UpgradeImpact,
   EMPTY_IMPACT,
   fetchImpact,
+  fetchSelectionPolicy,
+  EMPTY_SELECTION_POLICY,
+  type SelectionPolicy,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -132,6 +135,29 @@ export function loadContributions(): Promise<
 export interface ReposData {
   repos: DashboardRepo[];
   configured: boolean;
+}
+
+/**
+ * The owner's selection policy.
+ *
+ * Falls back to the empty policy on failure rather than erroring the page. An
+ * unreachable policy service must not read as "you have no rules" though, so the
+ * `failed` flag is what the UI keys its warning off — the same discipline the
+ * rest of this file follows about never presenting an absence as an answer.
+ */
+export async function loadSelectionPolicy(): Promise<Loaded<SelectionPolicy>> {
+  const { userId, demo } = await context();
+  if (!userId) return { data: EMPTY_SELECTION_POLICY, demo: false, failed: false };
+  if (demo) return { data: EMPTY_SELECTION_POLICY, demo: true, failed: false };
+  try {
+    return { data: await fetchSelectionPolicy(userId), demo: false, failed: false };
+  } catch (err) {
+    console.warn(
+      "[lurq] selection policy read failed.",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { data: EMPTY_SELECTION_POLICY, demo: false, failed: true };
+  }
 }
 
 export async function loadRepos(): Promise<Loaded<ReposData>> {
