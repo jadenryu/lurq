@@ -133,6 +133,16 @@ export interface RepoDrift {
    * `transitive: null`. An empty array is a real all-clear.
    */
   conflictsAtLatest?: CompatConflict[];
+  /**
+   * Peer/engine conflicts in the versions the repo resolves TODAY — i.e. whether
+   * this stack is broken right now, as opposed to whether the upgrades we are
+   * recommending would land somewhere coherent.
+   *
+   * Same `undefined` discipline as `conflictsAtLatest`: absent means the repo has
+   * not been scanned since this shipped and renders as "not checked", never as a
+   * clean install. An empty array is a real all-clear.
+   */
+  conflictsAtCurrent?: CompatConflict[];
 }
 
 /** Per-repo autopilot policy. Set by the connect survey, edited in the dashboard. */

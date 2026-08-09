@@ -131,6 +131,8 @@ export async function upsertPackageVersions(
       packageName: name,
       version: v.version,
       publishedAt: v.publishedAt,
+      peerDependencies: v.peerDependencies ?? null,
+      engines: v.engines ?? null,
     }));
     await db.insert(packageVersions).values(rows).onConflictDoNothing();
   }

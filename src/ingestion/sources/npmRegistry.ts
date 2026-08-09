@@ -4,7 +4,7 @@
  */
 import { CACHE_TTL } from '../../core/constants';
 import { httpGetJson } from '../../core/http';
-import type { NpmRegistryData } from '../types';
+import type { NpmRegistryData, VersionInfo } from '../types';
 
 const HOST = 'registry.npmjs.org';
 
@@ -138,12 +138,18 @@ function detectInstallScripts(manifest: any): boolean {
  * paired with its publish date from `time`, newest first. The `time` map also
  * holds `created`/`modified` sentinels, which we skip.
  */
-export function parseVersionTimeline(json: any): { version: string; publishedAt: Date | null }[] {
+export function parseVersionTimeline(json: any): VersionInfo[] {
   const versions = json?.versions;
   if (!versions || typeof versions !== 'object') return [];
   const time = json?.time ?? {};
   return Object.keys(versions)
-    .map((version) => ({ version, publishedAt: toDate(time?.[version]) }))
+    .map((version) => ({
+      version,
+      publishedAt: toDate(time?.[version]),
+      // Already in this document — no second fetch, no per-version round trip.
+      peerDependencies: parseDepMap(versions[version]?.peerDependencies),
+      engines: parseDepMap(versions[version]?.engines),
+    }))
     .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0));
 }
 

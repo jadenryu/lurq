@@ -12,7 +12,7 @@
  * src/surface/upgrade.ts: a dependency we did not look at must never be counted
  * as one we found nothing wrong with.
  */
-import { inArray } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import semver from 'semver';
 import type { Database } from '../db/client';
 import { packageVersions, packages } from '../db/schema';
@@ -28,7 +28,7 @@ import {
 } from './types';
 import { buildAttribution } from './attribute';
 import { assembleMembers } from '../compat/members';
-import { resolveArchitectureCompat } from '../compat/peerCompat';
+import { resolveArchitectureCompat, type CompatMember } from '../compat/peerCompat';
 import type { CompatConflict } from '../core/types';
 import type { DependencyEdge, ResolvedDep } from './sbom';
 
@@ -268,9 +268,11 @@ export async function computeTransitiveDrift(
  * whole into the `drift` JSONB column and re-served on every dashboard load, so
  * an unbounded array here is unbounded storage and an unbounded response.
  *
- * ponytail: conflicts in the CURRENT install (pinned versions) are the other half
- * and are not computed. Add them when the registry read can be amortised — a
- * `package_versions`-level peer/engine column would make it another single query.
+ * Its counterpart is `conflictsAtCurrent`, which asks the same question of the
+ * versions the repo runs today. The two are kept separate because they answer
+ * different things and a reader must not confuse them: this one is "will the
+ * upgrades we are recommending land somewhere coherent", the other is "is this
+ * repo broken right now".
  */
 async function conflictsAtLatest(
   db: Database,
@@ -278,6 +280,58 @@ async function conflictsAtLatest(
 ): Promise<CompatConflict[]> {
   if (names.length === 0) return [];
   const { members } = await assembleMembers(db, names);
+  return resolveArchitectureCompat(members).slice(0, REPO_DRIFT_DETAIL_CAP);
+}
+
+/**
+ * Peer/engine conflicts at the versions the repo actually resolves TODAY.
+ *
+ * Without this a repo could read entirely clean while being broken on disk:
+ * every conflict lurq reported was about versions the repo had not installed
+ * yet. "Your upgrades are coherent" is a useful sentence, but it is not the one
+ * someone debugging a failing install needs.
+ *
+ * One indexed read over `package_versions`, which now carries each version's own
+ * peers and engines — lifted from the registry document at ingest, where every
+ * version's manifest already sits in the same payload the timeline came from.
+ * That is what makes this affordable: the earlier note deferred this work until
+ * the per-dependency registry read could be amortised, and storing the column
+ * removes the read entirely rather than amortising it.
+ *
+ * A dependency whose resolved version is not in the index contributes nothing
+ * rather than falling back to its latest — silently substituting a version the
+ * repo does not run would produce conflicts about a stack nobody has.
+ */
+async function conflictsAtCurrent(
+  db: Database,
+  deps: DepDrift[],
+): Promise<CompatConflict[]> {
+  const pinned = deps.filter((d): d is DepDrift & { resolved: string } => Boolean(d.resolved));
+  if (pinned.length === 0) return [];
+
+  const rows = await db
+    .select({
+      packageName: packageVersions.packageName,
+      version: packageVersions.version,
+      peerDependencies: packageVersions.peerDependencies,
+      engines: packageVersions.engines,
+    })
+    .from(packageVersions)
+    .where(
+      inArray(
+        sql`(${packageVersions.packageName}, ${packageVersions.version})`,
+        pinned.map((d) => sql`(${d.name}, ${d.resolved})`),
+      ),
+    );
+
+  const members: CompatMember[] = rows.map((r) => ({
+    name: r.packageName,
+    version: r.version,
+    peerDependencies: r.peerDependencies,
+    peerDependenciesMeta: null,
+    engines: r.engines,
+  }));
+
   return resolveArchitectureCompat(members).slice(0, REPO_DRIFT_DETAIL_CAP);
 }
 
@@ -311,6 +365,7 @@ export async function computeDrift(
       deps: [],
       transitive,
       conflictsAtLatest: [],
+      conflictsAtCurrent: [],
     };
   }
 
@@ -331,7 +386,10 @@ export async function computeDrift(
   // Tracked names only. An untracked one would send `assembleMembers` to the npm
   // registry for its manifest, turning a one-query check into one request per
   // unindexed dependency on every scan.
-  const conflicts = await conflictsAtLatest(db, deps.map((d) => d.name));
+  const [conflicts, currentConflicts] = await Promise.all([
+    conflictsAtLatest(db, deps.map((d) => d.name)),
+    conflictsAtCurrent(db, deps),
+  ]);
 
   return {
     depsDeclared: declared.size,
@@ -343,5 +401,6 @@ export async function computeDrift(
     deps: deps.slice(0, REPO_DRIFT_DETAIL_CAP),
     transitive,
     conflictsAtLatest: conflicts,
+    conflictsAtCurrent: currentConflicts,
   };
 }

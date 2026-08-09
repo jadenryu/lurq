@@ -263,6 +263,12 @@ export const packageVersions = pgTable(
     packageName: text('package_name').notNull(),
     version: text('version').notNull(),
     publishedAt: ts('published_at'),
+    /** Peers/engines declared by this exact version. Lifted from the registry
+     *  document at ingest (it already carries every version's manifest), so a
+     *  conflict check against the versions a repo actually RUNS is one indexed
+     *  query rather than a registry read per dependency. */
+    peerDependencies: jsonb('peer_dependencies').$type<DependencyRanges>(),
+    engines: jsonb('engines').$type<DependencyRanges>(),
   },
   (table) => [
     primaryKey({ columns: [table.packageName, table.version] }),

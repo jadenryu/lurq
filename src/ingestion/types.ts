@@ -9,6 +9,16 @@ import type { Advisory, DependencyRanges, PeerMeta } from '../core/types';
 export interface VersionInfo {
   version: string;
   publishedAt: Date | null;
+  /**
+   * Peer ranges and engines declared by THIS version.
+   *
+   * Carried on the timeline because the registry document already contains every
+   * version's manifest — the same fetch that yields the publish dates. Reading
+   * them here costs nothing extra, and it is what lets drift check the versions
+   * a repo actually runs rather than only the latest ones.
+   */
+  peerDependencies?: DependencyRanges | null;
+  engines?: DependencyRanges | null;
 }
 
 export interface NpmRegistryData {
