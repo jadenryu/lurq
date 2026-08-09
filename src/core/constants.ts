@@ -3,8 +3,12 @@ export const SERVER_NAME = 'lurq';
 /** Published npm package name (the CLI command and MCP nickname stay `lurq`).
  *  Keep in sync with package.json "name". */
 export const PACKAGE_NAME = 'lurqrun';
-/** Keep in sync with package.json "version". */
-export const VERSION = '0.0.8';
+/** Keep in sync with package.json "version" — tests/version.test.ts enforces it.
+ *  Not just cosmetic: github/workflow.ts bakes this into the `npx lurqrun@<v>`
+ *  pin of every workflow lurq generates, so a stale value ships users a CI job
+ *  pinned to a version that is not the one that wrote it. 0.0.9 went out that
+ *  way, because `chore(release): 0.0.9` bumped package.json alone. */
+export const VERSION = '0.0.9';
 
 /** Default hosted endpoint the install wizard writes into agent configs. The
  *  marketing site is `lurq.run`; the MCP service lives on the `api.` subdomain.
