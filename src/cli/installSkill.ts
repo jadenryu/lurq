@@ -130,12 +130,20 @@ export function agentSpecs(): AgentSpec[] {
       },
     },
     {
+      // No instructions target, for two reasons that compound. A
+      // `.instructions.md` file is only applied automatically when its
+      // frontmatter carries an `applyTo` glob; without one, VS Code requires the
+      // user to attach it to a request by hand. And the user-profile directory
+      // that gets scanned is not a documented default at all: the workspace
+      // default is `.github/instructions`, and profile-level folders come from
+      // the `chat.instructionsFilesLocations` setting. Guessing the path would
+      // write a file nobody reads while reporting success, which is the same
+      // mistake the hardcoded macOS config path made above.
       id: 'copilot',
       label: 'VS Code / GitHub Copilot',
       format: 'servers',
       path: join(vscodeUserDir(), 'mcp.json'),
       detected: existsSync(vscodeUserDir()),
-      instructions: { kind: 'file', path: join(vscodeUserDir(), 'prompts', 'lurq.instructions.md') },
     },
     {
       id: 'codex',
