@@ -19,6 +19,7 @@ import type {
   DashboardOutcome,
   DashboardRepo,
   DashboardUsage,
+  RepoAlert,
   RepoBrief,
   RepoDetailPayload,
   StackConflict,
@@ -238,6 +239,34 @@ export function demoContributions(): { total: number; packages: DashboardContrib
     firstRequestedAt: `${dayISO(daysAgo)}T14:12:00.000Z`,
   }));
   return { total: packages.length, packages };
+}
+
+/**
+ * Breaking releases that landed on these repos' dependencies.
+ *
+ * Deliberately mixes both cases the feed exists to distinguish: a pinned range
+ * that is now a major behind, and an open range that will pick the new major up
+ * on its own at the next install. Repo ids line up with `demoRepos`.
+ */
+export function demoAlerts(): RepoAlert[] {
+  const rows: [number, string, string, string, string | null, string, boolean, number][] = [
+    // repoId, fullName, package, range, resolved, newVersion, inRange, hoursAgo
+    [2, "acme/billing-api", "stripe", ">=17", "18.5.0", "19.0.0", true, 2],
+    [1, "acme/checkout-web", "react-router", "^6.22.0", "6.30.1", "7.0.0", false, 9],
+    [4, "acme/internal-tools", "eslint", "^8.57.0", "8.57.1", "9.0.0", false, 31],
+    [1, "acme/checkout-web", "zod", "^3.23.8", "3.25.76", "4.0.0", false, 54],
+  ];
+  return rows.map(([repoId, repoFullName, packageName, range, fromVersion, toVersion, inRange, h], i) => ({
+    id: i + 1,
+    repoId,
+    repoFullName,
+    packageName,
+    range,
+    fromVersion,
+    toVersion,
+    inRange,
+    createdAt: hoursAgo(h),
+  }));
 }
 
 /**

@@ -169,6 +169,13 @@
       "when": 1786212440262,
       "tag": "0023_next_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786296675601,
+      "tag": "0024_dusty_maelstrom",
+      "breakpoints": true
     }
   ]
 }

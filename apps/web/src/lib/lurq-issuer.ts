@@ -236,6 +236,33 @@ export async function fetchRepos(ownerId: string): Promise<DashboardRepo[]> {
   return data.repos ?? [];
 }
 
+/**
+ * A breaking release that landed on a dependency of a connected repo, recorded
+ * by the sync the moment the new major appeared rather than at the next scan.
+ */
+export interface RepoAlert {
+  id: number;
+  repoId: number;
+  repoFullName: string;
+  packageName: string;
+  /** The range the repo declared when the release landed. */
+  range: string;
+  /** What that range resolved to at the last scan. Null when unknown. */
+  fromVersion: string | null;
+  toVersion: string;
+  /** True when the declared range already admits the new major — the next clean
+   *  install takes it without anyone editing a manifest. */
+  inRange: boolean;
+  createdAt: string;
+}
+
+export async function fetchAlerts(ownerId: string): Promise<RepoAlert[]> {
+  const res = await issuerFetch(`/repos/alerts?ownerId=${encodeURIComponent(ownerId)}`);
+  assertRepoOk(res, "Could not list alerts.");
+  const data = (await res.json()) as { alerts?: RepoAlert[] };
+  return data.alerts ?? [];
+}
+
 export interface UpgradeRun {
   id: number;
   packageName: string;

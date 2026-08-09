@@ -20,6 +20,7 @@
 import { cache } from "react";
 import { auth } from "@clerk/nextjs/server";
 import {
+  demoAlerts,
   demoContributions,
   demoKeys,
   demoImpact,
@@ -31,6 +32,7 @@ import {
   isDemoUser,
 } from "@/lib/demo-data";
 import {
+  fetchAlerts,
   fetchContributions,
   fetchKeys,
   fetchOutcomes,
@@ -44,6 +46,7 @@ import {
   type DashboardOutcome,
   type DashboardRepo,
   type DashboardUsage,
+  type RepoAlert,
   type RepoBrief,
   type RepoDetailPayload,
   type UpgradeImpact,
@@ -151,6 +154,17 @@ export async function loadRepos(): Promise<Loaded<ReposData>> {
     );
     return { data: { repos: [], configured: true }, demo: false, failed: true };
   }
+}
+
+/**
+ * Breaking releases that landed on connected repos' dependencies.
+ *
+ * Degrades to an empty feed, including when GitHub is unconfigured: an alert
+ * list is a "nothing has broken lately" surface, and an error banner there would
+ * read as an incident.
+ */
+export function loadAlerts(): Promise<Loaded<RepoAlert[]>> {
+  return load((userId) => fetchAlerts(userId), demoAlerts, []);
 }
 
 const EMPTY_BRIEF: RepoBrief = { upgrades: [], omitted: 0, pending: 0 };

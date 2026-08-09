@@ -26,6 +26,7 @@ import {
 } from '../auth/apiKeys';
 import { getOutcomesByOwner } from '../db/outcomes';
 import { getContributionsByOwner } from '../db/packages';
+import { listAlerts } from '../db/alerts';
 import { deleteRepo, getRepo, listRepos, setRepoPolicy, upsertRepos } from '../db/repos';
 import { getUsageByTool, getUsageSummary } from '../db/usage';
 import { createDb } from '../db/client';

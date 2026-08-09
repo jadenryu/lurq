@@ -5,7 +5,8 @@ import { ReposPanel } from "@/components/dashboard/repos-panel";
 import { DriftMeter } from "@/components/dashboard/drift-meter";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
-import { loadImpact, loadRepos } from "@/lib/dashboard-data";
+import { AlertsPanel } from "@/components/dashboard/alerts-panel";
+import { loadAlerts, loadImpact, loadRepos } from "@/lib/dashboard-data";
 import { installUrl } from "@/lib/github-connect";
 
 const IMPACT_DAYS = 30;
@@ -24,9 +25,10 @@ export default async function ReposPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { userId } = await auth();
-  const [{ data, demo, failed }, { data: impact }] = await Promise.all([
+  const [{ data, demo, failed }, { data: impact }, { data: alerts }] = await Promise.all([
     loadRepos(),
     loadImpact(IMPACT_DAYS),
+    loadAlerts(),
   ]);
   const connect = (await searchParams).connect;
   const message = typeof connect === "string" ? CONNECT_MESSAGES[connect] : undefined;
@@ -86,6 +88,11 @@ export default async function ReposPage({
           </InlineError>
         ) : (
           <>
+            {/* Above the impact tiles on purpose. Those answer "what has lurq
+                done for me lately"; this answers "what needs me right now", and
+                it renders nothing when the answer is nothing. */}
+            <AlertsPanel alerts={alerts} />
+
             {impact.analysed > 0 && (
               <div>
                 <p className={eyebrow}>last {IMPACT_DAYS} days</p>
