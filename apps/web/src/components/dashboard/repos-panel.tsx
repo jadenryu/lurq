@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Chip, EmptyState, InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
+import { ScanProgress } from "@/components/dashboard/scan-progress";
 import { TableToolbar } from "@/components/dashboard/table-toolbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { relativeTime } from "@/lib/format";
+import { isScanPending } from "@/lib/repo-scan";
 import type { DashboardRepo } from "@/lib/lurq-issuer";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +29,14 @@ import { cn } from "@/lib/utils";
 function DriftCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
   if (!drift) {
-    return <span className="font-mono text-xs text-ink-2/60">not scanned</span>;
+    // "not scanned" and "being scanned right now" are different facts, and the
+    // first one reads as a dead end. A repo connected 20 seconds ago is in the
+    // second state for as long as the first scan takes.
+    return (
+      <span className="font-mono text-xs text-ink-3">
+        {isScanPending(repo) ? "scanning…" : "not scanned"}
+      </span>
+    );
   }
   if (drift.majorDrift === 0 && drift.anyDrift === 0) {
     return <Chip tone="good">current</Chip>;
@@ -95,18 +104,35 @@ function CoverageCell({ repo }: { repo: DashboardRepo }) {
 
 function RepoRowActions({ repo, demo }: { repo: DashboardRepo; demo: boolean }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [refreshing, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The fetch is the slow part — POST /scan awaits the whole scan server-side,
+   * which is seconds of GitHub calls. `useTransition`'s flag only covers the
+   * refresh *after* that resolves, so the button used to sit there saying
+   * "rescan", enabled, for the entire scan: no feedback, and a second click
+   * would fire a second scan. This covers the fetch; `refreshing` covers the
+   * re-render after it.
+   */
+  const [scanning, setScanning] = useState(false);
+  const busy = scanning || refreshing;
 
   async function rescan() {
     setError(null);
-    const res = await fetch(`/api/repos/${repo.id}/scan`, { method: "POST" });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Scan failed.");
-      return;
+    setScanning(true);
+    try {
+      const res = await fetch(`/api/repos/${repo.id}/scan`, { method: "POST" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(body?.error ?? "Scan failed.");
+        return;
+      }
+      startTransition(() => router.refresh());
+    } catch {
+      setError("Scan failed.");
+    } finally {
+      setScanning(false);
     }
-    startTransition(() => router.refresh());
   }
 
   return (
@@ -115,11 +141,21 @@ function RepoRowActions({ repo, demo }: { repo: DashboardRepo; demo: boolean }) 
       <Button
         variant="ghost"
         size="sm"
-        disabled={demo || pending}
+        disabled={demo || busy}
         onClick={() => void rescan()}
         title={demo ? "Not available on demo data" : "Re-read manifests from GitHub"}
       >
-        {pending ? "scanning…" : "rescan"}
+        {busy ? (
+          <span className="flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="inline-block size-1.5 animate-pulse rounded-full bg-signal motion-reduce:animate-none"
+            />
+            scanning…
+          </span>
+        ) : (
+          "rescan"
+        )}
       </Button>
     </span>
   );
@@ -173,6 +209,12 @@ export function ReposPanel({
 
   return (
     <div className="space-y-4">
+      {/* Demo fixtures are already scanned and never change, so polling them
+          would refresh the route forever for nothing. */}
+      {!demo && (
+        <ScanProgress pending={repos.filter(isScanPending).length} total={repos.length} />
+      )}
+
       <TableToolbar
         query={query}
         onQueryChange={setQuery}
@@ -270,7 +312,7 @@ export function ReposPanel({
                         ? "failed"
                         : repo.lastScanAt
                           ? relativeTime(repo.lastScanAt)
-                          : "never"}
+                          : "scanning…"}
                     </span>
                   </TableCell>
                   <TableCell className="pr-5 text-right md:pr-6">
