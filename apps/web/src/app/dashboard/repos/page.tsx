@@ -40,13 +40,18 @@ export default async function ReposPage({
       const drift = repo.drift;
       if (!drift) return acc;
       return {
+        // Both, always. Summing only the tracked count and labelling it "across
+        // all manifests" reported the assessed subset as if it were the whole
+        // dependency set, which is the all-clear RepoDrift's own comment says
+        // must never be implied.
+        declared: acc.declared + drift.depsDeclared,
         deps: acc.deps + drift.depsTracked,
         major: acc.major + drift.majorDrift,
         advisories: acc.advisories + drift.advisories,
         deprecated: acc.deprecated + drift.deprecated,
       };
     },
-    { deps: 0, major: 0, advisories: 0, deprecated: 0 },
+    { declared: 0, deps: 0, major: 0, advisories: 0, deprecated: 0 },
   );
 
   return (
@@ -117,9 +122,13 @@ export default async function ReposPage({
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <StatTile label="repositories" value={data.repos.length} />
                 <StatTile
-                  label="dependencies tracked"
+                  label="dependencies indexed"
                   value={totals.deps}
-                  hint="across all manifests"
+                  hint={
+                    totals.declared > totals.deps
+                      ? `of ${totals.declared.toLocaleString()} declared`
+                      : "every declared dependency"
+                  }
                 />
                 <StatTile
                   label="majors behind"
@@ -129,6 +138,7 @@ export default async function ReposPage({
                 <DriftMeter
                   behind={totals.major}
                   tracked={totals.deps}
+                  declared={totals.declared}
                   deprecated={totals.deprecated}
                 />
               </div>

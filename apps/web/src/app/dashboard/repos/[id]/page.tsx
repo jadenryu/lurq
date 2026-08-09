@@ -81,7 +81,19 @@ export default async function RepoDetailPage({
               value={drift.anyDrift}
               hint={`${drift.majorDrift} across a major`}
             />
-            <StatTile label="advisories" value={drift.advisories} />
+            {/* Scoped, not bare. "0" against hundreds of dependencies reads as
+                an all-clear; it is only ever a statement about the packages
+                lurq has indexed, and advisories are recorded against the
+                package rather than proven against the installed version. */}
+            <StatTile
+              label="advisories"
+              value={drift.advisories}
+              hint={
+                uncovered > 0
+                  ? `in the ${drift.depsTracked} indexed`
+                  : "on indexed packages"
+              }
+            />
             <StatTile label="deprecated" value={drift.deprecated} />
             {/* "—" rather than 0 when the scan predates the check: an unrun check
                 must never occupy the same cell as one that found nothing. */}
