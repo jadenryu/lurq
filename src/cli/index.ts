@@ -212,9 +212,10 @@ export function buildProgram(): Command {
     .option('--json', 'output the plan as JSON (feed to `check-upgrade --plan`)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
-    .action(async (dir: string, opts: { json?: boolean; url?: string; apiKey?: string }) => {
+    .option('--repo <owner/name>', 'apply this repo\'s policy (defaults to $GITHUB_REPOSITORY)')
+    .action(async (dir: string, opts: { json?: boolean; url?: string; apiKey?: string; repo?: string }) => {
       const { buildUpgradePlan, formatUpgradePlan } = await import('./upgradePlan');
-      const plan = await buildUpgradePlan(dir, { url: opts.url, apiKey: opts.apiKey });
+      const plan = await buildUpgradePlan(dir, { url: opts.url, apiKey: opts.apiKey, repo: opts.repo });
       console.log(opts.json ? JSON.stringify(plan, null, 2) : formatUpgradePlan(plan));
     });
 

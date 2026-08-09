@@ -27,7 +27,13 @@ export function parseUpgradeSpec(spec: string): UpgradeTarget {
 
 /** Shape of the `upgrade-plan --json` file, as far as this command cares. */
 interface PlanFile {
-  upgrades?: { package: string; fromVersion: string; toVersion: string }[];
+  upgrades?: {
+    package: string;
+    fromVersion: string;
+    toVersion: string;
+    /** Repo-policy eligibility, when the plan was governed. */
+    inScope?: boolean;
+  }[];
 }
 
 /** Read targets from a plan produced by `lurq upgrade-plan --json`. */
@@ -57,6 +63,11 @@ export function targetsFromPlanFile(path: string): UpgradeTarget[] {
   }
   return parsed.upgrades
     .filter((u) => u.package && u.fromVersion && u.toVersion)
+    // `!== false` rather than a truthy test: a plan from a server that predates
+    // scope enforcement has no `inScope` key at all, and an absent policy must
+    // mean "ungoverned", never "excluded". Getting this backwards would empty
+    // the brief on every older deployment.
+    .filter((u) => u.inScope !== false)
     .map((u) => ({ package: u.package, fromVersion: u.fromVersion, toVersion: u.toVersion }));
 }
 

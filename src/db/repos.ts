@@ -106,6 +106,29 @@ export async function getRepo(
   return rows[0] ?? null;
 }
 
+/**
+ * The policy governing `owner/name`, or null when this owner has not connected
+ * that repo.
+ *
+ * Null is a first-class answer, not a failure: `upgrade-plan` runs in any
+ * checkout, connected or not, and an unconnected one is simply ungoverned. The
+ * caller must not substitute `DEFAULT_REPO_POLICY` here — that default has
+ * `scope: 'blocking'`, so treating "not connected" as "default policy" would
+ * silently narrow every unconnected workflow on deploy.
+ */
+export async function findPolicyByFullName(
+  db: Database,
+  ownerId: string,
+  fullName: string,
+): Promise<RepoPolicy | null> {
+  const rows = await db
+    .select({ policy: repos.policy })
+    .from(repos)
+    .where(and(eq(repos.ownerId, ownerId), eq(repos.fullName, fullName)))
+    .limit(1);
+  return rows[0]?.policy ?? null;
+}
+
 /** Persist a successful scan. Clears `lastScanError` — see the schema comment. */
 export async function saveScan(
   db: Database,

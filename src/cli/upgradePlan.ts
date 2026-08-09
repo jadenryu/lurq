@@ -86,16 +86,30 @@ export interface UpgradePlanResult extends RemotePlan {
   deps: number;
 }
 
+/**
+ * Which repository this checkout is, for policy lookup.
+ *
+ * `GITHUB_REPOSITORY` is set by Actions on every run, so the generated workflow
+ * needs no extra wiring and existing installs start being governed the moment
+ * they connect the repo. Outside CI it is absent and the plan is ungoverned,
+ * which is correct: a laptop is not a repository, and a policy the user set for
+ * automation should not silently narrow what they asked for by hand.
+ */
+export function detectRepoFullName(explicit?: string | null): string | null {
+  const value = explicit ?? process.env.GITHUB_REPOSITORY ?? null;
+  return value && /^[\w.-]+\/[\w.-]+$/.test(value) ? value : null;
+}
+
 export async function buildUpgradePlan(
   dir: string,
-  opts: RemoteOptions = {},
+  opts: RemoteOptions & { repo?: string | null } = {},
 ): Promise<UpgradePlanResult> {
   const manifests = readManifests(dir);
   const deps = mergedDeps(manifests);
   if (Object.keys(deps).length === 0) {
     throw new Error(`No package.json with dependencies found under ${dir}`);
   }
-  const plan = await fetchUpgradePlan(deps, opts);
+  const plan = await fetchUpgradePlan(deps, { ...opts, repo: detectRepoFullName(opts.repo) });
   return { ...plan, manifests: manifests.length, deps: Object.keys(deps).length };
 }
 
@@ -110,18 +124,32 @@ const VERDICT_LABEL: Record<RemoteUpgrade['verdict'], string> = {
 export function formatUpgradePlan(plan: UpgradePlanResult): string {
   const out: string[] = [
     `lurq upgrade plan (${plan.deps} dependencies across ${plan.manifests} manifest(s))`,
-    '',
   ];
+  // State the governing policy before listing anything. A reader who does not
+  // know the scope cannot tell a short plan from a filtered one.
+  if (plan.scopeSource === 'repo-policy') {
+    out.push(
+      `policy: scope=${plan.scope}` +
+        (plan.outOfScope ? `, ${plan.outOfScope} upgrade(s) held back` : ', nothing held back'),
+    );
+  }
+  out.push('');
 
   if (plan.upgrades.length === 0) {
     out.push('Everything lurq tracks is already on its latest release.');
   }
 
   for (const upgrade of plan.upgrades) {
+    // Held-back upgrades stay listed and stay visible — marked, never dropped.
+    // Hiding them would shrink the drift picture to whatever the current policy
+    // happens to allow, which is how someone stops knowing they are behind.
+    const held = upgrade.inScope === false ? '  [HELD]' : '';
     out.push(
       `${VERDICT_LABEL[upgrade.verdict]}  ${upgrade.package}  ${upgrade.fromVersion} → ${upgrade.toVersion}` +
-        (upgrade.advisories ? `  (${upgrade.advisories} advisory)` : ''),
+        (upgrade.advisories ? `  (${upgrade.advisories} advisory)` : '') +
+        held,
     );
+    if (upgrade.scopeReason) out.push(`  held: ${upgrade.scopeReason}`);
     if (upgrade.removed.length) {
       out.push(`  removes ${upgrade.removed.length}: ${upgrade.removed.slice(0, 8).join(', ')}`);
     }

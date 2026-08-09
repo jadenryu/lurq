@@ -27,7 +27,7 @@ import {
 import { getOutcomesByOwner } from '../db/outcomes';
 import { getContributionsByOwner } from '../db/packages';
 import { listAlerts } from '../db/alerts';
-import { deleteRepo, getRepo, listRepos, setRepoPolicy, upsertRepos } from '../db/repos';
+import { deleteRepo, findPolicyByFullName, getRepo, listRepos, setRepoPolicy, upsertRepos } from '../db/repos';
 import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
 import { parseSelectionPolicy } from '../policy/parse';
 import { getUsageByTool, getUsageSummary } from '../db/usage';
@@ -35,7 +35,8 @@ import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
-import { parseDepsInput, parseUpgradeRuns } from '../github/runs';
+import { applyScope } from '../github/scope';
+import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
 import {
   findRepoIdByFullName,
   getUpgradeImpact,
@@ -542,6 +543,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       const workflow = renderWorkflow({
         installCommand: row.installCommand ?? undefined,
         armed: row.policy.enabled,
+        autoMerge: row.policy.autoMerge,
       });
       res.status(200).json({
         repo: {
@@ -697,8 +699,21 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     try {
       const drift = await computeDrift(db, [{ path: 'package.json', deps }]);
       const brief = await briefRepo(db, drift);
+
+      // Policy enforcement, when the caller identifies a repo this owner has
+      // connected. `repo` is optional by design: the endpoint has always worked
+      // in any checkout, and connecting is what opts a repo into being governed.
+      // An unconnected or unrecognised name yields a null policy and the
+      // unfiltered behaviour this endpoint shipped with.
+      const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
+      const repoFullName = parseRepoFullName((req.body ?? {}).repo);
+      const policy =
+        ownerId && repoFullName ? await findPolicyByFullName(db, ownerId, repoFullName) : null;
+      const scoped = applyScope(brief.upgrades, policy);
+
       res.status(200).json({
         ...brief,
+        ...scoped,
         // Surfaced so CI can log what lurq had no opinion on. An upgrade we do
         // not know about must not look like an upgrade we cleared.
         untracked: Object.keys(deps).length - drift.depsTracked,

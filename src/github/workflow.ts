@@ -31,6 +31,12 @@ export interface WorkflowOptions {
   installCommand?: string;
   /** Max upgrades attempted per run — the blast-radius cap. */
   maxUpgrades?: number;
+  /**
+   * Emit the auto-merge step, per `RepoPolicy.autoMerge`. Off unless the repo
+   * has explicitly opted in — this is the only setting that lets lurq's loop
+   * change a default branch, so it is never a default.
+   */
+  autoMerge?: boolean;
 }
 
 export const WORKFLOW_PATH = '.github/workflows/lurq-upgrade.yml';
@@ -51,6 +57,7 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const install = opts.installCommand ?? 'npm ci';
   const max = opts.maxUpgrades ?? 3;
   const mode = opts.armed ? 'pr' : 'comment';
+  const autoMerge = opts.autoMerge ?? false;
 
   return `# Managed by lurq, https://lurq.run
 #
@@ -187,6 +194,7 @@ jobs:
 
       # 4. The workflow does version control, never the model.
       - name: Open pull request
+        id: pr
         if: env.LURQ_MODE == 'pr'
         uses: peter-evans/create-pull-request@v7
         with:
@@ -199,8 +207,33 @@ jobs:
           body-path: lurq-report.md
           labels: dependencies
           delete-branch: true
-`;
+${autoMerge ? MERGE_STEP : ''}`;
 }
+
+/**
+ * Auto-merge, emitted only when the repo's policy opts in.
+ *
+ * `--auto` is the load-bearing flag: it asks GitHub to merge **when the repo's
+ * own required checks pass**, rather than merging now. lurq does not evaluate
+ * anyone's CI and must never be the thing that decides a build was good enough —
+ * branch protection stays the authority, and on a repo without it this is a
+ * no-op that leaves the PR open rather than a silent landing.
+ *
+ * Emitting the step only under the policy — instead of always emitting it behind
+ * an `if:` — means a user who has not opted in can read their own workflow file
+ * and see that nothing in it can merge. The trust model is legible from the file
+ * itself, which is the same reason the user commits it by hand.
+ */
+const MERGE_STEP = `
+      # 5. Auto-merge, per this repository's lurq policy. GitHub merges only
+      #    once the repo's OWN required checks pass; lurq never makes that call.
+      #    Requires "Allow auto-merge" in repository settings.
+      - name: Enable auto-merge
+        if: env.LURQ_MODE == 'pr' && steps.pr.outputs.pull-request-number
+        env:
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "\${{ steps.pr.outputs.pull-request-number }}"
+`;
 
 /**
  * GitHub's prefilled new-file URL. The dashboard links here instead of lurq

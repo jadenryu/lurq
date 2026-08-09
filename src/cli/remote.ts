@@ -207,6 +207,14 @@ export interface RemoteUpgrade {
   typeOnlyRemoved: string[];
   newlyDeprecated: string[];
   inconclusive?: string;
+  /**
+   * May the agent attempt this one under the repo's policy? Absent from an older
+   * server, and `!== false` is how every consumer reads it — an unannotated plan
+   * must behave exactly as it did before scope enforcement shipped.
+   */
+  inScope?: boolean;
+  /** Why not, when `inScope` is false. */
+  scopeReason?: string;
 }
 
 export interface RemotePlan {
@@ -215,13 +223,20 @@ export interface RemotePlan {
   pending: number;
   /** Declared dependencies lurq has no index entry for. */
   untracked: number;
+  /** The policy scope applied, and where it came from. Absent from an older server. */
+  scope?: 'security' | 'blocking' | 'all';
+  scopeSource?: 'repo-policy' | 'unconnected';
+  outOfScope?: number;
 }
 
 export function fetchUpgradePlan(
   deps: Record<string, string>,
-  opts: RemoteOptions = {},
+  opts: RemoteOptions & { repo?: string | null } = {},
 ): Promise<RemotePlan> {
-  return post<RemotePlan>('/upgrade-plan', { deps }, opts);
+  // `repo` is what lets the server find this repository's policy. Omitted when
+  // unknown (a laptop, not a runner), which the server reads as "ungoverned".
+  const body = opts.repo ? { deps, repo: opts.repo } : { deps };
+  return post<RemotePlan>('/upgrade-plan', body, opts);
 }
 
 export interface ReportedRun {

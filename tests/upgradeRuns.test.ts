@@ -152,6 +152,25 @@ describe('renderWorkflow', () => {
     expect(yaml).not.toMatch(/consult the package's own docs/);
   });
 
+  it('emits no merge step unless the policy opts in', () => {
+    // A user who has not opted in must be able to read their own workflow file
+    // and see that nothing in it can touch the default branch.
+    const yaml = renderWorkflow();
+    expect(yaml).not.toContain('gh pr merge');
+    expect(yaml).not.toContain('auto-merge');
+  });
+
+  it('merges on the repo\'s own checks, never on lurq\'s say-so', () => {
+    const yaml = renderWorkflow({ autoMerge: true });
+    expect(yaml).toContain('gh pr merge --auto');
+    // `--auto` defers to branch protection. Merging immediately would make lurq
+    // the thing that decided a build was good enough, which it never evaluates.
+    expect(yaml).not.toMatch(/gh pr merge (?!--auto)/);
+    // It needs the PR number, so the PR step has to be addressable.
+    expect(yaml).toContain('id: pr');
+    expect(yaml).toContain('steps.pr.outputs.pull-request-number');
+  });
+
   it('gates every mutating step on pr mode', () => {
     const yaml = renderWorkflow();
     for (const step of ['Install dependencies', 'Apply upgrades', 'Open pull request']) {

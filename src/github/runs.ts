@@ -117,6 +117,20 @@ export function parseUpgradeRuns(
   return { runs, rejected };
 }
 
+/**
+ * `owner/name` posted by the workflow so the plan can be governed by that repo's
+ * policy. Optional — an absent or malformed value simply means "ungoverned",
+ * never an error, because `upgrade-plan` must keep working in any checkout.
+ *
+ * Shape-validated rather than trusted: it is used to look up a row, and the
+ * lookup is owner-scoped, so the worst a forged value can do is match nothing.
+ */
+export function parseRepoFullName(input: unknown): string | null {
+  const value = str(input, MAX_NAME * 2);
+  if (!value) return null;
+  return /^[\w.-]+\/[\w.-]+$/.test(value) ? value : null;
+}
+
 /** Declared dependency ranges posted by the CLI for a plan. */
 export function parseDepsInput(input: unknown): Record<string, string> {
   if (!input || typeof input !== 'object') return {};
