@@ -94,7 +94,7 @@ export function resolveArchitectureCompat(members: CompatMember[]): CompatConfli
           conflicts.push({
             source: 'peer-deps',
             packages: [cs[i]!.requirer, cs[j]!.requirer],
-            detail: `${cs[i]!.requirer} needs ${peer}@${cs[i]!.range} but ${cs[j]!.requirer} needs ${peer}@${cs[j]!.range} — no overlapping version`,
+            detail: `${cs[i]!.requirer} needs ${peer}@${cs[i]!.range} but ${cs[j]!.requirer} needs ${peer}@${cs[j]!.range}, no overlapping version`,
             // Two requirers disagreeing about a peer that isn't in the set: the
             // peer has no resolved version to report.
             requirement: { peer, range: cs[i]!.range, resolved: null },
@@ -114,7 +114,7 @@ export function resolveArchitectureCompat(members: CompatMember[]): CompatConfli
         conflicts.push({
           source: 'engines',
           packages: [nodeReqs[i]!.name, nodeReqs[j]!.name],
-          detail: `${nodeReqs[i]!.name} needs node ${nodeReqs[i]!.range} but ${nodeReqs[j]!.name} needs node ${nodeReqs[j]!.range} — no overlap`,
+          detail: `${nodeReqs[i]!.name} needs node ${nodeReqs[i]!.range} but ${nodeReqs[j]!.name} needs node ${nodeReqs[j]!.range}, no overlap`,
         });
       }
     }

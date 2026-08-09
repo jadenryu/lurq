@@ -15,8 +15,8 @@ import {
  * The card is mostly picture. Its figure fills the whole tile and the words sit
  * over the bottom of it on a blurred plate, which is the arrangement that makes
  * the section read as a set of instruments rather than as a table of features.
- * The previous pass had this inverted — a small diagram above four lines of
- * prose — and no amount of tuning the diagram fixes a card that is 90% text.
+ * The previous pass had this inverted, a small diagram above four lines of
+ * prose, and no amount of tuning the diagram fixes a card that is 90% text.
  *
  * The outer corners are rounded and the inner ones are not, so the five tiles
  * read as one slab that has been cut, rather than as five floating cards.
@@ -32,7 +32,7 @@ type Span = { grid: string; corner: string };
 /**
  * Placement lives here rather than in the content file: which tile is wide is a
  * layout decision, and content should not have to know the column count.
- * Order is the reading order — real, together, node, api, stack.
+ * Order is the reading order: real, together, node, api, stack.
  */
 const SPANS: Span[] = [
   { grid: "min-[900px]:col-span-3", corner: "min-[900px]:rounded-tl-[16px]" },

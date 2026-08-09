@@ -57,7 +57,7 @@ export default function RootLayout({
       signInFallbackRedirectUrl="/dashboard"
       appearance={{
         theme: dark,
-        // Site is monochrome — override Clerk's default purple accent so its
+        // Site is monochrome: override Clerk's default purple accent so its
         // buttons/links match the white CTA (and kill the purple load flash).
         variables: { colorPrimary: "#fafafa" },
       }}

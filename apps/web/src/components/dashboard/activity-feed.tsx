@@ -91,14 +91,14 @@ export function ActivityFeed({ outcomes }: { outcomes: DashboardOutcome[] }) {
                           {BUILD_SIGNAL_LABEL[o.buildSignal] ?? o.buildSignal}
                         </Chip>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="max-w-[18rem]">
                       {o.need ? (
                         <span className="line-clamp-2 text-sm text-muted-foreground">{o.need}</span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">

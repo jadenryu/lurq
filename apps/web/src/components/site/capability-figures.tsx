@@ -53,7 +53,7 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
  * washed orange under the drawings and went brown; the one-stop indigo version
  * turned the top of every tile navy while the plate below it stayed near-black,
  * so each card had two different grounds. The bloom is weather behind the hero
- * and the footer and a rim on the nav — tokens.css says so — and a panel is not
+ * and the footer and a rim on the nav (tokens.css says so) and a panel is not
  * weather.
  *
  * A neutral lift does the one job that was actually wanted: keep the tile from
@@ -129,7 +129,7 @@ function Frame({ id, children }: { id: string; children: React.ReactNode }) {
  * reason: the left column was short where the dial beside it was not.
  *
  * The dial's radius is set by the band, not by taste. The tightest band any
- * viewport produces is y 81..259 — measured, not guessed, and it bottoms out
+ * viewport produces is y 81..259: measured, not guessed, and it bottoms out
  * from 1280 up where the tile is at its widest 584 against a 216 figure. A
  * 84-radius dial spanned 86..254 inside that, five units of clearance at each
  * end, which at render scale is six pixels and reads as the circle resting on
@@ -220,7 +220,7 @@ export function PairsFigure({ id }: FigureProps) {
     <Frame id={id}>
       <Wash id={id} at={[0.24, 0.2]} />
       {/* x is off-centre by design. Centring the whole triangle put its visible
-          mass — the top four rows, the only ones above the scrim — well left of
+          mass (the top four rows, the only ones above the scrim) well left of
           the tile, because the rows that balance it are the faded ones. */}
       <g transform="translate(134 90)">
         {cells.map(({ r, c, bad }) => (
@@ -316,7 +316,7 @@ export function EnginesFigure({ id }: FigureProps) {
  * signatures being different lengths.
  */
 export function SurfaceFigure({ id }: FigureProps) {
-  // [depth, width, state] — state 0 unchanged, 1 added, -1 gone.
+  // [depth, width, state], state 0 unchanged, 1 added, -1 gone.
   const rows: [number, number, number][] = [
     [0, 230, 0],
     [1, 190, 0],

@@ -53,7 +53,7 @@ export const SURFACES: Surface[] = [
     id: "install",
     name: "One-time setup",
     blurb: "Install once, and it finds what you already have.",
-    command: "npm i -g lurqrun && lurq setup",
+    command: "npx lurqrun",
     chrome: "lurq · setup",
     detail:
       "Setup opens the dashboard for your key, then works out which assistants are installed and writes both a keyed MCP entry and a skill file for each. Your key is stored for the CLI too, so there is no second command and nothing to export.",
@@ -86,7 +86,7 @@ export const SURFACES: Surface[] = [
     id: "cli",
     name: "Command line",
     blurb: "For nerds, run in your terminal.",
-    command: "npm i -g lurqrun",
+    command: "npx lurqrun",
     chrome: "lurq · cli",
     detail:
       "Every capability is a subcommand, reading the same hosted index as your editor. No database, no API key to pass: setup stored it once.",

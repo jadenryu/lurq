@@ -190,7 +190,7 @@ export class E2BSandbox implements SandboxDriver {
           stderr: typeof e.stderr === 'string' ? e.stderr : errText(err),
         };
       }
-      throw err; // VM/timeout failure — infrastructure, not the subject
+      throw err; // VM/timeout failure, infrastructure, not the subject
     } finally {
       await sandbox.kill().catch(() => {});
     }

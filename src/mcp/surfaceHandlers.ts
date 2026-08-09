@@ -129,7 +129,7 @@ const MISS: Omit<SurfaceResponse, 'package' | 'version'> = {
   class: null,
   tier: null,
   symbols: [],
-  coverageNote: 'not yet extracted — queued; retry shortly. This is NOT evidence of absence.',
+  coverageNote: 'not yet extracted, queued; retry shortly. This is NOT evidence of absence.',
   observedAt: null,
 };
 
@@ -177,7 +177,7 @@ async function resolveSurfaceUncached(
       tier: stored.tier,
       symbols: [],
       coverageNote:
-        'package ships no artifact this tier can read — UNDECLARED, which is a measurement gap, not an empty API',
+        'package ships no artifact this tier can read, UNDECLARED, which is a measurement gap, not an empty API',
       observedAt: stored.observedAt,
     };
   }
@@ -203,7 +203,7 @@ async function resolveSurfaceUncached(
       `${runtime.length} runtime symbol(s)` +
       (excluded ? `; ${excluded} excluded as type-only or re-exported from another package` : '') +
       (stored.tier === 'shipped_js_ast'
-        ? '. Runtime existence only — signatures require tier C.'
+        ? '. Runtime existence only, signatures require tier C.'
         : ''),
     observedAt: stored.observedAt,
   };
@@ -240,7 +240,7 @@ async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
       fromVersion: input.fromVersion,
       toVersion: input.toVersion,
       verdict: 'unknown' as const,
-      inconclusive: `no extracted surface for ${missing.join(', ')} — queued; retry shortly. NOT evidence that symbols were removed.`,
+      inconclusive: `no extracted surface for ${missing.join(', ')}, queued; retry shortly. NOT evidence that symbols were removed.`,
       removed: [],
       added: [],
       arityChanged: [],

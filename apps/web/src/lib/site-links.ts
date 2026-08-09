@@ -3,7 +3,7 @@
  *
  * Docs live in a separate Next app (`apps/docs`) surfaced at `/docs` through the
  * multi-zone rewrite in `next.config.ts`. `/docs` is therefore the correct,
- * canonical target in production — `www.lurq.run/docs` serves the docs, and no
+ * canonical target in production: `www.lurq.run/docs` serves the docs, and no
  * `docs.<domain>` host is published.
  *
  * The catch is local development: the rewrite proxies to `localhost:3001`, so if

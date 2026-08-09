@@ -46,7 +46,7 @@ function demoEmails(): string[] {
 /**
  * Optional escape hatch: match on Clerk user ids instead of emails. The id comes
  * straight off the session with no Backend API call, so it can't be affected by a
- * Clerk outage or a missing secret key — worth pinning if email matching ever
+ * Clerk outage or a missing secret key, worth pinning if email matching ever
  * behaves inconsistently.
  */
 function demoUserIds(): string[] {
@@ -271,7 +271,7 @@ export function demoAlerts(): RepoAlert[] {
 
 /**
  * Connected repositories with realistic drift. The numbers are internally
- * consistent — `majorDrift <= anyDrift <= depsTracked <= depsDeclared` — because
+ * consistent (`majorDrift <= anyDrift <= depsTracked <= depsDeclared`) because
  * a demo whose totals don't add up is the fastest way to lose a room.
  */
 export function demoRepos(): DashboardRepo[] {
@@ -312,7 +312,7 @@ export function demoRepos(): DashboardRepo[] {
                 deprecated: [4, 2, 0, 9][i] ?? 0,
                 truncated: false,
                 // internal-tools has no usable edge data, so its risks show as
-                // unattributed — the state a real SBOM without relationships hits.
+                // unattributed: the state a real SBOM without relationships hits.
                 attributed: i !== 3,
               }
             : null,
@@ -352,7 +352,7 @@ function demoRepoDeps(): DashboardDep[] {
 
 /**
  * Migration brief for the demo repo. Symbol names are real removals from those
- * majors — a brief full of `foo`/`bar` teaches a viewer nothing about whether
+ * majors: a brief full of `foo`/`bar` teaches a viewer nothing about whether
  * the product would catch anything in their own codebase.
  */
 export function demoRepoBrief(): RepoBrief {
@@ -465,7 +465,7 @@ export function demoRepoBrief(): RepoBrief {
         typeOnlyRemoved: [],
         newlyDeprecated: [],
         inconclusive:
-          "no extracted surface for 4.1.0 — queued; retry shortly. NOT evidence that symbols were removed.",
+          "no extracted surface for 4.1.0, queued; retry shortly. NOT evidence that symbols were removed.",
       },
       {
         package: "zod",
@@ -514,7 +514,7 @@ function demoRuns(): UpgradeRun[] {
   }));
 }
 
-/** Impact totals consistent with demoRuns above — the arithmetic has to hold. */
+/** Impact totals consistent with demoRuns above, the arithmetic has to hold. */
 export function demoImpact(): UpgradeImpact {
   const runs = demoRuns();
   return {
@@ -529,7 +529,7 @@ export function demoImpact(): UpgradeImpact {
 
 /**
  * Transitive risks for the drill-down. Exact installed versions, because the
- * resolved tree gives them — no range guessing like the direct-dependency view.
+ * resolved tree gives them: no range guessing like the direct-dependency view.
  */
 function demoTransitiveRisks(): TransitiveRisk[] {
   const rows: [string, string, string | null, number, boolean, string[]][] = [
@@ -570,7 +570,7 @@ function demoConflicts(): StackConflict[] {
       source: "peer-deps",
       packages: ["eslint-plugin-import", "eslint-config-airbnb"],
       detail:
-        "eslint-plugin-import needs eslint@^8.56.0 but eslint-config-airbnb needs eslint@^9.0.0 — no overlapping version",
+        "eslint-plugin-import needs eslint@^8.56.0 but eslint-config-airbnb needs eslint@^9.0.0, no overlapping version",
       requirement: { peer: "eslint", range: "^8.56.0", resolved: null },
     },
   ];
@@ -578,7 +578,7 @@ function demoConflicts(): StackConflict[] {
 
 /** The detail payload the repo page needs beyond the list row. */
 export function demoRepoDetail(fullName: string): Omit<RepoDetailPayload, keyof DashboardRepo> {
-  const workflow = `# Managed by lurq — https://lurq.run\nname: lurq upgrade\n\non:\n  schedule:\n    - cron: "0 6 * * 1"\n  workflow_dispatch:\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  upgrade:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - run: npx -y lurqrun upgrade-plan . --json > lurq-plan.json\n      - run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json\n`;
+  const workflow = `# Managed by lurq, https://lurq.run\nname: lurq upgrade\n\non:\n  schedule:\n    - cron: "0 6 * * 1"\n  workflow_dispatch:\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  upgrade:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - run: npx -y lurqrun upgrade-plan . --json > lurq-plan.json\n      - run: npx -y lurqrun check-upgrade . --plan lurq-plan.json --json > lurq-brief.json\n`;
   return {
     deps: demoRepoDeps(),
     transitiveRisks: demoTransitiveRisks(),

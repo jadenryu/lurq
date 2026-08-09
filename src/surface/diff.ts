@@ -73,10 +73,10 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
   }
   // §6.4.2 — never issue a verdict from an empty surface. Mandatory guard.
   if (from.symbols.length === 0) {
-    return empty(from, to, 'source surface is empty — extraction failed, not a removal');
+    return empty(from, to, 'source surface is empty, extraction failed, not a removal');
   }
   if (to.symbols.length === 0) {
-    return empty(from, to, 'target surface is empty — extraction failed, not a removal');
+    return empty(from, to, 'target surface is empty, extraction failed, not a removal');
   }
 
   const fromRuntime = new Map(runtimeSymbols(from).map((s) => [s.path, s]));

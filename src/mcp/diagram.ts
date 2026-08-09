@@ -163,7 +163,7 @@ export async function handleDiagram(
 
   const unclassified = items.filter((i) => layerFor(i) === UNCLASSIFIED).map((i) => i.label);
   const note = unclassified.length
-    ? `Reference pattern derived from the provided stack — partial, not authoritative. Could not place ${unclassified.length} package(s): ${unclassified.join(', ')} (not in lurq's index and no category match) — shown under Unclassified, outside the flow.`
+    ? `Reference pattern derived from the provided stack: partial, not authoritative. Could not place ${unclassified.length} package(s): ${unclassified.join(', ')} (not in lurq's index and no category match), shown under Unclassified, outside the flow.`
     : 'Reference pattern derived from the provided stack. A labeled starting point, not a validated architecture.';
 
   return { mermaid: buildMermaid(items), note };

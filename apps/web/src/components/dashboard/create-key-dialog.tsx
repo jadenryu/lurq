@@ -20,7 +20,7 @@ import {
 /**
  * Mints a named key via POST /api/keys and shows it exactly once. The
  * plaintext is never persisted client-side; closing the dialog loses it (by
- * design — rotate or generate another).
+ * design: rotate or generate another).
  */
 export function CreateKeyDialog() {
   const router = useRouter();
@@ -102,7 +102,7 @@ export function CreateKeyDialog() {
             </div>
             {!isDemoKey && (
               <p className="text-sm text-muted-foreground">
-                Next: run <code className="font-mono text-foreground">npm i -g lurqrun && lurq setup</code>{" "}
+                Next: run <code className="font-mono text-foreground">npx lurqrun</code>{" "}
                 and paste this key to connect your coding agent.
               </p>
             )}

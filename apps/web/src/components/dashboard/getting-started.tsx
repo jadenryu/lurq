@@ -7,12 +7,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 import { cn } from "@/lib/utils";
 
-const INSTALL_COMMAND = "npm i -g lurqrun && lurq setup";
+const INSTALL_COMMAND = "npx lurqrun";
 
 /**
  * The zero-data overview: a setup checklist reflecting real account state.
  *
- * The version this replaced explained itself at length — a paragraph of
+ * The version this replaced explained itself at length, a paragraph of
  * reassurance under every step, plus a section describing what the other pages
  * would contain. That's the shape of a template, not a tool: it padded the page
  * with prose the reader hasn't asked for and can't act on, and it buried the two
@@ -27,7 +27,7 @@ interface Props {
   hasKey: boolean;
   /** Prefix of the newest active key, shown as proof step 1 is done. */
   keyPrefix?: string | null;
-  /** A key has authenticated at least once — the installer worked. */
+  /** A key has authenticated at least once, the installer worked. */
   connected: boolean;
 }
 

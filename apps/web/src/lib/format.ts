@@ -4,7 +4,7 @@
  *
  * These deliberately live outside `components/dashboard/charts.tsx`. That module is
  * `"use client"`, and a plain function exported from a client module cannot be
- * *called* from a server component — React only allows client exports to be
+ * *called* from a server component, React only allows client exports to be
  * rendered as components or passed as props. Keeping them here lets both sides
  * import the same implementation.
  */

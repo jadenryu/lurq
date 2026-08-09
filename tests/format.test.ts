@@ -14,7 +14,7 @@ describe('formatNumber', () => {
     expect(formatNumber(950)).toBe('950');
     expect(formatNumber(34_200)).toBe('34.2k');
     expect(formatNumber(145_648_579)).toBe('145.6M');
-    expect(formatNumber(null)).toBe('—');
+    expect(formatNumber(null)).toBe('-');
   });
 });
 
@@ -22,14 +22,14 @@ describe('formatPercent', () => {
   it('formats signed percentages', () => {
     expect(formatPercent(0.044)).toBe('+4.4%');
     expect(formatPercent(-0.056)).toBe('-5.6%');
-    expect(formatPercent(null)).toBe('—');
+    expect(formatPercent(null)).toBe('-');
   });
 });
 
 describe('formatDate', () => {
   it('keeps the date portion', () => {
     expect(formatDate('2026-06-21T00:00:00.000Z')).toBe('2026-06-21');
-    expect(formatDate(null)).toBe('—');
+    expect(formatDate(null)).toBe('-');
   });
 });
 

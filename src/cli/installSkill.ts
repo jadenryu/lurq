@@ -578,7 +578,7 @@ export async function runInstallSkill(opts: InstallSkillOptions): Promise<void> 
     const env = collectEnv();
     if (!env.DATABASE_URL) {
       logger.warn(
-        'DATABASE_URL is not set — the local server entry will have no DATABASE_URL. ' +
+        'DATABASE_URL is not set, the local server entry will have no DATABASE_URL. ' +
           'Set it (in .env) and re-run, or edit the config.',
       );
     }

@@ -6,7 +6,7 @@
  *  3. degrade without taking the page down when the MCP server is unreachable.
  *
  * On (3): the UI deliberately presents a failed read the same way it presents an
- * empty account — as a new user who hasn't generated data yet, not as an error.
+ * empty account: as a new user who hasn't generated data yet, not as an error.
  * A first-time visitor should never be met with "connection failed"; in the
  * overwhelmingly common case (a fresh signup against a not-yet-configured
  * endpoint) "here's how to get started" is both friendlier and more accurate
@@ -71,7 +71,7 @@ const EMPTY_USAGE: DashboardUsage = { today: 0, series: [], byTool: [] };
  * Resolve `{ userId, demo }` once per request; `null` userId means signed out.
  *
  * Wrapped in React's `cache` because the demo check hits Clerk's Backend API, and
- * the overview page fans out to four loaders in parallel — without memoization
+ * the overview page fans out to four loaders in parallel, without memoization
  * that's four identical round trips to Clerk for one page render.
  */
 const context = cache(async (): Promise<{ userId: string | null; demo: boolean }> => {
@@ -142,7 +142,7 @@ export interface ReposData {
  *
  * Falls back to the empty policy on failure rather than erroring the page. An
  * unreachable policy service must not read as "you have no rules" though, so the
- * `failed` flag is what the UI keys its warning off — the same discipline the
+ * `failed` flag is what the UI keys its warning off, the same discipline the
  * rest of this file follows about never presenting an absence as an answer.
  */
 export async function loadSelectionPolicy(): Promise<Loaded<SelectionPolicy>> {
@@ -197,8 +197,8 @@ const EMPTY_BRIEF: RepoBrief = { upgrades: [], omitted: 0, pending: 0 };
 
 /**
  * The migration brief. Loaded separately from the repo itself so the page can
- * stream: drift numbers render immediately while the brief — which fans out to
- * one surface diff per upgrade — resolves behind a boundary.
+ * stream: drift numbers render immediately while the brief, which fans out to
+ * one surface diff per upgrade: resolves behind a boundary.
  */
 export async function loadRepoBrief(id: number): Promise<Loaded<RepoBrief>> {
   const { userId, demo } = await context();
@@ -239,7 +239,7 @@ export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
   }
 }
 
-/** Autopilot impact. Zeroes on failure — this sits beside real numbers, so an
+/** Autopilot impact. Zeroes on failure, this sits beside real numbers, so an
  *  error must not render as an alarming figure. */
 export async function loadImpact(days = 30): Promise<Loaded<UpgradeImpact>> {
   return load((userId) => fetchImpact(userId, days), demoImpact, EMPTY_IMPACT);

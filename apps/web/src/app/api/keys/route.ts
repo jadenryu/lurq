@@ -5,8 +5,8 @@ import { fetchKeys, issueKey, LurqIssuerError } from "@/lib/lurq-issuer";
 
 /**
  * Self-serve API-key issuance/listing. Clerk authenticates the user here;
- * `ownerId` is always the individual Clerk user id (no org concept — one
- * identity per account). The backend never sees Clerk — it trusts this route
+ * `ownerId` is always the individual Clerk user id (no org concept, one
+ * identity per account). The backend never sees Clerk, it trusts this route
  * via the shared LURQ_ISSUER_SECRET. Plaintext keys are returned to the client
  * exactly once, at creation, and never stored here.
  *

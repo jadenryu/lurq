@@ -6,7 +6,7 @@
  * CORS headers. Asking server-side removes that coupling: this route is the only
  * thing the page needs to reach, and it reports exactly what upstream said.
  *
- * Never cached — a cached health check is a decoration.
+ * Never cached: a cached health check is a decoration.
  */
 import { HEALTH_ENDPOINT } from "@/lib/marketing-copy";
 

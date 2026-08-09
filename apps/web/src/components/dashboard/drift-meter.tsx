@@ -3,7 +3,7 @@ import { Panel, eyebrow } from "@/components/dashboard/panel";
 /**
  * Where the dependency set stands: behind, current, or never looked at.
  *
- * This replaced an "advisories" tile that was a false zero — lurq records 27
+ * This replaced an "advisories" tile that was a false zero, lurq records 27
  * advisories across 11,333 indexed packages, most of them typosquats rather
  * than CVEs, so a project with hundreds of dependencies read `0 advisories`,
  * which a person correctly hears as "nothing to worry about". That is a claim
@@ -12,9 +12,9 @@ import { Panel, eyebrow } from "@/components/dashboard/panel";
  * The first version of this tile then made the opposite mistake, and a worse
  * one: it showed `behind / tracked`, a single share over the subset lurq had
  * indexed, with the unindexed remainder nowhere on screen. RepoDrift is
- * explicit that those are not the same number — `depsTracked` is "how many of
- * those lurq has indexed. The rest are `unknown` — never silently counted as
- * current" — and CoverageCell in repos-panel.tsx spells out the rule this broke:
+ * explicit that those are not the same number, `depsTracked` is "how many of
+ * those lurq has indexed. The rest are `unknown`, never silently counted as
+ * current", and CoverageCell in repos-panel.tsx spells out the rule this broke:
  * collapsing coverage into one percentage lets the dashboard imply an all-clear
  * it did not earn.
  *
@@ -32,9 +32,9 @@ export function DriftMeter({
 }: {
   /** Tracked dependencies at least one major behind. */
   behind: number;
-  /** Dependencies lurq has indexed — the assessed set. */
+  /** Dependencies lurq has indexed: the assessed set. */
   tracked: number;
-  /** Dependencies the manifests declare — the real denominator. */
+  /** Dependencies the manifests declare, the real denominator. */
   declared: number;
   deprecated: number;
 }) {

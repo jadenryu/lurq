@@ -158,7 +158,7 @@ export function createEmbeddingProvider(fetchImpl?: typeof fetch): EmbeddingProv
     );
   }
   if (config.EMBEDDING_PROVIDER === 'openai' && !config.EMBEDDING_API_KEY) {
-    logger.warn('EMBEDDING_API_KEY not set — falling back to the local embedder.');
+    logger.warn('EMBEDDING_API_KEY not set, falling back to the local embedder.');
   }
   return new LocalEmbeddingProvider();
 }

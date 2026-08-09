@@ -167,7 +167,7 @@ async function planSequence(
   if (tooFarToSequence(base.fromVersion, base.toVersion)) {
     return {
       hops: [],
-      sequenceNote: `${dep.majorsBehind} majors behind — too far to sequence automatically. Treat this as a migration, not an upgrade.`,
+      sequenceNote: `${dep.majorsBehind} majors behind, too far to sequence automatically. Treat this as a migration, not an upgrade.`,
     };
   }
 

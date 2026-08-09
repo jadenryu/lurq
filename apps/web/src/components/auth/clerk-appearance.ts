@@ -1,4 +1,4 @@
-// Make Clerk's widget fully freeform — no card border, background, or shadow —
+// Make Clerk's widget fully freeform, with no card border, background, or shadow,
 // so it reads flat against the AuthShell. className overrides lose to Clerk's
 // own stylesheet on the card chrome, so use inline style OBJECTS: they're
 // applied as inline styles and always win on specificity. The chrome lives on

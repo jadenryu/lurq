@@ -16,7 +16,7 @@ import {
  * The page never told anyone how to use lurq. The hero prints an install
  * command and the marquee promises "one command" without ever showing it, and
  * between them sat a demonstration, a tool grid, a provenance orbit and a drift
- * board — four sections of argument and no instructions. This is the
+ * board: four sections of argument and no instructions. This is the
  * instructions, and it sits after the argument rather than before it.
  *
  * A rail rather than a row of tabs. The old version of this section had seven

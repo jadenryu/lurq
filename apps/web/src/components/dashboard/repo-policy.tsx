@@ -17,7 +17,7 @@ const SCOPES: { id: RepoPolicy["scope"]; label: string; blurb: string }[] = [
     id: "blocking",
     label: "security + breaking",
     blurb:
-      "Advisories, plus upgrades whose API surface drops a symbol this repo references — the ones that fail at runtime, not in review.",
+      "Advisories, plus upgrades whose API surface drops a symbol this repo references, the ones that fail at runtime, not in review.",
   },
   {
     id: "all",
@@ -52,7 +52,7 @@ function Row({
  * This panel is the one place a user decides how much autonomy lurq has over
  * their repository, so every control states its blast radius in plain language
  * next to itself. Auto-merge in particular is the only setting that lets lurq
- * touch a default branch, and it says so — a toggle whose consequence you have
+ * touch a default branch, and it says so, a toggle whose consequence you have
  * to infer is not consent.
  */
 export function RepoPolicyPanel({

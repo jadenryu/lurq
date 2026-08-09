@@ -34,18 +34,18 @@ export function detail(pairs: [string, string][]): string {
 
 /** Compact number formatting: 1.2M, 34k, 950. */
 export function formatNumber(n: number | null | undefined): string {
-  if (n == null) return '—';
+  if (n == null) return '-';
   if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`;
   if (n >= 1_000) return `${Math.round(n / 100) / 10}k`;
   return String(n);
 }
 
 export function formatDate(iso: string | null): string {
-  return iso ? iso.slice(0, 10) : '—';
+  return iso ? iso.slice(0, 10) : '-';
 }
 
 export function formatPercent(fraction: number | null | undefined): string {
-  if (fraction == null) return '—';
+  if (fraction == null) return '-';
   const pct = Math.round(fraction * 1000) / 10;
   return `${pct > 0 ? '+' : ''}${pct}%`;
 }

@@ -48,8 +48,8 @@ const VERSIONS = new Map(run.packages.map((p) => [p.name, p.version]));
  * confusing names.
  *
  * The TypeScript 7 pair is the same mechanism with a story everyone already
- * knows. TS 7 shipped the Go compiler without a stable programmatic API — that
- * lands in 7.1 — so typescript-eslint still declares support for <6.1.0. npm
+ * knows. TS 7 shipped the Go compiler without a stable programmatic API, that
+ * lands in 7.1, so typescript-eslint still declares support for <6.1.0. npm
  * refuses the install outright, and forcing it past the error crashes eslint
  * inside typescript-estree. "Upgrade me to TypeScript 7" is a request people
  * actually make, and this is what happens when nothing checks it first.

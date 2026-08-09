@@ -17,14 +17,14 @@ import type { TransitiveRisk, TransitiveSummary } from "@/lib/lurq-issuer";
  * 1. It says "packages with known advisories", never "vulnerable dependencies".
  *    lurq records advisories against a package, not against a version range, so
  *    claiming the *installed* version is affected would be an inference we can't
- *    back. The honest version is still useful — these were invisible before.
+ *    back. The honest version is still useful, these were invisible before.
  *
  * 2. A repo with the dependency graph switched off renders as "not read", not as
  *    a clean tree. Silence has to look different from an all-clear.
  *
  * The "pulled in by" column is what makes any of this actionable: a flagged
  * transitive you cannot trace is a fact you can do nothing with. An empty value
- * there means the tree gave no usable parentage — never that nothing depends on
+ * there means the tree gave no usable parentage, never that nothing depends on
  * the package, which cannot be true of something that is installed.
  */
 export function TransitiveRiskPanel({
@@ -62,7 +62,7 @@ export function TransitiveRiskPanel({
       <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Packages your dependencies pull in, which no manifest declares. These carry exact
         installed versions rather than ranges. An advisory here is recorded against the{" "}
-        <em>package</em>, not proven against the installed version — and it is fixed by upgrading
+        <em>package</em>, not proven against the installed version, and it is fixed by upgrading
         whatever pulls it in, named in the last column, not by editing your own manifest.
       </p>
 
@@ -70,7 +70,7 @@ export function TransitiveRiskPanel({
         <p className="max-w-2xl text-sm leading-relaxed text-warn">
           This repository&rsquo;s dependency graph carried no parent-child edges, so lurq
           cannot say which of your dependencies pulls these in. The findings below are still
-          real — only the attribution is missing.
+          real: only the attribution is missing.
         </p>
       )}
 
@@ -100,7 +100,7 @@ export function TransitiveRiskPanel({
                   <TableCell className="pl-5 font-mono text-sm md:pl-6">{risk.name}</TableCell>
                   <TableCell className="font-mono text-xs tabular-nums">{risk.version}</TableCell>
                   <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
-                    {risk.latest ?? "—"}
+                    {risk.latest ?? "-"}
                   </TableCell>
                   <TableCell>
                     <span className="flex flex-wrap items-center gap-1.5">

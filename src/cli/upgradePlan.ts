@@ -109,7 +109,7 @@ const VERDICT_LABEL: Record<RemoteUpgrade['verdict'], string> = {
 /** One-screen summary. Same shape as formatUpgradeReport so the two read alike. */
 export function formatUpgradePlan(plan: UpgradePlanResult): string {
   const out: string[] = [
-    `lurq — upgrade plan (${plan.deps} dependencies across ${plan.manifests} manifest(s))`,
+    `lurq upgrade plan (${plan.deps} dependencies across ${plan.manifests} manifest(s))`,
     '',
   ];
 

@@ -38,6 +38,21 @@ export function buildProgram(): Command {
         'coding agent on this machine. Get a key at https://lurq.run/dashboard/keys\n',
     );
 
+  // Bare `npx lurqrun` (or a bare `lurq`) on an unconfigured machine runs setup.
+  // That is the whole one-command install story: one thing to type, and the user
+  // ends up with the command on their PATH, a stored key, and every agent wired.
+  // Once a key exists, a bare `lurq` means "what can this do?" instead, so it
+  // prints help rather than re-running a wizard nobody asked for.
+  program.action(async () => {
+    const { resolveApiKey } = await import('../core/userConfig');
+    if (resolveApiKey()) {
+      program.outputHelp();
+      return;
+    }
+    const { runSetup } = await import('./install');
+    await runSetup({});
+  });
+
   // ── Setup ─────────────────────────────────────────────────────────────────
   // `install` and `login` are kept as aliases: `npx lurqrun install` is in
   // published docs, dashboard copy and people's notes, and silently breaking it
@@ -77,23 +92,9 @@ export function buildProgram(): Command {
       );
     });
 
-  program
-    .command('serve')
-    .description('start the MCP server over stdio (for agent integration)')
-    .action(async () => {
-      const { startMcpServer } = await import('../mcp/server');
-      await startMcpServer();
-    });
-
-  program
-    .command('serve-http')
-    .description('start the hosted MCP server over HTTP with API-key auth')
-    .option('--port <n>', 'port to listen on (default: $PORT or 8080)', (v) => parseInt(v, 10))
-    .action(async (opts: { port?: number }) => {
-      const { startHttpServer } = await import('../mcp/http');
-      await startHttpServer({ port: opts.port });
-    });
-
+  // ── Asking about packages ─────────────────────────────────────────────────
+  // Help lists commands in registration order, so the ones a user actually runs
+  // come first and the server/scripting plumbing sits at the bottom.
   program
     .command('recommend')
     .argument('<need>', 'natural-language description of what you need')
@@ -172,40 +173,6 @@ export function buildProgram(): Command {
     });
 
   program
-    .command('plan')
-    .argument('<file>', 'path to a markdown file describing your program')
-    .description('turn a program description into an evidence-scored package plan + roadmap')
-    .option('--optimize <mode>', "ranking bias: 'speed' (lightest bundle) or 'balanced'")
-    .option('--html <path>', 'write the roadmap as a self-contained HTML visualization')
-    .option('--open', 'render the roadmap to HTML and open it in your browser')
-    .option('--json', 'output the full plan as JSON')
-    .action(async (file: string, opts: { optimize?: string; json?: boolean; html?: string; open?: boolean }) => {
-      const { runPlan } = await import('./commands');
-      await runPlan(file, opts);
-    });
-
-  program
-    .command('weights')
-    .description('show and explain the scoring weight model (health, quality, composite λ)')
-    .option('--json', 'output the weight model as JSON')
-    .action(async (opts: { json?: boolean }) => {
-      const { runWeights } = await import('./commands');
-      runWeights(opts);
-    });
-
-  program
-    .command('edit-weights')
-    .description('override, reset, or explain the scoring weights (layered over defaults)')
-    .option('--set <pair>', 'override key=value, e.g. composite.lambda=0.5 (repeatable)', (v: string, acc: string[]) => acc.concat(v), [])
-    .option('--reset', 'remove all overrides and restore defaults')
-    .option('--explain <component>', 'explain a component (e.g. adoption, quality, lambda)')
-    .option('--project', 'write to project-local .lurq/weights.json instead of the user config')
-    .action(async (opts: { set?: string[]; reset?: boolean; explain?: string; project?: boolean }) => {
-      const { runEditWeights } = await import('./commands');
-      await runEditWeights(opts);
-    });
-
-  program
     .command('compat')
     .argument('<packages...>', 'npm package names to check together')
     .description('check whether a set of packages forms a coherent stack (peer/engine + recorded evidence)')
@@ -217,6 +184,19 @@ export function buildProgram(): Command {
     .action(async (pkgs: string[], opts: { json?: boolean; pin?: string[] }) => {
       const { runCompat } = await import('./commands');
       await runCompat(pkgs, opts);
+    });
+
+  program
+    .command('plan')
+    .argument('<file>', 'path to a markdown file describing your program')
+    .description('turn a program description into an evidence-scored package plan + roadmap')
+    .option('--optimize <mode>', "ranking bias: 'speed' (lightest bundle) or 'balanced'")
+    .option('--html <path>', 'write the roadmap as a self-contained HTML visualization')
+    .option('--open', 'render the roadmap to HTML and open it in your browser')
+    .option('--json', 'output the full plan as JSON')
+    .action(async (file: string, opts: { optimize?: string; json?: boolean; html?: string; open?: boolean }) => {
+      const { runPlan } = await import('./commands');
+      await runPlan(file, opts);
     });
 
   // ── Upgrade autopilot ─────────────────────────────────────────────────────
@@ -256,6 +236,31 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── Scoring model ─────────────────────────────────────────────────────────
+  program
+    .command('weights')
+    .description('show and explain the scoring weight model (health, quality, composite λ)')
+    .option('--json', 'output the weight model as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { runWeights } = await import('./commands');
+      runWeights(opts);
+    });
+
+  program
+    .command('edit-weights')
+    .description('override, reset, or explain the scoring weights (layered over defaults)')
+    .option('--set <pair>', 'override key=value, e.g. composite.lambda=0.5 (repeatable)', (v: string, acc: string[]) => acc.concat(v), [])
+    .option('--reset', 'remove all overrides and restore defaults')
+    .option('--explain <component>', 'explain a component (e.g. adoption, quality, lambda)')
+    .option('--project', 'write to project-local .lurq/weights.json instead of the user config')
+    .action(async (opts: { set?: string[]; reset?: boolean; explain?: string; project?: boolean }) => {
+      const { runEditWeights } = await import('./commands');
+      await runEditWeights(opts);
+    });
+
+  // ── Plumbing ──────────────────────────────────────────────────────────────
+  // Nobody types these to answer a question about a package: `install-skill` is
+  // the scriptable half of setup, and the two servers are what a host runs.
   program
     .command('install-skill')
     .description('register lurq as an MCP server in supported AI assistants (scriptable)')
@@ -266,6 +271,23 @@ export function buildProgram(): Command {
     .action(async (opts: { agent?: string; apiKey?: string; url?: string; local?: boolean }) => {
       const { runInstallSkill } = await import('./installSkill');
       await runInstallSkill(opts);
+    });
+
+  program
+    .command('serve')
+    .description('start the MCP server over stdio (for agent integration)')
+    .action(async () => {
+      const { startMcpServer } = await import('../mcp/server');
+      await startMcpServer();
+    });
+
+  program
+    .command('serve-http')
+    .description('start the hosted MCP server over HTTP with API-key auth')
+    .option('--port <n>', 'port to listen on (default: $PORT or 8080)', (v) => parseInt(v, 10))
+    .action(async (opts: { port?: number }) => {
+      const { startHttpServer } = await import('../mcp/http');
+      await startHttpServer({ port: opts.port });
     });
 
   return program;

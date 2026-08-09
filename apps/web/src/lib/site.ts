@@ -5,7 +5,7 @@
  * The apex `lurq.run` 308-redirects to `www.lurq.run`, so www is the canonical
  * host. If `NEXT_PUBLIC_SITE_URL` is set to the bare apex (a common env mistake),
  * the sitemap `<loc>`s, the robots `Sitemap`/`Host`, and the `<link rel=canonical>`
- * all point at the redirecting host — which Google reports as "Page with redirect"
+ * all point at the redirecting host, which Google reports as "Page with redirect"
  * and refuses to index. Normalizing the apex to www here makes every emitted URL
  * resolve 200 with no redirect, regardless of how the env var is set.
  */

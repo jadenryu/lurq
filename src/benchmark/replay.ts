@@ -150,7 +150,7 @@ export async function replayRepo(
     const exported = new Set(runtimeSymbols(surface).map((s) => s.path));
     const bareValue = exported.size <= 1 && exported.has('default');
     if (bareValue) {
-      skipped.push({ package: name, reason: 'exports a bare value — members are not module surface' });
+      skipped.push({ package: name, reason: 'exports a bare value, members are not module surface' });
       continue;
     }
 

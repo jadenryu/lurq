@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
  * lurq does not commit this. It has read-only access to the repository and
  * keeps it: the user creates the file through GitHub's own new-file page,
  * pre-filled. That means the thing granting write access is a commit they made,
- * reviewed, and can revert — not a permission they clicked past.
+ * reviewed, and can revert, not a permission they clicked past.
  */
 export function RepoSetup({
   workflow,
@@ -54,7 +54,7 @@ export function RepoSetup({
         <p className="text-sm leading-relaxed text-muted-foreground">
           <span className="text-foreground">lurq never writes to your repository.</span> Every
           change is made by the workflow&rsquo;s own <code className="font-mono text-xs">GITHUB_TOKEN</code>
-          , scoped by the permissions block in the file below, on a branch — never your default
+          , scoped by the permissions block in the file below, on a branch, never your default
           branch. Deleting the file turns it off.
         </p>
       </div>
@@ -84,12 +84,12 @@ export function RepoSetup({
       <div className="mt-5 space-y-2 border-t border-border pt-4">
         <p className={eyebrow}>repository secrets</p>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          <code className="font-mono text-xs text-foreground">LURQ_API_KEY</code> — required. Lets
+          <code className="font-mono text-xs text-foreground">LURQ_API_KEY</code>: required. Lets
           the workflow ask which upgrades are outstanding.
         </p>
         <p className="text-sm leading-relaxed text-muted-foreground">
           <code className="font-mono text-xs text-foreground">ANTHROPIC_API_KEY</code> or{" "}
-          <code className="font-mono text-xs text-foreground">CLAUDE_CODE_OAUTH_TOKEN</code> — only
+          <code className="font-mono text-xs text-foreground">CLAUDE_CODE_OAUTH_TOKEN</code>: only
           for <code className="font-mono text-xs">pr</code> mode, when you want code rewritten. An
           existing Claude Pro or Max subscription works for the second one. In{" "}
           <code className="font-mono text-xs">comment</code> mode you get the full drift and

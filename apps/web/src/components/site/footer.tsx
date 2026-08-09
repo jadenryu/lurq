@@ -14,7 +14,7 @@ import { REPO_URL } from "@/lib/marketing-copy";
 import { DOCS_URL } from "@/lib/site-links";
 
 /**
- * The closing line, then the columns — on flat ground, no decorated field.
+ * The closing line, then the columns, on flat ground, no decorated field.
  *
  * Every link here goes somewhere that exists. There is no Careers page, no Blog,
  * no Customers, and inventing them to fill a column is how a footer starts

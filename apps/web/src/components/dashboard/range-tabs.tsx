@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Time-range selector for the usage view. Rendered as links so the whole page
- * re-reads server-side for the new window — no client state, and the range is
+ * re-reads server-side for the new window, no client state, and the range is
  * shareable/bookmarkable.
  *
  * It lives in a filter row *above* the cards it scopes rather than inside a chart

@@ -1,9 +1,9 @@
 {
   "name": "lurqrun",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "jadenryu",
   "repository": {
     "type": "git",

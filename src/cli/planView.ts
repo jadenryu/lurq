@@ -18,14 +18,14 @@ function slotRows(plan: PlanOutput): string {
         ? rec.repoUrl
           ? `<a href="${esc(rec.repoUrl)}" target="_blank" rel="noreferrer">${esc(rec.name)}</a>`
           : esc(rec.name)
-        : '<span class="muted">— no match —</span>';
-      const alts = s.alternatives.map((a) => esc(a.name)).join(', ') || '<span class="muted">—</span>';
+        : '<span class="muted">no match</span>';
+      const alts = s.alternatives.map((a) => esc(a.name)).join(', ') || '<span class="muted">-</span>';
       return `<tr>
         <td>${esc(s.need)}</td>
         <td><span class="layer">${esc(s.layer)}</span></td>
         <td class="pkg">${name}</td>
-        <td class="num">${rec ? rec.healthScore : '—'}</td>
-        <td>${rec ? esc(rec.confidence) : '—'}</td>
+        <td class="num">${rec ? rec.healthScore : '-'}</td>
+        <td>${rec ? esc(rec.confidence) : '-'}</td>
         <td class="alts">${alts}</td>
       </tr>`;
     })
@@ -38,7 +38,7 @@ export function renderPlanHtml(plan: PlanOutput): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>lurq plan — roadmap</title>
+<title>lurq plan: roadmap</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }

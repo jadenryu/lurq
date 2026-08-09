@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /**
  * Chart primitives for the dashboard.
  *
- * Every plot here is a **single series** drawn in one ink — the `signal` accent
+ * Every plot here is a **single series** drawn in one ink, the `signal` accent
  * (periwinkle) from the shared syntax palette. One hue means there is no
  * categorical palette to validate and no legend to draw: the card's eyebrow
  * already names what's plotted. Identity in the per-tool breakdown is carried by
@@ -35,7 +35,7 @@ const axisText = "font-mono text-[0.65rem] tabular-nums text-ink-3";
 
 /**
  * Daily volume. Expects a **gap-free** series (one point per day in the window,
- * zero-count days included) — `getUsageSummary` guarantees that DB-side. A
+ * zero-count days included), `getUsageSummary` guarantees that DB-side. A
  * series carrying only days-with-traffic would give equal-width bars unequal
  * time spans and misstate the trend.
  */
@@ -56,7 +56,7 @@ export function ColumnChart({
   return (
     <div>
       <div className="relative">
-        {/* Tooltip: enhances, never gates — the same numbers live in the table twin
+        {/* Tooltip: enhances, never gates, the same numbers live in the table twin
             below. Clamped away from the edges so it can't overflow the card. */}
         {active && hover !== null && (
           <div
@@ -103,7 +103,7 @@ export function ColumnChart({
         </div>
       </div>
 
-      {/* Solid hairline baseline — never dashed. */}
+      {/* Solid hairline baseline, never dashed. */}
       <div className="h-px w-full bg-border" />
 
       {n > 1 && (
@@ -178,7 +178,7 @@ export function Sparkline({ data, height = 40 }: { data: Point[]; height?: numbe
 // ── horizontal bar list (magnitude by nominal category) ─────────────────────
 
 /**
- * Per-category totals. One ink for every row — the label carries identity, so a
+ * Per-category totals. One ink for every row, the label carries identity, so a
  * darker-where-bigger ramp would burn the color channel on information the bar
  * length already shows.
  */
@@ -188,7 +188,7 @@ export function BarList({
 }: {
   items: { label: string; count: number }[];
   /**
-   * `inline` puts label · bar · value on one row — only legible in a wide column.
+   * `inline` puts label · bar · value on one row, only legible in a wide column.
    * `stacked` lifts label and value above a full-width bar, for narrow rails where
    * an inline track collapses to a stub that reads as "no data".
    */

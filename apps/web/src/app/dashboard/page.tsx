@@ -14,7 +14,7 @@ export default async function DashboardOverviewPage() {
   const activeKeys = data.keys.filter((k) => !k.revokedAt);
   const calls = data.usage.series.reduce((s, p) => s + p.count, 0);
 
-  // Nothing to chart, nothing to list — either a genuinely fresh account, or a
+  // Nothing to chart, nothing to list, either a genuinely fresh account, or a
   // read that failed and therefore also has nothing to show. Both get the setup
   // path: an empty chart frame and four tiles reading `0` tell that person less
   // than one page explaining how to produce data does, and a first-time visitor
@@ -23,7 +23,7 @@ export default async function DashboardOverviewPage() {
   const isNew =
     failed || (calls === 0 && data.outcomes.length === 0 && data.contributions.total === 0);
 
-  // Has a key but has never used it — the one case where the nudge is the missing
+  // Has a key but has never used it: the one case where the nudge is the missing
   // piece rather than the whole story.
   const showOnboarding = !isNew && activeKeys.length > 0 && activeKeys.every((k) => !k.lastUsedAt);
 

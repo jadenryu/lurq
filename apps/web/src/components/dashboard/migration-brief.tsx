@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 /**
  * Verdict copy is the most carefully worded text in the product.
  *
- * lurq computes this from the packages alone — it knows the upgrade *removes*
+ * lurq computes this from the packages alone, it knows the upgrade *removes*
  * `useHistory`, not that this repo *calls* it. So the headline says "removes 6
  * exports", never "breaks 6 call sites". The narrowing to real call sites
  * happens in CI, where the source is, and it is the one claim that would cost us
@@ -180,7 +180,7 @@ function BriefCard({ upgrade }: { upgrade: UpgradeBrief }) {
 
       {upgrade.verdict === "clean" && (
         <p className="mt-3 text-sm text-muted-foreground">
-          Both surfaces compared — nothing this package exports was removed or re-shaped.
+          Both surfaces compared: nothing this package exports was removed or re-shaped.
         </p>
       )}
     </Panel>
@@ -191,7 +191,7 @@ export function MigrationBrief({ brief, failed }: { brief: RepoBrief; failed: bo
   if (failed) {
     return (
       <EmptyState title="Migration brief unavailable">
-        The surface index could not be reached. Drift figures above are unaffected — they come
+        The surface index could not be reached. Drift figures above are unaffected, they come
         from the last scan.
       </EmptyState>
     );
@@ -222,7 +222,7 @@ export function MigrationBrief({ brief, failed }: { brief: RepoBrief; failed: bo
 
       <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
         What each upgrade removes from the package&rsquo;s public surface, extracted from the
-        shipped types — not inferred. Whether your code calls any of these symbols is resolved in
+        shipped types: not inferred. Whether your code calls any of these symbols is resolved in
         your CI, where the source is.
       </p>
 
@@ -237,7 +237,7 @@ export function MigrationBrief({ brief, failed }: { brief: RepoBrief; failed: bo
         <p className="font-mono text-xs text-ink-3">
           {brief.omitted > 0 && `${brief.omitted} further upgrade(s) not shown. `}
           {brief.pending > 0 &&
-            `${brief.pending} awaiting surface extraction — queued, and they fill in on the next visit.`}
+            `${brief.pending} awaiting surface extraction, queued, and they fill in on the next visit.`}
         </p>
       )}
     </div>

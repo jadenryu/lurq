@@ -69,8 +69,8 @@ export function Contact() {
   return (
     <section id="contact" className="w-full py-24 min-[900px]:py-32">
       {/* The FAQ's column split, to the pixel. These two sections are the same
-          shape of thing — a standing statement on the left, a list of rows on
-          the right — and reading as one register is the whole point. */}
+          shape of thing: a standing statement on the left, a list of rows on
+          the right, and reading as one register is the whole point. */}
       <div className="mx-auto grid w-full max-w-[1180px] gap-12 px-4 min-[900px]:grid-cols-[minmax(0,0.5fr)_minmax(0,1fr)] min-[900px]:gap-20 min-[768px]:px-6">
         <div className="min-[900px]:sticky min-[900px]:top-28 min-[900px]:self-start">
           <h2

@@ -28,7 +28,7 @@ ${constraintsText}
 
 Your task is to select exactly one npm package for each requirement ID above.
 You must fill every required need with a concrete package whenever a co-installable option exists.
-If a newer major cannot satisfy peers/engines with the rest of the stack, pick the newest major that does — do not leave the need unmatched just to chase absolute latest.
+If a newer major cannot satisfy peers/engines with the rest of the stack, pick the newest major that does, do not leave the need unmatched just to chase absolute latest.
 Only add a need ID to unmatchedNeedIds when no viable maintained package exists at all.
 
 Output EXACTLY a JSON object conforming to this TypeScript interface:

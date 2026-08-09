@@ -278,7 +278,7 @@ export const WEIGHT_EXPLANATIONS: Record<string, string> = {
   reliability: 'OpenSSF Scorecard scaled 0–100, minus advisory penalties (weights.ts RELIABILITY).',
   efficiency: 'bundle size vs the category median; frontend categories only (weights.ts EFFICIENCY).',
   quality:
-    'intrinsic, adoption-independent: types, tests, docs, changelog, deps, license, provenance (weights.ts QUALITY_WEIGHTS). A standalone axis — it does NOT feed health.',
+    'intrinsic, adoption-independent: types, tests, docs, changelog, deps, license, provenance (weights.ts QUALITY_WEIGHTS). A standalone axis, it does NOT feed health.',
   lambda: 'how much the default sort composite favors quality over health: (1−λ)·health + λ·quality.',
 };
 

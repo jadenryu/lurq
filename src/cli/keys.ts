@@ -11,7 +11,7 @@ import type { ApiKeyRow } from '../db/schema';
 import { createDb } from '../db/client';
 import { bold, dim, green, table } from './format';
 
-const isoDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '—');
+const isoDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '-');
 
 /** Block until the operator presses Enter (resolves immediately if not a TTY). */
 function waitForEnter(prompt: string): Promise<void> {
@@ -63,7 +63,7 @@ async function presentNewKey(
   } else {
     // Non-TTY (piped, or over a non-interactive SSH exec): can't erase, so just
     // warn. Operator is responsible for clearing their buffer.
-    console.log(dim('Store it now — shown only once, stored hashed, cannot be recovered.'));
+    console.log(dim('Store it now, shown only once, stored hashed, cannot be recovered.'));
   }
 }
 
@@ -102,7 +102,7 @@ export async function runKeysRotate(
     }
     await presentNewKey(result.key, result.row, {
       json: opts.json,
-      header: `API key rotated — replaces ${result.previous.prefix} (now revoked).`,
+      header: `API key rotated, replaces ${result.previous.prefix} (now revoked).`,
       extraJson: { replaced: result.previous.prefix },
     });
   } finally {
@@ -144,7 +144,7 @@ export async function runKeysList(opts: { json?: boolean }): Promise<void> {
         ['prefix', 'label', 'tier', 'created', 'last used', 'status'],
         rows.map((r) => [
           r.prefix,
-          r.label ?? '—',
+          r.label ?? '-',
           r.tier,
           isoDay(r.createdAt),
           isoDay(r.lastUsedAt),

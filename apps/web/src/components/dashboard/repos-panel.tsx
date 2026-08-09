@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 /**
  * The drift column is the product's one-line pitch, so it is rendered as a
  * sentence ("9 majors behind") rather than a bare integer in a column called
- * "drift" — the reader should not have to learn a vocabulary to know whether the
+ * "drift", the reader should not have to learn a vocabulary to know whether the
  * number is bad.
  */
 function DriftCell({ repo }: { repo: DashboardRepo }) {
@@ -48,12 +48,12 @@ function DriftCell({ repo }: { repo: DashboardRepo }) {
 
 /**
  * Direct and transitive advisories are shown as separate chips, never summed.
- * You fix them differently — one by bumping your own manifest, the other by
- * upgrading whatever pulls it in — so a combined number is unactionable.
+ * You fix them differently: one by bumping your own manifest, the other by
+ * upgrading whatever pulls it in, so a combined number is unactionable.
  */
 function RiskCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
-  if (!drift) return <span className="text-ink-2/50">—</span>;
+  if (!drift) return <span className="text-ink-2/50">-</span>;
   const transitive = drift.transitive?.advisoryPackages ?? 0;
   if (drift.advisories === 0 && drift.deprecated === 0 && transitive === 0) {
     // "not read" is not "none": say so when the tree was never visible.
@@ -76,11 +76,11 @@ function RiskCell({ repo }: { repo: DashboardRepo }) {
  * Coverage is shown as `tracked / declared`, never as a single percentage of
  * "healthy" deps. A dependency lurq has not indexed is not a dependency it has
  * cleared, and collapsing the two would let the dashboard imply an all-clear it
- * did not earn — the same rule `unverified` follows in the upgrade checker.
+ * did not earn: the same rule `unverified` follows in the upgrade checker.
  */
 function CoverageCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
-  if (!drift) return <span className="text-ink-2/50">—</span>;
+  if (!drift) return <span className="text-ink-2/50">-</span>;
   const uncovered = drift.depsDeclared - drift.depsTracked;
   return (
     <span className="font-mono text-xs tabular-nums">
@@ -141,7 +141,7 @@ export function ReposPanel({
   /**
    * Filter by the two questions someone opening this page is actually asking:
    * which of these is behind, and which of these is armed to do something about
-   * it. Not a chip per field — a chip nobody clicks costs the same room as one
+   * it. Not a chip per field: a chip nobody clicks costs the same room as one
    * everybody does.
    */
   const shown = repos.filter((repo) => {
@@ -165,7 +165,7 @@ export function ReposPanel({
       >
         Connect the lurq GitHub app and it reads each repository&rsquo;s{" "}
         <code className="font-mono text-xs">package.json</code> to show how far behind its
-        dependencies are — and which of those upgrades will break code you actually reference.
+        dependencies are, and which of those upgrades will break code you actually reference.
         Only manifests are read; your source stays in your repo.
       </EmptyState>
     );
@@ -240,15 +240,15 @@ export function ReposPanel({
                         has to behave like one. The setting itself lives on the
                         repo page (RepoPolicyPanel) because choosing a scope
                         needs the explanation next to it, which does not fit a
-                        table cell — so this goes there rather than pretending
+                        table cell, so this goes there rather than pretending
                         to toggle in place. */}
                     <Link
                       href={`/dashboard/repos/${repo.id}#autopilot`}
                       className="rounded-[var(--radius-chip)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
                       title={
                         repo.policy.enabled
-                          ? `Autopilot is on for ${repo.policy.scope} upgrades — change it`
-                          : "Autopilot is off — turn it on"
+                          ? `Autopilot is on for ${repo.policy.scope} upgrades, change it`
+                          : "Autopilot is off, turn it on"
                       }
                     >
                       <Chip
@@ -286,7 +286,7 @@ export function ReposPanel({
       {repos.some((r) => r.lastScanError) && (
         <InlineError>
           Some repositories could not be read. The most likely cause is that the lurq app&rsquo;s
-          access was removed — open a repository below for the exact error.
+          access was removed: open a repository below for the exact error.
         </InlineError>
       )}
     </div>

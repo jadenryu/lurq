@@ -2,7 +2,7 @@
  * Persistent per-user CLI credentials: `~/.lurq/config.json`.
  *
  * `lurq setup` writes the API key here once, and every later command reads it
- * back. That is what makes a global `npm i -g lurqrun` install usable in any
+ * back. That is what makes a global install usable in any
  * directory without exporting `LURQ_API_KEY` in a shell profile first. The key
  * is also written into each agent's MCP config, but those files belong to the
  * agents; this one belongs to the CLI.

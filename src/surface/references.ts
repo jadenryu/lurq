@@ -162,7 +162,7 @@ function gitSourceFiles(dir: string, limit: number): string[] | null {
       stdio: ['ignore', 'pipe', 'ignore'],
     });
   } catch {
-    return null; // not a repo, or git is unavailable — walk instead
+    return null; // not a repo, or git is unavailable, walk instead
   }
 
   const out: string[] = [];

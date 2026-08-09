@@ -60,7 +60,7 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
     try {
       const res = await fetch(url, { signal });
       if (!res.ok || !res.body) throw new Error(`feed responded ${res.status}`);
-      backoff = 1000; // healthy connection — reset
+      backoff = 1000; // healthy connection, reset
 
       let sinceCheckpoint = 0;
       for await (const line of ndjsonLines(res.body, signal)) {
@@ -89,7 +89,7 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
       logger.info('watch: feed stream ended; reconnecting');
     } catch (err) {
       if (signal?.aborted) break;
-      logger.warn(`watch: ${String(err)} — retrying in ${backoff}ms`);
+      logger.warn(`watch: ${String(err)}, retrying in ${backoff}ms`);
       await sleep(backoff, signal);
       backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
     }

@@ -84,7 +84,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // first thing that buckles under real traffic. Warn loudly on the hosted path.
   if (!process.env.REDIS_URL) {
     logger.warn(
-      'REDIS_URL not set — response caching is OFF; every request recomputes on the ' +
+      'REDIS_URL not set, response caching is OFF; every request recomputes on the ' +
         'database. Set REDIS_URL before serving real traffic (and it also backs the ' +
         'rate limiter across instances).',
     );

@@ -549,7 +549,7 @@ li:hover > .room-ide-label {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Spent by 84%, which is where the plate's top edge lands — the plate is pulled
+  /* Spent by 84%, which is where the plate's top edge lands, the plate is pulled
      up 34px over a 216px figure, so it covers the last 16% whatever the tile's
      width. The old last stop was at 100%, i.e. below the cut, so a strong mark
      (the orange cell on the compat tile) was still at half strength under the
@@ -569,7 +569,7 @@ li:hover > .room-ide-label {
 
 /* The plate. Blurred rather than filled, so the figure carries on behind the
    words: a solid panel here cuts the tile in half and the picture stops being
-   the card. The top edge is feathered for the same reason — a hard line would
+   the card. The top edge is feathered for the same reason, a hard line would
    read as two stacked boxes. */
 .room-cap-plate {
   background: color-mix(in oklab, var(--cap-ground) 88%, transparent);
@@ -873,7 +873,7 @@ li:hover > .room-ide-label {
 /* The ring is a pseudo-element, not the element's own background.
 
    It has to be, because of the burst. Painted on .room-beam itself, the only way
-   to remove the ring is to fade .room-beam — and opacity on a parent takes every
+   to remove the ring is to fade .room-beam, and opacity on a parent takes every
    child with it, so the pieces were already invisible before they had travelled
    anywhere. On ::before the ring is its own box and can leave on its own clock
    while the pieces are still in the air.
@@ -931,8 +931,8 @@ li:hover > .room-ide-label {
    sits next to the markup it throws rather than in a pile of nth-child rules
    here.
 
-   An earlier version threw the composer's own parts — the chip, the selects, the
-   send button — on the theory that using the real boxes beat overlaying an
+   An earlier version threw the composer's own parts, the chip, the selects, the
+   send button: on the theory that using the real boxes beat overlaying an
    effect. It was wrong twice. It read as a UI sliding apart rather than as
    something breaking, and five large boxes cannot scatter without crossing the
    space the panel is about to occupy.
@@ -1340,7 +1340,7 @@ li:hover > .room-ide-label {
 /* ── The lane ────────────────────────────────────────────────────────────────
    One time axis shared by every row: the reference date at the left edge, the
    last sync at the right. Green runs from the left to the day the new major
-   shipped — the stretch where the model's answer still held. Orange runs from
+   shipped: the stretch where the model's answer still held. Orange runs from
    there to now. The dot is the day it happened.
 
    This replaced a bar chart of weekly installs, which was drawing the one
@@ -1382,7 +1382,7 @@ li:hover > .room-ide-label {
    The lane column's header, drawn as the chart's time axis: the two edges named
    above the rule, the month boundaries ticked and named below it.
 
-   Its geometry is the lane's geometry — the button is the same flex row at the
+   Its geometry is the lane's geometry, the button is the same flex row at the
    same gap, this box takes the same flex and the same min-width as
    .room-drift-track, and the caret sits in a 54px slot matching the "N mo"
    column. That is what puts a tick exactly over its rule. Change one and the
@@ -1414,7 +1414,7 @@ li:hover > .room-ide-label {
 }
 
 /* Geist, like every other word on this board. It was mono at 10px, which is the
-   size a proportional face cannot go to — so the ticks carry 11px and the
+   size a proportional face cannot go to, so the ticks carry 11px and the
    board's one family instead. */
 .room-drift-axis-tick {
   position: absolute;
@@ -1720,7 +1720,7 @@ li:hover > .room-ide-label {
    edge exactly as the next model comes up.
 
    Drawn only while the cycle is actually running, and frozen rather than
-   removed when a pointer or focus holds it — dropping the element on hover
+   removed when a pointer or focus holds it, dropping the element on hover
    would restart it from zero the moment the pointer left, which turns a pause
    into a stutter. The duration is the same constant the interval uses, handed
    over as --dwell, so the two cannot fall out of step.

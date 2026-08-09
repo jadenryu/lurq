@@ -210,7 +210,7 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
       const target = resolveInternal(file, spec, ctx.pkgDir);
       if (!target) return;
       if (!picks) {
-        walk(target, ctx, out); // `export * from` — the whole surface is correct
+        walk(target, ctx, out); // `export * from`, the whole surface is correct
         return;
       }
       // Selective: resolve the target's surface separately, then take only what

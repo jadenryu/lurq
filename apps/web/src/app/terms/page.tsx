@@ -97,7 +97,7 @@ export default function TermsPage() {
           their intended purpose.
         </p>
         <p>
-          The lurq CLI is open source under the MIT License. Your use of
+          The lurq CLI is open source under the Apache License 2.0. Your use of
           that source code is governed by that <a href="/license">license</a>,
           which controls over these Terms for that software.
         </p>

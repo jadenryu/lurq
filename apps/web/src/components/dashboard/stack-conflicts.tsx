@@ -4,14 +4,14 @@ import type { StackConflict } from "@/lib/lurq-issuer";
 /**
  * Dependencies that disagree with each other, rather than with time.
  *
- * Every other panel on this page measures a repo against the calendar — how far
+ * Every other panel on this page measures a repo against the calendar, how far
  * behind, what has an advisory. This one measures it against itself: two plugins
  * that want different majors of the same peer, or engine ranges with no common
  * Node. Those are the findings that turn an upgrade into a week of work, and
  * nothing in a drift number predicts them.
  *
  * The heading says "at latest versions" everywhere because that is what was
- * measured — the check runs over what the migration brief is proposing, not over
+ * measured: the check runs over what the migration brief is proposing, not over
  * what is installed today. A panel that let the reader assume otherwise would be
  * reporting a conflict they cannot reproduce locally.
  */

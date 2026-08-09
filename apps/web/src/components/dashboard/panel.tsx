@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 /**
  * A label, set like the rest of the page.
  *
- * This was mono, uppercase, on a 0.16em track — the treatment the marketing
+ * This was mono, uppercase, on a 0.16em track, the treatment the marketing
  * side removed in f4babe7 for the reason it applies here too: small-caps mono
  * labels read as chrome from a template rather than as this product's voice,
  * and stacked above every panel they were the loudest type on screen after the
@@ -73,7 +73,7 @@ export function PanelHeader({
 
 /**
  * Small outline chip. `tone` carries state, using the reserved status hues from
- * the soft syntax palette — never a solid saturated badge, and never a status
+ * the soft syntax palette: never a solid saturated badge, and never a status
  * color standing in for plain identity (that's what `neutral` is for).
  */
 export function Chip({
@@ -118,7 +118,7 @@ export function Chip({
 }
 
 /**
- * Empty state. Deliberately not a dashed box with a big glyph in it — that reads
+ * Empty state. Deliberately not a dashed box with a big glyph in it, that reads
  * as a broken upload widget. A left accent rule, a plain statement of what will
  * appear here, and (when there is one) the single action that makes it happen.
  */

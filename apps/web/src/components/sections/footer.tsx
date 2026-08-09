@@ -24,7 +24,7 @@ const columns: { title: string; links: FooterLink[] }[] = [
   {
     title: "Legal",
     links: [
-      { label: "License (MIT)", href: "/license" },
+      { label: "License (Apache 2.0)", href: "/license" },
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
     ],

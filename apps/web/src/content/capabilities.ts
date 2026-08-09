@@ -78,7 +78,7 @@ export const CAPABILITIES: Capability[] = [
  *
  * This section used to open with an eyebrow, a two-line headline and a
  * three-line paragraph, which is more preamble than the five cards underneath
- * it need — each one already states its own question. The paragraph in
+ * it need: each one already states its own question. The paragraph in
  * particular was explaining what the cards then demonstrate.
  */
 
