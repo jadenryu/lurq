@@ -9,10 +9,13 @@
  * (or any) Redis on the hosted server to turn it on. Any Redis error degrades to
  * computing directly; the cache never takes the request path down.
  *
- * Invalidation is version-based: every key embeds a namespace version read from
- * `lurq:cachever`. A successful sync `INCR`s it, so all prior keys become
- * unreachable at once (and age out via TTL) — no SCAN/DEL sweep.
+ * Invalidation is version-based on two axes: every key embeds the running
+ * release AND a data version read from `lurq:cachever`. A successful sync
+ * `INCR`s the latter, so all prior keys become unreachable at once (and age out
+ * via TTL) — no SCAN/DEL sweep. The release covers the other half: a deploy that
+ * changes how results are ranked invalidates rankings computed by the old code.
  */
+import { VERSION } from './constants';
 import { logger } from './logger';
 
 interface RedisLike {
@@ -72,6 +75,26 @@ async function namespaceVersion(client: RedisLike): Promise<string> {
 }
 
 /**
+ * The cached value depends on the CODE that produced it, not only on the data
+ * it read, and the key used to ignore that half.
+ *
+ * `lurq:cachever` is bumped by sync, rescore and edit-weights — every path that
+ * changes the *data*. A deploy that changes how results are *ranked* bumps
+ * nothing, so cached responses computed by the previous ranking kept being
+ * served for the rest of their hour. That happened for real: after shipping the
+ * confidence-aware ranking, a previously-seen query still returned the old
+ * order while a freshly-worded one returned the new — which reads exactly like
+ * a deploy that silently did not take.
+ *
+ * Folding the release into the key makes a version bump self-invalidating.
+ * A ranking change shipped WITHOUT a version bump still needs a manual
+ * `INCR lurq:cachever`, and that is the honest limit of a one-line fix.
+ */
+function codeVersion(): string {
+  return VERSION;
+}
+
+/**
  * Get-or-compute with optional caching. When the cache is off or unreachable,
  * `compute()` runs directly. `skipCache(value)` lets the caller avoid caching
  * unhelpful results (e.g. empty recommendations or not-found lookups).
@@ -88,7 +111,8 @@ export async function cached<T>(
   let fullKey: string;
   try {
     const version = await namespaceVersion(client);
-    fullKey = `lurq:${namespace}:${version}:${key}`;
+    // namespace : release : data-version : query
+    fullKey = `lurq:${namespace}:${codeVersion()}:${version}:${key}`;
     const hit = await client.get(fullKey);
     if (hit != null) return JSON.parse(hit) as T;
   } catch (err) {
