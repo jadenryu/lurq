@@ -11,7 +11,7 @@ import type { Candidate, Category, Confidence } from '../core/types';
 import type { Database } from '../db/client';
 import { packages } from '../db/schema';
 import { computeComposite } from '../scoring';
-import { loadWeights } from '../scoring/weights';
+import { CONFIDENCE_WEIGHT, RANKING, loadWeights } from '../scoring/weights';
 import { inferCategory } from './categoryInference';
 import { createEmbeddingProvider, type EmbeddingProvider } from './embeddings';
 
@@ -28,19 +28,36 @@ export interface RecommendOptions {
   limit?: number;
 }
 
-const CONFIDENCE_RANK: Record<Confidence, number> = {
+/** Ladder ORDER, for the minConfidence filter only — not the ranking weight
+ *  (that is CONFIDENCE_WEIGHT in scoring/weights). */
+const CONFIDENCE_ORDER: Record<Confidence, number> = {
   unproven: 0,
   promising: 1,
   emerging: 2,
   proven: 3,
 };
-/** Fused-relevance vs composite blend (§3, §11). The second term is the
- *  quality-aware composite (§1), not raw health — so a well-built package isn't
- *  buried by a popularity-tilted score. */
-const RELEVANCE_WEIGHT = 0.6;
-const COMPOSITE_WEIGHT = 0.4;
 /** RRF damping constant — standard value from the original RRF paper (§3). */
 const RRF_K = 60;
+
+/**
+ * Score one retrieved candidate (§3, §11).
+ *
+ * Exported so the ranking can be argued with numbers instead of adjectives —
+ * see tests/ranking.test.ts, which feeds it real rows captured from the live
+ * index. `relevance` is the RRF score normalised against the best in this
+ * result set, so it is always 0..1 and the weights below are comparable.
+ */
+export function rankScore(
+  row: Pick<Row, 'healthScore' | 'qualityScore' | 'confidence'>,
+  relevance: number,
+  lambda: number,
+): number {
+  const composite = computeComposite(row.healthScore ?? 0, row.qualityScore, lambda) / 100;
+  const confidence = CONFIDENCE_WEIGHT[row.confidence ?? 'unproven'] ?? 0;
+  return (
+    RANKING.relevance * relevance + RANKING.composite * composite + RANKING.confidence * confidence
+  );
+}
 
 export interface Row {
   name: string;
@@ -79,17 +96,16 @@ export async function recommend(
   }
   if (fused.length === 0) return [];
 
-  // Re-rank: blend normalized fused relevance (RRF) with the quality-aware
-  // composite (§1). RRF rank-fusion already absorbs both retrieval legs, so the
-  // relevance term rewards exact lexical hits the vector leg alone would miss.
+  // Re-rank: fused relevance (RRF), the quality-aware composite (§1), and the
+  // evidence tier. RRF already absorbs both retrieval legs, so the relevance
+  // term rewards exact lexical hits the vector leg alone would miss.
   const lambda = loadWeights().composite.lambda;
   const maxRrf = Math.max(...fused.map((f) => f.rrf));
   const ranked = fused
-    .map((f) => {
-      const relevance = maxRrf > 0 ? f.rrf / maxRrf : 0;
-      const composite = computeComposite(f.row.healthScore ?? 0, f.row.qualityScore, lambda) / 100;
-      return { row: f.row, score: RELEVANCE_WEIGHT * relevance + COMPOSITE_WEIGHT * composite };
-    })
+    .map((f) => ({
+      row: f.row,
+      score: rankScore(f.row, maxRrf > 0 ? f.rrf / maxRrf : 0, lambda),
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
@@ -177,7 +193,7 @@ function buildConditions(
   }
   if (constraints?.minConfidence) {
     const allowed = (['proven', 'emerging', 'promising', 'unproven'] as Confidence[]).filter(
-      (c) => CONFIDENCE_RANK[c] >= CONFIDENCE_RANK[constraints.minConfidence!],
+      (c) => CONFIDENCE_ORDER[c] >= CONFIDENCE_ORDER[constraints.minConfidence!],
     );
     // Parameterized: drizzle binds each value, closing the sql.raw interpolation
     // hole (safe today — validated enum — but no reason to keep a raw string).
