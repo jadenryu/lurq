@@ -199,7 +199,12 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
     const header = req.headers.authorization;
     const presented = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
-    if (presented !== token) {
+    // secretEquals, not `!==`: `===` on strings short-circuits at the first
+    // differing byte, which leaks the token prefix-by-prefix to anyone willing
+    // to time the responses. The issuer-secret check below already does this;
+    // this endpoint is guarded by a shared secret of exactly the same kind and
+    // has no reason to be the weaker one.
+    if (!secretEquals(presented, token)) {
       res.status(401).end();
       return;
     }
