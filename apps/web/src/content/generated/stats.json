@@ -11,10 +11,10 @@
   "dataSources": 10,
   "npm": {
     "package": "lurqrun",
-    "latestVersion": "0.0.6",
-    "publishedVersions": 6,
+    "latestVersion": "0.1.0",
+    "publishedVersions": 11,
     "firstPublishedAt": "2026-06-23T19:08:53.750Z",
-    "downloadsSincePublish": 1078,
+    "downloadsSincePublish": 1566,
     "weeksLive": 6
   },
   "lastSync": {
