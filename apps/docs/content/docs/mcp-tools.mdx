@@ -1,13 +1,29 @@
 ---
 title: MCP tools
-description: The five tools your agent can call over MCP, and what each returns.
+description: The eleven tools your agent can call over MCP, and what each returns.
 ---
 
 Once lurq is installed, your agent can call these tools over MCP. Every response
 is compact (to stay cheap in tokens) and carries a `dataAsOf` timestamp so the
 agent knows how fresh the underlying evidence is.
 
-## `recommend`
+| Tool | What it answers |
+| --- | --- |
+| [`recommend`](#recommend) | Best current packages for a described need |
+| [`evaluate`](#evaluate) | Full evidence read for one package |
+| [`compare`](#compare) | 2–5 packages ranked head-to-head |
+| [`verify`](#verify) | Is this package real, healthy, and not risky? |
+| [`compat`](#compat) | Will these packages actually install together? |
+| [`plan`](#plan) | Source every slot in a stack at once, checked for coherence |
+| [`usage`](#usage) | A version's *real* public API, and what changed since the one you know |
+| [`resolve_surface`](#resolve_surface) | Exactly what a version exports at runtime |
+| [`diff_surface`](#diff_surface) | What a version bump adds, removes, or re-shapes |
+| [`diagram`](#diagram) | A reference-architecture Mermaid diagram for a stack |
+| [`report_outcome`](#report_outcome) | What happened after a pick shipped |
+
+## Choosing packages
+
+### `recommend`
 
 Best current packages for a described need.
 
@@ -18,18 +34,20 @@ Best current packages for a described need.
 > "a form library for react" → `react-hook-form`, `@tanstack/react-form`, …
 
 Use this when the agent knows *what it needs* but not *which package* to reach
-for.
+for — including before hand-rolling something a package may already do.
 
-## `evaluate`
+### `evaluate`
 
 A full evidence read for a single package.
 
 - **Input:** one package name.
-- **Output:** the complete score breakdown, advisories, and a usage guide.
+- **Output:** the complete score breakdown, advisories, a usage guide, the latest
+  sandbox verdict, and — if the package has been superseded — the recommended
+  migration target.
 
 Use this when the agent has a candidate and wants the detail before committing.
 
-## `compare`
+### `compare`
 
 Rank 2–5 packages head-to-head by health.
 
@@ -40,25 +58,121 @@ Rank 2–5 packages head-to-head by health.
 
 Use this when the choice is already narrowed to a shortlist.
 
-## `verify`
+### `verify`
 
 The anti-hallucination guard: is this package real, healthy, and not risky?
 
-- **Input:** one package name (possibly a misspelling or invention).
-- **Output:** whether it exists, plus a health/risk read.
+- **Input:** one package name (possibly a misspelling or an invention).
+- **Output:** whether it exists on the live registry, a supply-chain risk level,
+  the individual risk flags, and the **suspected typosquat target** when the name
+  closely mimics a popular one.
 
 > `verify lodahs` → not a real package (did you mean `lodash`?)
 
 Use this **before** the agent writes an import for a package it "remembers."
 
-## `diagram`
+## Checking a whole stack
 
-A reference-architecture Mermaid diagram for a chosen stack.
+### `compat`
 
-- **Input:** a description of the stack.
+Will this set of packages actually install together?
+
+- **Input:** 2–8 package names — **the whole candidate stack in one call**.
+  Checking pairs separately misses conflicts that only appear across the set.
+- **Output:** an evidence-graded verdict, the exact clashing constraints, and
+  every pair that was compared.
+
+The verdict is deliberately four-valued, and the distinction matters:
+
+| Verdict | Meaning |
+| --- | --- |
+| `conflict` | Proven incompatible — a violated peer range, or a recorded failed co-install |
+| `compatible` | **Positively evidenced** — every pair has a recorded co-install or co-resolution at these versions |
+| `likely` | No conflict found, but not proven. Absence of a declared conflict is not proof |
+| `unknown` | A member isn't in the index yet |
+
+lurq never returns `compatible` on the mere absence of a declared conflict. A
+pair with no positive evidence is queued for background verification, so the next
+ask gets a real answer.
+
+### `plan`
+
+Turn a described program into an evidence-scored build plan.
+
+- **Input:** a detailed description (a spec or README), or a pre-decomposed list
+  of component needs, plus optional `using: [...]` for packages you've already
+  chosen.
+- **Output:** a recommended package per component with its scores, a whole-stack
+  compatibility verdict, and a Mermaid roadmap.
+
+Packages you pin are treated as fixed, and the rest of the stack is planned
+*around* them. lurq sources building blocks slot-by-slot — it doesn't invent an
+architecture from a bare prompt.
+
+## Writing code against a package
+
+### `usage`
+
+A package version's **real** public API — the exported symbols and signatures
+extracted from its shipped `.d.ts`, exact to the version.
+
+- **Input:** a package name, an optional target `version`, and — the useful part
+  — a `knownVersion`.
+- **Output:** the export surface, the version's declared `engines` (so you don't
+  write code against a version the target runtime can't install), and, when you
+  passed `knownVersion`, the precise **delta**: what was added, removed, renamed,
+  or changed.
+
+Pass the version your model *thinks* it knows and get the delta to the version
+you're actually installing. That fact exists in no changelog and no model's
+training data.
+
+### `resolve_surface`
+
+What a version **actually exports at runtime**, read from its shipped JavaScript
+rather than from documentation or memory.
+
+- **Input:** a package name and an optional exact version.
+- **Output:** the runtime symbols, plus the evidence class and extraction tier
+  behind the answer.
+
+Runtime existence is what decides whether an import throws: a removed type breaks
+`tsc`, a removed runtime symbol breaks the program. A miss returns `unknown` and
+queues extraction — **`unknown` never means the symbol is absent.**
+
+### `diff_surface`
+
+What changed between two versions of a package.
+
+- **Input:** a package name, `fromVersion`, `toVersion`.
+- **Output:** symbols removed, added, and arity-changed — with **type-only
+  removals returned separately**, because those break `tsc` rather than `node`.
+
+Answers "when did this stop working" from static comparison, with no install
+required. Use it before an upgrade, and to explain a break after one.
+
+## Everything else
+
+### `diagram`
+
+A reference-architecture Mermaid diagram for a stack you've already chosen.
+
+- **Input:** the package names in the stack.
 - **Output:** a Mermaid diagram you can drop into docs or a README.
 
-This one is optional: it's about communicating a stack, not picking packages.
+A labeled starting point, not a validated architecture. Packages lurq can't
+classify go into an explicit `Unclassified` bucket and are named in the note —
+never quietly filed under a default layer.
+
+### `report_outcome`
+
+Opt-in feedback after acting on a recommendation.
+
+- **Input:** the package, whether you went with it, and a coarse build signal.
+- **Output:** an acknowledgement.
+
+No source code — only the decision and whether it built. It's how lurq learns
+which packages agents actually succeed with. Safe to skip.
 
 ## Confidence labels
 
@@ -69,7 +183,7 @@ strength of the **discovered** evidence, not anyone's opinion:
 | --- | --- |
 | `proven` | Strong, broad, sustained evidence of health. |
 | `emerging` | Real traction, shorter track record. |
-| `promising` | Early signals look good, limited history. |
+| `promising` | Early signals look good, limited history — **adoption-independent**, so a well-built new package isn't buried by an old popular one. |
 | `unproven` | Too little evidence to stand behind yet. |
 
 See [How it works](/docs/how-it-works) for how these are derived.

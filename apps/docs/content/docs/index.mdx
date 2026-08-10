@@ -21,20 +21,44 @@ Coding agents are good at writing code but bad at picking dependencies. They:
 - **hallucinate** package names that were never published;
 - lean on whatever was popular when the model was trained, not what's healthy now.
 
-lurq fixes this by maintaining a live index built **only from public signals**
-(npm, GitHub, deps.dev, bundlephobia). Scores are computed, never hand-written,
-and every response carries a `dataAsOf` timestamp so the agent knows how fresh
-the evidence is.
+…and they write code against APIs that moved. A package name can be right,
+healthy, and current, and the call your agent just wrote still wrong, because the
+symbol it used was removed three majors ago.
+
+lurq fixes this with a live index built from **public signals** (npm, GitHub,
+deps.dev, OSV, bundlephobia), plus two things metadata can't tell you: what a
+version **actually exports**, extracted from its shipped code, and whether a set
+of packages **actually installs together**, established by running it. Scores are
+computed, never hand-written, and every response carries a `dataAsOf` timestamp.
 
 ## What you get
 
-Once connected, your agent can call five MCP tools:
+Once connected, your agent can call eleven MCP tools:
+
+**Choosing**
 
 - [`recommend`](/docs/mcp-tools#recommend): best current packages for a need
 - [`evaluate`](/docs/mcp-tools#evaluate): full evidence read for one package
 - [`compare`](/docs/mcp-tools#compare): rank 2–5 packages by health
 - [`verify`](/docs/mcp-tools#verify): is a package real, healthy, and safe?
+
+**Whole stacks**
+
+- [`compat`](/docs/mcp-tools#compat): will these packages actually install together?
+- [`plan`](/docs/mcp-tools#plan): source every slot in a stack at once
 - [`diagram`](/docs/mcp-tools#diagram): a reference-architecture diagram for a stack
+
+**Writing the code**
+
+- [`usage`](/docs/mcp-tools#usage): a version's real API, and what changed since the one you know
+- [`resolve_surface`](/docs/mcp-tools#resolve_surface): exactly what a version exports at runtime
+- [`diff_surface`](/docs/mcp-tools#diff_surface): what a version bump adds, removes, or re-shapes
+- [`report_outcome`](/docs/mcp-tools#report_outcome): tell lurq how the pick worked out
+
+The same engine is available from your terminal — see the
+[CLI reference](/docs/cli) — including `lurq check-upgrade`, which tells you
+whether an upgrade removes a symbol *your* code references, with no test suite
+required.
 
 ## Scope
 

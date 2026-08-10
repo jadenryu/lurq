@@ -6,16 +6,41 @@ description: How lurq turns public signals into scores, confidence, and search.
 lurq's scores are computed from public signals, **never hand-written**. This
 page sketches the pipeline from raw data to the answer your agent receives.
 
+## Where the evidence comes from
+
+Three kinds, and the distinction is the whole point.
+
+**Readable** — npm, GitHub, deps.dev, OSV, and bundlephobia, re-synced daily.
+Downloads, release cadence, maintenance, advisories, deprecations, license,
+bundle cost. This is what scoring runs on.
+
+**Executed** — an isolated sandbox that installs a package version, imports it,
+and records what happened. Co-installing a set is how compatibility is
+*established*: a successful co-install is positive proof two versions coexist, a
+failure is proof they conflict, and the error is kept as evidence.
+
+**Extracted** — the shipped `.d.ts` and the shipped JavaScript of an exact
+version, parsed deterministically. No model is involved anywhere in this path.
+This is what `usage`, `resolve_surface`, and `diff_surface` answer from, and it's
+the only way to know that the function your agent is about to call was removed
+two majors ago.
+
+Facts of the second and third kind appear in no changelog and no model's training
+data, and they go stale unless someone keeps re-running the experiment.
+
 ## The pipeline
 
 ```text
-public APIs (npm, github, deps.dev, bundlephobia)
+public APIs (npm, github, deps.dev, osv, bundlephobia)
   → ingestion
-  → scoring (health + quality + confidence)
+  → scoring (health + quality + field evidence + confidence)
   → summaries / usage guides
   → embeddings
   → postgres + pgvector  (hybrid lexical + semantic search)
   → { stdio MCP server, HTTP MCP service, CLI }
+
+npm tarballs / CDN .d.ts → surface extraction → api surfaces + symbol diffs
+sandbox co-install       → compatibility edges
 ```
 
 Each stage is idempotent and tolerant of a single source being down, so a flaky
@@ -45,10 +70,20 @@ hiding it.
 
 ## Search
 
-Retrieval is **hybrid**: lexical matching for exact names and keywords, combined
-with semantic (vector) search via pgvector for fuzzy, intent-based queries like
-"debounce a function." This catches both "I know the name" and "I know what I
-want it to do" cases.
+Retrieval is **hybrid**: two independent searches run over the same candidate
+set — lexical matching (Postgres full-text) for exact names and keywords, and
+semantic vector search via pgvector for intent-based queries like "debounce a
+function." This catches both "I know the name" and "I know what I want it to do."
+
+The two are merged with **Reciprocal Rank Fusion**, which combines them using
+only each result's *position* in its list. That's deliberate: it means two
+incomparable scoring scales never have to be normalised against each other, and
+an exact-name hit the vector search ranks poorly still surfaces. The fused
+relevance is then blended with the composite score, so results are both relevant
+and good.
+
+**No model sits in the ranking path.** That's why `recommend` is fast, cheap, and
+gives the same answer for the same question.
 
 ## Freshness
 

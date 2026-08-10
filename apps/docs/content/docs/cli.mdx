@@ -28,6 +28,54 @@ lurq verify lodahs
 
 `recommend` accepts `--category` and `--min-confidence` to narrow results.
 
+## API surfaces
+
+What a version actually exports, and what moved since the version you know:
+
+```bash
+lurq usage zod                       # the current export surface
+lurq usage zod --known 3.22.4        # …plus the exact delta from the version you know
+lurq usage react --target 19.0.0     # pin the target version
+lurq versions react                  # the stored version timeline (local index only)
+```
+
+`--known` is the one worth remembering: pass the version your model thinks it
+knows and get the precise added / removed / renamed / changed list for the
+version you're actually installing.
+
+## Whole stacks
+
+```bash
+lurq compat next react react-dom             # do these install together?
+lurq compat next react --pin next=15.5.4     # check exact versions
+lurq plan ./project.md                       # a description in, a scored stack out
+lurq plan ./project.md --open                # …rendered as a portable HTML roadmap
+```
+
+`--pin` requires an exact published version. A range would silently resolve to
+`latest` and report the wrong version as pinned, so it's rejected outright.
+
+## Upgrades
+
+These two run where your code is — a laptop or a CI runner:
+
+```bash
+# what's behind, and what each upgrade removes from its API  (needs your lurq key)
+lurq upgrade-plan . --json > lurq-plan.json
+
+# do those upgrades remove symbols YOUR code references?      (needs nothing)
+lurq check-upgrade . --plan lurq-plan.json --exit-code
+```
+
+`check-upgrade` compares both versions' npm tarballs against the symbols your
+codebase actually imports, and reports them at `file:line`. It needs no API key,
+no network to lurq, and **no test suite** — which is the point: it catches
+breakage in code no test covers. `--exit-code` exits 1 when the report is not
+safe, for use as a CI gate.
+
+An upgrade it could not establish is reported as `unverified` and is **never**
+counted as safe.
+
 ## Scoring controls
 
 ```bash
