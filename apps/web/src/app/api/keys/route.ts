@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { demoIssuedKey, demoKeys, isDemoUser } from "@/lib/demo-data";
 import { fetchKeys, issueKey, LurqIssuerError } from "@/lib/lurq-issuer";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * Self-serve API-key issuance/listing. Clerk authenticates the user here;
@@ -34,6 +35,17 @@ export async function GET() {
   }
 }
 
+/**
+ * Active keys one account may hold.
+ *
+ * Issuance had no ceiling and no throttle: a signed-in session could mint keys
+ * in a loop, and every one is a live credential that never expires. The cap is
+ * on *active* keys, so revoking frees a slot and the limit never becomes a trap
+ * — rotating in place stays unlimited, which is the operation people actually
+ * repeat.
+ */
+const MAX_ACTIVE_KEYS = 20;
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) {
@@ -45,6 +57,32 @@ export async function POST(req: Request) {
 
   if (await isDemoUser(userId)) {
     return NextResponse.json({ ...demoIssuedKey(), demo: true });
+  }
+
+  // Per-user, not per-IP: the identity is already authenticated here, so keying
+  // on it throttles the actual actor rather than everyone behind one NAT.
+  if (!rateLimit(`keys:${userId}`, 10, 60_000)) {
+    return NextResponse.json(
+      { error: "Too many keys created. Wait a minute and try again." },
+      { status: 429 },
+    );
+  }
+
+  try {
+    const existing = await fetchKeys(userId);
+    const active = existing.filter((k) => !k.revokedAt).length;
+    if (active >= MAX_ACTIVE_KEYS) {
+      return NextResponse.json(
+        {
+          error: `You already have ${active} active keys (limit ${MAX_ACTIVE_KEYS}). Revoke one to create another.`,
+        },
+        { status: 409 },
+      );
+    }
+  } catch {
+    // Couldn't read the current keys. Don't block issuance on it: the cap is
+    // abuse protection, and failing closed here would lock a user out of the
+    // dashboard's primary action during an unrelated outage.
   }
 
   try {
