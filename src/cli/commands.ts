@@ -240,7 +240,16 @@ export async function runCompare(pkgs: string[], opts: { json?: boolean }): Prom
       ]),
     ),
   );
-  if (res.missing?.length) console.log(dim(`\nnot found: ${res.missing.join(', ')}`));
+  // Two causes, two lines. A name that is not on npm is a red flag the user has
+  // to act on; a package still being ingested is a "try again in a moment". The
+  // single dim line these used to share said "not found" for both.
+  // `?? []` for the older-server case where only the union `missing` came back:
+  // report it under the cautious heading rather than silently dropping it.
+  const notFound = res.notFound ?? (res.pending ? [] : (res.missing ?? []));
+  if (notFound.length) console.log(red(`\nnot on npm: ${notFound.join(', ')}`));
+  if (res.pending?.length) {
+    console.log(dim(`\nbeing scored now (retry shortly): ${res.pending.join(', ')}`));
+  }
   console.log(dim(`data as of ${formatDate(res.dataAsOf)}`));
 }
 

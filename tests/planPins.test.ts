@@ -22,12 +22,13 @@ describe('resolvePins', () => {
   beforeEach(() => getOrFetchPackage.mockReset());
 
   it('turns a pinned package into a fixed, single-candidate slot', async () => {
-    getOrFetchPackage.mockResolvedValue({ row: row('drizzle-orm') });
-    const { slots, unresolved } = await resolvePins(db, ['drizzle-orm'], new Set());
+    getOrFetchPackage.mockResolvedValue({ row: row('drizzle-orm'), existsOnNpm: true });
+    const { slots, notFound, pending } = await resolvePins(db, ['drizzle-orm'], new Set());
     expect(slots).toHaveLength(1);
     expect(slots[0]!.recommended?.name).toBe('drizzle-orm');
     expect(slots[0]!.alternatives).toEqual([]); // fixed — optimizer can't swap it
-    expect(unresolved).toEqual([]);
+    expect(notFound).toEqual([]);
+    expect(pending).toEqual([]);
   });
 
   it('skips a pin the recommender already picked (no double slot)', async () => {
@@ -38,10 +39,22 @@ describe('resolvePins', () => {
   });
 
   it('reports a pin that does not exist on npm instead of dropping it', async () => {
-    getOrFetchPackage.mockResolvedValue({ row: null });
-    const { slots, unresolved } = await resolvePins(db, ['made-up-xyz'], new Set());
+    getOrFetchPackage.mockResolvedValue({ row: null, existsOnNpm: false });
+    const { slots, notFound, pending } = await resolvePins(db, ['made-up-xyz'], new Set());
     expect(slots).toHaveLength(0);
-    expect(unresolved).toEqual(['made-up-xyz']);
+    expect(notFound).toEqual(['made-up-xyz']);
+    expect(pending).toEqual([]);
+  });
+
+  // The regression this split exists for: a pin that IS on npm and is merely
+  // mid-ingest used to be reported as "not found on npm", telling the user their
+  // own installed dependency does not exist.
+  it('reports a real-but-unscored pin as pending, never as missing from npm', async () => {
+    getOrFetchPackage.mockResolvedValue({ row: null, existsOnNpm: true, queued: true });
+    const { slots, notFound, pending } = await resolvePins(db, ['freshpkg'], new Set());
+    expect(slots).toHaveLength(0);
+    expect(notFound).toEqual([]);
+    expect(pending).toEqual(['freshpkg']);
   });
 
   it('dedupes repeated pins', async () => {

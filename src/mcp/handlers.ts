@@ -237,6 +237,24 @@ export async function handleEvaluate(
 
 // ── compare ─────────────────────────────────────────────────────────────────
 
+/**
+ * One sentence per cause, so a response carrying both is unambiguous about which
+ * name is which. The not-found clause leads: it is the actionable one, and an
+ * agent that reads only the first sentence must read the warning, not the party.
+ */
+function comparisonNote(notFound: string[], pending: string[]): string {
+  return [
+    notFound.length
+      ? `Not found on the npm registry: ${notFound.join(', ')}. Check the name(s) before installing — these do not exist.`
+      : null,
+    pending.length
+      ? `🎉 You're the first to add ${pending.join(', ')} to lurq's registry! They're being scored now; retry shortly for the full comparison.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export async function handleCompare(
   db: Database,
   input: { packages: string[] },
@@ -258,19 +276,36 @@ export async function handleCompare(
         // would hand it the index.
         .map((row) => rowToEvaluate(row))
         .sort((a, b) => b.healthScore - a.healthScore);
-      const missing = input.packages.filter((name) => !rows.some((r) => r.name === name));
+
+      // A missing row has two completely different causes and they must never
+      // share a message. `getOrFetchPackage` returns row=null both for a name
+      // that is not on npm at all and for a real package whose ingest is still
+      // running — collapsing them told an agent comparing a hallucinated name
+      // that it was real and "being scored now", which is the exact failure
+      // `verify` exists to prevent. Split them at the source.
+      const missing: string[] = [];
+      const notFound: string[] = [];
+      const pending: string[] = [];
+      input.packages.forEach((name, i) => {
+        const result = results[i]!;
+        if (result.row) return;
+        missing.push(name);
+        (result.existsOnNpm ? pending : notFound).push(name);
+      });
+
       return {
         dataAsOf: await latestDataAsOf(db),
         rows,
-        ...(missing.length
-          ? {
-              missing,
-              note: "🎉 You're the first to add these to lurq's registry! They're being scored now; retry shortly for the full comparison.",
-            }
-          : {}),
+        // `missing` stays the union, in the caller's own order, so a client
+        // pinned to an older lurq keeps printing its "not found" line.
+        ...(missing.length ? { missing } : {}),
+        ...(notFound.length ? { notFound } : {}),
+        ...(pending.length ? { pending } : {}),
+        ...(missing.length ? { note: comparisonNote(notFound, pending) } : {}),
       };
     },
-    // Don't cache a transient miss (a package that momentarily failed to fetch).
+    // Don't cache a miss: a pending ingest lands within seconds, and a name that
+    // is not on npm today may be published tomorrow.
     { skipCache: (r) => Boolean((r as { missing?: string[] }).missing?.length) },
   );
   out.rows = out.rows.map(refreshStale);

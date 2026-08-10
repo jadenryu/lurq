@@ -60,23 +60,33 @@ function packageToCandidate(row: PackageRow): Candidate {
   };
 }
 
-/** Resolve user-pinned packages into fixed slots (one candidate, no alternatives)
- *  so the optimizer routes the recommended slots around them. Unresolvable pins
- *  (not on npm) are returned so the caller can report them. */
+/**
+ * Resolve user-pinned packages into fixed slots (one candidate, no alternatives)
+ * so the optimizer routes the recommended slots around them.
+ *
+ * A pin that yields no row is reported in one of two buckets, never one. Without
+ * a `blockMs` budget `getOrFetchPackage` returns row=null for a real package
+ * whose ingest is still running just as it does for a name that is not on npm,
+ * and folding those together made plan tell users that a package they had
+ * already installed "was not found on npm" — a false statement about the half of
+ * the input they were most sure of. (`compare` had the same bug in the opposite
+ * direction; see handleCompare.)
+ */
 export async function resolvePins(
   db: Database,
   using: string[] | undefined,
   recommendedNames: Set<string>,
   requestedByOwnerId: string | null = null,
-): Promise<{ slots: PlanSlot[]; unresolved: string[] }> {
+): Promise<{ slots: PlanSlot[]; notFound: string[]; pending: string[] }> {
   const slots: PlanSlot[] = [];
-  const unresolved: string[] = [];
+  const notFound: string[] = [];
+  const pending: string[] = [];
   // Dedupe, and skip a pin the recommender already picked (avoid double slots).
   for (const name of new Set(using ?? [])) {
     if (recommendedNames.has(name)) continue;
-    const { row } = await getOrFetchPackage(db, name, { requestedByOwnerId });
+    const { row, existsOnNpm } = await getOrFetchPackage(db, name, { requestedByOwnerId });
     if (!row) {
-      unresolved.push(name);
+      (existsOnNpm ? pending : notFound).push(name);
       continue;
     }
     slots.push({
@@ -88,7 +98,7 @@ export async function resolvePins(
       note: 'pinned by you',
     });
   }
-  return { slots, unresolved };
+  return { slots, notFound, pending };
 }
 
 /** A single component/slot to recommend a package for. */
@@ -254,12 +264,11 @@ export async function handlePlan(
   const recommendedNames = new Set(
     recSlots.map((s) => s.recommended?.name).filter((n): n is string => Boolean(n)),
   );
-  const { slots: pinnedSlots, unresolved: unresolvedPins } = await resolvePins(
-    db,
-    input.using,
-    recommendedNames,
-    ownerId,
-  );
+  const {
+    slots: pinnedSlots,
+    notFound: pinsNotFound,
+    pending: pinsPending,
+  } = await resolvePins(db, input.using, recommendedNames, ownerId);
   const slots = [...pinnedSlots, ...recSlots];
 
   // Auto-resolve compatibility: actually make the picked stack coherent by
@@ -269,7 +278,11 @@ export async function handlePlan(
 
   const unmatched = [
     ...slots.filter((s) => !s.recommended).map((s) => s.need),
-    ...unresolvedPins.map((n) => `${n} (pinned, but not found on npm)`),
+    ...pinsNotFound.map((n) => `${n} (pinned, but not on the npm registry)`),
+    // A pin that exists and is merely being ingested is not an unmatched need —
+    // it just has no scores yet. Saying so keeps the user from "fixing" a name
+    // that was correct all along.
+    ...pinsPending.map((n) => `${n} (pinned; being scored now, retry shortly)`),
   ];
   const mermaid = buildMermaid(
     slots
