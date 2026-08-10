@@ -39,7 +39,7 @@ import {
 } from '../db/repos';
 import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
 import { parseSelectionPolicy } from '../policy/parse';
-import { getUsageByTool, getUsageSummary } from '../db/usage';
+import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -133,7 +133,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     await Promise.all([import('express'), import('helmet'), import('express-rate-limit')]);
 
   // The DB pool is the expensive resource — created once, shared by all requests.
-  const { db } = createDb({ max: 20 });
+  const { db, close: closeDb } = createDb({ max: 20 });
 
   // Without Redis the response cache is a pass-through, so every recommend/
   // evaluate/compare recomputes its search on the DB — fine for one box, but the
@@ -882,6 +882,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         // not know about must not look like an upgrade we cleared.
         untracked: Object.keys(deps).length - drift.depsTracked,
       });
+      // Counted like any other tool call. Usage was recorded only inside the MCP
+      // server, so a user whose whole relationship with lurq is the weekly
+      // autopilot saw a dashboard reading zero calls — the one view meant to
+      // show them they are getting value. Fire-and-forget, after the response.
+      void recordUsage(db, ownerId, 'upgrade-plan');
     } catch (err) {
       logger.error('upgrade plan failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not build the upgrade plan.' });
@@ -913,6 +918,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         runs.map((run) => ({ ...run, ownerId, repoId: repoIds.get(run.repoFullName) ?? null })),
       );
       res.status(200).json({ recorded, rejected });
+      void recordUsage(db, ownerId, 'upgrade-runs');
     } catch (err) {
       logger.error('upgrade run record failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not record the upgrade runs.' });
@@ -977,4 +983,39 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     logger.error(`could not listen on :${port}: ${err.message}`);
     process.exit(1);
   });
+
+  /**
+   * Drain on SIGTERM, which is how every deploy ends.
+   *
+   * Railway sends SIGTERM and then SIGKILLs what is still alive. With no handler
+   * the default is immediate death, so every request in flight at that moment
+   * dies mid-response — on a redeploy that is a burst of failures for callers
+   * doing nothing wrong, and the agent on the other end reads it as lurq being
+   * unreliable rather than as us shipping.
+   *
+   * `server.close` stops accepting new connections and waits for the open ones,
+   * then the pool closes. The timer is the backstop: a wedged connection must
+   * not hold the process past the platform's own grace period, and it is
+   * unref'd so it can never be the thing keeping us alive.
+   */
+  const FORCE_EXIT_MS = 10_000;
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return; // a second SIGTERM must not race the first
+    shuttingDown = true;
+    logger.info(`${signal} received, draining…`);
+    const force = setTimeout(() => {
+      logger.warn('drain timed out, exiting anyway');
+      process.exit(0);
+    }, FORCE_EXIT_MS);
+    force.unref();
+    server.close(() => {
+      void closeDb().then(
+        () => process.exit(0),
+        () => process.exit(0),
+      );
+    });
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
