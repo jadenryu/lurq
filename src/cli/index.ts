@@ -227,10 +227,23 @@ export function buildProgram(): Command {
     .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. commander@11.1.0..12.1.0')
     .option('--json', 'output the report as JSON')
     .option('--exit-code', 'exit 1 when the report is not safe (for CI)')
+    // Opt-in, and never load-bearing: the check's whole point is that it needs
+    // no key and no network to us, so this only adds a dashboard write on top.
+    .option('--report', 'send the result to your lurq dashboard (CI; needs an API key)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
     .action(
       async (
         dir: string,
-        opts: { plan?: string; upgrade?: string[]; json?: boolean; exitCode?: boolean },
+        opts: {
+          plan?: string;
+          upgrade?: string[];
+          json?: boolean;
+          exitCode?: boolean;
+          report?: boolean;
+          url?: string;
+          apiKey?: string;
+        },
       ) => {
         const { runCheckUpgrade } = await import('./checkUpgrade');
         await runCheckUpgrade(dir, opts);

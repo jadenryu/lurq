@@ -132,8 +132,15 @@ jobs:
 
       # 2. Narrow that to symbols THIS repo references. Runs entirely locally
       #    against both versions' npm tarballs, no API key, no test suite.
+      #
+      #    \`--report\` is the only part that talks to us, and it is additive: it
+      #    posts what this check concluded so your dashboard can show it. A
+      #    missing key or an unreachable API prints a line and changes nothing
+      #    else, so the gate keeps working exactly as it does without it.
       - name: Check against this codebase
-        run: npx -y ${cli} check-upgrade . --plan lurq-plan.json --json > lurq-brief.json
+        env:
+          LURQ_API_KEY: \${{ secrets.LURQ_API_KEY }}
+        run: npx -y ${cli} check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
 
       # The same report twice: once into the run summary, once as the body of
       # the pull request. Fenced, because the report is aligned plain text and

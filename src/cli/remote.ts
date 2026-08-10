@@ -254,3 +254,17 @@ export interface ReportedRun {
   prUrl?: string | null;
   runUrl?: string;
 }
+
+/**
+ * Send what a CI check concluded, so the dashboard can show it.
+ *
+ * `rejected` is the server's count of rows it refused to parse. Surfaced rather
+ * than swallowed: a payload shape that drifts from the server's validator would
+ * otherwise look exactly like a repo with nothing to report.
+ */
+export function reportUpgradeRuns(
+  runs: ReportedRun[],
+  opts: RemoteOptions = {},
+): Promise<{ recorded: number; rejected: number }> {
+  return post<{ recorded: number; rejected: number }>('/upgrade-runs', { runs }, opts);
+}
