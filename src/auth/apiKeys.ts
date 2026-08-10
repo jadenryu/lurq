@@ -150,6 +150,18 @@ function matchByPrefixOrId(prefixOrId: string) {
  * the dashboard's revoke/rotate routes use before touching the row. Returns
  * null if no active key with that prefix belongs to this owner (never reveals
  * whether a key with that prefix exists for someone else).
+ *
+ * The owner is a WHERE condition, not a check on the row that came back. It used
+ * to be the latter, and `LIMIT 1` over a prefix alone meant a collision handed
+ * back somebody else's row, which then failed the JS comparison and returned
+ * null — so the legitimate owner could never revoke or rotate their own key, on
+ * a key they can see listed. The display prefix is only six characters of body
+ * (mcp/http.ts says as much where it declines to rate-limit on it), so distinct
+ * keys colliding is a birthday problem, not an impossibility.
+ *
+ * `orderBy(id)` makes the remaining ambiguity — one owner holding two active
+ * keys with the same prefix — resolve to the same row every call, so a retry
+ * cannot act on a different key than the request that preceded it.
  */
 export async function findKeyForOwner(
   db: Database,
@@ -158,15 +170,27 @@ export async function findKeyForOwner(
   const [row] = await db
     .select()
     .from(apiKeys)
-    .where(and(matchByPrefixOrId(args.prefixOrId), isNull(apiKeys.revokedAt)))
+    .where(
+      and(
+        matchByPrefixOrId(args.prefixOrId),
+        eq(apiKeys.ownerId, args.ownerId),
+        isNull(apiKeys.revokedAt),
+      ),
+    )
+    .orderBy(apiKeys.id)
     .limit(1);
-  if (!row || row.ownerId !== args.ownerId) return null;
-  return row;
+  return row ?? null;
 }
 
 /**
  * Revoke a key by display prefix or numeric id. Returns how many active keys were
  * revoked (0 if none matched or it was already revoked).
+ *
+ * NOT owner-scoped, deliberately: this is the operator primitive behind
+ * `lurq keys revoke`, where revoking anyone's key is the point. Never hand it a
+ * prefix that came from a user — the dashboard routes resolve one through
+ * `findKeyForOwner` first and then pass the resulting numeric id, which is what
+ * keeps a prefix collision from reaching across accounts.
  */
 export async function revokeKey(db: Database, prefixOrId: string): Promise<number> {
   const rows = await db
@@ -184,6 +208,10 @@ export async function revokeKey(db: Database, prefixOrId: string): Promise<numbe
  *
  * The new key is created BEFORE the old one is revoked, so a failure mid-rotation
  * leaves the caller with a working key (at worst two active keys, never zero).
+ *
+ * Owner-scoping is the caller's job here for the same reason as `revokeKey`:
+ * operator plane by prefix, dashboard by an id `findKeyForOwner` already vouched
+ * for.
  */
 export async function rotateKey(
   db: Database,
