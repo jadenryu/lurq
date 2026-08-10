@@ -4,6 +4,7 @@
  * returns it — organically growing coverage beyond the seed list.
  */
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { withBudget } from '../core/concurrency';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
 import type { Category, CategorySource, ScoreBreakdown } from '../core/types';
@@ -43,18 +44,6 @@ import { enqueueIngest, runIngest } from './ingestQueue';
  *  in-flight ingest keeps running in the background and the caller gets the
  *  "retry shortly" hint instead of a stalled request. */
 export const FIRST_TOUCH_BUDGET_MS = 4000;
-
-function raceTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-  let timer: NodeJS.Timeout;
-  // Cleared on settle: a live timer keeps Node's event loop open, so without
-  // this the CLI sat idle for the rest of the budget after a fast ingest.
-  return Promise.race([
-    p,
-    new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), ms);
-    }),
-  ]).finally(() => clearTimeout(timer));
-}
 
 async function getSeedCategory(db: Database, name: string): Promise<Category | null> {
   const [row] = await db
@@ -224,7 +213,7 @@ export async function getOrFetchPackage(
     // ingest keeps running (not cancelled) and lands within a few more seconds.
     // ponytail: inline ingest isn't queue-bounded; single-package request rate
     // is the natural cap. Route through enqueueIngest if a flood ever appears.
-    const row = await raceTimeout(runIngest(db, name, opts.requestedByOwnerId ?? null), opts.blockMs);
+    const row = await withBudget(runIngest(db, name, opts.requestedByOwnerId ?? null), opts.blockMs);
     if (row) return { row, wasTracked: false, existsOnNpm: true };
     return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
   }

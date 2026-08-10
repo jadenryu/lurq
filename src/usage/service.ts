@@ -1,5 +1,6 @@
 /** Usage-axis serving layer (§4D): read-through the surface cache, extracting
  *  on a miss. Shared by the `usage` handler and the discovery worker (§4G). */
+import { withBudget } from '../core/concurrency';
 import type { ExportSymbol } from '../core/types';
 import type { Database } from '../db/client';
 import { getStoredSurface, upsertSurface } from '../db/apiSurfaces';
@@ -39,12 +40,6 @@ export interface SurfaceLookupOptions {
   budgetMs?: number;
   /** Override the CDN fetch timeout/retries. */
   fetch?: ExtractOptions;
-}
-
-/** Resolve with the task's value, or null once `budgetMs` elapses. The task is
- *  deliberately NOT cancelled: its cache write is the point. */
-function raceBudget<T>(task: Promise<T>, budgetMs: number): Promise<T | null> {
-  return Promise.race([task, new Promise<null>((resolve) => setTimeout(resolve, budgetMs, null))]);
 }
 
 /** Start (or join) the single extraction for `name@version`. */
@@ -93,7 +88,7 @@ export async function getOrExtractSurface(
   // defaults so a slow-but-working CDN still yields a surface.
   const fetchOpts = opts.fetch ?? (opts.budgetMs === undefined ? {} : READ_PATH_FETCH);
   const task = extractOnce(db, name, version, fetchOpts);
-  return opts.budgetMs === undefined ? task : raceBudget(task, opts.budgetMs);
+  return opts.budgetMs === undefined ? task : withBudget(task, opts.budgetMs);
 }
 
 /** Test-only: drop memoized in-flight extractions. */

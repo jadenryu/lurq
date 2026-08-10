@@ -189,11 +189,16 @@ async function getLLMBaseLine(document: string, modelName: string): Promise<stri
     return [];
   }
 }
+// Not core/concurrency's withBudget: that resolves null on expiry and this one
+// has to reject, because a bakeoff participant that times out must not be
+// scored as if it answered. The clearTimeout is the same lesson though — a live
+// timer here kept the script running past its last result.
 const fetchWithTimeout = (promise: Promise<any>, ms: number) => {
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Request timeout')), ms)
-  );
-  return Promise.race([promise, timeout]);
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Request timeout')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 };
 
 
