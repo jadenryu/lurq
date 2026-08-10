@@ -15,7 +15,7 @@ function candidate(name: string, confidence: Confidence = 'proven'): Candidate {
     latestVersion: '1.0.0',
     weeklyDownloads: 1000,
     lastReleaseAt: null,
-    repoUrl: null,
+    repoUrl: null, deprecated: false, archived: false, advisories: 0
   };
 }
 

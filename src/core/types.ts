@@ -321,6 +321,23 @@ export interface Candidate {
   weeklyDownloads: number | null;
   lastReleaseAt: string | null;
   repoUrl: string | null;
+  /**
+   * The three facts that can reverse an install decision on their own.
+   *
+   * `recommend` is the call an agent makes *before* choosing a dependency, and
+   * it carried none of them: a deprecated package could be returned with nothing
+   * in the payload saying so, leaving `confidence` and a numeric score as the
+   * only hints. Deprecation caps the maintenance component and bars `proven`,
+   * but a low score reads as "less good", not "do not install this". `evaluate`
+   * and `verify` have always carried these; the tool most likely to precede an
+   * install should not be the one that hides them.
+   *
+   * Emitted even when false/zero — see mcp/compact, which keeps both on purpose,
+   * so an agent never has to read meaning into an absent field.
+   */
+  deprecated: boolean;
+  archived: boolean;
+  advisories: number;
 }
 
 /** Full evidence read for one package (§12.3.2). */

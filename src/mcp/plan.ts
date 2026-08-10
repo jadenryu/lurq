@@ -57,6 +57,12 @@ function packageToCandidate(row: PackageRow): Candidate {
     weeklyDownloads: row.weeklyDownloads,
     lastReleaseAt: row.lastReleaseAt ? row.lastReleaseAt.toISOString() : null,
     repoUrl: row.repoUrl,
+    // A pin is the one slot lurq did not choose, which makes these MORE worth
+    // saying, not less: the user picked it, so nobody else is going to notice
+    // that it has been deprecated since they did.
+    deprecated: row.deprecated,
+    archived: row.archived,
+    advisories: row.advisories?.length ?? 0,
   };
 }
 

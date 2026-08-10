@@ -42,7 +42,7 @@ const COMPOSITE_WEIGHT = 0.4;
 /** RRF damping constant — standard value from the original RRF paper (§3). */
 const RRF_K = 60;
 
-interface Row {
+export interface Row {
   name: string;
   category: Category | null;
   healthScore: number | null;
@@ -52,6 +52,9 @@ interface Row {
   weeklyDownloads: number | null;
   lastReleaseAt: Date | null;
   repoUrl: string | null;
+  deprecated: boolean | null;
+  archived: boolean | null;
+  advisories: number | null;
 }
 
 export async function recommend(
@@ -152,6 +155,13 @@ const ROW_COLUMNS = {
   weeklyDownloads: packages.weeklyDownloads,
   lastReleaseAt: packages.lastReleaseAt,
   repoUrl: packages.repoUrl,
+  deprecated: packages.deprecated,
+  archived: packages.archived,
+  // The count, not the array: an agent shortlisting five packages needs to know
+  // that one carries advisories, and `evaluate` is where it reads which. Pulling
+  // the jsonb payload for every candidate would cost tokens on every call for
+  // detail the next call already serves.
+  advisories: sql<number>`coalesce(jsonb_array_length(${packages.advisories}), 0)`,
 } as const;
 
 /** Shared filter conditions (category + constraints) for both retrieval legs. */
@@ -221,7 +231,7 @@ async function runLexicalQuery(
     .limit(pool);
 }
 
-function toCandidate(row: Row): Candidate {
+export function toCandidate(row: Row): Candidate {
   return {
     name: row.name,
     category: row.category,
@@ -233,16 +243,34 @@ function toCandidate(row: Row): Candidate {
     weeklyDownloads: row.weeklyDownloads,
     lastReleaseAt: row.lastReleaseAt ? row.lastReleaseAt.toISOString() : null,
     repoUrl: row.repoUrl,
+    deprecated: row.deprecated ?? false,
+    archived: row.archived ?? false,
+    advisories: Number(row.advisories ?? 0),
   };
 }
 
-/** A ≤1-sentence rationale (§12.3.1). */
+/**
+ * A ≤1-sentence rationale (§12.3.1).
+ *
+ * The disqualifying facts lead, and are worded as warnings rather than as
+ * further attributes in the list. A consumer that renders only `why` — the CLI
+ * table, a log line, an agent skimming — must not be able to miss that the
+ * package it is about to install is dead.
+ */
 function buildWhy(row: Row): string {
+  const warnings: string[] = [];
+  if (row.deprecated) warnings.push('DEPRECATED');
+  if (row.archived) warnings.push('repo archived');
+  if (row.advisories) {
+    warnings.push(`${row.advisories} advisor${row.advisories === 1 ? 'y' : 'ies'}`);
+  }
+
   const parts: string[] = [];
   if (row.confidence) parts.push(row.confidence);
   if (row.weeklyDownloads) parts.push(`${formatDownloads(row.weeklyDownloads)} weekly downloads`);
   if (row.healthScore !== null) parts.push(`health ${row.healthScore}`);
-  return parts.join(', ') || 'tracked package';
+  const rationale = parts.join(', ') || 'tracked package';
+  return warnings.length ? `${warnings.join(' + ')} — ${rationale}` : rationale;
 }
 
 function formatDownloads(n: number): string {

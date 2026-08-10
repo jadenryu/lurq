@@ -34,7 +34,7 @@ const cand = (name: string): Candidate => ({
   latestVersion: '1',
   weeklyDownloads: 1,
   lastReleaseAt: null,
-  repoUrl: null,
+  repoUrl: null, deprecated: false, archived: false, advisories: 0
 });
 
 describe('decomposeHeuristic', () => {

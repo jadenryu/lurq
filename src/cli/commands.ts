@@ -94,6 +94,26 @@ export interface RecommendCliOpts {
   json?: boolean;
 }
 
+/**
+ * The disqualifying facts about a candidate, or a dash.
+ *
+ * `—` here means "checked, nothing wrong", which is why the column is always
+ * rendered rather than appearing only when something is flagged: a column that
+ * comes and goes teaches the reader nothing when it is absent.
+ */
+function candidateFlags(c: {
+  deprecated?: boolean;
+  archived?: boolean;
+  advisories?: number;
+}): string {
+  const flags = [
+    c.deprecated && red('deprecated'),
+    c.archived && yellow('archived'),
+    c.advisories ? yellow(`${c.advisories} advisory`) : null,
+  ].filter(Boolean) as string[];
+  return flags.length ? flags.join(' ') : dim('—');
+}
+
 export async function runRecommend(need: string, opts: RecommendCliOpts): Promise<void> {
   if (opts.category && !isCategory(opts.category)) {
     throw new Error(`Unknown category "${opts.category}".`);
@@ -115,7 +135,7 @@ export async function runRecommend(need: string, opts: RecommendCliOpts): Promis
   }
   console.log(
     table(
-      ['Package', 'Health', 'Quality', 'Confidence', 'Weekly', 'Latest', 'Category'],
+      ['Package', 'Health', 'Quality', 'Confidence', 'Weekly', 'Latest', 'Flags'],
       candidates.map((c) => [
         c.name,
         String(c.healthScore),
@@ -123,7 +143,10 @@ export async function runRecommend(need: string, opts: RecommendCliOpts): Promis
         confidenceLabel(c.confidence),
         formatNumber(c.weeklyDownloads),
         c.latestVersion ?? '—',
-        c.category ?? '—',
+        // Category was the least useful column here — the caller either asked
+        // for one or is reading a list that is obviously of a kind. What was
+        // missing is the reason not to install any of these.
+        candidateFlags(c),
       ]),
     ),
   );
