@@ -30,6 +30,7 @@ import {
   agentSpecs,
   installAgent,
   installInstructionsFile,
+  lurqInvocation,
   printInstallReport,
   resolveAgents,
   type AgentSpec,
@@ -287,7 +288,14 @@ async function finish(
       remote.url === DEFAULT_ENDPOINT ? '' : dim('  (your own server)')
     }`,
   );
-  console.log(dim('  `lurq recommend`, `evaluate`, `compare`, `verify`, `usage` now work anywhere.'));
+  // Named with the invocation this machine actually has. This line used to say
+  // `lurq …` unconditionally, which is false for anyone who ran the wizard from
+  // npx and declined (or failed) the global install: setup reports total
+  // success and the very next thing they type does not exist.
+  const { command } = lurqInvocation();
+  console.log(
+    dim(`  \`${command} recommend\`, \`evaluate\`, \`compare\`, \`verify\`, \`usage\` now work anywhere.`),
+  );
 
   if (selected.length === 0) {
     console.log(

@@ -17,10 +17,10 @@
  * `{ serverUrl, headers }`; Gemini CLI uses `{ httpUrl, headers }` (`url` there
  * means SSE); Codex (TOML) uses `url` + an inline `http_headers` table.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { DEFAULT_ENDPOINT, PACKAGE_NAME } from '../core/constants';
 import { logger } from '../core/logger';
 import { packageRoot } from '../core/paths';
@@ -506,6 +506,38 @@ export function resolveAgents(target: string): AgentSpec[] {
 }
 
 /** Print the per-agent registration report + next steps. Shared by both paths. */
+/**
+ * How this user should invoke lurq from a terminal, decided by looking at PATH
+ * rather than by what the wizard believes it did.
+ *
+ * Every route to "no `lurq` command" looks different from the inside — the
+ * global install was declined, or it hit EACCES on a system-managed node, or
+ * npm's prefix is not on PATH, or the user never ran the wizard from npx at
+ * all — and they all land the user in the same place. Asking PATH once answers
+ * all of them, and cannot disagree with reality the way a tracked flag can.
+ *
+ * A PATH scan rather than `spawnSync('lurq', ['--version'])`: the question is
+ * whether the file exists and is executable, and spawning would load the whole
+ * CLI bundle to find out, then hang if what is on PATH happens to be broken.
+ */
+export function lurqInvocation(): { command: string; onPath: boolean } {
+  // On Windows the shim is `lurq.cmd`; the empty string covers the extensionless
+  // shell script npm writes everywhere else.
+  const candidates = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (!dir) continue;
+    for (const ext of candidates) {
+      try {
+        accessSync(join(dir, `lurq${ext}`), constants.X_OK);
+        return { command: 'lurq', onPath: true };
+      } catch {
+        // Not here, or not executable. Keep looking.
+      }
+    }
+  }
+  return { command: `npx ${PACKAGE_NAME}`, onPath: false };
+}
+
 export function printInstallReport(
   results: InstallResult[],
   instructionsPath: string | null,
@@ -541,7 +573,18 @@ export function printInstallReport(
     console.log('  1. Restart the agent so it picks up the new MCP server.');
   }
   console.log('  • Ask it to recommend a library. It should call lurq.');
-  console.log('  • Or use the terminal directly: `lurq recommend "a form library for React"`.');
+  // The invocation that actually works on THIS machine, not the one we wish
+  // they had. Printing `lurq …` to someone who ran the wizard from npx and
+  // declined the global install sends them straight to "command not found".
+  const { command, onPath } = lurqInvocation();
+  console.log(`  • Or use the terminal directly: \`${command} recommend "a form library for React"\`.`);
+  if (!onPath) {
+    // No em dash: b7a6d1b took them out of everything a user reads.
+    console.log(`\n  There is no \`lurq\` command on this machine yet. Everything above`);
+    console.log('  worked and your agents are wired up; only the terminal shortcut is');
+    console.log(`  missing, so use \`npx ${PACKAGE_NAME} <command>\`. To get \`lurq\` itself:`);
+    console.log(`      npm install -g ${PACKAGE_NAME}`);
+  }
 }
 
 export interface InstallSkillOptions {
