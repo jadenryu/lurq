@@ -146,6 +146,6 @@ export const FAQS: Faq[] = [
   },
   {
     q: "Is it free?",
-    a: "Yes, today. The CLI and the hosted server are free, the source is Apache 2.0 licensed, and there is no paid tier to buy. How this eventually pays for itself is not decided; whatever the answer turns out to be, it will not be sellers buying rank.",
+    a: "Yes, today. The CLI and the hosted server are free, the source is MIT licensed, and there is no paid tier to buy. How this eventually pays for itself is not decided; whatever the answer turns out to be, it will not be sellers buying rank.",
   },
 ];
