@@ -39,3 +39,24 @@ describe('dashboard guide covers what the server ships', () => {
     expect(documentedTools()).toEqual(registeredTools());
   });
 });
+
+/**
+ * The same honour system, one file over — and it had failed the same way.
+ *
+ * `templates/skill-instructions.md` is what `lurq setup` installs into an
+ * agent, and it is the difference between a tool existing and a tool being
+ * reached for. resolve_surface and diff_surface were registered, described, and
+ * absent from the guide, so the agent that could have used them never learned
+ * they were there. Enforcing it here means the next tool cannot ship invisible.
+ *
+ * agent-rules.md is deliberately NOT held to this: it is the always-loaded
+ * block inside a file the user also writes in, so it stays a short brief rather
+ * than a full index (see installSkill's InstructionKind).
+ */
+describe('the installed agent skill covers what the server ships', () => {
+  it('mentions every registered tool', () => {
+    const guide = readFileSync(join(ROOT, 'templates/skill-instructions.md'), 'utf8');
+    const missing = registeredTools().filter((tool) => !guide.includes(tool));
+    expect(missing).toEqual([]);
+  });
+});

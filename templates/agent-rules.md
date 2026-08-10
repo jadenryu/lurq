@@ -15,6 +15,11 @@ Use it instead of recalling package facts:
   refuse to install together.
 - `usage <pkg> --known <version-you-remember>` before writing code against an API that may
   have moved. Returns real exported symbols plus the delta from the version you know.
+- `resolve_surface <pkg>` when you need to know whether a symbol exists at runtime, not
+  just in the types. A removed type breaks `tsc`; a removed runtime export breaks the
+  program. UNKNOWN means "not extracted yet", never "absent".
+- `diff_surface <pkg> <from> <to>` to answer "when did this stop working", and before an
+  upgrade. Static comparison of both versions, no install required.
 
 Every response carries a `dataAsOf` timestamp. Scores are deterministic and the weights are
 public. For framework file layout and conventions rather than exported symbols, follow the

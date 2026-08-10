@@ -34,6 +34,16 @@ whatever was popular then; lurq is re-synced daily and its claims are checkable.
   you remember: what was added, removed, renamed, or changed. None of this is in your
   training data, and it is the difference between calling a function that exists and one
   that used to.
+- **Check whether a symbol actually exists at runtime** → `resolve_surface` with the
+  package (and version, if you have one). `usage` reads the shipped `.d.ts`; this reads
+  the shipped JavaScript, and the difference matters: a removed *type* breaks `tsc`, a
+  removed *runtime* export breaks the running program. `UNKNOWN` means the surface has
+  not been extracted yet and queues extraction — it never means the symbol is absent, so
+  do not treat it as a negative answer.
+- **Explain a break, or plan an upgrade** → `diff_surface` with the package and the two
+  versions. Returns what was removed, added, and what changed arity between them, with
+  type-only removals listed separately because those break the build rather than the
+  program. Static comparison of both published versions — no install, no test run.
 - **Build a whole project from a spec** → `plan` with the program description. Returns a
   scored package per component plus a Mermaid roadmap. It recommends building blocks
   slot-by-slot from the index; it does not invent an architecture from a bare prompt.
