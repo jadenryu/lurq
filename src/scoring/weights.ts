@@ -22,6 +22,49 @@ export const COMPOSITE = {
 } as const;
 
 /**
+ * How `recommend` orders a retrieved candidate set (§3, §11).
+ *
+ * Three terms, because there are three different questions and the ranking used
+ * to ask only two: how well does this match the need (relevance), how good is
+ * it (composite), and **is there enough evidence to trust it at all**
+ * (confidence).
+ *
+ * That third term is the one that was missing. `confidence` was computed,
+ * stored, rendered, and offered as a filter — and had no effect whatsoever on
+ * the default order. So on a large index, where hundreds of packages match a
+ * need on text alone, a package with seventeen weekly downloads could take a
+ * slot from Prisma purely by having a keyword-denser description. Measured on
+ * the live index, "an orm for postgres" returned five packages of which none
+ * was an ORM anyone uses.
+ *
+ * Relevance still leads: a proven package that does not answer the question is
+ * not the right answer either, and the weights leave room for a genuinely
+ * promising newcomer to outrank an established package it beats on fit.
+ */
+export const RANKING = {
+  relevance: 0.45,
+  composite: 0.35,
+  confidence: 0.2,
+} as const;
+
+/**
+ * Evidence tier → its contribution to the ranking's confidence term.
+ *
+ * Not linear across the ladder: the meaningful cliff is between "we have
+ * evidence this works at scale" and everything else, so `proven` is worth
+ * roughly double `emerging`. `promising` sits just under `emerging` rather than
+ * at the bottom — it is the adoption-independent tier, and burying it would
+ * undo the reason it exists (§1). `unproven` is not zeroed, so a package that
+ * is the only real match for a need can still surface.
+ */
+export const CONFIDENCE_WEIGHT: Record<string, number> = {
+  proven: 1,
+  emerging: 0.55,
+  promising: 0.45,
+  unproven: 0.1,
+};
+
+/**
  * Quality sub-score component weights (of the *available* components — missing
  * signals are dropped, not zeroed, via weightedAverage). All inputs are
  * adoption-independent: they measure how well-built a package is, not how many
@@ -321,12 +364,44 @@ export const CONFIDENCE = {
   proven: {
     minWeeklyDownloads: 100_000,
     minAgeMonths: 12,
-    maxLastReleaseMonths: 6,
+    /**
+     * Recency ceiling for the top tier.
+     *
+     * Was 6 months, which quietly punished stability. Because the stored label
+     * is frozen at ingest, nothing surfaced it until confidence was re-derived
+     * — at which point `p-limit` (273M weekly downloads, ten years old, last
+     * release 6.2 months ago) dropped out of `proven`, along with
+     * `@testing-library/react` at 6.7 months and 44M/wk. A mature utility that
+     * has not needed a release is the most proven kind of package there is.
+     *
+     * Abandonment is already caught three other ways that do not confuse it
+     * with maturity: `deprecated` and `archived` are hard-checked right here,
+     * and the maintenance component of health decays to zero over 24 months
+     * while carrying 35% of the health weight. Recency was the fourth penalty
+     * on the same fact, and the strictest.
+     */
+    maxLastReleaseMonths: 18,
   },
   emerging: {
     minWeeklyDownloads: 5_000,
     strongGrowth: 0.5,
-    maxLastReleaseMonths: 9,
+    /**
+     * Absolute floor the growth path must also clear.
+     *
+     * Growth alone used to qualify a package for `emerging`, and a percentage
+     * computed on a tiny base is noise: 4 → 17 weekly downloads is +325% and
+     * cleared the bar outright. That is how `@podgres/pg` (17/wk) and
+     * `@bungres/orm` (275/wk) came to wear the same evidence label as a package
+     * with five thousand real installs, and — because `recommend` treats the
+     * label as meaningful — outrank Prisma for "an orm for postgres".
+     *
+     * 1,000/wk is where a 50% swing stops being one CI pipeline changing its
+     * schedule. Below it the growth signal is not measuring adoption.
+     */
+    minDownloadsForGrowth: 1_000,
+    /** Same reasoning as `proven` above: 9 months demoted `@emotion/react`
+     *  (14.7M/wk, last release 9.2 months ago) to `unproven`. */
+    maxLastReleaseMonths: 18,
   },
   /** `promising` (§1): new but intrinsically high-quality, regardless of adoption. */
   promising: {

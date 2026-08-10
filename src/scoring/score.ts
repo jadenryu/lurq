@@ -362,8 +362,12 @@ export function computeConfidence(
 
   const emergingReleaseOk =
     lastReleaseMonths !== null && lastReleaseMonths <= CONFIDENCE.emerging.maxLastReleaseMonths;
+  // Growth qualifies only above an absolute floor. A percentage on a tiny base
+  // is noise, not traction — see CONFIDENCE.emerging.minDownloadsForGrowth.
   const emergingAdoptionOk =
-    dl >= CONFIDENCE.emerging.minWeeklyDownloads || growth >= CONFIDENCE.emerging.strongGrowth;
+    dl >= CONFIDENCE.emerging.minWeeklyDownloads ||
+    (growth >= CONFIDENCE.emerging.strongGrowth &&
+      dl >= CONFIDENCE.emerging.minDownloadsForGrowth);
 
   if (emergingAdoptionOk && emergingReleaseOk && !input.deprecated && !input.archived) {
     return 'emerging';
