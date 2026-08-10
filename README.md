@@ -2,15 +2,14 @@
 
 # lurq
 
-**Execution-verified dependency intelligence for AI coding agents.**
+**The verification layer for AI coding agents to ship unbreakable code.**
 
-A live index of npm scored from public signals, plus a sandbox that settles the
-questions metadata can't — exposed as an MCP server, a CLI, an HTTP API, and an
-installable agent skill.
+A live index of npm scored from public signals and co-installation through a sandbox. Use lurq
+through an MCP server, CLI, HTTP API, or an installable agent skill.
 
 [![npm version](https://img.shields.io/npm/v/lurqrun?color=%230b7285&label=npm)](https://www.npmjs.com/package/lurqrun)
 [![npm downloads](https://img.shields.io/npm/dm/lurqrun?color=%230b7285)](https://www.npmjs.com/package/lurqrun)
-[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![MCP](https://img.shields.io/badge/MCP-compatible-6E56CF)](https://modelcontextprotocol.io)
 
@@ -22,21 +21,13 @@ installable agent skill.
 
 ## Why
 
-Your agent picks the dependencies now, and it picks them from training data frozen
-at its cutoff, ranked by how often a name appeared in text — not by whether the
-package is healthy today. So agents install libraries that are abandoned, carry
-open advisories, or don't exist at all.
+Your agent is terrible at resolving dependency matrices and maintaining old projects, leading to stack version drift. 
 
-lurq is what the agent checks first.
+lurq reads the shipped code instead and caches it so we can diff surfaces across versions. lurq upgrades stacks and reports failures before they can even happen. lurq is what the agent checks first when planning, updating, or deploying any project.
 
-Most of what matters is readable — release cadence, advisories, deprecations,
-types/tests/docs, bundle cost — and lurq ingests all of it daily. The rest isn't
-readable at all. Whether a package installs cleanly, whether it imports without
-throwing, whether two versions can coexist in one tree: those are only knowable by
-running them, so lurq runs them in an isolated sandbox and keeps the result.
-
-lurq recommends and explains packages; your agent writes the code. Responses are
-compact and token-budgeted, built for a context window rather than a screen.
+lurq's information comes from readable and executable sources. These include analyzing advisories, release cadence, deprecations, and sandboxing. Compatibility edges are
+minted continuously and stored in a Postgres database. Responses are
+compact and token-budgeted so lurq works alongside your agent. 
 
 > **Scope:** the JavaScript/TypeScript web stack (npm) only.
 
@@ -51,9 +42,8 @@ with nothing installed first:
 npx lurqrun
 ```
 
-That runs the guided setup. It opens the dashboard so you can sign in and create
-an API key, validates it, detects your installed assistants, and writes a keyed
-remote MCP entry:
+This command runs the guided setup, allowing you to sign in and validate your system with an API key. lurq automatically 
+detects your installed assistants and writes a remote MCP entry.
 
 ```json
 {
@@ -67,11 +57,8 @@ remote MCP entry:
 
 ### The `lurq` command
 
-The package is published as **`lurqrun`** (the bare name `lurq` was taken on
-npm). The command you type is `lurq`, and it exists only once the package is
-installed. Setup offers to do that for you; if you decline, or npm refuses,
-everything above still works and terminal use goes through `npx lurqrun` until
-you install it:
+The package is published as **`lurqrun`**. The command you type is `lurq`, and it exists only once the package is
+installed.
 
 ```bash
 npm install -g lurqrun     # then `lurq` works in any terminal
@@ -92,8 +79,7 @@ self-host against your own database with `--local`.
 <details>
 <summary><b>Uninstall, or start over</b></summary>
 
-**Reinstall** is just setup again. It is safe to re-run and overwrites what it
-wrote last time, so it is also the fix for a half-finished install:
+**Reinstall** is just setup again. It is safe to re-run and overwrites previous runs.
 
 ```bash
 npx lurqrun
@@ -106,8 +92,7 @@ lurq logout                # forget the API key (~/.lurq/config.json)
 npm uninstall -g lurqrun   # remove the `lurq` command
 ```
 
-The third is the MCP entries in your assistants' own config files, which nothing
-removes for you yet. Delete the `lurq` entry by hand from whichever of these you
+The third is the MCP entries in your agents' config files. Delete the `lurq` entry from whichever of these you
 use:
 
 | Assistant | MCP config | Instructions file |
@@ -121,10 +106,9 @@ use:
 | Antigravity | `~/.gemini/config/mcp_config.json` | `~/.gemini/GEMINI.md` |
 | Kiro | `~/.kiro/settings/mcp.json` | `~/.kiro/steering/lurq.md` |
 
-Note that `lurq logout` clears the key stored for the CLI only. A copy of it
+`lurq logout` **only** clears the key stored for the CLI. A copy of it
 lives in each MCP entry above, so revoke the key from
-[the dashboard](https://lurq.run/dashboard/keys) if you want it dead rather than
-just unused.
+[the dashboard](https://lurq.run/dashboard/keys).
 
 </details>
 
@@ -132,8 +116,8 @@ just unused.
 
 ## MCP tools
 
-Once installed, your agent can call these over MCP. Every response is compact and
-carries a `dataAsOf` timestamp.
+lurq can call these tools over MCP. Every response
+carries a `dataAsOf` timestamp so your agents know how fresh the information is. 
 
 | Tool | What it answers |
 |---|---|
@@ -149,8 +133,7 @@ carries a `dataAsOf` timestamp.
 | `diff_surface` | What a version bump adds, removes, renames, or changes arity on |
 | `report_outcome` | What happened after a pick shipped — installed clean, broke the build, resolved the task |
 
-`usage` is the one worth calling out: pass the version your model *thinks* it knows
-and get the precise delta to the version you're actually installing. That fact
+`usage` outputs the delta between your agent's analysis of a package versus lurq's ground truth. That fact
 exists in no changelog and no model's training data.
 
 ---
@@ -184,7 +167,7 @@ lurq edit-weights --set composite.lambda=0.5
 lurq serve-http                            # run it as a rate-limited service of your own
 ```
 
-Every read command takes `--json`.
+Use the '-- json ' flag for every read command.
 
 ---
 
@@ -193,13 +176,8 @@ Every read command takes `--json`.
 lurq also keeps a repository's dependencies current **and rewrites the code an
 upgrade breaks.**
 
-Renovate and Dependabot open a PR that says *"bumped react-router 6→8"* and gate it
-on your test suite. If coverage misses the affected path, the PR merges green and
-breaks in production.
-
-lurq opens a PR that says *"bumped react-router 6→8, and rewrote the 14 call sites
-that used `useHistory`, which no longer exists"* — because it holds the
-symbol-level surface diff and intersects it with what your code references.
+lurq can open PRs addressing the symbol-level API surface diff 
+and resolve with what calls your code references.
 
 **The gate needs no tests at all.**
 
@@ -220,20 +198,19 @@ unverified could not be established            → never counted as safe
 | 4. `create-pull-request` — one branch, one PR | your runner | `GITHUB_TOKEN` |
 | 5. Outcomes post back — names and counts, never source | lurq | — |
 
-Steps 1–2 are the default. The generated workflow starts in `comment` mode: it
-plans, checks, and writes the brief to the run summary, changing nothing. Editing
-is opt-in per repository.
+Steps 1–2 are the default and are also available on the web app through project autopilot. The generated workflow starts in `comment` mode: it
+plans, checks, and writes the brief to the run summary. Editing
+is opt-in per repository. Click the policy tab to set global security parameters. 
 
 ### Trust model
 
 - **lurq's GitHub App is `Contents: read-only` and stays that way.** It cannot
   write to any repository, ever.
 - **Every write uses your own `GITHUB_TOKEN`** — ephemeral, scoped to one repo,
-  limited to what the `permissions:` block in a file *you* committed declares.
+  limited to the `permissions:` block in your committed file.
 - **The agent cannot touch version control.** Its allowlist is
-  `Read,Edit,Write,Bash(<pkg-manager>:*)` — no `git`, no network. The model edits
-  files; the *workflow* commits. A prompt injection in a dependency's changelog
-  cannot push a branch.
+  `Read,Edit,Write,Bash(<pkg-manager>:*)`. Your agent can only edit
+  files. 
 - **Revoking it is `git rm .github/workflows/lurq-upgrade.yml`.**
 
 Architecture and limits: [`docs/lurq-autopilot.md`](docs/lurq-autopilot.md).
@@ -242,28 +219,22 @@ Architecture and limits: [`docs/lurq-autopilot.md`](docs/lurq-autopilot.md).
 
 ## Where the evidence comes from
 
-Two sources, and the distinction is the whole point.
-
 **Readable** — npm, GitHub, deps.dev, and OSV, re-synced daily. Downloads, release
-cadence, maintenance, advisories, deprecations, license, bundle cost. This is what
-scoring runs on.
+cadence, maintenance, advisories, deprecations, license, bundle cost. 
 
 **Executed** — an isolated sandbox (E2B, with a local driver for trusted work) that
-installs a package version, imports it, and records what happened. Co-installing a
-set is how compatibility is established: a successful co-install is positive proof
-two versions coexist, a failure is proof they conflict, and the error is kept as
-evidence. `compat` and `plan` read those edges, which is why lurq can tell you a
-*stack* holds together rather than only that each package looks fine alone.
+installs and imports a package version. Results are recorded in the compatibility matrix.
+Compatibility is established through co-installation. `compat` and `plan` read those edges, which is why lurq can tell you 
+that an entire stack holds together.
 
-Facts of the second kind appear in no changelog and no model's training data, and
-they go stale unless someone keeps re-running the experiment.
+Executable proof allows lurq to look beyond changelogs and training data.
 
 ---
 
 ## How ranking works
 
 Deterministic, and public. **No model sits in the ranking path** — `recommend` is
-hybrid vector + full-text search over precomputed scores, which is why it's fast,
+hybrid vector + full-text search over precomputed scores, which is why lurq is fast,
 cheap, and reproducible.
 
 ```
@@ -272,19 +243,17 @@ quality = types · tests · docs · changelog · dep count · license · provena
 composite = blend at a single tunable λ (default 0.35)
 ```
 
-`quality` is a separate, **adoption-independent** axis, so a well-built new package
-isn't buried by an old popular one.
+`quality` is a separate, **adoption-independent** axis.
 
 Every weight lives in [`src/scoring/weights.ts`](src/scoring/weights.ts) and is
-printable with `lurq weights`. An answer an agent acts on is worth nothing if it
-can't be audited.
+printable with `lurq weights`.
 
 ---
 
 ## Contact
 
-Inquiries, partnerships, or proposals: **jadenryu@gmail.com**
+Inquiries, partnerships, or proposals: **jadenryu@lurq.run**
 
 ## License
 
-[Apache-2.0](LICENSE)
+[MIT](LICENSE)
