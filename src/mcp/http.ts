@@ -76,6 +76,46 @@ function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
 }
 
+/** What body-parser and friends attach to the errors they throw. */
+type RequestError = Error & { status?: number; type?: string };
+
+/**
+ * Turn a thrown request error into the envelope the addressed surface speaks.
+ *
+ * Exported for its own sake: this is the branch that decides whether a caller
+ * gets a readable reason or a shrug, and it is worth a test that does not need
+ * a listening server and a database to run.
+ *
+ * `/mcp` speaks JSON-RPC and everything else speaks `{ error }`. Getting this
+ * wrong is how the default Express handler used to answer a malformed body with
+ * an HTML page: lurq's own client parses the reply as JSON-RPC, found nothing,
+ * and reported a bare "failed with HTTP 400" — no reason, in the one case where
+ * the reason is the entire diagnosis.
+ *
+ * Only body-parser faults (`type` starting `entity.`) get their cause echoed.
+ * Any other throw is an unexpected server fault whose message may name internals,
+ * so it collapses to "Internal error." and goes to the log instead.
+ */
+export function errorEnvelope(
+  err: RequestError,
+  path: string,
+): { status: number; body: unknown; clientFault: boolean } {
+  const clientFault = typeof err.type === 'string' && err.type.startsWith('entity.');
+  const status =
+    typeof err.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 500;
+  const message = clientFault
+    ? err.type === 'entity.too.large'
+      ? 'Request body too large (limit 1mb).'
+      : 'Request body is not valid JSON.'
+    : 'Internal error.';
+  const body =
+    path === '/mcp'
+      ? // -32700 is JSON-RPC's own "parse error"; -32603 is "internal error".
+        rpcError(clientFault ? -32700 : -32603, message)
+      : { error: message };
+  return { status, body, clientFault };
+}
+
 /** Constant-time secret comparison (hash to a fixed length first, so length
  *  never leaks and mismatched lengths don't throw). */
 export function secretEquals(a: string, b: string): boolean {
@@ -900,7 +940,36 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     res.status(405).json(rpcError(-32000, 'Method not allowed.'));
   });
 
-  app.listen(port, () => {
+  // Terminal error handler. Registered last so it catches everything upstream,
+  // including the two `express.json()` rejections that never reach a route:
+  // a malformed body (400) and one over the 1mb limit (413).
+  //
+  // Without it those fell through to Express's default handler, which answers
+  // with an HTML error page. Every other rejection on this server is JSON, so a
+  // client — including lurq's own parseRpcBody — got undefined where it expected
+  // a message and reported a bare "failed with HTTP 400" with no reason. The
+  // one case where the body is the whole diagnosis was the one case it was
+  // unreadable.
+  //
+  // Four parameters, and `_next` must stay: Express identifies an error handler
+  // by arity, and dropping it silently turns this back into normal middleware.
+  app.use((err: RequestError, req: Request, res: Response, _next: NextFunction) => {
+    const { status, body, clientFault } = errorEnvelope(err, req.path);
+    // A client's malformed request is not a server incident; only log the rest.
+    if (!clientFault) {
+      logger.error(`unhandled request error (${req.method} ${req.path}):`, err.message);
+    }
+    if (res.headersSent) return;
+    res.status(status).json(body);
+  });
+
+  const server = app.listen(port, () => {
     logger.info(`lurq HTTP MCP server listening on :${port}/mcp`);
+  });
+  // A port already in use emits 'error' on the server, which is an unhandled
+  // 'error' event — a crash with a stack trace instead of a sentence.
+  server.on('error', (err: Error) => {
+    logger.error(`could not listen on :${port}: ${err.message}`);
+    process.exit(1);
   });
 }
