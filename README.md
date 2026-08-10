@@ -44,16 +44,16 @@ compact and token-budgeted, built for a context window rather than a screen.
 
 ## Quick start
 
-lurq is a **hosted service** — you don't run a database or a sync.
-[Create a free account](https://lurq.run/sign-up) to generate an API key, then run
-the guided installer:
+lurq is a **hosted service** — you don't run a database or a sync. One command,
+with nothing installed first:
 
 ```bash
-npx lurqrun install
+npx lurqrun
 ```
 
-It prompts for your key, validates it, detects your installed assistants, and
-writes a keyed remote MCP entry:
+That runs the guided setup. It opens the dashboard so you can sign in and create
+an API key, validates it, detects your installed assistants, and writes a keyed
+remote MCP entry:
 
 ```json
 {
@@ -65,6 +65,19 @@ writes a keyed remote MCP entry:
 
 **No database credentials ever touch your machine.** Restart your agent afterward.
 
+### The `lurq` command
+
+The package is published as **`lurqrun`** (the bare name `lurq` was taken on
+npm). The command you type is `lurq`, and it exists only once the package is
+installed. Setup offers to do that for you; if you decline, or npm refuses,
+everything above still works and terminal use goes through `npx lurqrun` until
+you install it:
+
+```bash
+npm install -g lurqrun     # then `lurq` works in any terminal
+lurq --version
+```
+
 <details>
 <summary><b>Supported assistants</b></summary>
 
@@ -73,6 +86,45 @@ Antigravity · Kiro
 
 Target one explicitly with `npx lurqrun install-skill --agent <name>`, or
 self-host against your own database with `--local`.
+
+</details>
+
+<details>
+<summary><b>Uninstall, or start over</b></summary>
+
+**Reinstall** is just setup again. It is safe to re-run and overwrites what it
+wrote last time, so it is also the fix for a half-finished install:
+
+```bash
+npx lurqrun
+```
+
+**Uninstall** is three separate things, because setup writes to three places:
+
+```bash
+lurq logout                # forget the API key (~/.lurq/config.json)
+npm uninstall -g lurqrun   # remove the `lurq` command
+```
+
+The third is the MCP entries in your assistants' own config files, which nothing
+removes for you yet. Delete the `lurq` entry by hand from whichever of these you
+use:
+
+| Assistant | MCP config | Instructions file |
+|---|---|---|
+| Claude Code | `~/.claude.json` | `~/.claude/skills/lurq/SKILL.md` |
+| Cursor | `~/.cursor/mcp.json` | |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `~/.codeium/windsurf/memories/global_rules.md` |
+| VS Code / Copilot | `<VS Code user dir>/mcp.json` | |
+| Codex | `~/.codex/config.toml` | `~/.codex/AGENTS.md` |
+| Gemini CLI | `~/.gemini/settings.json` | `~/.gemini/GEMINI.md` |
+| Antigravity | `~/.gemini/config/mcp_config.json` | `~/.gemini/GEMINI.md` |
+| Kiro | `~/.kiro/settings/mcp.json` | `~/.kiro/steering/lurq.md` |
+
+Note that `lurq logout` clears the key stored for the CLI only. A copy of it
+lives in each MCP entry above, so revoke the key from
+[the dashboard](https://lurq.run/dashboard/keys) if you want it dead rather than
+just unused.
 
 </details>
 
