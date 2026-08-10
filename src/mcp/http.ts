@@ -27,7 +27,16 @@ import {
 import { getOutcomesByOwner } from '../db/outcomes';
 import { getContributionsByOwner } from '../db/packages';
 import { listAlerts } from '../db/alerts';
-import { deleteRepo, findPolicyByFullName, getRepo, listRepos, setRepoPolicy, upsertRepos } from '../db/repos';
+import {
+  deleteRepo,
+  deleteReposByInstallation,
+  findPolicyByFullName,
+  getRepo,
+  listRepos,
+  ownerForInstallation,
+  setRepoPolicy,
+  upsertRepos,
+} from '../db/repos';
 import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
 import { parseSelectionPolicy } from '../policy/parse';
 import { getUsageByTool, getUsageSummary } from '../db/usage';
@@ -46,14 +55,20 @@ import {
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import type { RepoPolicy } from '../github/types';
+import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
 import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
-import { scanOwnerRepos, scanRepo } from '../pipeline/repoScan';
+import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
   lurqKey?: ApiKeyRow;
+}
+
+/** Raw request bytes, kept by the JSON parser for webhook signature checks. */
+interface RawBodyRequest extends Request {
+  rawBody?: Buffer;
 }
 
 /** JSON-RPC-shaped error envelope for HTTP-level rejections. */
@@ -114,7 +129,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   const app = express();
   app.set('trust proxy', 1); // Railway terminates TLS at the edge.
   app.use(helmet());
-  app.use(express.json({ limit: '1mb' }));
+  // `verify` keeps the bytes the parser already had in hand. GitHub signs the raw
+  // body, and a re-serialized parse result is not byte-identical, so the webhook
+  // signature is uncheckable without this. Costs a reference, not a copy.
+  app.use(
+    express.json({
+      limit: '1mb',
+      verify: (req, _res, buf) => {
+        (req as RawBodyRequest).rawBody = buf;
+      },
+    }),
+  );
 
   // Unauthenticated, no DB hit — for Railway's healthcheck. Intentionally not
   // rate-limited: it's a static response with no backend cost, and limiting it
@@ -458,6 +483,51 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     return { enabled: raw.enabled, scope: raw.scope, autoMerge: raw.autoMerge };
   }
 
+  /**
+   * Register everything an installation currently covers, then scan in the
+   * background. Returns the number of repos registered.
+   *
+   * Shared by the post-install redirect and the webhook so both agree on what
+   * "connected" means, and so neither takes a repo's shape from a payload — the
+   * inventory is always re-read from the API, which is the only source carrying
+   * `default_branch` (a webhook's repo object does not, and defaulting it to
+   * `main` would silently scan the wrong branch).
+   *
+   * `scanOnly` limits the background scan without limiting the registration: a
+   * webhook that adds one repo to a 200-repo installation should register the
+   * inventory it just read but not re-scan 199 repos nobody touched.
+   */
+  const syncInstallation = async (
+    ownerId: string,
+    installationId: number,
+    scanOnly?: string[],
+  ): Promise<number> => {
+    const found = await listInstallationRepos(installationId);
+    const connected = await upsertRepos(
+      db,
+      found.map((repo) => ({
+        ownerId,
+        installationId,
+        fullName: repo.fullName,
+        defaultBranch: repo.defaultBranch,
+        isPrivate: repo.isPrivate,
+      })),
+    );
+    // Deliberately not awaited: a first scan of a large account is minutes of
+    // GitHub calls, and holding the request open for it would time out at the
+    // edge and look like a failed install. Most-recently-pushed first, because
+    // the scan is sequential and that order is what the user watching the
+    // dashboard experiences as speed (see byRecentPush).
+    void (async () => {
+      const rows = byRecentPush(await listRepos(db, ownerId), found);
+      const only = scanOnly ? new Set(scanOnly) : null;
+      await scanRepos(db, only ? rows.filter((row) => only.has(row.fullName)) : rows);
+    })().catch((err: unknown) => {
+      logger.warn(`repo scan failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    return connected;
+  };
+
   app.post('/repos/connect', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
     const ownerId = ownerFrom(req);
     const installationRaw = (req.body ?? {}).installationId;
@@ -467,28 +537,77 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const found = await listInstallationRepos(installationId);
-      const connected = await upsertRepos(
-        db,
-        found.map((repo) => ({
-          ownerId,
-          installationId,
-          fullName: repo.fullName,
-          defaultBranch: repo.defaultBranch,
-          isPrivate: repo.isPrivate,
-        })),
-      );
-      // Respond as soon as the repos are registered. A first scan of a large
-      // account is minutes of GitHub calls, and holding the connect request open
-      // for it would time out at the edge and look like a failed install.
-      void scanOwnerRepos(db, ownerId).catch((err: unknown) => {
-        logger.warn(`initial repo scan failed: ${err instanceof Error ? err.message : String(err)}`);
-      });
-      res.status(200).json({ connected });
+      res.status(200).json({ connected: await syncInstallation(ownerId, installationId) });
     } catch (err) {
       const status = err instanceof GithubAppError ? err.status : 502;
       logger.error('repo connect failed:', err instanceof Error ? err.message : String(err));
       res.status(status).json({ error: 'Could not read the GitHub installation.' });
+    }
+  });
+
+  /**
+   * GitHub App webhook — the only route here authenticated by GitHub's signature
+   * rather than by the issuer secret or an API key.
+   *
+   * Not behind `requireIssuerSecret` (GitHub cannot present it) and not behind the
+   * per-IP limiter (GitHub's delivery IPs are shared, and 429-ing them drops
+   * events silently). The HMAC over the raw body is the gate, and an unset secret
+   * 404s the route rather than leaving it open.
+   *
+   * Acks before doing the work: GitHub retries on timeout, and a duplicate
+   * delivery would re-run the sync — idempotent, but a wasted scan of the whole
+   * installation each time.
+   */
+  app.post('/github/webhook', requireGithubApp, async (req: Request, res: Response) => {
+    const secret = config.LURQ_GITHUB_WEBHOOK_SECRET;
+    if (!secret) {
+      res.status(404).end();
+      return;
+    }
+    const raw = (req as RawBodyRequest).rawBody;
+    const signature = req.headers['x-hub-signature-256'];
+    if (!raw || !verifyWebhookSignature(secret, raw, typeof signature === 'string' ? signature : undefined)) {
+      res.status(401).json({ error: 'Invalid signature.' });
+      return;
+    }
+
+    const event = req.headers['x-github-event'];
+    const action = parseWebhook(typeof event === 'string' ? event : undefined, req.body);
+    res.status(202).end();
+    if (action.kind === 'ignored') return;
+
+    try {
+      if (action.kind === 'uninstalled') {
+        const forgotten = await deleteReposByInstallation(db, action.installationId);
+        logger.info(`installation ${action.installationId} uninstalled, forgot ${forgotten} repos`);
+        return;
+      }
+
+      // Removals first, and they need no owner lookup — the rows carry it. Doing
+      // them before the owner check also means a user who removes their *last*
+      // repo still gets it deleted, even though that erases the very mapping the
+      // addition path depends on (see ownerForInstallation).
+      if (action.removed.length > 0) {
+        await deleteReposByInstallation(db, action.installationId, action.removed);
+      }
+      if (action.added.length === 0) return;
+
+      const ownerId = await ownerForInstallation(db, action.installationId);
+      if (!ownerId) {
+        // An installation nobody has connected through the dashboard: there is no
+        // lurq user to attribute these repos to, and guessing one would hand
+        // someone else's repos to an account. Dropping it is correct.
+        logger.warn(`webhook for unlinked installation ${action.installationId}, ignored`);
+        return;
+      }
+      await syncInstallation(ownerId, action.installationId, action.added);
+    } catch (err) {
+      // The ack already went out; GitHub will not retry. Logged rather than
+      // thrown, and the next nightly scan reconciles anything missed.
+      logger.error(
+        `webhook handling failed for installation ${action.installationId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
     }
   });
 

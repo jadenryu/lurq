@@ -76,6 +76,10 @@ const EnvSchema = z.object({
   LURQ_GITHUB_APP_ID: z.string().min(1).optional(),
   /** PEM private key. Accepts literal newlines or `\n` escapes (Railway/Vercel). */
   LURQ_GITHUB_APP_PRIVATE_KEY: z.string().min(1).optional(),
+  /** Webhook secret from the same App settings page, so repo changes made on
+   *  GitHub reach us. Unset → `POST /github/webhook` is disabled (404): an
+   *  unverified webhook is an open write endpoint, so no secret means no route. */
+  LURQ_GITHUB_WEBHOOK_SECRET: z.string().min(1).optional(),
 
   // Client-side (install wizard / CLI talking to a remote endpoint).
   LURQ_ENDPOINT: z.string().url().optional(),

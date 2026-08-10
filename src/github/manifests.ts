@@ -17,10 +17,17 @@ export interface InstallationRepo {
   fullName: string;
   defaultBranch: string;
   isPrivate: boolean;
+  /** Last push, ISO-8601, or null when GitHub omits it. Ordering only — never stored. */
+  pushedAt: string | null;
 }
 
 interface ReposResponse {
-  repositories?: { full_name: string; default_branch: string; private: boolean }[];
+  repositories?: {
+    full_name: string;
+    default_branch: string;
+    private: boolean;
+    pushed_at?: string | null;
+  }[];
 }
 
 /** GitHub caps `per_page` at 100 for this endpoint. */
@@ -45,6 +52,7 @@ export async function listInstallationRepos(
         fullName: repo.full_name,
         defaultBranch: repo.default_branch,
         isPrivate: repo.private,
+        pushedAt: repo.pushed_at ?? null,
       });
     }
     if (batch.length < PAGE_SIZE) break;

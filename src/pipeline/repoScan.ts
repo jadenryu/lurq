@@ -12,11 +12,11 @@
  */
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
-import { listAllRepos, listRepos, saveScan, saveScanError } from '../db/repos';
+import { listAllRepos, saveScan, saveScanError } from '../db/repos';
 import type { RepoRow } from '../db/schema';
 import { GithubAppError } from '../github/app';
 import { computeDrift } from '../github/drift';
-import { fetchManifests } from '../github/manifests';
+import { fetchManifests, type InstallationRepo } from '../github/manifests';
 import { fetchResolvedTree } from '../github/sbom';
 
 export interface ScanResult {
@@ -83,7 +83,7 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
 /** Sequential on purpose: GitHub's rate limit is per installation and shared
  *  across these calls, and a scan is a background job with nobody waiting on
  *  latency. Parallelism here buys seconds and costs 403s. */
-async function scanEach(db: Database, rows: RepoRow[]): Promise<ScanResult[]> {
+export async function scanRepos(db: Database, rows: RepoRow[]): Promise<ScanResult[]> {
   const results: ScanResult[] = [];
   for (const repo of rows) {
     results.push(await scanRepo(db, repo));
@@ -91,15 +91,36 @@ async function scanEach(db: Database, rows: RepoRow[]): Promise<ScanResult[]> {
   return results;
 }
 
-/** Scan every repo an owner has connected. */
-export async function scanOwnerRepos(
-  db: Database,
-  ownerId: string,
-): Promise<ScanResult[]> {
-  return scanEach(db, await listRepos(db, ownerId));
+/**
+ * Rows reordered most-recently-pushed first, using the inventory just read from
+ * GitHub (`pushed_at` is not stored — it is only ever an ordering hint).
+ *
+ * This matters because `scanRepos` is sequential: on a 40-repo install the order
+ * decides which row in a dashboard someone is actively watching stops saying
+ * "scanning…" first. Alphabetical made that a coin flip; the repo they pushed to
+ * this morning is the one they connected lurq for. Rows absent from the
+ * inventory keep their incoming order at the end (`Array#sort` is stable).
+ */
+export function byRecentPush(rows: RepoRow[], inventory: InstallationRepo[]): RepoRow[] {
+  const pushedAt = (repo: InstallationRepo): number => {
+    const parsed = Date.parse(repo.pushedAt ?? '');
+    // NaN would make the comparator inconsistent and the sort order arbitrary;
+    // a repo with no timestamp sorts as oldest instead.
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  const rank = new Map(
+    [...inventory]
+      .sort((a, b) => pushedAt(b) - pushedAt(a))
+      .map((repo, index) => [repo.fullName, index] as const),
+  );
+  return [...rows].sort(
+    (a, b) =>
+      (rank.get(a.fullName) ?? Number.MAX_SAFE_INTEGER) -
+      (rank.get(b.fullName) ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 /** Scan every connected repo across all owners — the daily cron entry point. */
 export async function scanAllRepos(db: Database): Promise<ScanResult[]> {
-  return scanEach(db, await listAllRepos(db));
+  return scanRepos(db, await listAllRepos(db));
 }

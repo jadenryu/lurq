@@ -29,6 +29,17 @@ interface Props {
   keyPrefix?: string | null;
   /** A key has authenticated at least once, the installer worked. */
   connected: boolean;
+  /**
+   * GitHub App install link, or null when the deployment has no App configured
+   * (in which case there is no repo step to show at all).
+   *
+   * This row exists because the repo scan used to be invisible from here: the
+   * checklist described only the key → CLI → first-call path, so the one half of
+   * the product that needs no terminal was reachable only by guessing at the nav.
+   */
+  installUrl?: string | null;
+  /** Repos already connected. Zero with an installUrl present means "not done". */
+  repoCount?: number;
 }
 
 function Row({
@@ -71,9 +82,20 @@ function Row({
   );
 }
 
-export function GettingStarted({ hasKey, keyPrefix, connected }: Props) {
+export function GettingStarted({
+  hasKey,
+  keyPrefix,
+  connected,
+  installUrl,
+  repoCount = 0,
+}: Props) {
   const [copied, setCopied] = useState(false);
-  const done = [hasKey, connected, false].filter(Boolean).length;
+  // The repo step is the one optional row: a deployment with no GitHub App has
+  // nothing to connect, and counting a step nobody can complete would park the
+  // checklist at 3/4 forever.
+  const showRepos = Boolean(installUrl);
+  const steps = [hasKey, connected, false, ...(showRepos ? [repoCount > 0] : [])];
+  const done = steps.filter(Boolean).length;
 
   async function copy() {
     await navigator.clipboard.writeText(INSTALL_COMMAND);
@@ -86,7 +108,9 @@ export function GettingStarted({ hasKey, keyPrefix, connected }: Props) {
       <Panel padding="tight">
         <div className="flex items-center justify-between gap-4 border-b border-border pb-3">
           <p className={eyebrow}>setup</p>
-          <p className="font-mono text-xs tabular-nums text-ink-3">{done}/3</p>
+          <p className="font-mono text-xs tabular-nums text-ink-3">
+            {done}/{steps.length}
+          </p>
         </div>
 
         <Row done={hasKey} label="api key">
@@ -119,11 +143,36 @@ export function GettingStarted({ hasKey, keyPrefix, connected }: Props) {
           </div>
         </Row>
 
-        <Row done={false} label="first call" last>
+        <Row done={false} label="first call" last={!showRepos}>
           <span className="font-mono text-xs text-ink-3">
             waiting for your agent
           </span>
         </Row>
+
+        {/* Last, not third: the rows above are one sequence (key → CLI → call)
+            and splitting it would read as a dependency that isn't there. This
+            step needs no terminal and no key — it is a parallel way in. */}
+        {installUrl && (
+          <Row done={repoCount > 0} label="repos" last>
+            {repoCount > 0 ? (
+              <Link
+                href="/dashboard/repos"
+                className="font-mono text-xs text-signal transition-opacity hover:opacity-80"
+              >
+                {repoCount} connected →
+              </Link>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <a href={installUrl} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                  Connect GitHub
+                </a>
+                <span className="font-mono text-xs text-ink-3">
+                  see what your repos are behind on, no install needed
+                </span>
+              </div>
+            )}
+          </Row>
+        )}
       </Panel>
 
       <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">

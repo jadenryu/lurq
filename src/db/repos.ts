@@ -93,6 +93,57 @@ export async function reposDeclaring(db: Database, name: string): Promise<RepoRo
     );
 }
 
+/**
+ * The lurq user an installation belongs to, or null when nothing links them.
+ *
+ * The third deliberately unscoped read, and the one that makes webhooks work:
+ * GitHub tells us an installation id, never a Clerk user, so the existing rows
+ * are the only mapping back to an owner. Unscoped by necessity — the caller has
+ * no user context to scope by, and it returns an owner rather than any repo data.
+ *
+ * ponytail: the mapping lives in `repos`, so removing every repo from an
+ * installation also forgets who owns it, and later webhook additions are ignored
+ * until the user clicks "Add repositories" again. Give installations their own
+ * table if that stops being an acceptable edge.
+ */
+export async function ownerForInstallation(
+  db: Database,
+  installationId: number,
+): Promise<string | null> {
+  const rows = await db
+    .select({ ownerId: repos.ownerId })
+    .from(repos)
+    .where(eq(repos.installationId, installationId))
+    .limit(1);
+  return rows[0]?.ownerId ?? null;
+}
+
+/**
+ * Forget repos reachable through an installation — all of them, or just the
+ * named ones. Returns how many rows went away.
+ *
+ * Routes every deletion through `deleteRepo` rather than issuing one bulk
+ * `delete`: alerts carry no foreign key, and a bulk delete here would strand
+ * them in the owner's feed pointing at rows that no longer exist.
+ */
+export async function deleteReposByInstallation(
+  db: Database,
+  installationId: number,
+  fullNames?: string[],
+): Promise<number> {
+  const only = fullNames ? new Set(fullNames) : null;
+  const rows = await db
+    .select({ id: repos.id, ownerId: repos.ownerId, fullName: repos.fullName })
+    .from(repos)
+    .where(eq(repos.installationId, installationId));
+  let deleted = 0;
+  for (const row of rows) {
+    if (only && !only.has(row.fullName)) continue;
+    if (await deleteRepo(db, row.ownerId, row.id)) deleted++;
+  }
+  return deleted;
+}
+
 export async function getRepo(
   db: Database,
   ownerId: string,

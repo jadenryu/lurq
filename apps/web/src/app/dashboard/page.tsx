@@ -1,15 +1,24 @@
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
 import { buttonVariants } from "@/components/ui/button";
 import { GettingStarted } from "@/components/dashboard/getting-started";
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { loadOverview } from "@/lib/dashboard-data";
+import { loadOverview, loadRepos } from "@/lib/dashboard-data";
+import { installUrl } from "@/lib/github-connect";
 
 const WINDOW_DAYS = 30;
 
 export default async function DashboardOverviewPage() {
-  const { data, demo, failed } = await loadOverview(WINDOW_DAYS);
+  // Repos are read for the setup checklist's fourth step. In parallel, and it
+  // already degrades to an empty list on failure, so a repo-service outage
+  // costs this page a row rather than the whole render.
+  const [{ data, demo, failed }, { userId }, repos] = await Promise.all([
+    loadOverview(WINDOW_DAYS),
+    auth(),
+    loadRepos(),
+  ]);
 
   const activeKeys = data.keys.filter((k) => !k.revokedAt);
   const calls = data.usage.series.reduce((s, p) => s + p.count, 0);
@@ -46,6 +55,8 @@ export default async function DashboardOverviewPage() {
             hasKey={activeKeys.length > 0}
             keyPrefix={activeKeys[0]?.prefix}
             connected={data.keys.some((k) => k.lastUsedAt)}
+            installUrl={repos.data.configured && userId ? installUrl(userId) : null}
+            repoCount={repos.data.repos.length}
           />
         ) : (
           <>

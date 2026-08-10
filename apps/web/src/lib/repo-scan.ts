@@ -10,9 +10,9 @@
  */
 
 /**
- * `/repos/connect` starts `scanOwnerRepos` without awaiting it, so a freshly
- * connected repo has neither a result nor an error for as long as the scan
- * takes. That gap is the pending state.
+ * `syncInstallation` (the connect callback and the GitHub webhook both use it)
+ * starts the scan without awaiting it, so a freshly connected repo has neither a
+ * result nor an error for as long as the scan takes. That gap is the pending state.
  *
  * Note the failure mode this cannot see: a scan that dies inside the
  * fire-and-forget `.catch()` writes neither field, so it stays "pending"
