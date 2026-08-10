@@ -549,6 +549,9 @@ export async function runUsage(
     const reqs = Object.entries(res.engines).map(([k, v]) => `${k} ${v}`).join(', ');
     if (reqs) console.log(dim(`requires: ${reqs}`));
   }
+  // A version npm never published is an error in the request, not a gap in our
+  // index, so it gets the red treatment rather than the dim "no data" one.
+  if (res.unpublishedVersion) return console.log(red(res.note ?? 'that version does not exist'));
   if (!res.available) return console.log(dim(res.note ?? 'no API surface available'));
 
   console.log(
@@ -572,6 +575,8 @@ export async function runUsage(
     if (!removed.length && !added.length && !renamed.length && !changed.length) {
       console.log(dim('  no API changes'));
     }
+  } else if (res.deltaNote) {
+    console.log(yellow(`\n${res.deltaNote}`));
   }
 }
 

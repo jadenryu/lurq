@@ -250,6 +250,15 @@ export interface UsageOutput {
   engines: Record<string, string> | null;
   /** Present when a `knownVersion` was supplied and both surfaces resolved. */
   delta?: SurfaceDelta & { fromVersion: string };
+  /** Echo of a requested version the registry has never published. A structured
+   *  flag as well as prose, so an agent can branch on "this release does not
+   *  exist" without parsing `note` — it is a different answer from "we have no
+   *  surface for it yet", and only one of the two means stop. */
+  unpublishedVersion?: string;
+  /** Why a requested `knownVersion` delta is absent. Only set when one was asked
+   *  for and could not be produced — silence about a requested comparison reads
+   *  as "no changes", which is the one thing it never means. */
+  deltaNote?: string;
   note?: string;
 }
 

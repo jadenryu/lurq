@@ -35,6 +35,7 @@ import {
   fetchNpmRegistry,
   fetchWeeklyDownloads,
   npmPackageExists,
+  npmVersionExists,
 } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
@@ -436,17 +437,36 @@ export async function handleVerify(
 
 // ── usage (§4D — API signature drift) ─────────────────────────────────────────
 
-/** Resolve the version to serve: explicit request → tracked latest → npm latest. */
+/**
+ * Resolve the version to serve: explicit request → tracked latest → npm latest.
+ *
+ * An explicitly requested version is checked against the registry before it is
+ * used. It used to be trusted verbatim, so `usage react --target 999.0.0` ran a
+ * surface lookup that could only miss and answered "no extracted API surface for
+ * this version yet; fall back to the README" — which reads as "lurq has no data"
+ * when the truth is "that version does not exist". An agent acting on the first
+ * message writes code against an imaginary release; the whole point of this tool
+ * is that it never does that. `unpublished` is the version-level twin of
+ * `verify`'s not-found-on-registry answer.
+ */
+type ResolvedVersion = { version: string | null; unpublished?: boolean };
+
 async function resolveVersion(
   db: Database,
   name: string,
   requested?: string,
-): Promise<string | null> {
-  if (requested) return requested;
+): Promise<ResolvedVersion> {
+  if (requested) {
+    // null = we could not reach npm to check. Serve the request rather than
+    // accusing the caller of a bad version during our own outage; the surface
+    // lookup below then degrades to its normal "no surface" note.
+    const exists = await npmVersionExists(name, requested);
+    return exists === false ? { version: null, unpublished: true } : { version: requested };
+  }
   const row = await getPackageByName(db, name);
-  if (row?.latestVersion) return row.latestVersion;
+  if (row?.latestVersion) return { version: row.latestVersion };
   const reg = await fetchNpmRegistry(name).catch(() => null);
-  return reg?.latestVersion ?? null;
+  return { version: reg?.latestVersion ?? null };
 }
 
 export interface UsageInput {
@@ -478,7 +498,8 @@ export interface UsageInput {
  * its own, so a two-version cold miss can't double the worst-case latency.
  */
 export async function handleUsage(db: Database, input: UsageInput): Promise<UsageOutput> {
-  const version = await resolveVersion(db, input.package, input.version);
+  const resolved = await resolveVersion(db, input.package, input.version);
+  const version = resolved.version;
   if (!version) {
     return {
       package: input.package,
@@ -486,7 +507,10 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
       surface: null,
       available: false,
       engines: null,
-      note: `Could not resolve a version for "${input.package}" on npm.`,
+      note: resolved.unpublished
+        ? `"${input.package}" has no published version ${input.version}. That release does not exist on the npm registry — check the version before writing code against it.`
+        : `Could not resolve a version for "${input.package}" on npm.`,
+      ...(resolved.unpublished ? { unpublishedVersion: input.version } : {}),
     };
   }
 
@@ -520,6 +544,18 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
       budgetMs: Math.max(0, deadline - Date.now()),
     });
     if (known) out.delta = { ...diffSurface(known, surface), fromVersion: input.knownVersion };
+    // A caller who asked for a delta and gets a response with no `delta` field
+    // has to guess whether the two versions are identical, whether we timed out,
+    // or whether the version they named is fiction. Say which. The existence
+    // check is paid only here, on the path where we are already about to omit
+    // what was asked for, and hits the packument cache the lookup above warmed.
+    else {
+      const knownExists = await npmVersionExists(input.package, input.knownVersion);
+      out.deltaNote =
+        knownExists === false
+          ? `No delta: "${input.package}" has no published version ${input.knownVersion}. That release does not exist on the npm registry.`
+          : `No delta: no API surface extracted for ${input.package}@${input.knownVersion} yet. Retry shortly, or compare against a version that has been indexed.`;
+    }
   }
   return out;
 }

@@ -245,6 +245,39 @@ export async function fetchNpmCompatAtVersion(
   }
 }
 
+/**
+ * Is this exact version published? Tri-state on purpose.
+ *
+ * `false` ("npm has this package and that version is not among its releases")
+ * and `null` ("we could not ask") lead to opposite messages: the first is a
+ * typo'd or hallucinated version the caller must fix, the second is our outage
+ * and must never be reported as the caller's mistake. A boolean would have to
+ * pick one of those to be wrong about.
+ *
+ * Reads the same cached packument URL as the rest of this module, so calling it
+ * before `fetchNpmCompatAtVersion` costs a cache hit, not a second round-trip.
+ */
+export async function npmVersionExists(
+  name: string,
+  version: string,
+  fetchImpl?: typeof fetch,
+): Promise<boolean | null> {
+  const url = `https://${HOST}/${encodeNpmName(name)}`;
+  try {
+    const { data } = await httpGetJson<any>(url, {
+      host: HOST,
+      ttlMs: CACHE_TTL.npmRegistry,
+      fetchImpl,
+    });
+    // A packument with no `versions` map is a shape we don't understand, not a
+    // package with no releases — don't call the version missing on that basis.
+    if (!data?.versions || typeof data.versions !== 'object') return null;
+    return Object.prototype.hasOwnProperty.call(data.versions, version);
+  } catch {
+    return null;
+  }
+}
+
 /** Live existence check for `verify` (§12.3.4) — bypasses cache. */
 export async function npmPackageExists(name: string, fetchImpl?: typeof fetch): Promise<boolean> {
   const url = `https://${HOST}/${encodeNpmName(name)}`;
