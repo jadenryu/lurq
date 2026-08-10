@@ -135,7 +135,7 @@ export async function runRecommend(need: string, opts: RecommendCliOpts): Promis
   }
   console.log(
     table(
-      ['Package', 'Health', 'Quality', 'Confidence', 'Weekly', 'Latest', 'Flags'],
+      ['Package', 'Health', 'Quality', 'Confidence', 'Weekly', 'Latest', 'Category', 'Flags'],
       candidates.map((c) => [
         c.name,
         String(c.healthScore),
@@ -143,9 +143,10 @@ export async function runRecommend(need: string, opts: RecommendCliOpts): Promis
         confidenceLabel(c.confidence),
         formatNumber(c.weeklyDownloads),
         c.latestVersion ?? '—',
-        // Category was the least useful column here — the caller either asked
-        // for one or is reading a list that is obviously of a kind. What was
-        // missing is the reason not to install any of these.
+        c.category ?? '—',
+        // Last, and the only coloured cell: it is the column that can reverse
+        // the decision the other seven are supporting, so it reads as a verdict
+        // at the end of the row rather than as one more attribute among them.
         candidateFlags(c),
       ]),
     ),
