@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-11T08:32:31.763Z",
+  "generatedAt": "2026-08-12T08:50:24.012Z",
   "source": "lurq index: package_versions joined to packages",
   "reproduce": "npx tsx scripts/gen-drift.ts",
   "cutoffs": [
@@ -13,8 +13,8 @@
   "buckets": {
     "2026-05-01": {
       "totals": {
-        "drifted": 1124,
-        "tracked": 13555
+        "drifted": 1166,
+        "tracked": 14239
       },
       "rows": [
         {
@@ -88,21 +88,21 @@
           "weekly_downloads": 252846244
         },
         {
-          "name": "nanoid",
-          "major_then": 5,
-          "version_then": "5.1.11",
-          "major_now": 6,
-          "version_now": "6.0.1",
-          "bumped_at": "2026-07-12",
+          "name": "@babel/code-frame",
+          "major_then": 7,
+          "version_then": "7.29.0",
+          "major_now": 8,
+          "version_now": "8.0.0",
+          "bumped_at": "2026-06-16",
           "majors_since": 1,
-          "weekly_downloads": 234317076
+          "weekly_downloads": 239704327
         }
       ]
     },
     "2026-02-16": {
       "totals": {
-        "drifted": 1515,
-        "tracked": 13049
+        "drifted": 1571,
+        "tracked": 13705
       },
       "rows": [
         {
@@ -189,8 +189,8 @@
     },
     "2026-01-01": {
       "totals": {
-        "drifted": 1659,
-        "tracked": 12774
+        "drifted": 1716,
+        "tracked": 13408
       },
       "rows": [
         {
@@ -277,8 +277,8 @@
     },
     "2025-12-01": {
       "totals": {
-        "drifted": 1717,
-        "tracked": 12587
+        "drifted": 1797,
+        "tracked": 13195
       },
       "rows": [
         {
@@ -365,8 +365,8 @@
     },
     "2025-08-01": {
       "totals": {
-        "drifted": 2076,
-        "tracked": 12101
+        "drifted": 2165,
+        "tracked": 12685
       },
       "rows": [
         {
@@ -453,8 +453,8 @@
     },
     "2025-01-01": {
       "totals": {
-        "drifted": 2578,
-        "tracked": 11522
+        "drifted": 2679,
+        "tracked": 12070
       },
       "rows": [
         {
