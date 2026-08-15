@@ -114,41 +114,32 @@ export function SiteNav() {
               two transitions on separate elements means neither has to know the
               other's property list.
 
-              Same tab stop either way; the label follows the session so a
-              signed-in visitor isn't invited to sign in again. */}
-          <span className="room-nav-signin">
-            <Link
-              href={isSignedIn ? "/dashboard" : "/sign-in"}
-              className={link}
-              style={hover}
-            >
-              {isSignedIn ? NAV_DASHBOARD : NAV_SIGN_IN}
-            </Link>
-          </span>
-          {/* Condensed, this sends you back to the top rather than to the docs.
-              The install command is already on this page: someone who scrolled
-              past it and then reached for "Get started" is asking for the thing
-              they scrolled past, not for a different page. At rest the command
-              is right there, so the link behaves normally.
+              Signed OUT this is "Sign in", the quiet counterpart to the CTA's
+              "Get started". Signed IN it renders nothing: the CTA beside it has
+              become "Dashboard", and two adjacent links to the same page is the
+              kind of thing that reads as a bug even when it works. */}
+          {!isSignedIn && (
+            <span className="room-nav-signin">
+              <Link href="/sign-in" className={link} style={hover}>
+                {NAV_SIGN_IN}
+              </Link>
+            </span>
+          )}
+          {/* The primary action is an ACCOUNT, not a page to read.
+              This used to point at /docs/quickstart and, once condensed, hijack
+              the click to scroll back to the top — so the one button on the page
+              that should convert either sent you to documentation or to nowhere.
+              Docs already have their own nav link two positions to the left.
 
-              Still an <a href> either way: a keyboard or middle-click user, and
-              anyone whose JS hasn't run, gets a real destination. */}
+              A signed-in visitor gets the dashboard instead: offering "Get
+              started" to someone who already started is a dead end, and it is
+              the same destination the label beside it points at. */}
           <Link
-            href="/docs/quickstart"
-            onClick={(e) => {
-              if (!condensed) return;
-              e.preventDefault();
-              window.scrollTo({
-                top: 0,
-                behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                  ? "auto"
-                  : "smooth",
-              });
-            }}
+            href={isSignedIn ? "/dashboard" : "/sign-up"}
             className="inline-flex h-9 shrink-0 items-center rounded-md bg-ink px-4 text-[14px] font-medium text-ground transition-[background-color] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
             style={hover}
           >
-            {NAV_CTA}
+            {isSignedIn ? NAV_DASHBOARD : NAV_CTA}
           </Link>
         </nav>
       </div>
