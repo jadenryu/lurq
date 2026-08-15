@@ -18,6 +18,7 @@
  * about. Callers still receive the flag if they ever need to distinguish.
  */
 import { cache } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import {
   demoAlerts,
@@ -75,9 +76,33 @@ const EMPTY_USAGE: DashboardUsage = { today: 0, series: [], byTool: [] };
  * that's four identical round trips to Clerk for one page render.
  */
 const context = cache(async (): Promise<{ userId: string | null; demo: boolean }> => {
-  const { userId } = await auth();
-  if (!userId) return { userId: null, demo: false };
-  return { userId, demo: await isDemoUser(userId) };
+  // Guarded because this is the ONE call every loader makes before its own
+  // try/catch. `load()` reads the context first and only then enters the block
+  // that degrades a failed read — so an `auth()` throw (a Clerk blip, a request
+  // that reached a route the proxy did not match) skipped every safety net in
+  // this file and took the whole page to the error boundary.
+  //
+  // Failing closed to "signed out" is right: the layout already redirects an
+  // unauthenticated visitor to /sign-in, so the worst case is one redirect
+  // instead of a crash, and the warning keeps the real cause in the logs.
+  try {
+    const { userId } = await auth();
+    if (!userId) return { userId: null, demo: false };
+    return { userId, demo: await isDemoUser(userId) };
+  } catch (err) {
+    // Next signals control flow by THROWING: `DynamicServerError` when a route
+    // touches request data during static generation, plus redirect() and
+    // notFound(). Those are not failures and must reach the framework — a bare
+    // catch here swallowed the dynamic-usage signal and the build started
+    // reporting every dashboard route as un-renderable. `unstable_rethrow`
+    // re-throws exactly that family and returns for everything else.
+    unstable_rethrow(err);
+    console.warn(
+      "[lurq] session lookup failed; treating this request as signed out.",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { userId: null, demo: false };
+  }
 });
 
 /** Run a live read, or hand back the fixture, without ever throwing. */
