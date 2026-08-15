@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { ChartValues, ColumnChart, BarList } from "@/components/dashboard/charts";
 import { Chip, EmptyState, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
+import { Stagger, StaggerItem } from "@/components/dashboard/motion";
 import { HeroFigure, StatTile } from "@/components/dashboard/stat-tile";
 import type { OverviewData } from "@/lib/dashboard-data";
 import { fmtDay, relativeTime } from "@/lib/format";
@@ -35,120 +36,140 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="calls today" value={usage.today} />
-        <StatTile
-          label="active keys"
-          value={activeKeys.length}
-          hint={keys.length > activeKeys.length ? `${keys.length - activeKeys.length} revoked` : undefined}
-        />
-        <StatTile label="packages added" value={contributions.total} hint="first requested by you" />
-        <StatTile
-          label="acceptance"
-          value={acceptance === null ? "-" : `${acceptance}%`}
-          hint={decided > 0 ? `${accepted}/${decided} recommendations` : "no outcomes yet"}
-        />
-      </div>
+      {/* The counters arrive left to right, then the panels below them in two
+          further waves. Each Stagger starts on mount, so the small `delay` on
+          the later groups is what makes the page read top-down rather than all
+          three rows animating at once. */}
+      <Stagger className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StaggerItem>
+          <StatTile label="calls today" value={usage.today} />
+        </StaggerItem>
+        <StaggerItem>
+          <StatTile
+            label="active keys"
+            value={activeKeys.length}
+            hint={keys.length > activeKeys.length ? `${keys.length - activeKeys.length} revoked` : undefined}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatTile label="packages added" value={contributions.total} hint="first requested by you" />
+        </StaggerItem>
+        <StaggerItem>
+          <StatTile
+            label="acceptance"
+            value={acceptance === null ? "-" : `${acceptance}%`}
+            hint={decided > 0 ? `${accepted}/${decided} recommendations` : "no outcomes yet"}
+          />
+        </StaggerItem>
+      </Stagger>
 
       {/* items-start: without it the two cards stretch to equal height and the
           shorter one ends up with a large dead band under its content. */}
-      <div className="grid items-start gap-6 lg:grid-cols-3">
-        <Panel className="lg:col-span-2">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <HeroFigure
-              label="total calls"
-              value={total}
-              hint={`Across the last ${days} days.`}
-            />
-            <SectionLink href="/dashboard/usage">usage detail</SectionLink>
-          </div>
-          <div className="mt-6">
-            <ColumnChart data={usage.series} />
-            <ChartValues
-              columns={["day", "calls"]}
-              rows={usage.series.map((p) => [fmtDay(p.date), p.count])}
-            />
-          </div>
-        </Panel>
-
-        <Panel>
-          <PanelHeader title="by tool" />
-          <div className="mt-5">
-            {usage.byTool.length > 0 ? (
-              <BarList
-                layout="stacked"
-                items={usage.byTool.map((t) => ({ label: t.tool, count: t.count }))}
+      <Stagger className="grid items-start gap-6 lg:grid-cols-3" delay={0.06}>
+        <StaggerItem className="lg:col-span-2">
+          <Panel>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <HeroFigure
+                label="total calls"
+                value={total}
+                hint={`Across the last ${days} days.`}
               />
-            ) : (
-              <EmptyState title="No calls yet">
-                Tool usage appears here once your agent starts querying the index.
-              </EmptyState>
-            )}
-          </div>
-        </Panel>
-      </div>
+              <SectionLink href="/dashboard/usage">usage detail</SectionLink>
+            </div>
+            <div className="mt-6">
+              <ColumnChart data={usage.series} />
+              <ChartValues
+                columns={["day", "calls"]}
+                rows={usage.series.map((p) => [fmtDay(p.date), p.count])}
+              />
+            </div>
+          </Panel>
+        </StaggerItem>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel>
-          <PanelHeader
-            title="recent activity"
-            trailing={<SectionLink href="/dashboard/activity">all</SectionLink>}
-          />
-          <div className="mt-5">
-            {recent.length === 0 ? (
-              <EmptyState title="No activity yet">
-                Outcomes land here once your agent reports whether a recommendation worked.
-              </EmptyState>
-            ) : (
-              <ul className="divide-y divide-border/60">
-                {recent.map((o) => (
-                  <li
-                    key={`${o.packageName}-${o.createdAt}`}
-                    className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                  >
-                    <span className="min-w-0 flex-1 truncate font-mono text-sm">{o.packageName}</span>
-                    <Chip tone={o.accepted ? "good" : "neutral"} dot>
-                      {o.accepted ? "accepted" : "passed"}
-                    </Chip>
-                    <span className="w-16 shrink-0 text-right font-mono text-[0.65rem] tabular-nums text-ink-3">
-                      {relativeTime(o.createdAt)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Panel>
+        <StaggerItem>
+          <Panel>
+            <PanelHeader title="by tool" />
+            <div className="mt-5">
+              {usage.byTool.length > 0 ? (
+                <BarList
+                  layout="stacked"
+                  items={usage.byTool.map((t) => ({ label: t.tool, count: t.count }))}
+                />
+              ) : (
+                <EmptyState title="No calls yet">
+                  Tool usage appears here once your agent starts querying the index.
+                </EmptyState>
+              )}
+            </div>
+          </Panel>
+        </StaggerItem>
+      </Stagger>
 
-        <Panel>
-          <PanelHeader
-            title="your contributions"
-            trailing={<SectionLink href="/dashboard/contributions">all</SectionLink>}
-          />
-          <div className="mt-5">
-            {topPackages.length === 0 ? (
-              <EmptyState title="No contributions yet">
-                Evaluate a package nobody has asked lurq about, and you get the credit here.
-              </EmptyState>
-            ) : (
-              <ul className="divide-y divide-border/60">
-                {topPackages.map((p) => (
-                  <li
-                    key={p.name}
-                    className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                  >
-                    <span className="min-w-0 flex-1 truncate font-mono text-sm">{p.name}</span>
-                    {p.category && <Chip>{p.category}</Chip>}
-                    <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                      {p.healthScore ?? "-"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Panel>
-      </div>
+      <Stagger className="grid gap-6 lg:grid-cols-2" delay={0.12}>
+        <StaggerItem>
+          <Panel>
+            <PanelHeader
+              title="recent activity"
+              trailing={<SectionLink href="/dashboard/activity">all</SectionLink>}
+            />
+            <div className="mt-5">
+              {recent.length === 0 ? (
+                <EmptyState title="No activity yet">
+                  Outcomes land here once your agent reports whether a recommendation worked.
+                </EmptyState>
+              ) : (
+                <ul className="divide-y divide-border/60">
+                  {recent.map((o) => (
+                    <li
+                      key={`${o.packageName}-${o.createdAt}`}
+                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                    >
+                      <span className="min-w-0 flex-1 truncate font-mono text-sm">{o.packageName}</span>
+                      <Chip tone={o.accepted ? "good" : "neutral"} dot>
+                        {o.accepted ? "accepted" : "passed"}
+                      </Chip>
+                      <span className="w-16 shrink-0 text-right font-mono text-[0.65rem] tabular-nums text-ink-3">
+                        {relativeTime(o.createdAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Panel>
+        </StaggerItem>
+
+        <StaggerItem>
+          <Panel>
+            <PanelHeader
+              title="your contributions"
+              trailing={<SectionLink href="/dashboard/contributions">all</SectionLink>}
+            />
+            <div className="mt-5">
+              {topPackages.length === 0 ? (
+                <EmptyState title="No contributions yet">
+                  Evaluate a package nobody has asked lurq about, and you get the credit here.
+                </EmptyState>
+              ) : (
+                <ul className="divide-y divide-border/60">
+                  {topPackages.map((p) => (
+                    <li
+                      key={p.name}
+                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                    >
+                      <span className="min-w-0 flex-1 truncate font-mono text-sm">{p.name}</span>
+                      {p.category && <Chip>{p.category}</Chip>}
+                      <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {p.healthScore ?? "-"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Panel>
+        </StaggerItem>
+      </Stagger>
 
       <p className={eyebrow}>
         scores are computed from public signals · never editorial

@@ -4,7 +4,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { geist, commitMono, robotoMono } from "@/lib/fonts";
+import { geist, commitMono, robotoMono, inter } from "@/lib/fonts";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 // After globals.css on purpose: the dark-room palette re-declares --ink,
@@ -64,7 +64,7 @@ export default function RootLayout({
     >
       <html
         lang="en"
-        className={`${geist.variable} ${commitMono.variable} ${robotoMono.variable} dark h-full antialiased`}
+        className={`${geist.variable} ${commitMono.variable} ${robotoMono.variable} ${inter.variable} dark h-full antialiased`}
         suppressHydrationWarning
       >
         <body className="flex min-h-full flex-col bg-background text-foreground">

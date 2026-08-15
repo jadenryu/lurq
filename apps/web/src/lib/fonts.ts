@@ -1,5 +1,16 @@
 import localFont from "next/font/local";
-import { Roboto_Mono } from "next/font/google";
+import { Roboto_Mono, Inter } from "next/font/google";
+
+// Inter: the dashboard's body/UI face, paired with Geist for headings.
+// Scoped to /dashboard in globals.css (`.dashboard-type`) — the marketing route
+// keeps its own pairing, which is a deliberate design and not ours to retune.
+// next/font downloads at build time and self-hosts the result, so this adds no
+// runtime request and no CDN dependency (same mechanism as Roboto_Mono above).
+export const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 // Roboto Mono (Google): monospaced accents such as the version string.
 export const robotoMono = Roboto_Mono({

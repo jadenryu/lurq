@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { AccountMenu } from "@/components/dashboard/account-menu";
 import { Logo } from "@/components/common/logo";
 import { DOCS_URL } from "@/lib/site-links";
@@ -42,6 +43,7 @@ function isActive(pathname: string, href: string): boolean {
  * current route comes from an accent rule plus a lifted surface instead.
  */
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const reduce = useReducedMotion();
   const className = cn(
     "relative flex items-center rounded-[var(--radius-control)] py-2 pl-4 pr-3 font-mono text-sm lowercase tracking-wide transition-colors",
     active
@@ -50,10 +52,25 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
   const inner = (
     <>
+      {/* One indicator for the whole rail, not one per row. `layoutId` makes
+          framer treat the rule on the outgoing row and the rule on the incoming
+          row as the SAME element, so it travels between them instead of the old
+          one vanishing and a new one appearing. That movement is the thing that
+          tells you where you went — which is why it is the one piece of motion
+          in the sidebar worth having.
+
+          Under reduced motion the indicator still moves (it has to mark the
+          current route) but arrives instantly. */}
       {active && (
-        <span
+        <motion.span
+          layoutId="dashboard-nav-indicator"
           aria-hidden
           className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-signal"
+          transition={
+            reduce
+              ? { duration: 0 }
+              : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
+          }
         />
       )}
       {item.label}
@@ -103,6 +120,7 @@ function NavGroup({
  */
 export function DashboardNav() {
   const pathname = usePathname();
+  const reduce = useReducedMotion();
 
   return (
     <>
@@ -116,26 +134,44 @@ export function DashboardNav() {
             <AccountMenu compact />
           </div>
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-4 pb-3">
-          {WORKSPACE.map((item) => {
-            const active = isActive(pathname, item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "shrink-0 rounded-[var(--radius-control)] border-b-2 px-3 py-1.5 font-mono text-sm lowercase tracking-wide transition-colors",
-                  active
-                    ? "border-signal bg-secondary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* Its own LayoutGroup and its own layoutId. The mobile bar and the
+            desktop sidebar are both in the DOM at all times — one is hidden by a
+            media query, not unmounted — so sharing one id would give framer two
+            live elements claiming to be the same thing. */}
+        <LayoutGroup id="dashboard-nav-mobile">
+          <nav className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain px-4 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {WORKSPACE.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative shrink-0 snap-start rounded-[var(--radius-control)] px-3 py-1.5 font-mono text-sm lowercase tracking-wide transition-colors",
+                    active
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="dashboard-nav-indicator-mobile"
+                      aria-hidden
+                      className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-signal"
+                      transition={
+                        reduce
+                          ? { duration: 0 }
+                          : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
+                      }
+                    />
+                  )}
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </LayoutGroup>
       </div>
 
       {/* Desktop: full-height sticky sidebar. */}
@@ -146,10 +182,12 @@ export function DashboardNav() {
           </Link>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-2">
-          <NavGroup label="workspace" items={WORKSPACE} pathname={pathname} />
-          <NavGroup label="support" items={SUPPORT} pathname={pathname} />
-        </nav>
+        <LayoutGroup id="dashboard-nav-desktop">
+          <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-2">
+            <NavGroup label="workspace" items={WORKSPACE} pathname={pathname} />
+            <NavGroup label="support" items={SUPPORT} pathname={pathname} />
+          </nav>
+        </LayoutGroup>
 
         <div className="border-t border-border p-2">
           <AccountMenu />

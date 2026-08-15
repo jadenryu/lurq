@@ -309,7 +309,9 @@
     @apply font-sans;
     color-scheme: dark;
   }
-  /* All headings use Geist (--font-heading); body uses Pliant (--font-sans). */
+  /* Site-wide: headings take --font-heading (Commit Mono), body --font-sans
+     (Geist). The old comment here claimed Geist headings and a "Pliant" body,
+     neither of which matched the tokens above it. */
   h1,
   h2,
   h3,
@@ -318,6 +320,22 @@
   h6 {
     @apply font-heading;
   }
+}
+
+/* ── Dashboard type ──────────────────────────────────────────────────────────
+   The dashboard is an application surface, not the marketing page, and it wants
+   a different pairing: Geist carries the headings, Inter runs the body and the
+   UI text. Commit Mono stays for anything that is a figure in a column, a key
+   prefix, or a command — those want the monospace.
+
+   Scoped to a class on the dashboard shell rather than changed globally,
+   because the marketing route's type is a deliberate design and retuning it was
+   explicitly out of scope. Everything below inherits through the two tokens, so
+   no component needs to know which surface it is on. */
+.dashboard-type {
+  --font-heading: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
 }
 
 
