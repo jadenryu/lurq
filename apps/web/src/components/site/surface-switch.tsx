@@ -143,12 +143,23 @@ export function SurfaceSwitch() {
     if (!el) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
+        // Also treat "already scrolled past" as reached — see the long note in
+        // capability-grid.tsx. Scrolling by before hydration otherwise leaves
+        // this panel permanently dead.
+        const reached = entries.some(
+          (e) => e.isIntersecting || e.boundingClientRect.top < 0,
+        );
+        if (reached) {
           setLive(true);
           io.disconnect();
         }
       },
-      { threshold: 0.35 },
+      // Was `threshold: 0.35`, i.e. "35% of this panel on screen at once" — a
+      // condition a phone viewport cannot satisfy for a panel taller than ~3x
+      // the screen, so the callback never fired and the panel never went live.
+      // Same defect as the tool grid; see the note there. Reveal-on-scroll wants
+      // "any part of it is visible", which is threshold 0.
+      { threshold: 0, rootMargin: "0px 0px -10% 0px" },
     );
     io.observe(el);
     return () => io.disconnect();

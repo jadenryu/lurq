@@ -86,14 +86,43 @@ export function CapabilityGrid() {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    // Never gate on a visible RATIO. The cards are `opacity: 0` with their
+    // animation paused until `data-playing` lands, so this observer is the only
+    // thing that can make the section legible — and a ratio threshold is a
+    // condition the layout can make unsatisfiable. `threshold: 0.12` asks for
+    // 12% of the section on screen at once; the grid is five stacked cards on a
+    // phone, and once a section is taller than ~8x the viewport the maximum
+    // achievable ratio drops below the threshold and the callback NEVER fires.
+    // The section then stays black forever. That is the mobile bug, and it is
+    // invisible on a desktop viewport because the same section fits the screen.
+    //
+    // `threshold: 0` fires on any intersection at all, which is what "reveal
+    // when it comes into view" actually means. The negative bottom margin keeps
+    // the original intent — start slightly before the top edge — without ever
+    // becoming unreachable.
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
+        // `isIntersecting` alone is not enough. IntersectionObserver reports the
+        // current state once on observe() and then only on change — so if the
+        // visitor has ALREADY scrolled past this section by the time React
+        // hydrates and this effect runs, the first callback says "not
+        // intersecting" (the element is above the viewport) and no further
+        // callback ever comes. The section stays black for the rest of the
+        // session, and only for people who scrolled quickly, which is what made
+        // this look intermittent.
+        //
+        // `boundingClientRect.top < 0` is "we are past it", which for a
+        // reveal-on-scroll means the same thing as "it has been seen".
+        const reached = entries.some(
+          (e) => e.isIntersecting || e.boundingClientRect.top < 0,
+        );
+        if (reached) {
           setPlaying(true);
           io.disconnect();
         }
       },
-      { threshold: 0.12 },
+      { threshold: 0, rootMargin: "0px 0px -10% 0px" },
     );
     io.observe(el);
     return () => io.disconnect();

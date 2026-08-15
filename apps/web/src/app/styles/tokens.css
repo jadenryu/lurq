@@ -2104,10 +2104,24 @@ li:hover > .room-ide-label {
   }
 }
 
+/* The resting state is VISIBLE. The animation only borrows the hidden state for
+   the length of its own delay.
+ *
+ * This used to set `opacity: 0` on the element and rely on `both` fill to bring
+ * it back. That makes the animation load-bearing for legibility: anything that
+ * stops it from completing — and on mobile Safari that includes a backgrounded
+ * tab, a bfcache restore, and an interrupted load — leaves the element pinned at
+ * zero with no way back. The nav and the hero are the two things carrying this
+ * attribute, both sit on --ground, so the failure mode is the entire first
+ * screen rendering black. Which is the reported bug.
+ *
+ * `backwards` applies the `from` state during the delay and nothing after the
+ * animation ends, so the element falls back to its own style. Same motion, same
+ * timing, but now the worst case is "it appeared without animating" rather than
+ * "it never appeared". Nothing here should be able to hide content permanently. */
 [data-reveal] {
-  opacity: 0;
   animation: room-reveal var(--dur-reveal) var(--ease-reveal)
-    calc(var(--reveal-at, 0ms) * var(--reveal-scale)) both;
+    calc(var(--reveal-at, 0ms) * var(--reveal-scale)) backwards;
 }
 
 [data-reveal="opacity"] {
