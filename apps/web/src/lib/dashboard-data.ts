@@ -22,6 +22,7 @@ import { unstable_rethrow } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import {
   demoAlerts,
+  demoConformance,
   demoContributions,
   demoKeys,
   demoImpact,
@@ -56,6 +57,9 @@ import {
   fetchSelectionPolicy,
   EMPTY_SELECTION_POLICY,
   type SelectionPolicy,
+  fetchConformance,
+  EMPTY_CONFORMANCE,
+  type ConformanceReport,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -133,6 +137,18 @@ export function loadKeys(): Promise<Loaded<DashboardKey[]>> {
 
 export function loadUsage(days = 30): Promise<Loaded<DashboardUsage>> {
   return load((userId) => fetchUsage(userId, days), () => demoUsage(days), EMPTY_USAGE);
+}
+
+/**
+ * How the repos you already have measure up against the policy.
+ *
+ * Empty on failure like everything else here, and the `enforcing` flag is what
+ * keeps that honest: an unreachable service and a repo with nothing wrong both
+ * produce an empty list, and only the flag distinguishes "no rules set" from
+ * "nothing found".
+ */
+export function loadConformance(): Promise<Loaded<ConformanceReport>> {
+  return load(fetchConformance, demoConformance, EMPTY_CONFORMANCE);
 }
 
 export function loadOutcomes(): Promise<Loaded<DashboardOutcome[]>> {

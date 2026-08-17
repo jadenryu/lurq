@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { InlineError, Panel, eyebrow } from "@/components/dashboard/panel";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { ConformancePanel } from "@/components/dashboard/conformance-panel";
 import { SelectionPolicyPanel } from "@/components/dashboard/selection-policy";
-import { loadSelectionPolicy } from "@/lib/dashboard-data";
+import { loadConformance, loadSelectionPolicy } from "@/lib/dashboard-data";
 
 export const metadata: Metadata = {
   title: "selection policy",
@@ -18,7 +19,10 @@ export const metadata: Metadata = {
  * repository to hang the setting off yet.
  */
 export default async function PolicyPage() {
-  const { data: policy, demo, failed } = await loadSelectionPolicy();
+  const [{ data: policy, demo, failed }, { data: conformance }] = await Promise.all([
+    loadSelectionPolicy(),
+    loadConformance(),
+  ]);
 
   return (
     <div>
@@ -39,6 +43,12 @@ export default async function PolicyPage() {
 
         <SelectionPolicyPanel policy={policy} demo={demo} failed={failed} />
 
+        {/* Directly under the editor, because the two are one loop: you write a
+            rule, and the answer to "who does this affect" is the next thing
+            anyone wants. Splitting them across pages is what makes a policy feel
+            like a setting nobody can see the effect of. */}
+        <ConformancePanel report={conformance} />
+
         <Panel padding="tight">
           <p className={eyebrow}>where these rules apply</p>
           <div className="mt-3 space-y-2.5 text-sm leading-relaxed text-ink-2">
@@ -56,8 +66,9 @@ export default async function PolicyPage() {
             </p>
             <p className="text-ink-3">
               Rules are enforced for every agent authenticating with your API key. They do not
-              rewrite a manifest or touch code that already depends on a blocked package,
-              that is autopilot&apos;s job, set per repository.
+              rewrite a manifest or touch code that already depends on a blocked package, that
+              is autopilot&apos;s job, set per repository. What the rules do report on is the
+              code you already have, above.
             </p>
           </div>
         </Panel>

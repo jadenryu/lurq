@@ -40,6 +40,7 @@ import {
 } from '../db/repos';
 import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
 import { parseSelectionPolicy } from '../policy/parse';
+import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
@@ -852,6 +853,23 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('selection policy write failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not save policy.' });
+    }
+  });
+
+  // The same policy, run backwards over the repos that already exist. Not gated
+  // on the GitHub App: an owner with no connected repos gets an empty list, which
+  // the dashboard renders as "connect a repo", not as a failure.
+  app.get('/selection-policy/conformance', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      res.status(200).json(await repoConformance(db, ownerId));
+    } catch (err) {
+      logger.error('conformance read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read conformance.' });
     }
   });
 

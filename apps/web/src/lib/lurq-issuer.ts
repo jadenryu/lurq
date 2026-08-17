@@ -457,6 +457,34 @@ export async function fetchSelectionPolicy(ownerId: string): Promise<SelectionPo
   return data.policy;
 }
 
+/** One connected repo, ruled against the policy. Mirrors src/policy/conformance. */
+export interface RepoConformance {
+  repoId: number;
+  fullName: string;
+  checked: number;
+  unchecked: number;
+  unscored: number;
+  total: number;
+  violations: { name: string; rule: string; reason: string }[];
+}
+
+export interface ConformanceReport {
+  /** False = no rule was in force, so nothing was evaluated. An empty repo list
+   *  under `false` means "no policy set", never "everything passed". */
+  enforcing: boolean;
+  repos: RepoConformance[];
+}
+
+export const EMPTY_CONFORMANCE: ConformanceReport = { enforcing: false, repos: [] };
+
+export async function fetchConformance(ownerId: string): Promise<ConformanceReport> {
+  const res = await issuerFetch(
+    `/selection-policy/conformance?ownerId=${encodeURIComponent(ownerId)}`,
+  );
+  if (!res.ok) throw new LurqIssuerError("Could not read conformance.", 502);
+  return (await res.json()) as ConformanceReport;
+}
+
 export async function updateSelectionPolicy(
   ownerId: string,
   policy: SelectionPolicy,

@@ -13,6 +13,7 @@
  */
 import { currentUser } from "@clerk/nextjs/server";
 import type {
+  ConformanceReport,
   DashboardContribution,
   DashboardDep,
   DashboardKey,
@@ -282,6 +283,80 @@ export function demoAlerts(): RepoAlert[] {
  * consistent (`majorDrift <= anyDrift <= depsTracked <= depsDeclared`) because
  * a demo whose totals don't add up is the fastest way to lose a room.
  */
+/**
+ * The four demo repos ruled against a policy. Ids and names line up with
+ * `demoRepos`.
+ *
+ * Deliberately not uniform: one repo is clean, one is clean but has dependencies
+ * the index has never seen, and the worst offender trips three different rules.
+ * A fixture where every repo fails the same way would let a rendering bug that
+ * ignores `rule` or `unchecked` look correct.
+ */
+export function demoConformance(): ConformanceReport {
+  return {
+    enforcing: true,
+    repos: [
+      {
+        repoId: 4,
+        fullName: "acme/internal-tools",
+        checked: 174,
+        unchecked: 36,
+        unscored: 12,
+        total: 5,
+        violations: [
+          { name: "request", rule: "deprecated", reason: "Marked deprecated on npm." },
+          { name: "moment", rule: "deprecated", reason: "Marked deprecated on npm." },
+          {
+            name: "node-sass",
+            rule: "deprecated",
+            reason: "Marked deprecated on npm.",
+          },
+          {
+            name: "left-pad",
+            rule: "confidence",
+            reason: "Evidence is unproven; your policy requires emerging or better.",
+          },
+          {
+            name: "cypress-plugin-snapshots",
+            rule: "license",
+            reason: "License GPL-3.0 is not in the allowed set (MIT, Apache-2.0, ISC, BSD-3-Clause).",
+          },
+        ],
+      },
+      {
+        repoId: 1,
+        fullName: "acme/checkout-web",
+        checked: 131,
+        unchecked: 17,
+        unscored: 4,
+        total: 2,
+        violations: [
+          { name: "axios", rule: "denied", reason: "Use the internal http client." },
+          { name: "moment", rule: "deprecated", reason: "Marked deprecated on npm." },
+        ],
+      },
+      {
+        repoId: 2,
+        fullName: "acme/billing-api",
+        checked: 88,
+        unchecked: 8,
+        unscored: 0,
+        total: 0,
+        violations: [],
+      },
+      {
+        repoId: 3,
+        fullName: "acme/design-system",
+        checked: 66,
+        unchecked: 6,
+        unscored: 3,
+        total: 0,
+        violations: [],
+      },
+    ],
+  };
+}
+
 export function demoRepos(): DashboardRepo[] {
   // Last tuple slot is the resolved-tree size; 0 means the repo has GitHub's
   // dependency graph switched off, which must render as "not read", not "clean".
