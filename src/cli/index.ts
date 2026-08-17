@@ -92,6 +92,19 @@ export function buildProgram(): Command {
       );
     });
 
+  // Answers "can lurq do X" without making anyone read `--help` twice. Local
+  // and instant: the catalog ships in the binary, so this works before setup and
+  // offline.
+  program
+    .command('can')
+    .argument('[query...]', 'what you are trying to do, in plain words')
+    .description('find the lurq capability for what you are trying to do')
+    .option('--json', 'output matches as JSON')
+    .action(async (query: string[], opts: { json?: boolean }) => {
+      const { runCan } = await import('./commands');
+      runCan(query.join(' '), opts);
+    });
+
   // ── Asking about packages ─────────────────────────────────────────────────
   // Help lists commands in registration order, so the ones a user actually runs
   // come first and the server/scripting plumbing sits at the bottom.

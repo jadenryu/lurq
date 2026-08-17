@@ -7,6 +7,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { SERVER_NAME, VERSION } from '../core/constants';
 import { CATEGORIES, type Category } from '../core/types';
+import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
@@ -259,6 +260,28 @@ export function buildMcpServer(
       },
     },
     async (args) => json(await run('diff_surface', () => handleDiffSurface(db, args))),
+  );
+
+  // Self-description, and the only tool that reads nothing. An agent holding
+  // eleven lurq tools still has to guess which one answers the situation in
+  // front of it; this turns that guess into a lookup, and returns the exact tool
+  // name to call next rather than prose about it. No db, no key, no usage row —
+  // asking what a tool does is not usage of it.
+  server.registerTool(
+    'capabilities',
+    {
+      title: 'What lurq can do',
+      description:
+        "Look up which lurq tool answers a situation, and what to run next. Call when you're unsure whether lurq covers something (an upgrade, a licence rule, a version's exact exports, publishing a package) instead of guessing or skipping it. Returns matching capabilities with the tool or command to use.",
+      inputSchema: {
+        query: z
+          .string()
+          .max(300)
+          .optional()
+          .describe('What you are trying to do, in plain words. Omit for the full menu.'),
+      },
+    },
+    async (args) => json({ capabilities: searchCapabilities(args.query ?? '', 6) }),
   );
 
   server.registerTool(

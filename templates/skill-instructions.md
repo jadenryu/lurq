@@ -49,6 +49,10 @@ whatever was popular then; lurq is re-synced daily and its claims are checkable.
   slot-by-slot from the index; it does not invent an architecture from a bare prompt.
 - **Visualize a stack you have already chosen** → `diagram` with the package names. A
   labeled starting point by layer — not a validated architecture.
+- **Unsure whether lurq covers the situation** → `capabilities` with what you are trying
+  to do, in plain words. Returns the matching tools and commands rather than prose, so a
+  capability you did not know about becomes a call you can make. Cheaper than guessing,
+  and far cheaper than skipping a check that exists.
 - **After you act on a recommendation** → `report_outcome` (optional) with whether you
   used the package and whether it built. No source code, just the coarse decision and a
   build signal. It is how lurq learns which packages agents actually succeed with.

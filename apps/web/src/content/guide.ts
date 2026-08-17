@@ -134,6 +134,14 @@ export const TOOLS: GuideTool[] = [
     input: "optional stack[]",
   },
   {
+    name: "capabilities",
+    group: "extra",
+    purpose:
+      "Ask lurq what lurq can do. Matches a situation in plain words against the whole catalog — tools, CLI commands and dashboard pages — and answers with the exact thing to run next. The one to call when you're unsure whether lurq covers something, rather than guessing or skipping it.",
+    prompt: "does lurq have anything for publishing a package safely?",
+    input: "optional query (omit for the full menu)",
+  },
+  {
     name: "report_outcome",
     group: "extra",
     purpose:

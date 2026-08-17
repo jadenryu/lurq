@@ -8,6 +8,7 @@ import { loadEnv, requireConfig } from '../core/config';
 import { openInBrowser } from '../core/open';
 import { resolveApiKey } from '../core/userConfig';
 import { isCategory, type Category, type Confidence } from '../core/types';
+import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
 import { getPackageVersions } from '../db/packages';
 import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from '../mcp/handlers';
@@ -280,6 +281,31 @@ export async function runCompare(pkgs: string[], opts: { json?: boolean }): Prom
 // ── weights / edit-weights (§4) ──────────────────────────────────────────────
 
 /** `lurq weights` — show + explain the score model (no DB needed). */
+/**
+ * `lurq can <what you're trying to do>` — the catalog, searched.
+ *
+ * `--help` lists commands; it does not answer "is there something in here for
+ * the thing I'm stuck on", because that question is asked in the user's words
+ * and help is written in ours. This reads the same catalog the MCP
+ * `capabilities` tool and the dashboard palette read, so all three stay in step.
+ */
+export function runCan(query: string, opts: { json?: boolean } = {}): void {
+  const matches = searchCapabilities(query, 5);
+  if (opts.json) {
+    console.log(JSON.stringify(matches, null, 2));
+    return;
+  }
+  if (!query.trim()) console.log(dim('Showing everything lurq does. Add words to narrow it.\n'));
+  for (const m of matches) {
+    console.log(bold(m.title));
+    console.log(`  ${m.answer}`);
+    if (m.cli) console.log(`  ${green('$')} ${m.cli}`);
+    if (m.mcp) console.log(dim(`  agents: call the \`${m.mcp}\` tool`));
+    if (m.page) console.log(dim(`  dashboard: https://lurq.run${m.page}`));
+    console.log('');
+  }
+}
+
 export function runWeights(opts: { json?: boolean } = {}): void {
   const w = loadWeights();
   const active = activeWeightsPath();

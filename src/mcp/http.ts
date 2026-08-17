@@ -16,6 +16,7 @@ import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
+import { CAPABILITIES, searchCapabilities } from '../core/capabilities';
 import {
   createKey,
   findKeyForOwner,
@@ -219,6 +220,16 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     legacyHeaders: false,
     ...(makeStore ? { store: makeStore('rl:ip:') } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
+  });
+
+  // The capability catalog, for the dashboard's search palette. Public and
+  // unauthenticated on purpose: it is a static description of the product —
+  // the same list the docs print — and holds nothing about any account. Behind
+  // the IP limiter only, since it costs no backend work at all.
+  app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const limit = Math.min(Number(req.query.limit) || 6, CAPABILITIES.length);
+    res.json({ capabilities: q ? searchCapabilities(q, limit) : CAPABILITIES });
   });
 
   // Bearer API-key auth: resolve and attach the key, or 401.
