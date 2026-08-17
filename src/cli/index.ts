@@ -250,6 +250,25 @@ export function buildProgram(): Command {
       },
     );
 
+  // The same diff, pointed at the author instead of the consumer: does the
+  // version about to be published match what this release actually did to the
+  // API? Needs no key and no network to us — just the registry tarball.
+  program
+    .command('check-release')
+    .argument('[dir]', 'package directory (default: current)', '.')
+    .description('is the version you are about to publish honest about what changed?')
+    .option('--against <version>', 'compare with this published version (default: latest)')
+    .option('--json', 'output the check as JSON')
+    .option('--exit-code', 'exit 1 when the bump is understated (for CI / prepublish)')
+    .action(
+      async (dir: string, opts: { against?: string; json?: boolean; exitCode?: boolean }) => {
+        const { checkRelease, formatReleaseCheck } = await import('../surface/release');
+        const check = await checkRelease(dir, { against: opts.against });
+        console.log(opts.json ? JSON.stringify(check, null, 2) : formatReleaseCheck(check));
+        if (opts.exitCode && check.verdict !== 'ok') process.exitCode = 1;
+      },
+    );
+
   // ── Scoring model ─────────────────────────────────────────────────────────
   program
     .command('weights')
