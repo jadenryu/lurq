@@ -19,7 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // The capability catalog is the one module both planes share. It is a
+      // dependency-free leaf (no imports at all), so reaching across the
+      // workspace for it costs nothing at build time and saves keeping a second
+      // copy of twenty entries in step with the first. Anything with runtime
+      // imports stays behind the issuer HTTP boundary, as before.
+      "@lurq/core/*": ["../../src/core/*"]
     }
   },
   "include": [

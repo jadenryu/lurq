@@ -1,9 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { AccountMenu } from "@/components/dashboard/account-menu";
+import {
+  CommandPalette,
+  CommandPaletteTrigger,
+} from "@/components/dashboard/command-palette";
 import { Logo } from "@/components/common/logo";
 import { DOCS_URL } from "@/lib/site-links";
 import { cn } from "@/lib/utils";
@@ -121,10 +126,17 @@ function NavGroup({
 export function DashboardNav() {
   const pathname = usePathname();
   const reduce = useReducedMotion();
+  // The nav owns the palette's open state so both trigger buttons drive one
+  // dialog: the mobile bar and the desktop sidebar are both mounted at every
+  // viewport (one is hidden by a media query, not unmounted), so a palette per
+  // trigger would mean two ⌘K listeners racing each other.
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   return (
     <>
-      {/* Mobile: top bar (logo + account) then a scrollable tab row. */}
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+
+      {/* Mobile: top bar (logo + account) then search, then a scrollable tab row. */}
       <div className="border-b border-border md:hidden">
         <div className="flex h-16 items-center justify-between gap-3 px-5">
           <Link href="/" className="transition-opacity hover:opacity-80">
@@ -133,6 +145,9 @@ export function DashboardNav() {
           <div className="w-auto">
             <AccountMenu compact />
           </div>
+        </div>
+        <div className="px-4 pb-3">
+          <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} className="w-full" />
         </div>
         {/* Its own LayoutGroup and its own layoutId. The mobile bar and the
             desktop sidebar are both in the DOM at all times — one is hidden by a
@@ -176,10 +191,17 @@ export function DashboardNav() {
 
       {/* Desktop: full-height sticky sidebar. */}
       <aside className="hidden w-60 shrink-0 border-r border-border md:sticky md:top-0 md:flex md:h-screen md:flex-col">
-        <div className="px-5 py-6">
+        <div className="px-5 pb-4 pt-6">
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
           </Link>
+        </div>
+
+        {/* Above the rail, not inside it: it searches what lurq can *do*, which
+            is mostly not a page, so listing it as an eighth nav row would file it
+            under the one thing it isn't. */}
+        <div className="px-3 pb-4">
+          <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} className="w-full" />
         </div>
 
         <LayoutGroup id="dashboard-nav-desktop">
