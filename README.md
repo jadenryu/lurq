@@ -161,6 +161,13 @@ lurq plan ./project.md                     # a description in, a scored stack ou
 lurq upgrade-plan .                        # what's behind, and what each upgrade removes
 lurq check-upgrade . --plan lurq-plan.json --exit-code
 
+# Shipping your own (the same diff, pointed the other way)
+lurq check-release                         # is the version you're about to publish honest?
+lurq check-api --against origin/main       # does this break the callers of your API?
+
+# Finding your way around
+lurq can "will this upgrade break my code" # which lurq capability answers this?
+
 # Configuration & serving
 lurq weights                               # the exact ranking weights, printed
 lurq edit-weights --set composite.lambda=0.5

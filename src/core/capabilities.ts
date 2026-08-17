@@ -159,6 +159,15 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['publish', 'semver', 'release', 'major', 'prepublish', 'library author'],
   },
   {
+    id: 'check-api',
+    title: 'Check your own API for breaks',
+    question: 'Will this change break the people calling my service?',
+    answer:
+      'Diffs two git revisions of your OpenAPI document: removed operations, newly required parameters and body fields, removed response codes — and whether info.version was bumped enough. Reads git only, nothing leaves the machine.',
+    cli: 'lurq check-api --against origin/main --exit-code',
+    aliases: ['openapi', 'swagger', 'endpoint', 'consumers', 'callers', 'service', 'contract', 'rest'],
+  },
+  {
     id: 'autopilot',
     title: 'Keep a repo current automatically',
     question: 'Can lurq just do the upgrades for me?',

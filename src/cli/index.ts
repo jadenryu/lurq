@@ -282,6 +282,34 @@ export function buildProgram(): Command {
       },
     );
 
+  // The same question as check-upgrade, asked by the other party: not "will this
+  // dependency break me" but "will this change break the people calling me".
+  // Reads two git revisions of an OpenAPI document — nothing leaves the machine.
+  program
+    .command('check-api')
+    .argument('[spec]', 'OpenAPI document (default: the first one found)')
+    .description('does this change break the callers of your own API?')
+    .option('--against <rev>', 'git revision to compare with (default: HEAD)')
+    .option('-C, --dir <dir>', 'repository directory (default: current)', '.')
+    .option('--json', 'output the check as JSON')
+    .option('--exit-code', 'exit 1 on a breaking change (for CI)')
+    .action(
+      async (
+        spec: string | undefined,
+        opts: { against?: string; dir?: string; json?: boolean; exitCode?: boolean },
+      ) => {
+        const { runApiCheck } = await import('../api/check');
+        const { formatApiCheck } = await import('../api/diff');
+        const check = await runApiCheck(opts.dir ?? '.', { spec, against: opts.against });
+        console.log(
+          opts.json
+            ? JSON.stringify(check, null, 2)
+            : formatApiCheck(check, `api check (vs ${check.against})`),
+        );
+        if (opts.exitCode && check.verdict !== 'ok') process.exitCode = 1;
+      },
+    );
+
   // ── Scoring model ─────────────────────────────────────────────────────────
   program
     .command('weights')
