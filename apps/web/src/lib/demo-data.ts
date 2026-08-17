@@ -116,7 +116,15 @@ function usageSeries(days: number): { date: string; count: number }[] {
     const date = dayISO(i);
     const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
     const weekend = dow === 0 || dow === 6;
-    const rampUp = Math.min(1, (days - i) / 6); // quiet first few days
+    // Adoption ramp, scaled to the window: a few quiet days at 30d, a couple of
+    // quiet months on the year map — which is what adoption actually looks like,
+    // and what makes the activity map read as a story rather than a solid block.
+    const rampUp = Math.min(1, (days - i) / Math.max(6, days * 0.25));
+    // Before it caught on, most days had nothing at all.
+    if (rampUp < 0.35 && jitter(i) < 0.45) {
+      out.push({ date, count: 0 });
+      continue;
+    }
     const base = weekend ? 34 : 128;
     const spread = weekend ? 22 : 70;
     let count = Math.round((base + jitter(i) * spread) * rampUp);

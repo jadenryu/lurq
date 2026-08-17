@@ -1,6 +1,7 @@
 import { BarList, ChartValues, ColumnChart, Sparkline } from "@/components/dashboard/charts";
 import { EmptyState, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { HeroFigure, RailStat } from "@/components/dashboard/stat-tile";
+import { TOOLS } from "@/content/guide";
 import { compact, fmtDay } from "@/lib/format";
 import type { DashboardUsage } from "@/lib/lurq-issuer";
 
@@ -65,7 +66,10 @@ export function UsagePanel({ usage, days }: { usage: DashboardUsage; days: numbe
             <p className={eyebrow}>averaged over {usage.series.length} days</p>
           </RailStat>
           <div className="h-px w-full bg-border" />
-          <RailStat label="tools used" value={`${usage.byTool.length} of 9`} />
+          {/* Denominator from the guide's tool list, which a test pins to what
+              the server actually registers. It was hardcoded, and had already
+              gone stale by three tools. */}
+          <RailStat label="tools used" value={`${usage.byTool.length} of ${TOOLS.length}`} />
         </Panel>
       </div>
 
