@@ -109,7 +109,7 @@ components:
 
 describe('diffApiSurfaces', () => {
   it('calls a removed operation breaking', () => {
-    const after = BASE.replace(/  \/v1\/invoices\/\{id\}:[\s\S]*$/, '');
+    const after = BASE.replace(/ {2}\/v1\/invoices\/\{id\}:[\s\S]*$/, '');
     const diff = diffApiSurfaces(spec(BASE), spec(after));
     expect(diff.breaking).toHaveLength(1);
     expect(diff.breaking[0]).toMatchObject({
@@ -158,7 +158,7 @@ describe('diffApiSurfaces', () => {
 });
 
 describe('checkApi', () => {
-  const removed = BASE.replace(/  \/v1\/invoices\/\{id\}:[\s\S]*$/, '');
+  const removed = BASE.replace(/ {2}\/v1\/invoices\/\{id\}:[\s\S]*$/, '');
 
   it('needs a major for a breaking change', () => {
     const patched = removed.replace('version: 1.2.3', 'version: 1.2.4');
