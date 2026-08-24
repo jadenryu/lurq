@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-23T07:59:18.442Z",
+  "generatedAt": "2026-08-24T08:13:16.038Z",
   "source": "lurq index: package_versions joined to packages",
   "reproduce": "npx tsx scripts/gen-drift.ts",
   "cutoffs": [
@@ -13,8 +13,8 @@
   "buckets": {
     "2026-05-01": {
       "totals": {
-        "drifted": 1509,
-        "tracked": 17202
+        "drifted": 1527,
+        "tracked": 17372
       },
       "rows": [
         {
@@ -35,7 +35,7 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 494038686
+          "weekly_downloads": 495157664
         },
         {
           "name": "commander",
@@ -45,7 +45,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 1,
-          "weekly_downloads": 491666195
+          "weekly_downloads": 492785411
         },
         {
           "name": "@types/node",
@@ -85,7 +85,7 @@
           "version_now": "7.0.2",
           "bumped_at": "2026-07-08",
           "majors_since": 1,
-          "weekly_downloads": 269286177
+          "weekly_downloads": 269606477
         },
         {
           "name": "argparse",
@@ -101,8 +101,8 @@
     },
     "2026-02-16": {
       "totals": {
-        "drifted": 2024,
-        "tracked": 16534
+        "drifted": 2046,
+        "tracked": 16674
       },
       "rows": [
         {
@@ -123,7 +123,7 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 494038686
+          "weekly_downloads": 495157664
         },
         {
           "name": "commander",
@@ -133,7 +133,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 1,
-          "weekly_downloads": 491666195
+          "weekly_downloads": 492785411
         },
         {
           "name": "wrap-ansi",
@@ -189,8 +189,8 @@
     },
     "2026-01-01": {
       "totals": {
-        "drifted": 2182,
-        "tracked": 16126
+        "drifted": 2205,
+        "tracked": 16261
       },
       "rows": [
         {
@@ -221,7 +221,7 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 494038686
+          "weekly_downloads": 495157664
         },
         {
           "name": "commander",
@@ -231,7 +231,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 1,
-          "weekly_downloads": 491666195
+          "weekly_downloads": 492785411
         },
         {
           "name": "wrap-ansi",
@@ -277,8 +277,8 @@
     },
     "2025-12-01": {
       "totals": {
-        "drifted": 2267,
-        "tracked": 15845
+        "drifted": 2290,
+        "tracked": 15973
       },
       "rows": [
         {
@@ -309,7 +309,7 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 494038686
+          "weekly_downloads": 495157664
         },
         {
           "name": "commander",
@@ -319,7 +319,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 1,
-          "weekly_downloads": 491666195
+          "weekly_downloads": 492785411
         },
         {
           "name": "wrap-ansi",
@@ -365,8 +365,8 @@
     },
     "2025-08-01": {
       "totals": {
-        "drifted": 2669,
-        "tracked": 15167
+        "drifted": 2693,
+        "tracked": 15281
       },
       "rows": [
         {
@@ -397,7 +397,7 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 494038686
+          "weekly_downloads": 495157664
         },
         {
           "name": "commander",
@@ -407,7 +407,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 1,
-          "weekly_downloads": 491666195
+          "weekly_downloads": 492785411
         },
         {
           "name": "wrap-ansi",
@@ -447,14 +447,14 @@
           "version_now": "13.0.6",
           "bumped_at": "2025-11-19",
           "majors_since": 2,
-          "weekly_downloads": 388853924
+          "weekly_downloads": 389604050
         }
       ]
     },
     "2025-01-01": {
       "totals": {
-        "drifted": 3228,
-        "tracked": 14405
+        "drifted": 3252,
+        "tracked": 14507
       },
       "rows": [
         {
@@ -485,7 +485,7 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 494038686
+          "weekly_downloads": 495157664
         },
         {
           "name": "commander",
@@ -495,7 +495,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 2,
-          "weekly_downloads": 491666195
+          "weekly_downloads": 492785411
         },
         {
           "name": "wrap-ansi",
@@ -535,7 +535,7 @@
           "version_now": "13.0.6",
           "bumped_at": "2025-11-19",
           "majors_since": 2,
-          "weekly_downloads": 388853924
+          "weekly_downloads": 389604050
         }
       ]
     }
