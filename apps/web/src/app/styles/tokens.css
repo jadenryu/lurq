@@ -628,6 +628,10 @@ li:hover > .room-ide-label {
   padding-left: 1.75rem;
 }
 
+/* The track. Flat rather than the gradient it used to be: once a fill runs down
+   it the unfilled part is carrying information — how much of this section is
+   left — and a line that fades to nothing says "the list ends here, roughly",
+   which is the one thing a progress track may not be vague about. */
 .room-surface-rail::before {
   content: "";
   position: absolute;
@@ -635,7 +639,141 @@ li:hover > .room-ide-label {
   top: 1.35rem;
   bottom: 1.75rem;
   width: 1px;
-  background: linear-gradient(to bottom, var(--edge-lit), var(--edge) 55%, transparent);
+  background: var(--edge);
+}
+
+/* The fill. --fill is 0..1 and is written by surface-switch.tsx: every frame
+   while the scroll is driving, once per selection when it is not.
+                                     ^
+   Height rather than a scaleY transform, for two reasons that outweigh keeping
+   it off the layout path. A scaled bar drags its head with it, so the dot below
+   would be squashed to an ellipse at one end of the run and a circle at the
+   other. And this is a 1px-wide absolutely-positioned box: it is out of flow,
+   nothing reflows around it, and the work is a paint on a sliver.
+
+   Inset to match the track exactly — 1.35rem off the top and 1.75rem off the
+   bottom is 3.1rem of the rail's height that the bar must not count. */
+.room-surface-fill {
+  position: absolute;
+  left: 5px;
+  top: 1.35rem;
+  width: 1px;
+  height: calc(var(--fill, 0) * (100% - 3.1rem));
+  background: var(--mark);
+  /* Only when a click is doing the moving. Under the scroll the bar is already
+     following the wheel frame by frame, and easing toward a position that has
+     itself moved on is how a progress bar ends up lagging its own scroll. */
+  transition: height var(--dur) var(--ease-ui);
+}
+
+.room-surface-rail[data-driven] .room-surface-fill {
+  transition: none;
+}
+
+/* The head. Rides the top of the fill, which is what makes the bar read as
+   something travelling rather than a bar growing. Same treatment as the stop it
+   is about to land on, so arriving looks like the two becoming one. */
+.room-surface-fill::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -3.5px;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 999px;
+  background: var(--mark);
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--mark) 20%, transparent),
+    0 0 12px color-mix(in oklab, var(--mark) 55%, transparent);
+}
+
+/* ── The hold ────────────────────────────────────────────────────────────────
+   Same mechanism as .room-session-pin, and deliberately so: two sections on one
+   page that both take the screen should take it the same way. The block sticks,
+   the spacer under it gives the track its length, and surface-switch.tsx reads
+   its progress as a fraction of that distance without ever naming the number —
+   so how long the section holds for is a decision that retunes here alone.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-surface-pin {
+  /* Four steps, so each one is a quarter of this. ~475px per step is about five
+     wheel notches: long enough that a step is read rather than glimpsed, short
+     enough that nobody feels held. Unlike the session's track this one is never
+     cut short — there is no "it has played" moment to cut it at, since the
+     reader is the one deciding how long to look at each command. */
+  --pin-span: 1900px;
+}
+
+.room-surface-run {
+  height: var(--pin-span);
+}
+
+.room-surface-sticky {
+  position: sticky;
+  /* Roughly centred: half the viewport less half the held block, which is the
+     heading plus the rail-and-panel row and comes to ~600px at this width. The
+     floor keeps the heading clear of the nav on short screens. */
+  top: max(96px, calc(50dvh - 300px));
+}
+
+/* No hold. Below 900px the row is already stacking to one column, so pinning it
+   would hold the screen on a block taller than the screen; below 700px of
+   viewport there is no arrangement that both centres and clears the nav. Either
+   way the rail goes back to being four buttons you click, which is what it was
+   before the bar existed and is still a complete way to use the section.
+
+   surface-switch.tsx reads the track's height rather than re-deriving any of
+   this, so a track of zero is the whole signal. */
+@media (max-width: 899.98px), (max-height: 700px) {
+  .room-surface-run {
+    display: none;
+  }
+  .room-surface-sticky {
+    position: static;
+  }
+}
+
+/* Nothing is being driven, so nothing may be held. A screen of scrolling that
+   buys you four panels you could have reached with four clicks is just a page
+   that will not move. */
+@media (prefers-reduced-motion: reduce), (scripting: none) {
+  .room-surface-run {
+    display: none;
+  }
+  .room-surface-sticky {
+    position: static;
+  }
+  .room-surface-fill {
+    transition: none;
+  }
+}
+
+/* The two bits of the panel that change without being remounted into a typing
+   run: the chrome label and the detail under it. Both are keyed by surface in
+   the component, so this plays on every change and needs no state.
+
+   Text only, and short: the terminal beside them is already re-typing its
+   command, and two things easing in at different speeds next to each other
+   reads as the panel being assembled rather than swapped. */
+.room-surface-swap {
+  animation: room-surface-swap 320ms var(--ease-reveal) both;
+}
+
+@keyframes room-surface-swap {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-surface-swap {
+    animation: none;
+  }
 }
 
 .room-surface-tab {
