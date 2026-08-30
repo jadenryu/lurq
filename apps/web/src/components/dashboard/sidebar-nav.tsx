@@ -10,31 +10,59 @@ import {
   CommandPaletteTrigger,
 } from "@/components/dashboard/command-palette";
 import { Logo } from "@/components/common/logo";
-import { DOCS_URL } from "@/lib/site-links";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
   href: string;
   label: string;
-  /** Cross-zone or off-site link: render a plain <a> for a real navigation. */
-  external?: boolean;
 }
 
+/**
+ * Two groups, split by who the row is about.
+ *
+ * The rail used to be one seven-row "workspace" group plus a "support" group,
+ * which put "api keys" (a credential belonging to one person) in the same list
+ * as "policy" (a rule binding every repo in the account). The split now runs on
+ * that line: workspace is the thing being governed, account is the person doing
+ * the governing. It is the division a reader can predict before they read the
+ * rows, which is the only property a nav grouping has to have.
+ *
+ * TWO ROWS ARE RELABELLED, NOT MOVED. `/dashboard/repos` is "autopilot" and
+ * `/dashboard/usage` is "credits". Both keep their URLs, so the GitHub OAuth
+ * callback, the alerts and conformance panels, getting-started, the overview's
+ * "usage detail" link and `capabilities.ts` all keep working untouched. A label
+ * is a word in one file; a route is a contract with six callers and a published
+ * docs page.
+ */
 const WORKSPACE: NavItem[] = [
   { href: "/dashboard", label: "overview" },
-  { href: "/dashboard/repos", label: "repositories" },
+  // The repositories page: connect a repo, scan it, let lurq keep it current.
+  // "autopilot" is what the page has always been for — the per-repo section is
+  // already anchored `#autopilot` — and it names the outcome instead of the
+  // noun.
+  { href: "/dashboard/repos", label: "autopilot" },
   { href: "/dashboard/policy", label: "policy" },
-  { href: "/dashboard/keys", label: "api keys" },
-  { href: "/dashboard/usage", label: "usage" },
-  { href: "/dashboard/activity", label: "activity" },
+  { href: "/dashboard/audit", label: "audit log" },
   { href: "/dashboard/contributions", label: "contributions" },
 ];
 
-const SUPPORT: NavItem[] = [
-  { href: "/dashboard/guide", label: "how to use" },
-  { href: DOCS_URL, label: "docs", external: true },
-  { href: "/#contact", label: "support" },
+const ACCOUNT: NavItem[] = [
+  { href: "/dashboard/profile", label: "profile" },
+  { href: "/dashboard/activity", label: "activity" },
+  // Metered API consumption: the year map, the trend, the per-tool split.
+  // "credits" is what the reader is actually spending.
+  { href: "/dashboard/usage", label: "credits" },
+  { href: "/dashboard/notifications", label: "notifications" },
+  { href: "/dashboard/preferences", label: "preferences" },
+  // Sixth row, and the one place a reader can get back to a key they closed the
+  // tab on. `lurq setup` opens this URL and the docs quickstart links straight
+  // to it, so it has to be findable from inside the product too.
+  { href: "/dashboard/keys", label: "api keys" },
+  { href: "/dashboard/support", label: "support" },
 ];
+
+/** Both rails, in reading order. The mobile tab row is one flat list. */
+const ALL: NavItem[] = [...WORKSPACE, ...ACCOUNT];
 
 /** `/dashboard` is only active on an exact match, every other route is a prefix. */
 function isActive(pathname: string, href: string): boolean {
@@ -81,13 +109,6 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       {item.label}
     </>
   );
-  if (item.external) {
-    return (
-      <a href={item.href} className={className}>
-        {inner}
-      </a>
-    );
-  }
   return (
     <Link href={item.href} aria-current={active ? "page" : undefined} className={className}>
       {inner}
@@ -155,7 +176,10 @@ export function DashboardNav() {
             live elements claiming to be the same thing. */}
         <LayoutGroup id="dashboard-nav-mobile">
           <nav className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain px-4 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {WORKSPACE.map((item) => {
+            {/* Both groups, flat. A mobile tab row has no room for two headings
+                and no need for them: the row is already ordered workspace-then-
+                account, and it scrolls. */}
+            {ALL.map((item) => {
               const active = isActive(pathname, item.href);
               return (
                 <Link
@@ -207,7 +231,7 @@ export function DashboardNav() {
         <LayoutGroup id="dashboard-nav-desktop">
           <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-2">
             <NavGroup label="workspace" items={WORKSPACE} pathname={pathname} />
-            <NavGroup label="support" items={SUPPORT} pathname={pathname} />
+            <NavGroup label="account" items={ACCOUNT} pathname={pathname} />
           </nav>
         </LayoutGroup>
 
