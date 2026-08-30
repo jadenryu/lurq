@@ -24,7 +24,6 @@ const COLUMNS = [
   {
     heading: "Product",
     links: [
-      { label: "Pricing", href: "/#pricing" },
       { label: "Docs", href: DOCS_URL },
       { label: "Dashboard", href: "/dashboard" },
       { label: "npm", href: "https://www.npmjs.com/package/lurqrun", external: true },
@@ -61,10 +60,7 @@ export function SiteFooter() {
       {/* Behind the closing line, not in a corner. The hero's blooms sit under
           its headline, and a glow parked away from the type reads as a
           rendering artefact rather than as the same device. */}
-      <GradientBlob
-        outer="inset-0"
-        inner="left-1/2 top-[-8rem] rotate-[15deg] sm:top-[-12rem]"
-      />
+      <GradientBlob outer="inset-0" inner="left-1/2 top-[-8rem] rotate-[15deg] sm:top-[-12rem]" />
 
       <div className="relative z-10 mx-auto w-full max-w-[1180px] px-4 pb-10 pt-20 min-[768px]:px-6 min-[900px]:pt-24">
         <div className="pb-16 text-center min-[900px]:pb-20">
@@ -87,11 +83,7 @@ export function SiteFooter() {
               reader wondering which one is the real one. Ending on the thing you
               would actually type is a stronger close than a repeat. */}
           <div className="mt-7 flex justify-center">
-            <CopyCommandButton
-              command={INSTALL_COMMAND}
-              label={INSTALL_COMMAND}
-              variant="solid"
-            />
+            <CopyCommandButton command={INSTALL_COMMAND} label={INSTALL_COMMAND} variant="solid" />
           </div>
         </div>
 

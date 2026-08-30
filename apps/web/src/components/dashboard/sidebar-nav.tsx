@@ -5,10 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { AccountMenu } from "@/components/dashboard/account-menu";
-import {
-  CommandPalette,
-  CommandPaletteTrigger,
-} from "@/components/dashboard/command-palette";
+import { CommandPalette, CommandPaletteTrigger } from "@/components/dashboard/command-palette";
 import { Logo } from "@/components/common/logo";
 import { cn } from "@/lib/utils";
 
@@ -54,9 +51,6 @@ const ACCOUNT: NavItem[] = [
   { href: "/dashboard/usage", label: "credits" },
   { href: "/dashboard/notifications", label: "notifications" },
   { href: "/dashboard/preferences", label: "preferences" },
-  // Directly under credits' neighbours on purpose: the row you want after
-  // seeing you are near the month's limit is the one that lifts it.
-  { href: "/dashboard/billing", label: "billing" },
   // Sixth row, and the one place a reader can get back to a key they closed the
   // tab on. `lurq setup` opens this URL and the docs quickstart links straight
   // to it, so it has to be findable from inside the product too.
@@ -103,9 +97,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
           aria-hidden
           className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-signal"
           transition={
-            reduce
-              ? { duration: 0 }
-              : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
+            reduce ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
           }
         />
       )}
