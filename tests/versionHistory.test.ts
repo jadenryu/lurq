@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseVersionTimeline } from '../src/ingestion/sources/npmRegistry';
-import { parseChangeLine, routeChange } from '../src/pipeline/watch';
+import { parseChange, parseChangesPage, routeChange } from '../src/pipeline/watch';
 
 describe('parseVersionTimeline', () => {
   const packument = {
@@ -30,9 +30,9 @@ describe('parseVersionTimeline', () => {
   });
 });
 
-describe('parseChangeLine', () => {
+describe('parseChange', () => {
   it('parses a package change record', () => {
-    expect(parseChangeLine('{"seq":99,"id":"react","changes":[{"rev":"1-x"}]}')).toEqual({
+    expect(parseChange({ seq: 99, id: 'react', changes: [{ rev: '1-x' }] })).toEqual({
       seq: 99,
       id: 'react',
       deleted: false,
@@ -40,14 +40,47 @@ describe('parseChangeLine', () => {
   });
 
   it('flags deletions', () => {
-    expect(parseChangeLine('{"seq":5,"id":"gone","deleted":true}')?.deleted).toBe(true);
+    expect(parseChange({ seq: 5, id: 'gone', deleted: true })?.deleted).toBe(true);
   });
 
-  it('ignores heartbeats and garbage', () => {
-    expect(parseChangeLine('')).toBeNull();
-    expect(parseChangeLine('   ')).toBeNull();
-    expect(parseChangeLine('{"last_seq":42}')).toBeNull(); // no id
-    expect(parseChangeLine('not json')).toBeNull();
+  it('rejects anything without both a seq and a string id', () => {
+    expect(parseChange({ last_seq: 42 })).toBeNull(); // no id
+    expect(parseChange({ seq: 1 })).toBeNull();
+    expect(parseChange({ id: 'x' })).toBeNull(); // no seq
+    expect(parseChange({ seq: 1, id: 42 })).toBeNull(); // id not a string
+    expect(parseChange(null)).toBeNull();
+    expect(parseChange('not an object')).toBeNull();
+  });
+});
+
+describe('parseChangesPage', () => {
+  it('reads results and the resume point off a page', () => {
+    const page = parseChangesPage({
+      results: [
+        { seq: 1, id: 'a', changes: [] },
+        { seq: 2, id: 'b', deleted: true },
+      ],
+      last_seq: 2,
+    });
+    expect(page.changes.map((c) => c.id)).toEqual(['a', 'b']);
+    expect(page.lastSeq).toBe('2');
+  });
+
+  it('drops malformed entries without losing the rest of the page', () => {
+    const page = parseChangesPage({
+      results: [{ seq: 1, id: 'a' }, null, { nope: true }],
+      last_seq: 9,
+    });
+    expect(page.changes).toHaveLength(1);
+    expect(page.lastSeq).toBe('9');
+  });
+
+  it('treats an unreadable body as an empty page, so the caller retries the cursor', () => {
+    // A 200 with a body we cannot parse must not advance the cursor past changes
+    // we never processed — lastSeq null is what keeps it pinned.
+    for (const body of [null, 'nope', {}, { results: 'not-an-array' }]) {
+      expect(parseChangesPage(body)).toEqual({ changes: [], lastSeq: null });
+    }
   });
 });
 
