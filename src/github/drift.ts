@@ -12,7 +12,7 @@
  * src/surface/upgrade.ts: a dependency we did not look at must never be counted
  * as one we found nothing wrong with.
  */
-import { inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import semver from 'semver';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
@@ -31,7 +31,7 @@ import { buildAttribution } from './attribute';
 import { installKey, queryVulnerableInstalls } from '../ingestion/sources/osv';
 import { assembleMembers } from '../compat/members';
 import { resolveArchitectureCompat, type CompatMember } from '../compat/peerCompat';
-import type { CompatConflict } from '../core/types';
+import { DEFAULT_ECOSYSTEM, type CompatConflict, type Ecosystem } from '../core/types';
 import type { DependencyEdge, ResolvedDep } from './sbom';
 
 /** Postgres caps bind parameters; chunk the `IN` lists well under it. */
@@ -80,6 +80,7 @@ export function declaredDeps(manifests: RepoManifest[]): Map<string, DeclaredDep
 async function loadIndexed(
   db: Database,
   names: string[],
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
 ): Promise<Map<string, IndexedPackage>> {
   const out = new Map<string, IndexedPackage>();
   for (let i = 0; i < names.length; i += NAME_CHUNK) {
@@ -91,7 +92,12 @@ async function loadIndexed(
         advisories: packages.advisories,
       })
       .from(packages)
-      .where(inArray(packages.name, names.slice(i, i + NAME_CHUNK)));
+      .where(
+        and(
+          inArray(packages.name, names.slice(i, i + NAME_CHUNK)),
+          eq(packages.ecosystem, ecosystem),
+        ),
+      );
     for (const row of rows) {
       out.set(row.name, {
         latestVersion: row.latestVersion,

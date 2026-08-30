@@ -1,5 +1,6 @@
 /** Read/write helpers for recommendation→outcome capture (`recommendation_outcomes`, §3.1). */
-import { count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { DEFAULT_ECOSYSTEM } from '../core/types';
 import { alias } from 'drizzle-orm/pg-core';
 import { buildLearnedSuccessors, type LearnedSuccessors } from '../core/successors';
 import type { FieldEvidence } from '../scoring/score';
@@ -162,7 +163,7 @@ export async function loadLearnedSuccessors(
   const rows = await db
     .select({ name: packages.name, deprecated: packages.deprecated, archived: packages.archived })
     .from(packages)
-    .where(inArray(packages.name, names));
+    .where(and(inArray(packages.name, names), eq(packages.ecosystem, DEFAULT_ECOSYSTEM)));
   const dead = new Set(rows.filter((r) => r.deprecated || r.archived).map((r) => r.name));
 
   const value = buildLearnedSuccessors(observed, (name) => dead.has(name));

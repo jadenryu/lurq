@@ -45,6 +45,7 @@ import type {
   DependencyRanges,
   DiscoverySource,
   DiscoveryStatus,
+  Ecosystem,
   ExportSymbol,
   PeerMeta,
   ScoreBreakdown,
@@ -62,13 +63,20 @@ import type { ExtractionTier, SymbolKind } from '../surface/types';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
-/** One row per tracked npm package. */
+/**
+ * One row per tracked package.
+ *
+ * Keyed by (ecosystem, name), never by name alone: `requests`, `redis`, `click`
+ * and `attrs` are all real packages on BOTH npm and PyPI, and they are unrelated
+ * software. A global unique on `name` would let whichever registry synced last
+ * overwrite the other's scores, advisories and version timeline.
+ */
 export const packages = pgTable(
   'packages',
   {
     id: serial('id').primaryKey(),
-    name: text('name').notNull().unique(),
-    ecosystem: text('ecosystem').notNull().default('npm'),
+    name: text('name').notNull(),
+    ecosystem: text('ecosystem').$type<Ecosystem>().notNull().default('npm'),
 
     // Classification + descriptive text
     category: text('category').$type<Category>(),
@@ -149,6 +157,7 @@ export const packages = pgTable(
     firstRequestedByOwnerId: text('first_requested_by_owner_id'),
   },
   (table) => [
+    uniqueIndex('packages_ecosystem_name_idx').on(table.ecosystem, table.name),
     index('packages_category_idx').on(table.category),
     index('packages_health_score_idx').on(table.healthScore),
     // pgvector HNSW index for cosine similarity search (§11).

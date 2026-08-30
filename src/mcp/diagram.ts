@@ -19,7 +19,8 @@
  *   keeps the Presentation default, which is the safe direction: `framework` is
  *   a UI-leaning category to begin with.
  */
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
+import { DEFAULT_ECOSYSTEM } from '../core/types';
 import type { Category } from '../core/types';
 import { inferCategory } from '../search/categoryInference';
 import { classifyRuntimeTarget, type RuntimeTarget } from '../core/runtimeTarget';
@@ -155,7 +156,9 @@ export async function handleDiagram(
       runtimeTarget: packages.runtimeTarget,
     })
     .from(packages)
-    .where(inArray(packages.name, input.stack));
+    .where(
+      and(inArray(packages.name, input.stack), eq(packages.ecosystem, DEFAULT_ECOSYSTEM)),
+    );
   const known = new Map(rows.map((r) => [r.name, r]));
   // inferCategory is best-effort on a bare package name (it was built for NL
   // needs); a miss yields null, not a faked category. No silent 'other'.

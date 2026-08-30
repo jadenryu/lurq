@@ -6,9 +6,10 @@
  * there is deliberately no unscoped read. A policy leak is worse than a repo
  * leak — it discloses what a company has decided to ban and why.
  */
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { Database } from './client';
 import { packages, selectionPolicies } from './schema';
+import { DEFAULT_ECOSYSTEM, type Ecosystem } from '../core/types';
 import { DEFAULT_SELECTION_POLICY, type SelectionPolicy, type PolicyFacts } from '../policy/types';
 
 /**
@@ -64,6 +65,7 @@ export async function setSelectionPolicy(
 export async function loadPolicyFacts(
   db: Database,
   names: string[],
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
 ): Promise<Map<string, PolicyFacts>> {
   const out = new Map<string, PolicyFacts>();
   if (names.length === 0) return out;
@@ -74,7 +76,7 @@ export async function loadPolicyFacts(
       deprecated: packages.deprecated,
     })
     .from(packages)
-    .where(inArray(packages.name, names));
+    .where(and(inArray(packages.name, names), eq(packages.ecosystem, ecosystem)));
   for (const row of rows) {
     out.set(row.name, { license: row.license, deprecated: row.deprecated });
   }

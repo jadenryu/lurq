@@ -1,6 +1,11 @@
 /** Read/write helpers for the compatibility matrix (`compat_edges`). */
 import { and, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm';
-import type { DependencyRanges, PeerMeta } from '../core/types';
+import {
+  DEFAULT_ECOSYSTEM,
+  type DependencyRanges,
+  type Ecosystem,
+  type PeerMeta,
+} from '../core/types';
 import type { Database } from './client';
 import {
   compatEdges,
@@ -25,6 +30,7 @@ export interface CompatMetadataRow {
 export async function getCompatMetadata(
   db: Database,
   names: string[],
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
 ): Promise<CompatMetadataRow[]> {
   if (names.length === 0) return [];
   return db
@@ -36,7 +42,7 @@ export async function getCompatMetadata(
       engines: packages.engines,
     })
     .from(packages)
-    .where(inArray(packages.name, names));
+    .where(and(inArray(packages.name, names), eq(packages.ecosystem, ecosystem)));
 }
 
 /** Order a pair canonically by package name so (A,B) and (B,A) dedupe to one row. */

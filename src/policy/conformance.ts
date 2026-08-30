@@ -18,8 +18,8 @@
  * REPO_DRIFT_DETAIL_CAP for transport, and ruling on a truncated list would
  * report a clean repo that simply had its violations cut off the end.
  */
-import { eq, inArray } from 'drizzle-orm';
-import type { Confidence } from '../core/types';
+import { and, eq, inArray } from 'drizzle-orm';
+import { DEFAULT_ECOSYSTEM, type Confidence, type Ecosystem } from '../core/types';
 import type { Database } from '../db/client';
 import { packages, repos } from '../db/schema';
 import { getSelectionPolicy } from '../db/selectionPolicy';
@@ -75,7 +75,11 @@ export interface ConformanceReport {
 }
 
 /** license / deprecated / confidence for the named packages, keyed by name. */
-async function loadRuleFacts(db: Database, names: string[]): Promise<Map<string, RuleFacts>> {
+async function loadRuleFacts(
+  db: Database,
+  names: string[],
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
+): Promise<Map<string, RuleFacts>> {
   const out = new Map<string, RuleFacts>();
   for (let i = 0; i < names.length; i += NAME_CHUNK) {
     const rows = await db
@@ -86,7 +90,12 @@ async function loadRuleFacts(db: Database, names: string[]): Promise<Map<string,
         confidence: packages.confidence,
       })
       .from(packages)
-      .where(inArray(packages.name, names.slice(i, i + NAME_CHUNK)));
+      .where(
+        and(
+          inArray(packages.name, names.slice(i, i + NAME_CHUNK)),
+          eq(packages.ecosystem, ecosystem),
+        ),
+      );
     for (const row of rows) {
       out.set(row.name, {
         license: row.license,

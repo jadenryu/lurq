@@ -19,7 +19,8 @@
  *    is honest-but-coarse, and the response note says so.
  */
 import { createHash } from 'node:crypto';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
+import { DEFAULT_ECOSYSTEM } from '../core/types';
 import { getConfig } from '../core/config';
 import { httpRequest } from '../core/http';
 import { checkCompat } from '../compat/check';
@@ -486,7 +487,8 @@ async function bundleSizes(db: Database, candidates: Candidate[]): Promise<Map<s
   const rows = await db
     .select({ name: packages.name, bundle: packages.bundleMinGzipKb })
     .from(packages)
-    .where(inArray(packages.name, names));
+    // Bundle size is a JS concept; the 'speed' re-rank is npm-only by nature.
+    .where(and(inArray(packages.name, names), eq(packages.ecosystem, DEFAULT_ECOSYSTEM)));
   return new Map(rows.filter((r) => r.bundle != null).map((r) => [r.name, r.bundle as number]));
 }
 
