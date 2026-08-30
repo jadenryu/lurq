@@ -377,6 +377,14 @@ const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : us
  * build time. Reach for one if this table ever gains insertion, removal or
  * virtualisation, none of which are on the roadmap.
  */
+/**
+ * Long enough to follow a row across the board, short enough that a second click
+ * does not queue behind the first. Shared with the lane geometry in tokens.css:
+ * a row that slides while its own bar takes a different amount of time to move
+ * comes apart visibly.
+ */
+const SLIDE = { duration: 420, easing: "cubic-bezier(.22,.61,.36,1)" } as const;
+
 function useRerank(deps: unknown[]): (node: HTMLTableSectionElement | null) => void {
   const body = useRef<HTMLTableSectionElement | null>(null);
   const wasAt = useRef(new Map<string, number>());
@@ -388,21 +396,34 @@ function useRerank(deps: unknown[]): (node: HTMLTableSectionElement | null) => v
     // the tokens.css reduced-motion block cannot reach it.
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    // Empty map means nothing has been measured yet: this is the first paint and
+    // the lanes' own entrance owns it. Any later board that arrives with an
+    // unmeasured row means the cutoff swapped a package in.
+    const first = wasAt.current.size === 0;
+    const here = new Set<string>();
+
     for (const row of rows) {
       const key = row.dataset.row!;
+      here.add(key);
       const now = row.offsetTop;
       const before = wasAt.current.get(key);
       wasAt.current.set(key, now);
-      // First measurement of this row, or it did not move. Nothing to play.
-      if (before === undefined || before === now || still) continue;
-      row.animate(
-        [{ transform: `translateY(${before - now}px)` }, { transform: "none" }],
-        // Long enough to follow a row across the board, short enough that a
-        // second click does not queue behind the first.
-        { duration: 420, easing: "cubic-bezier(.22,.61,.36,1)" },
-      );
+      if (still) continue;
+      if (before === undefined) {
+        // A package this cutoff brought in. It has nowhere to slide from, and
+        // popping in at full opacity beside seven sliding rows is the single
+        // thing that still reads as a glitch, so it fades on the same clock.
+        if (!first) row.animate([{ opacity: 0 }, { opacity: 1 }], SLIDE);
+        continue;
+      }
+      if (before === now) continue;
+      row.animate([{ transform: `translateY(${before - now}px)` }, { transform: "none" }], SLIDE);
     }
-     
+
+    // Forget the packages this board dropped. Left in, a stale offsetTop is what
+    // a row slides from if a later cutoff brings it back, which is a slide from
+    // a position it never occupied on the board you are looking at.
+    for (const key of wasAt.current.keys()) if (!here.has(key)) wasAt.current.delete(key);
   }, deps);
 
   // A callback ref, so a tbody remounting on a model change (it is keyed on the
@@ -778,10 +799,20 @@ export function DriftBoard() {
                     />
                   </tr>
                 </thead>
-                {/* Keyed on the cutoff so switching models fades the new board in.
-                    A table whose contents change with no acknowledgement reads as
-                    a glitch. */}
-                <tbody key={model.cutoff} ref={tbody} className="room-drift-swap">
+                {/* NOT keyed on the cutoff. It was, and that was the whole reason
+                    switching models looked like a glitch: the key remounted the
+                    tbody, so the old board was destroyed in one frame and the new
+                    one faded up from opacity 0 with every row already in its final
+                    place. Nothing moved, something just blinked.
+
+                    Adjacent cutoffs share six to eight of their eight rows — the
+                    top of this board is chalk, commander, ansi-styles and
+                    @types/node whichever model you pick — so keeping the rows
+                    mounted lets useRerank FLIP them to their new ranks, and the
+                    handful the cutoff actually swaps out are the only ones that
+                    change by appearing. The class stays for the one-time entrance
+                    fade on first mount. */}
+                <tbody ref={tbody} className="room-drift-swap">
                   {rows.map((r, i) => (
                     <tr
                       key={r.name}
@@ -828,9 +859,18 @@ export function DriftBoard() {
                       </td>
                       {/* The two version columns are the argument, so they are
                           the only cells that carry weight. Everything else on
-                          the row is the context that makes them readable. */}
+                          the row is the context that makes them readable.
+
+                          Semibold, a step above the package name and every other
+                          figure on the row. This is the one value the section
+                          exists to deliver — the version that is actually current,
+                          against the one the model would have given you — and at
+                          `font-medium` it was the same weight as the row label
+                          beside it. The struck-through old version opposite is
+                          --ink-3, so the pair now reads as a correction in the
+                          direction it should: what was, quietly; what is, loudly. */}
                       <td className={cell}>
-                        <span className="font-medium" style={{ color: "var(--held)" }}>
+                        <span className="font-semibold" style={{ color: "var(--held)" }}>
                           {r.version_now}
                         </span>
                       </td>

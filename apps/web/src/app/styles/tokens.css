@@ -1583,7 +1583,16 @@ li:hover > .room-ide-label {
   top: 50%;
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform 700ms var(--ease) var(--row-at, 0ms);
+  /* `transform` is the entrance: the lane drawing itself left to right, once.
+     `width` and `left` are the model switch. Both are driven off --at, which is
+     the cutoff's position on the axis, so picking a different model moves every
+     bar's start and end at once — and until these were in the list it moved them
+     between two frames while the rows around them slid over 420ms. The bar has
+     to travel on the same clock as the row carrying it. */
+  transition:
+    transform 700ms var(--ease) var(--row-at, 0ms),
+    width 420ms var(--ease) var(--row-at, 0ms),
+    left 420ms var(--ease) var(--row-at, 0ms);
 }
 
 /* The two spans are deliberately not the same weight. Equal halves of a
@@ -1611,6 +1620,7 @@ li:hover > .room-ide-label {
   opacity: 0.7;
   transition:
     transform 700ms var(--ease) var(--row-at, 0ms),
+    left 420ms var(--ease) var(--row-at, 0ms),
     opacity var(--dur-hover) var(--ease-ui);
 }
 
@@ -1632,9 +1642,15 @@ li:hover > .room-ide-label {
   background: var(--conflict);
   opacity: 0;
   transform: scale(0.4);
+  /* The delay belongs to the entrance only — the marker lands after its lane has
+     drawn. On a model switch there is no entrance to wait for, so `left` carries
+     the row's stagger and nothing more; inheriting the +420ms would leave the
+     dot sitting on the old cutoff's date while the bar under it had already
+     moved. */
   transition:
     opacity 240ms var(--ease) calc(var(--row-at, 0ms) + 420ms),
-    transform 240ms var(--ease) calc(var(--row-at, 0ms) + 420ms);
+    transform 240ms var(--ease) calc(var(--row-at, 0ms) + 420ms),
+    left 420ms var(--ease) var(--row-at, 0ms);
 }
 
 /* More than one major since the cutoff: a ring, so the count is carried by
