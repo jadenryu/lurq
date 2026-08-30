@@ -24,6 +24,7 @@ const COLUMNS = [
   {
     heading: "Product",
     links: [
+      { label: "Pricing", href: "/#pricing" },
       { label: "Docs", href: DOCS_URL },
       { label: "Dashboard", href: "/dashboard" },
       { label: "npm", href: "https://www.npmjs.com/package/lurqrun", external: true },

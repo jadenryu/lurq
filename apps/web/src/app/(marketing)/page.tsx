@@ -6,13 +6,14 @@ import { CapabilityGrid } from "@/components/site/capability-grid";
 import { ProvenanceOrbit } from "@/components/site/provenance-orbit";
 import { DriftBoard } from "@/components/site/drift-board";
 import { SurfaceSwitch } from "@/components/site/surface-switch";
+import { Pricing } from "@/components/site/pricing";
 import { SiteFooter } from "@/components/site/footer";
 import { Faq } from "@/components/site/faq";
 import { Contact } from "@/components/site/contact";
 
 /**
  * ORDER. Claim, demonstration, problem, surface, receipts, distribution, setup,
- * questions, contact.
+ * price, questions, contact.
  *
  * The page is read by three people and this sequence is the compromise between
  * them. A developer wants to see it work before being told anything, so the
@@ -96,6 +97,11 @@ export default function Home() {
             the answer to a question the reader now has, rather than an install
             guide for a product they had not been shown. */}
         <SurfaceSwitch />
+        {/* Cost is the question that follows "here is how to install it", and it
+            has to be answered before the FAQ rather than inside it. Reinstated
+            after ecba588 removed it; two of the three plans cannot be bought
+            yet and the cards say so. */}
+        <Pricing />
         <Faq />
         <Contact />
       </main>
