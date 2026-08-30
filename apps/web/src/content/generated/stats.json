@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-30T18:57:02.187Z",
+  "generatedAt": "2026-08-30T19:04:43.023Z",
   "source": "live",
   "dataAsOf": "2026-08-30T18:46:42.758Z",
   "packages": 20801,
   "packagesScored": 20801,
   "categories": 23,
   "versionsTracked": 2827888,
-  "apiSurfaces": 16311,
+  "apiSurfaces": 16312,
   "coOccurrencePairs": 11540000,
   "dataSources": 10,
   "npm": {

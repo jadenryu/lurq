@@ -13,10 +13,11 @@
 # the same way, so the job regenerates the whole directory and commits whatever
 # moved.
 #
-# Both generators are read-only against the database. `content:landing` also
-# reads the npm registry and package tarballs (the usage-diff surface), so it is
-# the slower of the two and goes second: a network failure there still leaves the
-# drift board refreshed.
+# Both generators are read-only against the database, and between them they
+# write exactly the three files the page imports: drift.json, stats.json and
+# provenance.json. `content:landing` also reads the npm registry (download
+# counts for the hero), so it is the one with an outbound dependency and goes
+# second — a network failure there still leaves the drift board refreshed.
 name: refresh landing data
 
 on:
