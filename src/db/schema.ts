@@ -60,6 +60,7 @@ import type {
   UpgradeSeverity,
 } from '../github/types';
 import type { ExtractionTier, SymbolKind } from '../surface/types';
+import type { Tier } from '../core/plans';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -364,9 +365,7 @@ export const resolvedClosures = pgTable(
     nodes: jsonb('nodes').$type<{ name: string; version: string }[]>().notNull(),
     fetchedAt: ts('fetched_at').notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex('resolved_closures_pkg_idx').on(table.packageName, table.version),
-  ],
+  (table) => [uniqueIndex('resolved_closures_pkg_idx').on(table.packageName, table.version)],
 );
 
 /**
@@ -588,11 +587,7 @@ export const repoAlerts = pgTable(
     // One alert per repo per release. A re-sync of the same version — and the
     // watcher re-syncs on every publish, including non-latest backports — must
     // not re-notify.
-    uniqueIndex('repo_alerts_dedup_idx').on(
-      table.repoId,
-      table.packageName,
-      table.toVersion,
-    ),
+    uniqueIndex('repo_alerts_dedup_idx').on(table.repoId, table.packageName, table.toVersion),
   ],
 );
 
@@ -722,7 +717,9 @@ export const symbols = pgTable(
   // they are not interchangeable (§6.4.3). Without the tier in the key, storing a
   // tier-C surface would silently overwrite the tier-A one that answers runtime
   // existence — replacing the authoritative answer with a type-level guess.
-  (table) => [uniqueIndex('symbols_entity_path_tier_idx').on(table.entityId, table.path, table.tier)],
+  (table) => [
+    uniqueIndex('symbols_entity_path_tier_idx').on(table.entityId, table.path, table.tier),
+  ],
 );
 
 /** The runtime a verdict holds in. Never a node — always a dimension (§2). */
@@ -846,5 +843,52 @@ export type UpgradeRunRow = typeof upgradeRuns.$inferSelect;
 export type NewUpgradeRunRow = typeof upgradeRuns.$inferInsert;
 export type RepoAlertRow = typeof repoAlerts.$inferSelect;
 export type NewRepoAlertRow = typeof repoAlerts.$inferInsert;
+/**
+ * Billing state for one account, mirrored from Stripe.
+ *
+ * Stripe is the authority; this is a local read-replica of the two facts the
+ * request path needs — which tier, and is it still being served — so a tool
+ * call resolves entitlement from Postgres instead of a network hop to Stripe on
+ * every request. Written only by the webhook.
+ *
+ * Keyed by `ownerId` (the Clerk user id), NOT by API key. Entitlement belongs to
+ * the account: a user with four keys bought one subscription, and putting the
+ * tier on `api_keys` would let them mint themselves a free upgrade by issuing a
+ * new key. `api_keys.tier` predates this and is display-only.
+ *
+ * `tier` is derived from the Stripe Price at webhook time rather than stored on
+ * the customer, so re-pricing a plan does not require a backfill.
+ */
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    /** Clerk user id. One subscription per account. */
+    ownerId: text('owner_id').primaryKey(),
+    /** Stable across subscriptions: a customer who cancels and returns reuses it. */
+    stripeCustomerId: text('stripe_customer_id').notNull().unique(),
+    /** Null between creating a customer and completing a first checkout. */
+    stripeSubscriptionId: text('stripe_subscription_id').unique(),
+    tier: text('tier').$type<Tier>().notNull().default('free'),
+    /** Raw Stripe subscription status. `null` = never subscribed. */
+    status: text('status'),
+    /** When the paid period lapses. Display only; `status` is what gates access. */
+    currentPeriodEnd: ts('current_period_end'),
+    /** Set when the user cancels but has paid through the period. */
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+    /**
+     * Stripe delivers out of order and retries, so a late duplicate of an older
+     * event must not overwrite newer state. The webhook drops any event whose
+     * timestamp is older than the one that produced the current row.
+     */
+    lastEventAt: ts('last_event_at'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (table) => [index('subscriptions_customer_idx').on(table.stripeCustomerId)],
+);
+
+export type SubscriptionRow = typeof subscriptions.$inferSelect;
+export type NewSubscriptionRow = typeof subscriptions.$inferInsert;
+
 export type SelectionPolicyRow = typeof selectionPolicies.$inferSelect;
 export type NewSelectionPolicyRow = typeof selectionPolicies.$inferInsert;

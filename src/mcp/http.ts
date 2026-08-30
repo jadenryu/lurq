@@ -42,6 +42,20 @@ import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
 import { parseSelectionPolicy } from '../policy/parse';
 import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
+import {
+  entitlementFor,
+  getSubscription,
+  getSubscriptionByCustomer,
+  type Entitlement,
+} from '../db/subscriptions';
+import {
+  billingEnabled,
+  constructEvent,
+  createCheckoutSession,
+  createPortalSession,
+  handleEvent,
+} from '../billing/stripe';
+import { PLANS, type Tier } from '../core/plans';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -66,6 +80,7 @@ import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
   lurqKey?: ApiKeyRow;
+  entitlement?: Entitlement;
 }
 
 /** Raw request bytes, kept by the JSON parser for webhook signature checks. */
@@ -164,7 +179,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     makeStore = (prefix: string) =>
       new RedisStore({
         prefix,
-        sendCommand: (...args: string[]) => rlRedis.call(args[0]!, ...args.slice(1)) as Promise<never>,
+        sendCommand: (...args: string[]) =>
+          rlRedis.call(args[0]!, ...args.slice(1)) as Promise<never>,
       });
   }
 
@@ -255,10 +271,44 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
   };
 
+  /**
+   * Monthly quota, resolved once per request after auth.
+   *
+   * Cached for a minute per account. The lookup is two indexed queries, which is
+   * cheap once and silly on every tool call from an agent running a batch; a
+   * minute of staleness means someone who just upgraded may spend up to sixty
+   * more seconds on the old plan, and someone who has exhausted their quota may
+   * get a handful of extra calls. Both are the right direction to be wrong in.
+   * The webhook clears the entry on upgrade so the common case is instant.
+   */
+  const entitlementCache = new Map<string, { at: number; value: Entitlement }>();
+  const ENTITLEMENT_TTL_MS = 60_000;
+
+  const invalidateEntitlement = (ownerId: string) => entitlementCache.delete(ownerId);
+
+  const resolveEntitlement = async (ownerId: string | null): Promise<Entitlement> => {
+    if (!ownerId) return entitlementFor(db, null);
+    const hit = entitlementCache.get(ownerId);
+    if (hit && Date.now() - hit.at < ENTITLEMENT_TTL_MS) return hit.value;
+    const value = await entitlementFor(db, ownerId);
+    entitlementCache.set(ownerId, { at: Date.now(), value });
+    return value;
+  };
+
   // Per-key limiter (runs after auth so it can key on the resolved API key).
   const keyLimiter = rateLimit({
     windowMs: config.LURQ_RATE_LIMIT_WINDOW_MS,
-    limit: config.LURQ_RATE_LIMIT_MAX,
+    // The burst ceiling is the plan's, not one number for everybody. Read from
+    // the cached entitlement when `quota` has already resolved it on a previous
+    // request for this key, and otherwise from LURQ_RATE_LIMIT_MAX — the limiter
+    // runs BEFORE `quota` in the chain, so the first request of a minute is
+    // metered at the configured default and the rest at the plan's rate. Paying
+    // for Enterprise should not leave you sharing the free tier's burst.
+    limit: (req: Request) => {
+      const ownerId = (req as AuthedRequest).lurqKey?.ownerId;
+      const cached = ownerId ? entitlementCache.get(ownerId) : undefined;
+      return cached?.value.plan.ratePerMinute ?? config.LURQ_RATE_LIMIT_MAX;
+    },
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     // Key on the resolved API key's unique row id (always present — auth runs
@@ -273,6 +323,48 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     ...(makeStore ? { store: makeStore('rl:key:') } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
+
+  /**
+   * Enforce the plan's monthly allowance. Runs after `auth`, before the tool.
+   *
+   * 402 rather than 429: the caller is not going too fast, they are out of
+   * allowance until the month turns, and a retry-after has nothing useful to say.
+   * The body names the plan, the limit and where to change it, because an agent
+   * relaying this to a developer should be relaying something actionable.
+   *
+   * Fails OPEN. If the entitlement lookup itself errors, the request is served:
+   * a Postgres hiccup must not read as "your subscription is invalid" to every
+   * paying customer at once. Over-serving during an outage is recoverable;
+   * locking out the paid tier is the incident.
+   */
+  const quota = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const authed = req as AuthedRequest;
+    const ownerId = authed.lurqKey?.ownerId ?? null;
+    try {
+      const ent = await resolveEntitlement(ownerId);
+      authed.entitlement = ent;
+      if (!ent.withinQuota) {
+        res
+          .status(402)
+          .json(
+            rpcError(
+              -32002,
+              `Monthly limit reached for the ${ent.plan.name} plan ` +
+                `(${ent.used}/${ent.plan.monthlyCalls} calls). ` +
+                `It resets when the month turns. Upgrade at ${config.LURQ_WEB_URL}/#pricing`,
+            ),
+          );
+        return;
+      }
+      next();
+    } catch (err) {
+      logger.error(
+        'quota lookup failed, serving anyway:',
+        err instanceof Error ? err.message : String(err),
+      );
+      next();
+    }
+  };
 
   // Dashboard-authenticated routes (§ identity): gated by the shared
   // LURQ_ISSUER_SECRET, never by a per-request API key. The Clerk-authenticated
@@ -309,6 +401,142 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
     revokedAt: row.revokedAt,
+  });
+
+  // ── Billing (§ Stripe) ─────────────────────────────────────────────────────
+  // Checkout and portal are issuer-secret routes: the web app asks on behalf of
+  // a Clerk-authenticated user and never holds a Stripe credential itself. The
+  // webhook authenticates by Stripe's own signature instead, since Stripe is the
+  // caller and knows nothing about our issuer secret.
+
+  app.post('/billing/checkout', requireIssuerSecret, async (req: Request, res: Response) => {
+    if (!billingEnabled()) {
+      res.status(404).end();
+      return;
+    }
+    const ownerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
+    const tier = typeof req.body?.tier === 'string' ? (req.body.tier as Tier) : 'pro';
+    const email = typeof req.body?.email === 'string' ? req.body.email : null;
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    if (!(tier in PLANS) || !PLANS[tier].paid) {
+      res.status(400).json({ error: `${tier} is not a purchasable plan.` });
+      return;
+    }
+    try {
+      const url = await createCheckoutSession(db, { ownerId, tier, email });
+      if (!url) {
+        res.status(503).json({ error: 'That plan is not available for checkout yet.' });
+        return;
+      }
+      res.status(200).json({ url });
+    } catch (err) {
+      logger.error('checkout failed:', err instanceof Error ? err.message : String(err));
+      res.status(502).json({ error: 'Could not start checkout.' });
+    }
+  });
+
+  app.post('/billing/portal', requireIssuerSecret, async (req: Request, res: Response) => {
+    if (!billingEnabled()) {
+      res.status(404).end();
+      return;
+    }
+    const ownerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      const url = await createPortalSession(db, ownerId);
+      if (!url) {
+        res.status(404).json({ error: 'No billing account for this user yet.' });
+        return;
+      }
+      res.status(200).json({ url });
+    } catch (err) {
+      logger.error('portal failed:', err instanceof Error ? err.message : String(err));
+      res.status(502).json({ error: 'Could not open the billing portal.' });
+    }
+  });
+
+  /** What the dashboard renders: the plan, its state, and the month so far. */
+  app.get('/billing/subscription', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      const [sub, ent] = await Promise.all([
+        getSubscription(db, ownerId),
+        entitlementFor(db, ownerId),
+      ]);
+      res.status(200).json({
+        tier: ent.plan.tier,
+        planName: ent.plan.name,
+        status: sub?.status ?? null,
+        currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
+        cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
+        used: ent.used,
+        limit: ent.plan.monthlyCalls,
+        billingEnabled: billingEnabled(),
+        manageable: Boolean(sub?.stripeCustomerId),
+      });
+    } catch (err) {
+      logger.error('subscription read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read the subscription.' });
+    }
+  });
+
+  /**
+   * Stripe's webhook. Signature-authenticated, so it is deliberately NOT behind
+   * requireIssuerSecret or the IP limiter: Stripe calls it from its own ranges
+   * and a burst of retries must not be throttled into looking like an outage.
+   *
+   * Answers 200 for anything it managed to verify, including events it does not
+   * act on. A non-2xx makes Stripe retry for three days, so reserving failure
+   * for "we could not verify this at all" is what keeps the retry queue honest.
+   */
+  app.post('/billing/webhook', async (req: Request, res: Response) => {
+    const raw = (req as RawBodyRequest).rawBody;
+    const signature = req.headers['stripe-signature'];
+    let event;
+    try {
+      event = await constructEvent(
+        raw ?? '',
+        typeof signature === 'string' ? signature : undefined,
+      );
+    } catch (err) {
+      logger.warn(
+        `billing webhook: bad signature: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      res.status(400).json({ error: 'Invalid signature.' });
+      return;
+    }
+    if (!event) {
+      res.status(404).end();
+      return;
+    }
+
+    // Acknowledge before doing the work. Stripe times out at 20 seconds and a
+    // retry of an already-applied event is wasted round trips on both sides.
+    res.status(200).json({ received: true });
+    try {
+      const outcome = await handleEvent(db, event);
+      logger.info(`billing webhook: ${outcome}`);
+      // The plan just moved. Drop the cached entitlement so the next call sees
+      // it immediately rather than up to a minute later — the one moment the
+      // staleness would be felt is the moment someone has just paid.
+      const object = event.data.object as { customer?: unknown };
+      if (typeof object.customer === 'string') {
+        const row = await getSubscriptionByCustomer(db, object.customer);
+        if (row) invalidateEntitlement(row.ownerId);
+      }
+    } catch (err) {
+      logger.error('billing webhook failed:', err instanceof Error ? err.message : String(err));
+    }
   });
 
   app.post('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
@@ -398,7 +626,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
-    const limit = limitRaw && Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : undefined;
+    const limit =
+      limitRaw && Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : undefined;
     try {
       const rows = await getOutcomesByOwner(db, ownerId, { limit });
       res.status(200).json({
@@ -465,7 +694,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const offsetRaw = typeof req.query.offset === 'string' ? Number(req.query.offset) : NaN;
     const offset = Number.isInteger(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
     try {
-      const { total, packages: rows } = await getContributionsByOwner(db, ownerId, { limit, offset });
+      const { total, packages: rows } = await getContributionsByOwner(db, ownerId, {
+        limit,
+        offset,
+      });
       res.status(200).json({ total, packages: rows });
     } catch (err) {
       logger.error('contributions read failed:', err instanceof Error ? err.message : String(err));
@@ -585,22 +817,27 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     return connected;
   };
 
-  app.post('/repos/connect', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    const installationRaw = (req.body ?? {}).installationId;
-    const installationId = Number(installationRaw);
-    if (!ownerId || !Number.isInteger(installationId) || installationId <= 0) {
-      res.status(400).json({ error: 'ownerId and installationId are required.' });
-      return;
-    }
-    try {
-      res.status(200).json({ connected: await syncInstallation(ownerId, installationId) });
-    } catch (err) {
-      const status = err instanceof GithubAppError ? err.status : 502;
-      logger.error('repo connect failed:', err instanceof Error ? err.message : String(err));
-      res.status(status).json({ error: 'Could not read the GitHub installation.' });
-    }
-  });
+  app.post(
+    '/repos/connect',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const installationRaw = (req.body ?? {}).installationId;
+      const installationId = Number(installationRaw);
+      if (!ownerId || !Number.isInteger(installationId) || installationId <= 0) {
+        res.status(400).json({ error: 'ownerId and installationId are required.' });
+        return;
+      }
+      try {
+        res.status(200).json({ connected: await syncInstallation(ownerId, installationId) });
+      } catch (err) {
+        const status = err instanceof GithubAppError ? err.status : 502;
+        logger.error('repo connect failed:', err instanceof Error ? err.message : String(err));
+        res.status(status).json({ error: 'Could not read the GitHub installation.' });
+      }
+    },
+  );
 
   /**
    * GitHub App webhook — the only route here authenticated by GitHub's signature
@@ -623,7 +860,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
     const raw = (req as RawBodyRequest).rawBody;
     const signature = req.headers['x-hub-signature-256'];
-    if (!raw || !verifyWebhookSignature(secret, raw, typeof signature === 'string' ? signature : undefined)) {
+    if (
+      !raw ||
+      !verifyWebhookSignature(secret, raw, typeof signature === 'string' ? signature : undefined)
+    ) {
       res.status(401).json({ error: 'Invalid signature.' });
       return;
     }
@@ -685,139 +925,176 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   // Must stay above `/repos/:id` — Express matches in registration order, and
   // `:id` would otherwise capture the literal "alerts" and 400 on Number('alerts').
-  app.get('/repos/alerts', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    if (!ownerId) {
-      res.status(400).json({ error: 'ownerId is required.' });
-      return;
-    }
-    try {
-      res.status(200).json({ alerts: await listAlerts(db, ownerId) });
-    } catch (err) {
-      logger.error('alert list failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not list alerts.' });
-    }
-  });
-
-  app.get('/repos/:id', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    const id = Number(req.params.id);
-    if (!ownerId || !Number.isInteger(id)) {
-      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
-      return;
-    }
-    try {
-      const row = await getRepo(db, ownerId, id);
-      if (!row) {
-        res.status(404).json({ error: 'Repo not found.' });
+  app.get(
+    '/repos/alerts',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      if (!ownerId) {
+        res.status(400).json({ error: 'ownerId is required.' });
         return;
       }
-      const runs = await listRunsForRepo(db, ownerId, row.id);
-      // The setup file is rendered per repo because it carries that repo's own
-      // package manager and armed state. Shipped as text so the dashboard can
-      // show exactly what will be committed before anything is.
-      const workflow = renderWorkflow({
-        installCommand: row.installCommand ?? undefined,
-        armed: row.policy.enabled,
-        autoMerge: row.policy.autoMerge,
-      });
-      res.status(200).json({
-        repo: {
-          ...toDashboardRepo(row),
-          deps: row.drift?.deps ?? [],
-          transitiveRisks: row.drift?.transitive?.risks ?? [],
-          conflicts: row.drift?.conflictsAtLatest ?? null,
-          runs,
-          workflow,
-          workflowPath: WORKFLOW_PATH,
-          setupUrl: newFileUrl(row.fullName, row.defaultBranch ?? 'main', workflow),
-        },
-      });
-    } catch (err) {
-      logger.error('repo read failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not read repo.' });
-    }
-  });
+      try {
+        res.status(200).json({ alerts: await listAlerts(db, ownerId) });
+      } catch (err) {
+        logger.error('alert list failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not list alerts.' });
+      }
+    },
+  );
 
-  app.get('/repos/:id/brief', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    const id = Number(req.params.id);
-    if (!ownerId || !Number.isInteger(id)) {
-      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
-      return;
-    }
-    try {
-      const row = await getRepo(db, ownerId, id);
-      if (!row) {
-        res.status(404).json({ error: 'Repo not found.' });
+  app.get(
+    '/repos/:id',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const id = Number(req.params.id);
+      if (!ownerId || !Number.isInteger(id)) {
+        res.status(400).json({ error: 'ownerId and a numeric id are required.' });
         return;
       }
-      res.status(200).json(await briefRepo(db, row.drift ?? null));
-    } catch (err) {
-      logger.error('repo brief failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not build the migration brief.' });
-    }
-  });
+      try {
+        const row = await getRepo(db, ownerId, id);
+        if (!row) {
+          res.status(404).json({ error: 'Repo not found.' });
+          return;
+        }
+        const runs = await listRunsForRepo(db, ownerId, row.id);
+        // The setup file is rendered per repo because it carries that repo's own
+        // package manager and armed state. Shipped as text so the dashboard can
+        // show exactly what will be committed before anything is.
+        const workflow = renderWorkflow({
+          installCommand: row.installCommand ?? undefined,
+          armed: row.policy.enabled,
+          autoMerge: row.policy.autoMerge,
+        });
+        res.status(200).json({
+          repo: {
+            ...toDashboardRepo(row),
+            deps: row.drift?.deps ?? [],
+            transitiveRisks: row.drift?.transitive?.risks ?? [],
+            conflicts: row.drift?.conflictsAtLatest ?? null,
+            runs,
+            workflow,
+            workflowPath: WORKFLOW_PATH,
+            setupUrl: newFileUrl(row.fullName, row.defaultBranch ?? 'main', workflow),
+          },
+        });
+      } catch (err) {
+        logger.error('repo read failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not read repo.' });
+      }
+    },
+  );
 
-  app.post('/repos/:id/scan', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    const id = Number(req.params.id);
-    if (!ownerId || !Number.isInteger(id)) {
-      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
-      return;
-    }
-    try {
-      const row = await getRepo(db, ownerId, id);
-      if (!row) {
-        res.status(404).json({ error: 'Repo not found.' });
+  app.get(
+    '/repos/:id/brief',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const id = Number(req.params.id);
+      if (!ownerId || !Number.isInteger(id)) {
+        res.status(400).json({ error: 'ownerId and a numeric id are required.' });
         return;
       }
-      // One repo is a handful of GitHub calls — fast enough to await, so the
-      // dashboard can render the new numbers instead of polling for them.
-      const result = await scanRepo(db, row);
-      res.status(200).json({ result });
-    } catch (err) {
-      logger.error('repo scan failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not scan repo.' });
-    }
-  });
+      try {
+        const row = await getRepo(db, ownerId, id);
+        if (!row) {
+          res.status(404).json({ error: 'Repo not found.' });
+          return;
+        }
+        res.status(200).json(await briefRepo(db, row.drift ?? null));
+      } catch (err) {
+        logger.error('repo brief failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not build the migration brief.' });
+      }
+    },
+  );
 
-  app.patch('/repos/:id', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    const id = Number(req.params.id);
-    const policy = parsePolicy((req.body ?? {}).policy);
-    if (!ownerId || !Number.isInteger(id) || !policy) {
-      res.status(400).json({ error: 'ownerId, a numeric id, and a complete policy are required.' });
-      return;
-    }
-    try {
-      const updated = await setRepoPolicy(db, ownerId, id, policy);
-      if (!updated) {
-        res.status(404).json({ error: 'Repo not found.' });
+  app.post(
+    '/repos/:id/scan',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const id = Number(req.params.id);
+      if (!ownerId || !Number.isInteger(id)) {
+        res.status(400).json({ error: 'ownerId and a numeric id are required.' });
         return;
       }
-      res.status(200).json({ policy });
-    } catch (err) {
-      logger.error('repo policy update failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not update policy.' });
-    }
-  });
+      try {
+        const row = await getRepo(db, ownerId, id);
+        if (!row) {
+          res.status(404).json({ error: 'Repo not found.' });
+          return;
+        }
+        // One repo is a handful of GitHub calls — fast enough to await, so the
+        // dashboard can render the new numbers instead of polling for them.
+        const result = await scanRepo(db, row);
+        res.status(200).json({ result });
+      } catch (err) {
+        logger.error('repo scan failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not scan repo.' });
+      }
+    },
+  );
 
-  app.delete('/repos/:id', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    const id = Number(req.params.id);
-    if (!ownerId || !Number.isInteger(id)) {
-      res.status(400).json({ error: 'ownerId and a numeric id are required.' });
-      return;
-    }
-    try {
-      const removed = await deleteRepo(db, ownerId, id);
-      res.status(removed ? 200 : 404).json(removed ? { removed: true } : { error: 'Repo not found.' });
-    } catch (err) {
-      logger.error('repo delete failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not disconnect repo.' });
-    }
-  });
+  app.patch(
+    '/repos/:id',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const id = Number(req.params.id);
+      const policy = parsePolicy((req.body ?? {}).policy);
+      if (!ownerId || !Number.isInteger(id) || !policy) {
+        res
+          .status(400)
+          .json({ error: 'ownerId, a numeric id, and a complete policy are required.' });
+        return;
+      }
+      try {
+        const updated = await setRepoPolicy(db, ownerId, id, policy);
+        if (!updated) {
+          res.status(404).json({ error: 'Repo not found.' });
+          return;
+        }
+        res.status(200).json({ policy });
+      } catch (err) {
+        logger.error(
+          'repo policy update failed:',
+          err instanceof Error ? err.message : String(err),
+        );
+        res.status(500).json({ error: 'Could not update policy.' });
+      }
+    },
+  );
+
+  app.delete(
+    '/repos/:id',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const id = Number(req.params.id);
+      if (!ownerId || !Number.isInteger(id)) {
+        res.status(400).json({ error: 'ownerId and a numeric id are required.' });
+        return;
+      }
+      try {
+        const removed = await deleteRepo(db, ownerId, id);
+        res
+          .status(removed ? 200 : 404)
+          .json(removed ? { removed: true } : { error: 'Repo not found.' });
+      } catch (err) {
+        logger.error('repo delete failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not disconnect repo.' });
+      }
+    },
+  );
 
   // ── Selection policy (dashboard-authenticated) ─────────────────────────────
   //
@@ -835,7 +1112,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     try {
       res.status(200).json({ policy: await getSelectionPolicy(db, ownerId) });
     } catch (err) {
-      logger.error('selection policy read failed:', err instanceof Error ? err.message : String(err));
+      logger.error(
+        'selection policy read failed:',
+        err instanceof Error ? err.message : String(err),
+      );
       res.status(500).json({ error: 'Could not read policy.' });
     }
   });
@@ -851,7 +1131,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       await setSelectionPolicy(db, ownerId, policy);
       res.status(200).json({ policy });
     } catch (err) {
-      logger.error('selection policy write failed:', err instanceof Error ? err.message : String(err));
+      logger.error(
+        'selection policy write failed:',
+        err instanceof Error ? err.message : String(err),
+      );
       res.status(500).json({ error: 'Could not save policy.' });
     }
   });
@@ -859,19 +1142,23 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // The same policy, run backwards over the repos that already exist. Not gated
   // on the GitHub App: an owner with no connected repos gets an empty list, which
   // the dashboard renders as "connect a repo", not as a failure.
-  app.get('/selection-policy/conformance', requireIssuerSecret, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    if (!ownerId) {
-      res.status(400).json({ error: 'ownerId is required.' });
-      return;
-    }
-    try {
-      res.status(200).json(await repoConformance(db, ownerId));
-    } catch (err) {
-      logger.error('conformance read failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not read conformance.' });
-    }
-  });
+  app.get(
+    '/selection-policy/conformance',
+    requireIssuerSecret,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      if (!ownerId) {
+        res.status(400).json({ error: 'ownerId is required.' });
+        return;
+      }
+      try {
+        res.status(200).json(await repoConformance(db, ownerId));
+      } catch (err) {
+        logger.error('conformance read failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not read conformance.' });
+      }
+    },
+  );
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
   //
@@ -883,80 +1170,100 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // already has on disk, so `upgrade-plan` works in any checkout — connecting a
   // repo to the dashboard adds visibility, it is not a precondition for the loop.
 
-  app.post('/upgrade-plan', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
-    const deps = parseDepsInput((req.body ?? {}).deps);
-    if (Object.keys(deps).length === 0) {
-      res.status(400).json({ error: 'deps is required: { "package": "range", … }' });
-      return;
-    }
-    // Read up front rather than at the policy lookup below: computeDrift now
-    // attributes any first-time ingest it triggers to this caller.
-    const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
-    try {
-      const drift = await computeDrift(db, [{ path: 'package.json', deps }], null, ownerId);
-      const brief = await briefRepo(db, drift);
-
-      // Policy enforcement, when the caller identifies a repo this owner has
-      // connected. `repo` is optional by design: the endpoint has always worked
-      // in any checkout, and connecting is what opts a repo into being governed.
-      // An unconnected or unrecognised name yields a null policy and the
-      // unfiltered behaviour this endpoint shipped with.
-      const repoFullName = parseRepoFullName((req.body ?? {}).repo);
-      const policy =
-        ownerId && repoFullName ? await findPolicyByFullName(db, ownerId, repoFullName) : null;
-      const scoped = applyScope(brief.upgrades, policy);
-
-      res.status(200).json({
-        ...brief,
-        ...scoped,
-        // Surfaced so CI can log what lurq had no opinion on. An upgrade we do
-        // not know about must not look like an upgrade we cleared.
-        untracked: Object.keys(deps).length - drift.depsTracked,
-      });
-      // Counted like any other tool call. Usage was recorded only inside the MCP
-      // server, so a user whose whole relationship with lurq is the weekly
-      // autopilot saw a dashboard reading zero calls — the one view meant to
-      // show them they are getting value. Fire-and-forget, after the response.
-      void recordUsage(db, ownerId, 'upgrade-plan');
-    } catch (err) {
-      logger.error('upgrade plan failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not build the upgrade plan.' });
-    }
-  });
-
-  app.post('/upgrade-runs', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
-    const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
-    if (!ownerId) {
-      // Operator-issued keys have no dashboard account to attribute runs to.
-      res.status(403).json({ error: 'This key has no account attached.' });
-      return;
-    }
-    const { runs, rejected } = parseUpgradeRuns((req.body ?? {}).runs, MAX_RUNS_PER_POST);
-    if (runs.length === 0) {
-      res.status(400).json({ error: 'runs must be a non-empty array of upgrade results.' });
-      return;
-    }
-    try {
-      // Resolve repo links once per distinct repo, not once per run.
-      const repoIds = new Map<string, number | null>();
-      for (const run of runs) {
-        if (!repoIds.has(run.repoFullName)) {
-          repoIds.set(run.repoFullName, await findRepoIdByFullName(db, ownerId, run.repoFullName));
-        }
+  app.post(
+    '/upgrade-plan',
+    ipLimiter,
+    auth,
+    keyLimiter,
+    quota,
+    async (req: Request, res: Response) => {
+      const deps = parseDepsInput((req.body ?? {}).deps);
+      if (Object.keys(deps).length === 0) {
+        res.status(400).json({ error: 'deps is required: { "package": "range", … }' });
+        return;
       }
-      const recorded = await recordUpgradeRuns(
-        db,
-        runs.map((run) => ({ ...run, ownerId, repoId: repoIds.get(run.repoFullName) ?? null })),
-      );
-      res.status(200).json({ recorded, rejected });
-      void recordUsage(db, ownerId, 'upgrade-runs');
-    } catch (err) {
-      logger.error('upgrade run record failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not record the upgrade runs.' });
-    }
-  });
+      // Read up front rather than at the policy lookup below: computeDrift now
+      // attributes any first-time ingest it triggers to this caller.
+      const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
+      try {
+        const drift = await computeDrift(db, [{ path: 'package.json', deps }], null, ownerId);
+        const brief = await briefRepo(db, drift);
 
-  app.post('/mcp', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+        // Policy enforcement, when the caller identifies a repo this owner has
+        // connected. `repo` is optional by design: the endpoint has always worked
+        // in any checkout, and connecting is what opts a repo into being governed.
+        // An unconnected or unrecognised name yields a null policy and the
+        // unfiltered behaviour this endpoint shipped with.
+        const repoFullName = parseRepoFullName((req.body ?? {}).repo);
+        const policy =
+          ownerId && repoFullName ? await findPolicyByFullName(db, ownerId, repoFullName) : null;
+        const scoped = applyScope(brief.upgrades, policy);
+
+        res.status(200).json({
+          ...brief,
+          ...scoped,
+          // Surfaced so CI can log what lurq had no opinion on. An upgrade we do
+          // not know about must not look like an upgrade we cleared.
+          untracked: Object.keys(deps).length - drift.depsTracked,
+        });
+        // Counted like any other tool call. Usage was recorded only inside the MCP
+        // server, so a user whose whole relationship with lurq is the weekly
+        // autopilot saw a dashboard reading zero calls — the one view meant to
+        // show them they are getting value. Fire-and-forget, after the response.
+        void recordUsage(db, ownerId, 'upgrade-plan');
+      } catch (err) {
+        logger.error('upgrade plan failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not build the upgrade plan.' });
+      }
+    },
+  );
+
+  app.post(
+    '/upgrade-runs',
+    ipLimiter,
+    auth,
+    keyLimiter,
+    quota,
+    async (req: Request, res: Response) => {
+      const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
+      if (!ownerId) {
+        // Operator-issued keys have no dashboard account to attribute runs to.
+        res.status(403).json({ error: 'This key has no account attached.' });
+        return;
+      }
+      const { runs, rejected } = parseUpgradeRuns((req.body ?? {}).runs, MAX_RUNS_PER_POST);
+      if (runs.length === 0) {
+        res.status(400).json({ error: 'runs must be a non-empty array of upgrade results.' });
+        return;
+      }
+      try {
+        // Resolve repo links once per distinct repo, not once per run.
+        const repoIds = new Map<string, number | null>();
+        for (const run of runs) {
+          if (!repoIds.has(run.repoFullName)) {
+            repoIds.set(
+              run.repoFullName,
+              await findRepoIdByFullName(db, ownerId, run.repoFullName),
+            );
+          }
+        }
+        const recorded = await recordUpgradeRuns(
+          db,
+          runs.map((run) => ({ ...run, ownerId, repoId: repoIds.get(run.repoFullName) ?? null })),
+        );
+        res.status(200).json({ recorded, rejected });
+        void recordUsage(db, ownerId, 'upgrade-runs');
+      } catch (err) {
+        logger.error(
+          'upgrade run record failed:',
+          err instanceof Error ? err.message : String(err),
+        );
+        res.status(500).json({ error: 'Could not record the upgrade runs.' });
+      }
+    },
+  );
+
+  app.post('/mcp', ipLimiter, auth, keyLimiter, quota, async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
     // Thread the authenticated key's owner identity into the tools (§3.1).
     const server = buildMcpServer(db, { ownerId: (req as AuthedRequest).lurqKey?.ownerId ?? null });

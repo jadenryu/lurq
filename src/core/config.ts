@@ -74,6 +74,23 @@ const EnvSchema = z.object({
    *  → the endpoint is disabled (404). Keep it server-side, never in the client. */
   LURQ_ISSUER_SECRET: z.string().min(1).optional(),
 
+  // Billing (Stripe). Every secret here lives on this service and nowhere else:
+  // the web app holds no Stripe credential and reaches checkout through the
+  // issuer-secret routes, the same way it reaches key issuance. Unset →
+  // /billing/* is disabled (404) and every account is served the free tier, so
+  // a deployment without Stripe configured degrades to "free for everyone"
+  // rather than to "nobody can call anything".
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  /** Signing secret for `POST /billing/webhook`. Unset → the endpoint is 404. */
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Price id backing the Pro plan. Unset → Pro cannot be checked out. */
+  STRIPE_PRICE_PRO: z.string().min(1).optional(),
+  /** Price id backing Enterprise. Normally unset: Enterprise is sold by
+   *  conversation, and `contactOnly` in core/plans.ts is what the page reads. */
+  STRIPE_PRICE_ENTERPRISE: z.string().min(1).optional(),
+  /** Absolute base URL the checkout returns to, e.g. https://lurq.run. */
+  LURQ_WEB_URL: z.string().url().default('https://lurq.run'),
+
   // GitHub App (repo autopilot). Only the App itself holds repo access; lurq
   // never stores a user's personal token. Either unset → /repos is disabled (404).
   // The App *slug* is deliberately not here: only the web app needs it, to build

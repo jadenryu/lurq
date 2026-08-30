@@ -44,11 +44,11 @@ export interface Checkpoint {
 export function checkpointAt(tops: number[], anchor: number): Checkpoint {
   const n = tops.length;
   if (n === 0) return { index: 0, fill: 0 };
-  if (n === 1) return { index: 0, fill: tops[0] <= anchor ? 1 : 0 };
+  if (n === 1) return { index: 0, fill: tops[0]! <= anchor ? 1 : 0 };
 
   let at = -1;
   for (let i = 0; i < n; i += 1) {
-    if (tops[i] <= anchor) at = i;
+    if (tops[i]! <= anchor) at = i;
   }
 
   // Above the first block: the section has not started, so nothing is lit and
@@ -57,9 +57,9 @@ export function checkpointAt(tops: number[], anchor: number): Checkpoint {
   // Past the last: hold it full rather than letting it run on.
   if (at >= n - 1) return { index: n - 1, fill: 1 };
 
-  const span = tops[at + 1] - tops[at];
+  const span = tops[at + 1]! - tops[at]!;
   // Two blocks at the same offset cannot be interpolated between. Only reachable
   // if the blocks have not been laid out yet, where 0 is the honest answer.
-  const frac = span > 0 ? unit((anchor - tops[at]) / span) : 0;
+  const frac = span > 0 ? unit((anchor - tops[at]!) / span) : 0;
   return { index: at, fill: (at + frac) / (n - 1) };
 }
