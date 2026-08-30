@@ -44,7 +44,13 @@ export type CategorySource = 'curated' | 'inferred';
 /** How a candidate entered the discovery queue (§2B). `dependency-graph` and
  *  `recent` are the long-tail channels; `category-search` is keyword-seeded;
  *  `reactive` is an on-demand query that wasn't tracked yet. */
-export type DiscoverySource = 'dependency-graph' | 'category-search' | 'recent' | 'reactive';
+export type DiscoverySource =
+  | 'dependency-graph'
+  | 'category-search'
+  | 'recent'
+  | 'reactive'
+  /** Seen on npm's `_changes` replication feed — a name we had never heard of. */
+  | 'npm-changes';
 
 /** Lifecycle of a discovery-queue candidate (§2B). */
 export type DiscoveryStatus = 'pending' | 'ingested' | 'rejected';

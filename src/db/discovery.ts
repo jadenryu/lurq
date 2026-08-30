@@ -21,6 +21,15 @@ export async function getKnownNames(db: Database): Promise<Set<string>> {
   return new Set([...tracked.map((r) => r.name), ...queued.map((r) => r.name)]);
 }
 
+/** Names already sitting in the queue, at any status. The changes-feed follower
+ *  keeps this in memory so a package republishing twenty times in an hour costs
+ *  one insert attempt, not twenty — `onConflictDoNothing` would swallow the rest,
+ *  but each rejected row still burns a sequence value and an index probe. */
+export async function getQueuedNames(db: Database): Promise<Set<string>> {
+  const rows = await db.select({ name: discoveryQueue.name }).from(discoveryQueue);
+  return new Set(rows.map((r) => r.name));
+}
+
 /** Insert new candidates, ignoring any that race in concurrently. Returns count inserted. */
 export async function enqueueCandidates(
   db: Database,
@@ -40,11 +49,7 @@ export async function getPendingCandidates(
   db: Database,
   limit: number,
 ): Promise<DiscoveryQueueRow[]> {
-  return db
-    .select()
-    .from(discoveryQueue)
-    .where(eq(discoveryQueue.status, 'pending'))
-    .limit(limit);
+  return db.select().from(discoveryQueue).where(eq(discoveryQueue.status, 'pending')).limit(limit);
 }
 
 export async function setDiscoveryStatus(
@@ -54,6 +59,9 @@ export async function setDiscoveryStatus(
 ): Promise<void> {
   await db
     .update(discoveryQueue)
-    .set({ status: data.status, ...(data.preScore !== undefined ? { preScore: data.preScore } : {}) })
+    .set({
+      status: data.status,
+      ...(data.preScore !== undefined ? { preScore: data.preScore } : {}),
+    })
     .where(eq(discoveryQueue.name, name));
 }

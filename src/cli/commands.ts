@@ -738,11 +738,11 @@ export async function runCompat(
   // `conflict` reads as the tool contradicting itself. Say which one lost.
   const conflicted = new Set(
     conflicts.flatMap((c) =>
-      c.packages.length >= 2 ? [[...c.packages].sort().join(' ')] : [],
+      c.packages.length >= 2 ? [[...c.packages].sort().join('\0')] : [],
     ),
   );
   const isOverruled = (e: { packages: [string, string] }) =>
-    conflicted.has([...e.packages].sort().join(' '));
+    conflicted.has([...e.packages].sort().join('\0'));
   const compatEvidence = (res.evidence ?? []).filter((e) => e.status === 'compatible');
   if (compatEvidence.length) {
     console.log(

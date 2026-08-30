@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseVersionTimeline } from '../src/ingestion/sources/npmRegistry';
-import { parseChangeLine } from '../src/pipeline/watch';
+import { parseChangeLine, routeChange } from '../src/pipeline/watch';
 
 describe('parseVersionTimeline', () => {
   const packument = {
@@ -48,5 +48,28 @@ describe('parseChangeLine', () => {
     expect(parseChangeLine('   ')).toBeNull();
     expect(parseChangeLine('{"last_seq":42}')).toBeNull(); // no id
     expect(parseChangeLine('not json')).toBeNull();
+  });
+});
+
+describe('routeChange (the growth branch)', () => {
+  const tracked = new Set(['react']);
+  const queued = new Set(['already-waiting']);
+  const change = (id: string, deleted = false) => ({ seq: 1, id, deleted });
+
+  it('re-syncs a package we already track', () => {
+    expect(routeChange(change('react'), tracked, queued)).toBe('resync');
+  });
+
+  it('enqueues a name nobody has seen — this is the whole growth channel', () => {
+    expect(routeChange(change('brand-new-pkg'), tracked, queued)).toBe('enqueue');
+  });
+
+  it('skips a name already waiting on the merit gate', () => {
+    expect(routeChange(change('already-waiting'), tracked, queued)).toBe('skip');
+  });
+
+  it('skips unpublishes, even for a name we have never seen', () => {
+    expect(routeChange(change('brand-new-pkg', true), tracked, queued)).toBe('skip');
+    expect(routeChange(change('react', true), tracked, queued)).toBe('skip');
   });
 });
