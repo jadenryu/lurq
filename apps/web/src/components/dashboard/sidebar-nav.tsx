@@ -54,6 +54,9 @@ const ACCOUNT: NavItem[] = [
   { href: "/dashboard/usage", label: "credits" },
   { href: "/dashboard/notifications", label: "notifications" },
   { href: "/dashboard/preferences", label: "preferences" },
+  // Directly under credits' neighbours on purpose: the row you want after
+  // seeing you are near the month's limit is the one that lifts it.
+  { href: "/dashboard/billing", label: "billing" },
   // Sixth row, and the one place a reader can get back to a key they closed the
   // tab on. `lurq setup` opens this URL and the docs quickstart links straight
   // to it, so it has to be findable from inside the product too.
