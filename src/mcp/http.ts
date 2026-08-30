@@ -889,8 +889,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       res.status(400).json({ error: 'deps is required: { "package": "range", … }' });
       return;
     }
+    // Read up front rather than at the policy lookup below: computeDrift now
+    // attributes any first-time ingest it triggers to this caller.
+    const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
     try {
-      const drift = await computeDrift(db, [{ path: 'package.json', deps }]);
+      const drift = await computeDrift(db, [{ path: 'package.json', deps }], null, ownerId);
       const brief = await briefRepo(db, drift);
 
       // Policy enforcement, when the caller identifies a repo this owner has
@@ -898,7 +901,6 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       // in any checkout, and connecting is what opts a repo into being governed.
       // An unconnected or unrecognised name yields a null policy and the
       // unfiltered behaviour this endpoint shipped with.
-      const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
       const repoFullName = parseRepoFullName((req.body ?? {}).repo);
       const policy =
         ownerId && repoFullName ? await findPolicyByFullName(db, ownerId, repoFullName) : null;

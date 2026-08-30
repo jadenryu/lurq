@@ -45,7 +45,9 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
     // on a repo feature that may be off. A null result degrades to
     // direct-dependency-only drift rather than failing the scan.
     const resolvedTree = await fetchResolvedTree(repo.installationId, repo.fullName);
-    const drift = await computeDrift(db, manifests, resolvedTree);
+    // ownerId is passed so any dependency this scan ingests for the first time
+    // is attributed to the user whose repo surfaced it.
+    const drift = await computeDrift(db, manifests, resolvedTree, repo.ownerId);
     await saveScan(db, repo.id, { manifests, drift, installCommand });
     return {
       ...base,
