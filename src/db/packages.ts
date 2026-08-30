@@ -4,7 +4,7 @@
  */
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, notExists, sql } from 'drizzle-orm';
 import { logger } from '../core/logger';
-import type { Category } from '../core/types';
+import { DEFAULT_ECOSYSTEM, type Category, type Ecosystem } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
 import {
@@ -72,8 +72,16 @@ export async function getStaleRefreshTargets(
   return rows.map((r) => ({ name: r.name, category: r.category ?? null }));
 }
 
-export async function getPackageByName(db: Database, name: string) {
-  const rows = await db.select().from(packages).where(eq(packages.name, name)).limit(1);
+export async function getPackageByName(
+  db: Database,
+  name: string,
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
+) {
+  const rows = await db
+    .select()
+    .from(packages)
+    .where(and(eq(packages.name, name), eq(packages.ecosystem, ecosystem)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
@@ -89,21 +97,34 @@ export async function getPackageByName(db: Database, name: string) {
 export async function latestVersionsFor(
   db: Database,
   names: string[],
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
 ): Promise<Map<string, string | null>> {
   const out = new Map<string, string | null>();
   for (let i = 0; i < names.length; i += NAME_CHUNK) {
     const rows = await db
       .select({ name: packages.name, latestVersion: packages.latestVersion })
       .from(packages)
-      .where(inArray(packages.name, names.slice(i, i + NAME_CHUNK)));
+      .where(
+        and(
+          inArray(packages.name, names.slice(i, i + NAME_CHUNK)),
+          eq(packages.ecosystem, ecosystem),
+        ),
+      );
     for (const row of rows) out.set(row.name, row.latestVersion);
   }
   return out;
 }
 
-/** Every tracked package name — the set the `_changes` follower filters against. */
-export async function getAllPackageNames(db: Database): Promise<string[]> {
-  const rows = await db.select({ name: packages.name }).from(packages);
+/** Every tracked package name in one registry — the set a changes follower
+ *  filters against. Scoped because each registry has its own feed. */
+export async function getAllPackageNames(
+  db: Database,
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
+): Promise<string[]> {
+  const rows = await db
+    .select({ name: packages.name })
+    .from(packages)
+    .where(eq(packages.ecosystem, ecosystem));
   return rows.map((r) => r.name);
 }
 
@@ -193,14 +214,23 @@ export async function ensureSeedEntry(
     .onConflictDoNothing({ target: seedPackages.name });
 }
 
-/** Upsert a fully-computed package row, refreshing every field on conflict. */
+/**
+ * Upsert a fully-computed package row, refreshing every field on conflict.
+ *
+ * The conflict target must name the SAME columns as the unique index or
+ * Postgres rejects the statement outright ("no unique or exclusion constraint
+ * matching the ON CONFLICT specification") — so this pair moves together with
+ * `packages_ecosystem_name_idx` and cannot be changed independently of it.
+ * `ecosystem` is excluded from the update set for the same reason `name` is: it
+ * is half the identity of the row, not a mutable field.
+ */
 export async function upsertPackage(db: Database, row: NewPackageRow): Promise<void> {
-  const { name: _name, createdAt: _createdAt, ...mutable } = row;
+  const { name: _name, ecosystem: _ecosystem, createdAt: _createdAt, ...mutable } = row;
   await db
     .insert(packages)
     .values(row)
     .onConflictDoUpdate({
-      target: packages.name,
+      target: [packages.ecosystem, packages.name],
       set: { ...mutable, updatedAt: new Date() },
     });
 }
@@ -217,11 +247,18 @@ export async function stampFirstRequester(
   db: Database,
   name: string,
   ownerId: string,
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
 ): Promise<void> {
   await db
     .update(packages)
     .set({ firstRequestedByOwnerId: ownerId })
-    .where(and(eq(packages.name, name), isNull(packages.firstRequestedByOwnerId)));
+    .where(
+      and(
+        eq(packages.name, name),
+        eq(packages.ecosystem, ecosystem),
+        isNull(packages.firstRequestedByOwnerId),
+      ),
+    );
 }
 
 export interface Contribution {

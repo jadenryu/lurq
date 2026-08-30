@@ -3,6 +3,64 @@
  * These are the stable contracts the rest of the system builds on.
  */
 
+/**
+ * Which registry a package lives in.
+ *
+ * `npm` is the default everywhere — every read path defaults to it, so adding
+ * this type changed no existing behaviour. What it buys is that a package name
+ * is only unique WITHIN a registry: `requests`, `redis`, `click` and `attrs` all
+ * exist on both npm and PyPI as entirely unrelated software, and keying on the
+ * bare name would let one overwrite the other's evidence.
+ *
+ * PyPI names normalise before they are stored (PEP 503: `Flask`, `flask` and
+ * `Flask_SQLAlchemy` are the same project); that belongs in the PyPI client at
+ * the ingestion boundary, not here, so `name` always holds the canonical form.
+ */
+export const ECOSYSTEMS = ['npm', 'pypi'] as const;
+export type Ecosystem = (typeof ECOSYSTEMS)[number];
+
+/**
+ * The registry every existing caller means when it doesn't say.
+ *
+ * Every read helper takes `ecosystem` as a DEFAULTED parameter rather than a
+ * required one. That is what let the composite key land as a pure no-op: not a
+ * single call site changed, and npm behaviour is bit-identical. A PyPI caller
+ * passes the argument; nobody else has to care.
+ *
+ * ponytail: only `packages` is keyed by registry so far. These are still keyed
+ * by bare package name and WILL collide once PyPI rows exist — each one is safe
+ * today only because nothing writes a PyPI row yet, so scope it in the phase
+ * that first makes it multi-ecosystem, not speculatively now:
+ *
+ *   package_versions   → needed by PyPI compat (per-version requires-dist)
+ *   seed_packages      → needed when a PyPI package can join the sync roster
+ *   discovery_queue    → needed by PyPI discovery (classifiers + BigQuery seed)
+ *   api_surfaces,
+ *   surface_queue,
+ *   symbols, entities  → needed by the Python surface worker
+ *   compat_edges,
+ *   resolved_closures  → needed by the `uv` resolve-check
+ *
+ * The unscoped reads that go with them live in db/discovery.ts, db/apiSurfaces.ts
+ * and pipeline/discovery.ts. Adding a PyPI write path without scoping the tables
+ * it touches is how one registry starts answering for the other.
+ *
+ * RETRIEVAL IS THE ONE THIS DEFAULT CANNOT COVER, and it is the one that fails
+ * quietly. A keyed lookup has a name to disambiguate, so a defaulted argument
+ * resolves it. `search/recommend.ts` has no name — finding names IS the query —
+ * so nothing here helps it, and the first PyPI row with an embedding puts
+ * SQLAlchemy in the results for a TypeScript project. No error, just a wrong
+ * answer. Retrieval has to take its ecosystem from the REQUEST (the repo whose
+ * manifest was parsed, an explicit tool argument, or the stack the agent is
+ * editing), never from a default.
+ *
+ * Two notes for whoever wires that up: filtering the HNSW index after the fact
+ * loses recall — pre-filtered partial indexes per ecosystem keep it — and the
+ * lexical `search_vector` needs the same treatment, or the hybrid's two halves
+ * will disagree about which registry they are searching.
+ */
+export const DEFAULT_ECOSYSTEM: Ecosystem = 'npm';
+
 /** Category taxonomy for the JS/TS web stack (§8.3). `other` is the fallback. */
 export const CATEGORIES = [
   'framework',
