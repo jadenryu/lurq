@@ -1,0 +1,59 @@
+# Refreshes every generated artifact the landing page renders, once a day.
+#
+# The page is static content read at build time, not a live query, so no visitor
+# ever touches the database no matter how much traffic it gets. The tradeoff is
+# that the numbers age, and this page's whole argument is "check us" — a board
+# about staleness going stale, or a "last read" chip three weeks behind the
+# index, is the one failure it cannot afford.
+#
+# WHY THIS RUNS EVERYTHING, NOT JUST THE DRIFT BOARD. It used to run only
+# `content:drift`. The index kept syncing daily (railway.json) while stats.json
+# sat where a hand-run left it, so the provenance section advertised a read date
+# 22 days old. Any artifact the page renders and nobody regenerates will drift
+# the same way, so the job regenerates the whole directory and commits whatever
+# moved.
+#
+# Both generators are read-only against the database. `content:landing` also
+# reads the npm registry and package tarballs (the usage-diff surface), so it is
+# the slower of the two and goes second: a network failure there still leaves the
+# drift board refreshed.
+name: refresh landing data
+
+on:
+  schedule:
+    # 07:30 UTC. The heavy nightly sync starts at 06:00 (railway.json), so this
+    # clears it by 90 minutes. lurq-discover writes every 15 minutes all day
+    # (railway.discover.json), so there is no quiet window to aim for; the only
+    # thing worth avoiding is reading the index while the bulk write is running.
+    - cron: '30 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run content:drift
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npm run content:landing
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Commit if the numbers moved
+        run: |
+          if git diff --quiet -- apps/web/src/content/generated; then
+            echo "generated content unchanged; nothing to commit"
+            exit 0
+          fi
+          git config user.name  "lurq bot"
+          git config user.email "bot@lurq.run"
+          git add apps/web/src/content/generated
+          git commit -m "chore: refresh landing page data"
+          git push
