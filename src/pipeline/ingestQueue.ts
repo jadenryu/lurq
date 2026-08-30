@@ -33,6 +33,29 @@ export function ingestQueueDepth(): number {
   return pending.length + inFlight.size;
 }
 
+/**
+ * Wait for the backlog to clear.
+ *
+ * Only a ONE-SHOT process needs this. The queue's in-flight syncs hold the same
+ * DB handle their caller opened, so a cron that returns from its command and
+ * closes the pool pulls the floor out from under every ingest it just queued —
+ * the nightly repo scan would discover hundreds of new dependencies and then
+ * fail every one of them against a closed pool. The long-lived server never
+ * calls this: there is nothing to wait for when the process outlives the work.
+ *
+ * Bounded, because a cron that cannot finish is worse than one that leaves work
+ * for tomorrow. Whatever is still queued at the deadline is abandoned and the
+ * next scan re-enqueues it — the same self-heal the queue already relies on for
+ * a process that dies with work pending. Returns the count left behind.
+ */
+export async function drainIngestQueue(timeoutMs = 10 * 60_000): Promise<number> {
+  const deadline = Date.now() + timeoutMs;
+  while (ingestQueueDepth() > 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return ingestQueueDepth();
+}
+
 /** Test-only: clear all queue state. */
 export function resetIngestQueue(): void {
   pending.length = 0;
