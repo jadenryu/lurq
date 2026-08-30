@@ -211,6 +211,20 @@
       "when": 1788123568168,
       "tag": "0029_busy_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788131811665,
+      "tag": "0030_fancy_lockjaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788131847661,
+      "tag": "0031_milky_molten_man",
+      "breakpoints": true
     }
   ]
 }

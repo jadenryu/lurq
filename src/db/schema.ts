@@ -864,8 +864,12 @@ export const subscriptions = pgTable(
   {
     /** Clerk user id. One subscription per account. */
     ownerId: text('owner_id').primaryKey(),
-    /** Stable across subscriptions: a customer who cancels and returns reuses it. */
-    stripeCustomerId: text('stripe_customer_id').notNull().unique(),
+    /** Stable across subscriptions: a customer who cancels and returns reuses it.
+     *  NULL for a plan granted by hand (`billing grant`), which is a real state
+     *  and not a missing value: that account paid by invoice or a hosted link
+     *  and has no Stripe customer to point at. If they later check out through
+     *  Stripe, `linkCustomer` fills this in on the same row. */
+    stripeCustomerId: text('stripe_customer_id').unique(),
     /** Null between creating a customer and completing a first checkout. */
     stripeSubscriptionId: text('stripe_subscription_id').unique(),
     tier: text('tier').$type<Tier>().notNull().default('free'),
@@ -881,6 +885,10 @@ export const subscriptions = pgTable(
      * timestamp is older than the one that produced the current row.
      */
     lastEventAt: ts('last_event_at'),
+    /** Why a hand-granted plan exists: invoice number, deal, whoever asked.
+     *  Null for anything Stripe created. Six months on, a paid account nobody
+     *  can account for is indistinguishable from a mistake. */
+    manualNote: text('manual_note'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
