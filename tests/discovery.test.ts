@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { selectCandidates, passesGate, nextSearchOffset } from '../src/pipeline/discovery';
+import {
+  selectCandidates,
+  passesGate,
+  nextSearchOffset,
+  SEARCH_MAX_OFFSET,
+} from '../src/pipeline/discovery';
 import { DISCOVERY } from '../src/scoring/weights';
 import type { DiscoveryCandidate } from '../src/db/discovery';
 
@@ -62,13 +67,16 @@ describe('nextSearchOffset (§2B search channel walks the ranking)', () => {
   });
 
   it('laps back to the head rather than walking off into unranked noise', () => {
-    // Whatever the cursor, the offset stays inside the paged window.
-    for (const stored of ['500', '510', '9999']) {
+    // Whatever the cursor, the offset stays inside the paged window. Asserted
+    // against the constant, not a literal: the ceiling is a tuning knob and the
+    // invariant under test is the wrap, not the value it wraps at.
+    const past = SEARCH_MAX_OFFSET;
+    for (const stored of [String(past), String(past + 10), String(past * 20 - 1)]) {
       const from = nextSearchOffset(stored);
       expect(from).toBeGreaterThanOrEqual(0);
-      expect(from).toBeLessThan(500);
+      expect(from).toBeLessThan(past);
     }
-    expect(nextSearchOffset('500')).toBe(0);
+    expect(nextSearchOffset(String(past))).toBe(0);
   });
 
   it('treats a corrupt or negative cursor as the head', () => {

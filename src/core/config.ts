@@ -49,8 +49,14 @@ const EnvSchema = z.object({
    *  This is the rotation rate for everything discovery ingested: index size /
    *  this = days to come all the way around. Raise it if the sync finishes well
    *  inside the cron window; lower it if npm starts rate-limiting. 0 disables
-   *  the rotation (seeds only, the pre-rotation behaviour). */
-  LURQ_SYNC_REFRESH_CAP: z.coerce.number().int().min(0).max(5000).default(400),
+   *  the rotation (seeds only, the pre-rotation behaviour).
+   *
+   *  It is also the discovery frontier's clock, which is why it is not a small
+   *  number. `graphChannel` re-expands a package only when its `latest_version`
+   *  moves, and nothing observes a version move except this rotation — so at 400
+   *  against a 20.8k index the graph channel could only re-arm on a 52-day lag
+   *  and had gone effectively silent. */
+  LURQ_SYNC_REFRESH_CAP: z.coerce.number().int().min(0).max(25_000).default(2000),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 
   // Hosted HTTP service (`serve-http`). Server-side only.

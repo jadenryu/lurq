@@ -167,10 +167,13 @@ async function markSeedsScanned(
 /** Cursor row (in `watch_state`) holding the search channel's rank offset. */
 const SEARCH_CURSOR_ID = 'discovery-search-offset';
 
-/** Where the walk laps back to the head. Past a few hundred hits npm's ranking
- *  is mostly noise the gate rejects anyway, and lapping is how newly-published
- *  top-ranked packages get picked up. */
-const SEARCH_MAX_OFFSET = 500;
+/** Where the walk laps back to the head. Sized to npm's actual corpus depth, not
+ *  a guess: a category keyword reports ~4.3k total hits (`keywords:orm` → 4321),
+ *  and the old 500 ceiling meant the channel lapped every ~12h over the same top
+ *  11% while the other 89% was never requested — the queue ran dry with the
+ *  supply still sitting there. At `searchSizePerCategory` per run this laps in
+ *  ~5 days instead, which is also how newly-published top-ranked names get seen. */
+export const SEARCH_MAX_OFFSET = 5000;
 
 /**
  * Category-keyword + recency channel via npm search (the niche workhorse).
