@@ -438,10 +438,17 @@ export function registerOperatorCommands(program: Command): void {
       const { db, close } = createDb();
       try {
         const results = await scanAllRepos(db);
+        // A scan queues every dependency the index had never seen, and those
+        // background syncs run on THIS pool. Closing it the moment the scan
+        // returns would fail every one of them, so the cron waits for the
+        // backlog it created before shutting down.
+        const { drainIngestQueue } = await import('../pipeline/ingestQueue');
+        const stranded = await drainIngestQueue();
         if (opts.json) console.log(JSON.stringify(results, null, 2));
         else {
           const failed = results.filter((r) => !r.ok).length;
-          console.log(`scanned ${results.length} repo(s), ${failed} failed`);
+          const left = stranded > 0 ? `, ${stranded} left to ingest next run` : '';
+          console.log(`scanned ${results.length} repo(s), ${failed} failed${left}`);
         }
       } finally {
         await close();

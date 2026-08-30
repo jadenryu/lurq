@@ -14,6 +14,7 @@
  */
 import { inArray, sql } from 'drizzle-orm';
 import semver from 'semver';
+import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { packageVersions, packages } from '../db/schema';
 import {
@@ -354,11 +355,48 @@ async function conflictsAtCurrent(
   return resolveArchitectureCompat(members).slice(0, REPO_DRIFT_DETAIL_CAP);
 }
 
+/**
+ * Send every untracked declared dependency to the background ingester.
+ *
+ * This is the fix for the coverage asymmetry that makes a scan read "9 tracked,
+ * 36 unknown": the index only ever held packages somebody had already asked
+ * about, so a repo full of ordinary dependencies had nothing to diff against.
+ * Feeding the misses back means the next scan of this repo is complete, and
+ * across every connected repo the index converges on the set that actually
+ * matters — what people really depend on — rather than what a seed list guessed.
+ *
+ * Fire-and-forget on purpose. `enqueueIngest` dedupes and is hard-capped, so a
+ * flood drops its overflow with a warning and the following scan re-enqueues it;
+ * nothing here can slow, block, or fail the scan that triggered it.
+ *
+ * Imported dynamically to break a real module cycle — ingestQueue → single →
+ * github/alerts → github/drift. Nothing is lost by deferring it: the enqueue has
+ * no return value and the caller never waits on it.
+ *
+ * ponytail: direct dependencies only. A resolved tree carries thousands of
+ * transitives and would starve the queue of the names the dashboard actually
+ * renders. Also no negative cache — a repo's private `@acme/*` packages will
+ * miss on npm and be retried each scan, which costs one cached registry lookup
+ * apiece. Add one if internal-heavy repos make that measurable.
+ */
+function queueUntracked(db: Database, names: string[], ownerId: string | null): void {
+  if (names.length === 0) return;
+  void import('../pipeline/ingestQueue')
+    .then(({ enqueueIngest }) => {
+      for (const name of names) enqueueIngest(db, name, ownerId);
+    })
+    .catch((err) => {
+      // Ingestion is an optimisation for the next scan; this one still reports.
+      logger.debug(`untracked-dep enqueue failed: ${String(err)}`);
+    });
+}
+
 /** Compute a repo's full drift summary from its manifests. */
 export async function computeDrift(
   db: Database,
   manifests: RepoManifest[],
   resolvedTree: { deps: ResolvedDep[]; edges: DependencyEdge[]; truncated: boolean } | null = null,
+  requestedByOwnerId: string | null = null,
 ): Promise<RepoDrift> {
   const declared = declaredDeps(manifests);
   const names = [...declared.keys()];
@@ -392,6 +430,14 @@ export async function computeDrift(
     loadIndexed(db, names),
     loadVersions(db, names),
   ]);
+
+  // Everything the index has never seen. Queue it now so the NEXT scan of this
+  // repo can report on it instead of counting it as unknown.
+  queueUntracked(
+    db,
+    names.filter((name) => !indexed.has(name)),
+    requestedByOwnerId,
+  );
 
   const deps: DepDrift[] = [];
   for (const [name, entry] of declared) {

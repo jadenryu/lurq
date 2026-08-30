@@ -4,7 +4,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../src/pipeline/single', () => ({ syncOnePackage: vi.fn() }));
 vi.mock('../src/db/packages', () => ({ ensureSeedEntry: vi.fn().mockResolvedValue(undefined) }));
 
-import { enqueueIngest, ingestQueueDepth, resetIngestQueue } from '../src/pipeline/ingestQueue';
+import {
+  drainIngestQueue,
+  enqueueIngest,
+  ingestQueueDepth,
+  resetIngestQueue,
+} from '../src/pipeline/ingestQueue';
 import * as single from '../src/pipeline/single';
 import * as pkgs from '../src/db/packages';
 
@@ -80,5 +85,34 @@ describe('ingestQueue', () => {
     await drain();
     expect(syncOnePackage).toHaveBeenCalledTimes(1);
     expect(syncOnePackage).toHaveBeenCalledWith(db, 'dupe', { requestedByOwnerId: 'user_a' });
+  });
+});
+
+describe('drainIngestQueue', () => {
+  beforeEach(() => {
+    resetIngestQueue();
+    vi.clearAllMocks();
+  });
+
+  it('resolves only once the backlog is empty', async () => {
+    // The bug this guards: a one-shot cron closing its DB pool the instant the
+    // scan returns, killing every ingest the scan had just queued.
+    let release!: () => void;
+    syncOnePackage.mockImplementation(
+      () => new Promise((r) => (release = () => r({ confidence: 'unproven' } as never))),
+    );
+    enqueueIngest(db, 'slowpkg');
+    await new Promise((r) => setImmediate(r));
+    expect(ingestQueueDepth()).toBe(1);
+
+    const drained = drainIngestQueue(5_000);
+    release();
+    expect(await drained).toBe(0);
+  });
+
+  it('gives up at the deadline and reports what it left behind', async () => {
+    syncOnePackage.mockImplementation(() => new Promise(() => {})); // never settles
+    enqueueIngest(db, 'stuck');
+    expect(await drainIngestQueue(300)).toBe(1);
   });
 });

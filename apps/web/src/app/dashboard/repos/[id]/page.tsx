@@ -84,7 +84,9 @@ export default async function RepoDetailPage({
             <StatTile
               label="tracked"
               value={drift.depsTracked}
-              hint={uncovered > 0 ? `${uncovered} not in the index` : "full coverage"}
+              hint={
+                uncovered > 0 ? `${uncovered} queued for indexing` : "full coverage"
+              }
             />
             <StatTile
               label="behind"

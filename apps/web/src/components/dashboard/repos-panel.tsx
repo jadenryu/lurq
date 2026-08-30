@@ -86,6 +86,12 @@ function RiskCell({ repo }: { repo: DashboardRepo }) {
  * "healthy" deps. A dependency lurq has not indexed is not a dependency it has
  * cleared, and collapsing the two would let the dashboard imply an all-clear it
  * did not earn: the same rule `unverified` follows in the upgrade checker.
+ *
+ * "pending" rather than "unknown": a scan now queues every dependency it could
+ * not find for background ingestion (src/github/drift.ts), so the gap closes on
+ * its own by the next scan. The exception is a package that is not on the public
+ * registry at all — a private `@scope/*` — which stays uncovered, so the word
+ * still has to be one that does not promise.
  */
 function CoverageCell({ repo }: { repo: DashboardRepo }) {
   const drift = repo.drift;
@@ -96,7 +102,7 @@ function CoverageCell({ repo }: { repo: DashboardRepo }) {
       {drift.depsTracked}
       <span className="text-ink-2/50">/{drift.depsDeclared}</span>
       {uncovered > 0 && (
-        <span className="ml-1.5 text-ink-2/50">({uncovered} unknown)</span>
+        <span className="ml-1.5 text-ink-2/50">({uncovered} pending)</span>
       )}
     </span>
   );
