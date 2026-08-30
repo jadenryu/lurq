@@ -30,3 +30,29 @@ describe('trackedPairs (§4B bounding)', () => {
     expect(pairs[0]).toMatchObject({ packageA: 'axios', packageB: 'zod' });
   });
 });
+
+describe('trackedPairs mustTouch (§4B incremental re-mine)', () => {
+  const nodes = [N('react'), N('react-dom'), N('zod')];
+  const tracked = new Set(['react', 'react-dom', 'zod']);
+
+  it('emits every pair when no filter is given', () => {
+    expect(trackedPairs(nodes, tracked)).toHaveLength(3); // C(3,2)
+  });
+
+  it('keeps only pairs touching a newly-tracked name', () => {
+    // 'zod' just became tracked; react↔react-dom was minted on an earlier pass
+    // and regenerating it only buys a rejected insert.
+    const pairs = trackedPairs(nodes, tracked, new Set(['zod']));
+    expect(pairs).toHaveLength(2);
+    expect(pairs.every((p) => p.packageA === 'zod' || p.packageB === 'zod')).toBe(true);
+  });
+
+  it('keeps a pair where both endpoints are new', () => {
+    const pairs = trackedPairs(nodes, tracked, new Set(['react', 'zod']));
+    expect(pairs).toHaveLength(3); // react↔zod, react↔react-dom, react-dom↔zod
+  });
+
+  it('emits nothing when the closure holds no new name', () => {
+    expect(trackedPairs(nodes, tracked, new Set(['unrelated']))).toHaveLength(0);
+  });
+});

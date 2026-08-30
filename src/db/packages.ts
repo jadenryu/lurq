@@ -2,7 +2,7 @@
  * Read/write helpers for the `packages` table. All recommendation/eval reads use
  * this single denormalized table (§8.2).
  */
-import { and, desc, eq, inArray, isNotNull, isNull, lt, notExists, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, notExists, sql } from 'drizzle-orm';
 import { logger } from '../core/logger';
 import type { Category } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
@@ -54,9 +54,7 @@ export async function getStaleRefreshTargets(
   const rows = await db
     .select({
       name: packages.name,
-      category: sql<
-        Category | null
-      >`case when ${packages.categorySource} = 'curated' then ${packages.category} end`,
+      category: sql<Category | null>`case when ${packages.categorySource} = 'curated' then ${packages.category} end`,
     })
     .from(packages)
     .where(
@@ -106,6 +104,16 @@ export async function latestVersionsFor(
 /** Every tracked package name — the set the `_changes` follower filters against. */
 export async function getAllPackageNames(db: Database): Promise<string[]> {
   const rows = await db.select({ name: packages.name }).from(packages);
+  return rows.map((r) => r.name);
+}
+
+/** Names that became tracked at or after `since` — the only packages the daily
+ *  re-mine pass can produce new edges for (§4B trigger 2). */
+export async function getPackageNamesCreatedSince(db: Database, since: Date): Promise<string[]> {
+  const rows = await db
+    .select({ name: packages.name })
+    .from(packages)
+    .where(gte(packages.createdAt, since));
   return rows.map((r) => r.name);
 }
 
