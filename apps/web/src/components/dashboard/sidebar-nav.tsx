@@ -5,10 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { AccountMenu } from "@/components/dashboard/account-menu";
-import {
-  CommandPalette,
-  CommandPaletteTrigger,
-} from "@/components/dashboard/command-palette";
+import { CommandPalette, CommandPaletteTrigger } from "@/components/dashboard/command-palette";
 import { Logo } from "@/components/common/logo";
 import { cn } from "@/lib/utils";
 
@@ -100,9 +97,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
           aria-hidden
           className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-signal"
           transition={
-            reduce
-              ? { duration: 0 }
-              : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
+            reduce ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
           }
         />
       )}

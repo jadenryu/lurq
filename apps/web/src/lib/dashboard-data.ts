@@ -35,6 +35,7 @@ import {
 } from "@/lib/demo-data";
 import {
   fetchAlerts,
+  fetchBilling,
   fetchContributions,
   fetchKeys,
   fetchOutcomes,
@@ -60,6 +61,7 @@ import {
   fetchConformance,
   EMPTY_CONFORMANCE,
   type ConformanceReport,
+  type BillingSummary,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -109,6 +111,18 @@ const context = cache(async (): Promise<{ userId: string | null; demo: boolean }
   }
 });
 
+const EMPTY_BILLING: BillingSummary = {
+  tier: "free",
+  planName: "Free",
+  status: null,
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+  used: 0,
+  limit: 200,
+  billingEnabled: false,
+  manageable: false,
+};
+
 /** Run a live read, or hand back the fixture, without ever throwing. */
 async function load<T>(
   live: (userId: string) => Promise<T>,
@@ -131,12 +145,29 @@ async function load<T>(
   }
 }
 
+/**
+ * The account's plan and what it has spent this month.
+ *
+ * `EMPTY_BILLING` is the free tier rather than a blank, because that is what an
+ * account with no subscription genuinely is. A failed read therefore renders as
+ * "you are on Free" instead of as an empty panel, which is both true for the
+ * overwhelming majority of accounts and the safe direction to be wrong in: it
+ * never tells someone they have a plan they do not.
+ */
+export function loadBilling(): Promise<Loaded<BillingSummary>> {
+  return load(fetchBilling, () => ({ ...EMPTY_BILLING, used: 42 }), EMPTY_BILLING);
+}
+
 export function loadKeys(): Promise<Loaded<DashboardKey[]>> {
   return load(fetchKeys, demoKeys, []);
 }
 
 export function loadUsage(days = 30): Promise<Loaded<DashboardUsage>> {
-  return load((userId) => fetchUsage(userId, days), () => demoUsage(days), EMPTY_USAGE);
+  return load(
+    (userId) => fetchUsage(userId, days),
+    () => demoUsage(days),
+    EMPTY_USAGE,
+  );
 }
 
 /**

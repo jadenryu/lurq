@@ -1,16 +1,17 @@
 /**
- * Scroll arithmetic for the "four ways in" section (surface-switch.tsx).
+ * Checkpoint arithmetic for the "four ways in" section (surface-switch.tsx).
  *
  * Split out for the same reason `activity-map` and `drift-axis` are: every one
- * of these is a silent-failure shape. A step boundary that is off by one lights
- * the wrong row for a quarter of the section and still renders perfectly; a fill
- * that does not account for the track's inset leaves the head dot floating past
- * the last stop. Nothing throws, so nothing here is caught by scrolling the page
- * and looking at it.
+ * of these is a silent-failure shape. A checkpoint that resolves one off lights
+ * the wrong row for a whole entry point and still renders perfectly; a fill
+ * divided by the wrong denominator leaves the bar short of the last stop and
+ * implies a fifth section nobody can reach. Nothing throws, so nothing here is
+ * caught by scrolling the page and looking at it.
  *
- * All of it is pure and unit-free: `travel` and `span` are both distances in the
- * same space (pixels down the pinned track), so nothing here needs to know where
- * the block sticks or how tall the viewport is.
+ * All of it is pure. `tops` are viewport-relative offsets and `anchor` is a
+ * viewport line, so the whole model is "which block has crossed the line, and
+ * how far to the next one" — no scroll position, no document height, and
+ * nothing that has to know where the page starts.
  */
 
 /** Clamp to the unit interval. */
@@ -18,57 +19,47 @@ function unit(n: number): number {
   return n < 0 ? 0 : n > 1 ? 1 : n;
 }
 
-/**
- * How far through the hold, 0..1.
- *
- * A span of zero means the stylesheet has taken the track away (reduce, narrow,
- * short, or scripting off) and there is no scroll to read. Returning 0 rather
- * than dividing is the difference between "the section has not started" and
- * `NaN` propagating into a CSS custom property, which paints nothing at all.
- */
-export function progress(travel: number, span: number): number {
-  if (!(span > 0)) return 0;
-  return unit(travel / span);
+export interface Checkpoint {
+  /** Which entry point is the one being read. */
+  index: number;
+  /** How far down the rail the bar has filled, 0..1. */
+  fill: number;
 }
 
 /**
- * Which step a progress fraction lands on.
+ * Which checkpoint the reader is at, and where the bar should sit.
  *
- * `floor(p * steps)` is the whole rule, except at exactly p = 1, where it gives
- * `steps` — one past the end. That is the frame the track runs out, i.e. the
- * last thing a reader sees of this section, so getting it wrong would blank the
- * panel precisely as they scroll out of it.
+ * The bar lands *exactly* on stop `i` at the moment block `i` crosses the
+ * anchor, and travels smoothly to the next one in between. That is the whole
+ * reason the fill is interpolated between block tops rather than taken from a
+ * scroll fraction: a bar driven by raw scroll drifts off its own stops, and a
+ * progress bar whose head does not touch the dot it is pointing at is worse
+ * than no bar.
+ *
+ * Reading downward — the *last* block to have crossed the line wins — is what
+ * makes this behave at the bottom of the page. The final blocks may all be on
+ * screen at once with no scroll left to separate them, and taking the first
+ * match would pin the rail to block 3 while the reader is plainly at block 4.
  */
-export function stepAt(p: number, steps: number): number {
-  if (steps < 1) return 0;
-  const i = Math.floor(unit(p) * steps);
-  return i < 0 ? 0 : i > steps - 1 ? steps - 1 : i;
-}
+export function checkpointAt(tops: number[], anchor: number): Checkpoint {
+  const n = tops.length;
+  if (n === 0) return { index: 0, fill: 0 };
+  if (n === 1) return { index: 0, fill: tops[0]! <= anchor ? 1 : 0 };
 
-/**
- * How far down the track a click on `step` should land.
- *
- * The middle of the step's band, not its edge: targeting the boundary puts the
- * reader one pixel from the step before, so a click that overshoots by a hair
- * selects the wrong row and a click that undershoots does nothing visible.
- */
-export function travelFor(step: number, steps: number, span: number): number {
-  if (steps < 1) return 0;
-  const i = step < 0 ? 0 : step > steps - 1 ? steps - 1 : step;
-  return ((i + 0.5) / steps) * span;
-}
+  let at = -1;
+  for (let i = 0; i < n; i += 1) {
+    if (tops[i]! <= anchor) at = i;
+  }
 
-/**
- * The bar's fill when the scroll is *not* driving it.
- *
- * Then it is not reporting a position in a hold, it is reporting which of the
- * four you picked, so it has to land on that step's own stop: the first step
- * reads empty and the last reads full. Dividing by `steps` instead would leave
- * the bar a quarter short on the last row, which reads as a section with a fifth
- * step you cannot reach.
- */
-export function fillFor(active: number, steps: number): number {
-  if (steps < 2) return 1;
-  const i = active < 0 ? 0 : active > steps - 1 ? steps - 1 : active;
-  return i / (steps - 1);
+  // Above the first block: the section has not started, so nothing is lit and
+  // the bar is empty. Not index -1, which would index off the front of the rail.
+  if (at < 0) return { index: 0, fill: 0 };
+  // Past the last: hold it full rather than letting it run on.
+  if (at >= n - 1) return { index: n - 1, fill: 1 };
+
+  const span = tops[at + 1]! - tops[at]!;
+  // Two blocks at the same offset cannot be interpolated between. Only reachable
+  // if the blocks have not been laid out yet, where 0 is the honest answer.
+  const frac = span > 0 ? unit((anchor - tops[at]!) / span) : 0;
+  return { index: at, fill: (at + frac) / (n - 1) };
 }

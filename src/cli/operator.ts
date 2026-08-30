@@ -543,6 +543,36 @@ export function registerOperatorCommands(program: Command): void {
       await runKeysRevoke(prefixOrId);
     });
 
+  const billing = program.command('billing').description('Stripe billing setup');
+  billing
+    .command('setup')
+    .description('create/reuse the Stripe products, prices and webhook, then print the env vars')
+    .option(
+      '--webhook-url <url>',
+      'where Stripe should POST events',
+      'https://api.lurq.run/billing/webhook',
+    )
+    .action(async (opts: { webhookUrl: string }) => {
+      const { provisionBilling } = await import('../billing/provision');
+      const { env } = await provisionBilling(opts.webhookUrl);
+      if (Object.keys(env).length === 0) {
+        console.log('\nNothing new to set.');
+        return;
+      }
+      console.log('\nSet these on the serve-http service (Railway), NOT on the web app:\n');
+      for (const [k, v] of Object.entries(env)) console.log(`  ${k}=${v}`);
+      console.log(
+        '\nSTRIPE_SECRET_KEY and LURQ_WEB_URL go there too. The web app needs none of them.',
+      );
+    });
+  billing
+    .command('status')
+    .description('report what is configured in Stripe, changing nothing')
+    .action(async () => {
+      const { billingStatus } = await import('../billing/provision');
+      for (const line of await billingStatus()) console.log(line);
+    });
+
   const db = program.command('db').description('database management');
   db.command('migrate')
     .description('apply database migrations and load the seed list')

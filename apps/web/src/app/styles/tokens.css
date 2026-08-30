@@ -590,21 +590,24 @@ li:hover > .room-ide-label {
   }
 }
 
-.room-cap-grid [data-card] {
+.room-cap-grid [data-card],
+.room-price-grid [data-card] {
   opacity: 0;
   animation: room-reveal var(--dur-reveal) var(--ease-reveal)
     calc(var(--reveal-at, 0ms) * var(--reveal-scale)) both;
   animation-play-state: paused;
 }
 
-.room-cap-grid[data-playing="true"] [data-card] {
+.room-cap-grid[data-playing="true"] [data-card],
+.room-price-grid[data-playing="true"] [data-card] {
   animation-play-state: running;
 }
 
 /* Nothing sets data-playing without script, and a grid stuck on its first frame
    is five empty boxes. */
 @media (scripting: none) {
-  .room-cap-grid [data-card] {
+  .room-cap-grid [data-card],
+  .room-price-grid [data-card] {
     animation: none;
     opacity: 1;
   }
@@ -621,58 +624,50 @@ li:hover > .room-ide-label {
 /* The spine. Four bordered boxes in a column read as four of the same thing;
    a line with four stops on it reads as an order, which is what this is: the
    guided install is how nearly everyone gets in, and 04 is for someone running
-   the endpoint themselves. It fades out at the bottom rather than stopping
-   square, so the rail does not draw a hard edge under the last row. */
+   the endpoint themselves. */
 .room-surface-rail {
   position: relative;
   padding-left: 1.75rem;
 }
 
 /* The track. Flat rather than the gradient it used to be: once a fill runs down
-   it the unfilled part is carrying information — how much of this section is
-   left — and a line that fades to nothing says "the list ends here, roughly",
-   which is the one thing a progress track may not be vague about. */
+   it the unfilled part is carrying information — how many entry points are still
+   below you — and a line that fades to nothing says "the list ends here,
+   roughly", which is the one thing a progress track may not be vague about. */
 .room-surface-rail::before {
   content: "";
   position: absolute;
   left: 5px;
-  top: 1.35rem;
-  bottom: 1.75rem;
+  top: 1.05rem;
+  bottom: 1.05rem;
   width: 1px;
   background: var(--edge);
 }
 
-/* The fill. --fill is 0..1 and is written by surface-switch.tsx: every frame
-   while the scroll is driving, once per selection when it is not.
+/* The fill. --fill is 0..1 and is written by surface-switch.tsx every frame,
+   interpolated between the blocks' own offsets so the head lands exactly on a
+   stop as that block reaches the reading line.
                                      ^
    Height rather than a scaleY transform, for two reasons that outweigh keeping
    it off the layout path. A scaled bar drags its head with it, so the dot below
-   would be squashed to an ellipse at one end of the run and a circle at the
-   other. And this is a 1px-wide absolutely-positioned box: it is out of flow,
-   nothing reflows around it, and the work is a paint on a sliver.
+   would be an ellipse at one end of the run and a circle at the other. And this
+   is a 1px-wide absolutely-positioned box: it is out of flow, nothing reflows
+   around it, and the work is a paint on a sliver.
 
-   Inset to match the track exactly — 1.35rem off the top and 1.75rem off the
-   bottom is 3.1rem of the rail's height that the bar must not count. */
+   Inset top and bottom to match the track exactly — 2.1rem of the rail's height
+   the bar must not count. */
 .room-surface-fill {
   position: absolute;
   left: 5px;
-  top: 1.35rem;
+  top: 1.05rem;
   width: 1px;
-  height: calc(var(--fill, 0) * (100% - 3.1rem));
+  height: calc(var(--fill, 0) * (100% - 2.1rem));
   background: var(--mark);
-  /* Only when a click is doing the moving. Under the scroll the bar is already
-     following the wheel frame by frame, and easing toward a position that has
-     itself moved on is how a progress bar ends up lagging its own scroll. */
-  transition: height var(--dur) var(--ease-ui);
-}
-
-.room-surface-rail[data-driven] .room-surface-fill {
-  transition: none;
 }
 
 /* The head. Rides the top of the fill, which is what makes the bar read as
    something travelling rather than a bar growing. Same treatment as the stop it
-   is about to land on, so arriving looks like the two becoming one. */
+   is landing on, so arriving looks like the two becoming one. */
 .room-surface-fill::after {
   content: "";
   position: absolute;
@@ -688,118 +683,32 @@ li:hover > .room-ide-label {
     0 0 12px color-mix(in oklab, var(--mark) 55%, transparent);
 }
 
-/* ── The hold ────────────────────────────────────────────────────────────────
-   Same mechanism as .room-session-pin, and deliberately so: two sections on one
-   page that both take the screen should take it the same way. The block sticks,
-   the spacer under it gives the track its length, and surface-switch.tsx reads
-   its progress as a fraction of that distance without ever naming the number —
-   so how long the section holds for is a decision that retunes here alone.
-   ─────────────────────────────────────────────────────────────────────────── */
-.room-surface-pin {
-  /* Four steps, so each one is a quarter of this. ~475px per step is about five
-     wheel notches: long enough that a step is read rather than glimpsed, short
-     enough that nobody feels held. Unlike the session's track this one is never
-     cut short — there is no "it has played" moment to cut it at, since the
-     reader is the one deciding how long to look at each command. */
-  --pin-span: 1900px;
-}
-
-.room-surface-run {
-  height: var(--pin-span);
-}
-
-.room-surface-sticky {
-  position: sticky;
-  /* Roughly centred: half the viewport less half the held block, which is the
-     heading plus the rail-and-panel row and comes to ~600px at this width. The
-     floor keeps the heading clear of the nav on short screens. */
-  top: max(96px, calc(50dvh - 300px));
-}
-
-/* No hold. Below 900px the row is already stacking to one column, so pinning it
-   would hold the screen on a block taller than the screen; below 700px of
-   viewport there is no arrangement that both centres and clears the nav. Either
-   way the rail goes back to being four buttons you click, which is what it was
-   before the bar existed and is still a complete way to use the section.
-
-   surface-switch.tsx reads the track's height rather than re-deriving any of
-   this, so a track of zero is the whole signal. */
-@media (max-width: 899.98px), (max-height: 700px) {
-  .room-surface-run {
-    display: none;
-  }
-  .room-surface-sticky {
-    position: static;
-  }
-}
-
-/* Nothing is being driven, so nothing may be held. A screen of scrolling that
-   buys you four panels you could have reached with four clicks is just a page
-   that will not move. */
-@media (prefers-reduced-motion: reduce), (scripting: none) {
-  .room-surface-run {
-    display: none;
-  }
-  .room-surface-sticky {
-    position: static;
-  }
-  .room-surface-fill {
-    transition: none;
-  }
-}
-
-/* The two bits of the panel that change without being remounted into a typing
-   run: the chrome label and the detail under it. Both are keyed by surface in
-   the component, so this plays on every change and needs no state.
-
-   Text only, and short: the terminal beside them is already re-typing its
-   command, and two things easing in at different speeds next to each other
-   reads as the panel being assembled rather than swapped. */
-.room-surface-swap {
-  animation: room-surface-swap 320ms var(--ease-reveal) both;
-}
-
-@keyframes room-surface-swap {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .room-surface-swap {
-    animation: none;
-  }
-}
-
-.room-surface-tab {
+/* One checkpoint in the rail. */
+.room-surface-stop {
   position: relative;
-  display: block;
-  width: 100%;
-  /* Transparent rather than absent: a border that appears on hover moves the
-     text by a pixel, and four rows twitching under the cursor is the kind of
-     thing you feel before you can name it. */
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 0.75rem 1rem 0.875rem;
-  text-align: left;
-  background: transparent;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  text-decoration: none;
   transition:
     background-color var(--dur-hover) var(--ease-ui),
-    border-color var(--dur-hover) var(--ease-ui);
+    opacity var(--dur) var(--ease-ui);
+  /* Dimmed until it is the one being read. The rail is navigation, not the
+     content, so it should not compete with the block beside it for attention —
+     but every row stays legible, because a table of contents you cannot read
+     until you arrive at each line is not one. */
+  opacity: 0.55;
 }
 
-/* The stop on the line. Filled with --ground so the spine passes behind it
+/* The stop on the line. Filled with --ground so the track passes behind it
    rather than through it. */
-.room-surface-tab::before {
+.room-surface-stop::before {
   content: "";
   position: absolute;
   left: -1.375rem;
-  top: 1.15rem;
+  top: 0.85rem;
   width: 7px;
   height: 7px;
   border-radius: 999px;
@@ -807,45 +716,116 @@ li:hover > .room-ide-label {
   background: var(--ground);
   transition:
     background-color var(--dur-hover) var(--ease-ui),
-    border-color var(--dur-hover) var(--ease-ui),
-    box-shadow var(--dur-hover) var(--ease-ui);
+    border-color var(--dur-hover) var(--ease-ui);
 }
 
-.room-surface-tab:hover {
-  border-color: var(--edge);
+.room-surface-stop:hover {
   background: var(--surface);
+  opacity: 0.85;
 }
 
-/* --mark, the same way .room-drift-chip[data-on] marks its selection. --held
-   and --conflict are verdicts everywhere else on this page and a chosen tab is
-   not a verdict about anything. */
-.room-surface-tab[data-on] {
-  border-color: var(--edge-lit);
+.room-surface-stop[data-on] {
   background: var(--surface-2);
+  opacity: 1;
 }
 
-.room-surface-tab[data-on]::before {
+.room-surface-stop[data-on]::before {
   border-color: var(--mark);
   background: var(--mark);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--mark) 20%, transparent);
 }
 
-.room-surface-tab:focus-visible {
+.room-surface-stop:focus-visible {
   outline: 2px solid var(--mark);
   outline-offset: 2px;
+  opacity: 1;
 }
 
 .room-surface-index {
-  display: block;
-  margin-bottom: 0.4rem;
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   color: var(--ink-3);
 }
 
-.room-surface-tab[data-on] .room-surface-index {
+.room-surface-stop[data-on] .room-surface-index {
   color: var(--mark);
+}
+
+/* ── The rail, and the four blocks beside it ─────────────────────────────────
+   Nothing is held here and nothing swaps. All four entry points are on the page
+   in order, the reader scrolls through them, and the only thing that follows
+   along is the rail — which sticks so that "there are four of these, you are on
+   the second" survives past the first screenful.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-surface-nav {
+  position: sticky;
+  /* Clear of the nav bar, and high enough that the whole rail is on screen at
+     the shortest viewport this layout runs at. */
+  top: 120px;
+  align-self: start;
+}
+
+.room-surface-blocks {
+  display: flex;
+  flex-direction: column;
+  /* Wide enough that each block reads as its own checkpoint rather than as the
+     next paragraph of one long one. */
+  gap: 7rem;
+}
+
+/* The block being read. The others stay legible but stand down — four terminals
+   at equal weight is four things competing, and the rail has already said which
+   one is yours. */
+.room-surface-block {
+  /* An anchor jump from the rail must not tuck the heading under the nav bar. */
+  scroll-margin-top: 120px;
+  transition: opacity var(--dur) var(--ease-ui);
+}
+
+@media (min-width: 900px) {
+  .room-surface-block:not([data-on]) {
+    opacity: 0.62;
+  }
+}
+
+@media (max-width: 899.98px) {
+  /* No room for a column beside the blocks. The rail goes to the top of the
+     section and reads as a contents list, which is what it is; the bar keeps
+     working, it is just horizontal-adjacent rather than alongside. */
+  .room-surface-nav {
+    position: static;
+  }
+
+  .room-surface-blocks {
+    gap: 4.5rem;
+  }
+
+  .room-surface-block {
+    scroll-margin-top: 88px;
+  }
+}
+
+/* Nothing is being driven, so nothing follows along. The rail is still a
+   contents list and every block is still on the page in order — the bar simply
+   stops being a moving part. */
+@media (prefers-reduced-motion: reduce) {
+  .room-surface-stop,
+  .room-surface-stop::before,
+  .room-surface-block {
+    transition: none;
+  }
+}
+
+@media (scripting: none) {
+  /* Nothing writes --fill, so the bar would sit empty and the rail would look
+     broken. Without script there is no "where you are" to draw. */
+  .room-surface-fill {
+    display: none;
+  }
+
+  .room-surface-stop {
+    opacity: 1;
+  }
 }
 
 /* Three dots, drawn rather than typed: a window control that is really the
@@ -2436,7 +2416,8 @@ li:hover > .room-ide-label {
     animation: none;
   }
   /* The cards are simply already there. */
-  .room-cap-grid [data-card] {
+  .room-cap-grid [data-card],
+  .room-price-grid [data-card] {
     animation: none;
     opacity: 1;
     transform: none;

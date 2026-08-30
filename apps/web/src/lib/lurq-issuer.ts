@@ -319,10 +319,7 @@ export interface RepoDetailPayload extends DashboardRepo {
   setupUrl: string;
 }
 
-export async function fetchRepo(
-  ownerId: string,
-  id: number,
-): Promise<RepoDetailPayload | null> {
+export async function fetchRepo(ownerId: string, id: number): Promise<RepoDetailPayload | null> {
   const res = await issuerFetch(`/repos/${id}?ownerId=${encodeURIComponent(ownerId)}`);
   if (res.status === 404) {
     // Ambiguous status: the App may be unconfigured, or this repo may not exist
@@ -495,4 +492,63 @@ export async function updateSelectionPolicy(
     body: JSON.stringify({ ownerId, policy }),
   });
   if (!res.ok) throw new LurqIssuerError("Could not save policy.", 502);
+}
+
+// ── Billing ──────────────────────────────────────────────────────────────────
+// Stripe credentials live on the MCP service, never here. These three calls are
+// the whole of the web app's involvement in payments: it asks the backend for a
+// URL and redirects to it, so nothing that faces the browser holds a key.
+
+export interface BillingSummary {
+  tier: "free" | "pro" | "enterprise";
+  planName: string;
+  status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  used: number;
+  /** null = uncapped. */
+  limit: number | null;
+  /** False when the deployment has no Stripe configured. */
+  billingEnabled: boolean;
+  /** True once the account has a Stripe customer, i.e. the portal will open. */
+  manageable: boolean;
+}
+
+export async function fetchBilling(ownerId: string): Promise<BillingSummary> {
+  const res = await issuerFetch(`/billing/subscription?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read your plan.", 502);
+  return (await res.json()) as BillingSummary;
+}
+
+/** A Stripe Checkout URL, or null when this deployment cannot sell that plan. */
+export async function startCheckout(args: {
+  ownerId: string;
+  tier: string;
+  email?: string | null;
+}): Promise<string | null> {
+  const res = await issuerFetch("/billing/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  // 404 = billing not configured, 503 = that plan has no Price yet. Neither is
+  // an error the buyer can do anything about, so the caller shows the contact
+  // route instead of an alarming failure.
+  if (res.status === 404 || res.status === 503) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not start checkout.", 502);
+  const data = (await res.json()) as { url?: string };
+  return data.url ?? null;
+}
+
+/** A Stripe Billing Portal URL, or null if the account never had a subscription. */
+export async function openBillingPortal(ownerId: string): Promise<string | null> {
+  const res = await issuerFetch("/billing/portal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not open the billing portal.", 502);
+  const data = (await res.json()) as { url?: string };
+  return data.url ?? null;
 }
