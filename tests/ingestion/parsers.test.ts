@@ -190,3 +190,32 @@ describe('bundlephobia parser', () => {
     expect(parseBundleSize({})).toBeNull();
   });
 });
+
+describe('repoUrl scheme validation', () => {
+  const withRepo = (url: string) => ({
+    name: 'evil',
+    'dist-tags': { latest: '1.0.0' },
+    versions: { '1.0.0': { repository: { type: 'git', url } } },
+    repository: { type: 'git', url },
+  });
+
+  it('drops a non-http(s) repository url rather than storing it', () => {
+    // Anyone can publish this. It used to reach an href in the plan HTML.
+    expect(parseNpmRegistry(withRepo('javascript:alert(1)')).repoUrl).toBeNull();
+    expect(parseNpmRegistry(withRepo('data:text/html,<script>1</script>')).repoUrl).toBeNull();
+    expect(parseNpmRegistry(withRepo('  JaVaScRiPt:alert(1)')).repoUrl).toBeNull();
+  });
+
+  it('still keeps a legitimate non-github repository url', () => {
+    expect(parseNpmRegistry(withRepo('git+https://gitlab.com/a/b.git')).repoUrl).toBe(
+      'https://gitlab.com/a/b',
+    );
+  });
+
+  it('safeHref refuses anything that is not http(s)', async () => {
+    const { safeHref } = await import('../../src/cli/planView');
+    expect(safeHref('javascript:alert(1)')).toBeNull();
+    expect(safeHref(null)).toBeNull();
+    expect(safeHref('https://github.com/a/b')).toBe('https://github.com/a/b');
+  });
+});

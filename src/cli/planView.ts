@@ -10,13 +10,29 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
+/**
+ * A URL safe to put in an `href`, or null.
+ *
+ * `esc` escapes `& < > "`, which does nothing to a scheme: `javascript:alert(1)`
+ * survives it intact. `repoUrl` originates in npm packument metadata — whatever
+ * the publisher typed — and this page is written to disk and opened from
+ * `file://`, so a click would run attacker JS in a local-file origin. Ingestion
+ * now drops non-http(s) URLs too (npmRegistry.cleanUrl); this is the check at
+ * the point of rendering, which also covers rows stored before that landed.
+ */
+export function safeHref(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return /^https?:\/\//i.test(url.trim()) ? url.trim() : null;
+}
+
 function slotRows(plan: PlanOutput): string {
   return plan.slots
     .map((s) => {
       const rec = s.recommended;
+      const href = rec ? safeHref(rec.repoUrl) : null;
       const name = rec
-        ? rec.repoUrl
-          ? `<a href="${esc(rec.repoUrl)}" target="_blank" rel="noreferrer">${esc(rec.name)}</a>`
+        ? href
+          ? `<a href="${esc(href)}" target="_blank" rel="noreferrer">${esc(rec.name)}</a>`
           : esc(rec.name)
         : '<span class="muted">no match</span>';
       const alts = s.alternatives.map((a) => esc(a.name)).join(', ') || '<span class="muted">-</span>';

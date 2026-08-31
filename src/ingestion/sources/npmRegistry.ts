@@ -40,12 +40,24 @@ function normalizeRepoUrl(
   return { repoUrl, repo };
 }
 
+/**
+ * Normalize a registry-supplied repository/homepage URL, or null.
+ *
+ * The scheme check is the security half. `repository.url` is whatever the
+ * publisher typed — it reaches us straight from the packument — and this value
+ * ends up in an `href` (src/cli/planView.ts renders the plan as HTML). Entity
+ * escaping does not stop `javascript:`, so a package published with
+ * `"repository": "javascript:..."` would be a one-click XSS in a file:// page.
+ * Anything that isn't http(s) after normalization is not a repo link.
+ */
 function cleanUrl(url: string | null): string | null {
   if (!url) return null;
-  return url
+  const normalized = url
+    .trim()
     .replace(/^git\+/, '')
     .replace(/^git:\/\//, 'https://')
     .replace(/\.git$/, '');
+  return /^https?:\/\//i.test(normalized) ? normalized : null;
 }
 
 function pickLicense(value: unknown): string | null {

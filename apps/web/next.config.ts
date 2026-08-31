@@ -27,6 +27,41 @@ const nextConfig: NextConfig = {
   // (which blocklist *.posthog.com) can't silently drop events. The static/array
   // asset rules must precede the /ingest catch-all. US region — swap us→eu to move.
   skipTrailingSlashRedirect: true,
+  /**
+   * Baseline security headers. The Express service has had `helmet()` since it
+   * shipped; this app — the one that actually holds the Clerk session — had
+   * nothing, so /dashboard was framable and its revoke/rotate buttons were a
+   * clickjack away.
+   *
+   * DELIBERATELY NOT A FULL CSP. A `script-src`/`style-src` policy has to
+   * allowlist Clerk, PostHog, Vercel analytics and Next's own inline bootstrap,
+   * and a wrong one fails by silently killing sign-in. `frame-ancestors` is the
+   * one directive that constrains no resource loading at all, so it is safe to
+   * ship un-tested; the rest of the policy is a separate, measured change.
+   *
+   * HSTS carries neither `includeSubDomains` nor `preload` on purpose: this app
+   * is not the only thing on the domain (api.lurq.run, the docs zone), and
+   * asserting HTTPS on their behalf from here is how you brick a subdomain you
+   * forgot about, for two years, in every browser that ever saw the header.
+   */
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+          },
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       { source: "/ingest/static/:path*", destination: "https://us-assets.i.posthog.com/static/:path*" },
