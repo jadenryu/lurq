@@ -1,9 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { EmptyState, InlineError, eyebrow } from "@/components/dashboard/panel";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { ReposPanel } from "@/components/dashboard/repos-panel";
 import { DriftMeter } from "@/components/dashboard/drift-meter";
-import { StatTile } from "@/components/dashboard/stat-tile";
+import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { loadAlerts, loadImpact, loadRepos } from "@/lib/dashboard-data";
@@ -71,7 +71,7 @@ export default async function ReposPage({
         }
       />
 
-      <div className="mt-8 space-y-6">
+      <PageBody>
         {message && <InlineError>{message}</InlineError>}
 
         {!data.configured ? (
@@ -96,7 +96,7 @@ export default async function ReposPage({
             {impact.analysed > 0 && (
               <div>
                 <p className={eyebrow}>last {IMPACT_DAYS} days</p>
-                <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="mt-3"><StatRow>
                   <StatTile
                     label="breakages caught"
                     value={impact.blocking}
@@ -121,12 +121,12 @@ export default async function ReposPage({
                         : undefined
                     }
                   />
-                </div>
+                </StatRow></div>
               </div>
             )}
 
             {data.repos.length > 0 && (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <StatRow>
                 <StatTile label="repositories" value={data.repos.length} />
                 <StatTile
                   label="dependencies indexed"
@@ -148,12 +148,12 @@ export default async function ReposPage({
                   declared={totals.declared}
                   deprecated={totals.deprecated}
                 />
-              </div>
+              </StatRow>
             )}
             <ReposPanel repos={data.repos} demo={demo} installUrl={url} />
           </>
         )}
-      </div>
+      </PageBody>
     </div>
   );
 }

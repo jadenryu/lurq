@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { Chip, EmptyState, Panel } from "@/components/dashboard/panel";
 import { loadAuditLog, type AuditEvent } from "@/lib/audit";
 import { relativeTime } from "@/lib/format";
@@ -58,7 +58,7 @@ export default async function DashboardAuditPage() {
         demo={demo}
       />
 
-      <div className="mt-8 space-y-4">
+      <PageBody>
         {events.length === 0 ? (
           <EmptyState title="nothing logged yet">
             Keys you create, repositories lurq scans, and releases that affect them all land here.
@@ -81,7 +81,7 @@ export default async function DashboardAuditPage() {
           timestamp for. Policy edits and preference changes are not recorded yet, so they do not
           appear here.
         </p>
-      </div>
+      </PageBody>
     </div>
   );
 }

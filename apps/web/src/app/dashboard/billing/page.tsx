@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { BillingPanel } from "@/components/dashboard/billing-panel";
 import { loadBilling } from "@/lib/dashboard-data";
 
@@ -25,7 +25,9 @@ export default async function DashboardBillingPage(props: PageProps<"/dashboard/
         subtitle="Your plan, what it includes, and what you have used this month."
         demo={demo}
       />
-      <BillingPanel billing={billing} justCheckedOut={justChecked} />
+      <PageBody>
+        <BillingPanel billing={billing} justCheckedOut={justChecked} />
+      </PageBody>
     </div>
   );
 }

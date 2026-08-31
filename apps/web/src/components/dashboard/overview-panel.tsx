@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { ChartValues, ColumnChart, BarList } from "@/components/dashboard/charts";
 import { Chip, EmptyState, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { Stagger, StaggerItem } from "@/components/dashboard/motion";
-import { HeroFigure, StatTile } from "@/components/dashboard/stat-tile";
+import { HeroFigure, StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import type { OverviewData } from "@/lib/dashboard-data";
 import { fmtDay, relativeTime } from "@/lib/format";
 
@@ -40,7 +40,11 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
           further waves. Each Stagger starts on mount, so the small `delay` on
           the later groups is what makes the page read top-down rather than all
           three rows animating at once. */}
-      <Stagger className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* md, not lg: at 768–1024px this row used to drop to two columns while
+          every other page still showed four, so the tiles resized when you
+          switched tabs. StatRow owns this everywhere it can; here the stagger
+          wrapper needs the grid itself, so the scale is matched by hand. */}
+      <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StaggerItem>
           <StatTile label="calls today" value={usage.today} />
         </StaggerItem>

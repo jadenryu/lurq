@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { Panel, PanelHeader } from "@/components/dashboard/panel";
 import { PreferencesForm } from "@/components/dashboard/preferences-form";
 import { loadSettings } from "@/lib/user-settings";
@@ -31,7 +31,7 @@ export default async function DashboardPreferencesPage() {
     <div>
       <PageHeader title="preferences" subtitle="How the dashboard behaves for you." />
 
-      <div className="mt-8 space-y-6">
+      <PageBody>
         <PreferencesForm defaultRangeDays={settings.defaultRangeDays} />
 
         <Panel>
@@ -53,7 +53,7 @@ export default async function DashboardPreferencesPage() {
             </li>
           </ul>
         </Panel>
-      </div>
+      </PageBody>
     </div>
   );
 }

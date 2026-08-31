@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MigrationBrief } from "@/components/dashboard/migration-brief";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
@@ -11,7 +11,7 @@ import { ScanProgress } from "@/components/dashboard/scan-progress";
 import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
 import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
 import { UpgradeRuns } from "@/components/dashboard/upgrade-runs";
-import { StatTile } from "@/components/dashboard/stat-tile";
+import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { buttonVariants } from "@/components/ui/button";
 import { loadRepo, loadRepoBrief } from "@/lib/dashboard-data";
 import { relativeTime } from "@/lib/format";
@@ -71,7 +71,7 @@ export default async function RepoDetailPage({
         }
       />
 
-      <div className="mt-8 space-y-6">
+      <PageBody>
         {/* Polls this route until the first scan lands, so the page fills itself
             in instead of waiting for someone to guess that rescan is the only
             thing that ever re-reads the data. */}
@@ -80,7 +80,7 @@ export default async function RepoDetailPage({
         {repo.lastScanError && <InlineError>{repo.lastScanError}</InlineError>}
 
         {drift && (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <StatRow>
             <StatTile
               label="tracked"
               value={drift.depsTracked}
@@ -114,7 +114,7 @@ export default async function RepoDetailPage({
               value={drift.conflicts ?? "-"}
               hint={drift.conflicts === null ? "rescan to check" : "at latest versions"}
             />
-          </div>
+          </StatRow>
         )}
 
         {/* The brief fans out to one surface diff per upgrade, so it streams in
@@ -142,7 +142,7 @@ export default async function RepoDetailPage({
         />
 
         <RepoDeps deps={repo.deps} scanning={scanning} />
-      </div>
+      </PageBody>
     </div>
   );
 }
