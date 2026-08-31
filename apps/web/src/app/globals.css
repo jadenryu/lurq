@@ -323,18 +323,25 @@
 }
 
 /* ── Dashboard type ──────────────────────────────────────────────────────────
-   The dashboard is an application surface, not the marketing page, and it wants
-   a different pairing: Geist carries the headings, Inter runs the body and the
-   UI text. Commit Mono stays for anything that is a figure in a column, a key
-   prefix, or a command — those want the monospace.
+   Geist everywhere, Commit Mono for the things that are actually monospace.
 
-   Scoped to a class on the dashboard shell rather than changed globally,
-   because the marketing route's type is a deliberate design and retuning it was
-   explicitly out of scope. Everything below inherits through the two tokens, so
-   no component needs to know which surface it is on. */
+   Headings and body are the SAME family here, deliberately: hierarchy comes
+   from weight and size, not from a second typeface. The dashboard used to pair
+   Geist headings against an Inter body, which is a distinction nobody reads as
+   intentional at 13px — two grotesques that close together just look like a
+   font failed to load. Inter is now gone from the bundle entirely.
+
+   `--font-mono` is NOT redeclared here. It resolves to Commit Mono from the
+   root, which is what the ~160 `font-mono` usages across the dashboard want: a
+   figure in a column, a key prefix, a version, a command. Overriding it here
+   would only be a second place to keep in step.
+
+   Still scoped to a class on the dashboard shell rather than changed globally,
+   because the marketing route's pairing (Commit Mono headings over a Geist
+   body) is a deliberate design and is not what this asks for. */
 .dashboard-type {
   --font-heading: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter), var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   font-family: var(--font-sans);
 }
 
