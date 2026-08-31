@@ -1,5 +1,5 @@
 import { ActivityMap } from "@/components/dashboard/activity-map";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { RangeTabs, parseDays } from "@/components/dashboard/range-tabs";
 import { UsagePanel } from "@/components/dashboard/usage-panel";
 import { loadUsage } from "@/lib/dashboard-data";
@@ -35,10 +35,10 @@ export default async function DashboardUsagePage(props: PageProps<"/dashboard/us
         action={<RangeTabs active={days} basePath="/dashboard/usage" />}
       />
 
-      <div className="mt-8 space-y-6">
+      <PageBody>
         <ActivityMap series={year.series} />
         <UsagePanel usage={usage} days={days} />
-      </div>
+      </PageBody>
     </div>
   );
 }

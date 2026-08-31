@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { Panel, PanelHeader } from "@/components/dashboard/panel";
 import { DOCS_URL } from "@/lib/site-links";
 
@@ -54,7 +54,8 @@ export default function DashboardSupportPage() {
         subtitle="Documentation, the in-dashboard guide, and how to reach a person."
       />
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
+      <PageBody>
+        <div className="grid gap-3 md:grid-cols-3">
         {ROUTES.map((route) => (
           <Panel key={route.href}>
             <PanelHeader title={route.title} />
@@ -81,6 +82,7 @@ export default function DashboardSupportPage() {
           </Panel>
         ))}
       </div>
+      </PageBody>
     </div>
   );
 }

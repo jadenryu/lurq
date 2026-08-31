@@ -1,5 +1,5 @@
 import { ContributionsFeed } from "@/components/dashboard/contributions-feed";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { loadContributions } from "@/lib/dashboard-data";
 
 export default async function DashboardContributionsPage() {
@@ -13,9 +13,9 @@ export default async function DashboardContributionsPage() {
         demo={demo}
       />
 
-      <div className="mt-8">
+      <PageBody>
         <ContributionsFeed packages={data.packages} />
-      </div>
+      </PageBody>
     </div>
   );
 }

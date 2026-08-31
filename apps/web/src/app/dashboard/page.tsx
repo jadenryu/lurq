@@ -4,7 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { GettingStarted } from "@/components/dashboard/getting-started";
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { loadOverview, loadRepos } from "@/lib/dashboard-data";
 import { installUrl } from "@/lib/github-connect";
 
@@ -49,7 +49,7 @@ export default async function DashboardOverviewPage() {
         }
       />
 
-      <div className="mt-8">
+      <PageBody>
         {isNew ? (
           <GettingStarted
             hasKey={activeKeys.length > 0}
@@ -68,7 +68,7 @@ export default async function DashboardOverviewPage() {
             <OverviewPanel data={data} days={WINDOW_DAYS} />
           </>
         )}
-      </div>
+      </PageBody>
     </div>
   );
 }

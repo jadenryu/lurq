@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { EmptyState } from "@/components/dashboard/panel";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { loadAlerts } from "@/lib/dashboard-data";
 
 export const metadata: Metadata = {
@@ -40,7 +40,7 @@ export default async function DashboardNotificationsPage() {
         demo={demo}
       />
 
-      <div className="mt-8">
+      <PageBody>
         {alerts.length === 0 ? (
           <EmptyState
             title="nothing to report"
@@ -56,7 +56,7 @@ export default async function DashboardNotificationsPage() {
         ) : (
           <AlertsPanel alerts={alerts} />
         )}
-      </div>
+      </PageBody>
     </div>
   );
 }

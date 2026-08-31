@@ -1,7 +1,7 @@
 import { CreateKeyDialog } from "@/components/dashboard/create-key-dialog";
 import { KeysPanel } from "@/components/dashboard/keys-panel";
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { InlineError } from "@/components/dashboard/panel";
 import { loadKeys } from "@/lib/dashboard-data";
 
@@ -32,24 +32,17 @@ export default async function DashboardKeysPage() {
         has working ones — the user cannot see the keys they hold, so they have
         no way to know. Say it plainly instead.
       */}
-      {failed && (
-        <div className="mt-8">
+      <PageBody>
+        {failed && (
           <InlineError>
             The key service is unreachable, so your keys could not be loaded. This is not an
             empty account, don&apos;t create a new key from this page until it reconnects,
             and any key you already have keeps working.
           </InlineError>
-        </div>
-      )}
-
-      {showOnboarding && (
-        <div className="mt-8">
-          <OnboardingPanel />
-        </div>
-      )}
-      <div className="mt-8">
+        )}
+        {showOnboarding && <OnboardingPanel />}
         <KeysPanel keys={keys} readOnly={demo || failed} />
-      </div>
+      </PageBody>
     </div>
   );
 }

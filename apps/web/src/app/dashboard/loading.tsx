@@ -24,7 +24,9 @@ export default function DashboardLoading() {
       </div>
 
       {/* Stat row */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Must match StatRow exactly — a skeleton that reflows when the
+          content lands reads as a layout bug, not as loading. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
