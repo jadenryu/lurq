@@ -147,10 +147,15 @@ export default async function ReposPage({
                   tracked={totals.deps}
                   declared={totals.declared}
                   deprecated={totals.deprecated}
+                  href="#repos"
                 />
               </StatRow>
             )}
-            <ReposPanel repos={data.repos} demo={demo} installUrl={url} />
+            {/* scroll-mt so the drift meter's link lands the list below the
+                header rather than tucked under it. */}
+            <div id="repos" className="scroll-mt-24">
+              <ReposPanel repos={data.repos} demo={demo} installUrl={url} />
+            </div>
           </>
         )}
       </PageBody>

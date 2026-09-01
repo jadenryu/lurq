@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 
 /**
@@ -29,6 +31,7 @@ export function DriftMeter({
   tracked,
   declared,
   deprecated,
+  href,
 }: {
   /** Tracked dependencies at least one major behind. */
   behind: number;
@@ -37,15 +40,25 @@ export function DriftMeter({
   /** Dependencies the manifests declare, the real denominator. */
   declared: number;
   deprecated: number;
+  /** Where the counted rows live. Omitted → the tile stays inert. */
+  href?: string;
 }) {
   const total = Math.max(declared, tracked, 1);
   const unknown = Math.max(0, declared - tracked);
   const current = Math.max(0, tracked - behind);
   const pct = (n: number) => (n / total) * 100;
 
-  return (
-    <Panel padding="tight" className="flex flex-col justify-between">
-      <p className={eyebrow}>behind by a major</p>
+  const body = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <p className={eyebrow}>behind by a major</p>
+        {href && (
+          <ChevronRight
+            aria-hidden
+            className="size-3.5 shrink-0 -translate-x-1 text-ink-3 opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+          />
+        )}
+      </div>
 
       <div className="mt-3">
         <p className="font-sans text-2xl font-medium tracking-[-0.02em] text-ink md:text-3xl">
@@ -69,14 +82,51 @@ export function DriftMeter({
           (unknown > 0 ? `; ${unknown} of ${declared} declared are not indexed` : "")
         }
       >
+        {/* Native title per segment. The bar's aria-label already reads the
+            whole sentence for assistive tech, but a sighted reader hovering the
+            red slice had no way to learn which slice it was — the widths are
+            the label only once you already know the encoding. */}
         {behind > 0 && (
-          <span style={{ width: `${pct(behind)}%`, background: "var(--conflict)" }} />
+          <span
+            title={`${behind.toLocaleString()} behind by a major`}
+            style={{ width: `${pct(behind)}%`, background: "var(--conflict)" }}
+          />
         )}
         {current > 0 && (
-          <span style={{ width: `${pct(current)}%`, background: "var(--held)", opacity: 0.4 }} />
+          <span
+            title={`${current.toLocaleString()} on a current major`}
+            style={{ width: `${pct(current)}%`, background: "var(--held)", opacity: 0.4 }}
+          />
         )}
-        {unknown > 0 && <span style={{ width: `${pct(unknown)}%`, background: "var(--edge-lit)" }} />}
+        {unknown > 0 && (
+          <span
+            title={`${unknown.toLocaleString()} declared but not yet indexed`}
+            style={{ width: `${pct(unknown)}%`, background: "var(--edge-lit)" }}
+          />
+        )}
       </div>
-    </Panel>
+    </>
+  );
+
+  if (!href) {
+    return (
+      <Panel padding="tight" className="flex flex-col justify-between">
+        {body}
+      </Panel>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="group rounded-[var(--radius-panel)] outline-none transition-transform duration-150 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg motion-reduce:hover:translate-y-0 motion-reduce:transition-none"
+    >
+      <Panel
+        padding="tight"
+        className="flex h-full flex-col justify-between transition-colors duration-150 group-hover:border-edge-lit"
+      >
+        {body}
+      </Panel>
+    </Link>
   );
 }
