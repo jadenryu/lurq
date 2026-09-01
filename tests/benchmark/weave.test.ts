@@ -4,7 +4,9 @@ import {
   hasNoBlockingPackage,
   isCoinstallableSlotFilled,
   predictedFail,
+  validateTemplate,
 } from '../../src/benchmark/results';
+import { resolveTemplateRef } from '../../src/sandbox/e2b';
 import { finishWeave, logResult, tracedRun, weaveEnabled } from '../../src/benchmark/weave';
 import type { BenchmarkResult, Participant } from '../../src/benchmark/types';
 
@@ -97,5 +99,18 @@ describe('weave mirror', () => {
       selections: [],
       unmatchedNeedIds: ['n1'],
     });
+  });
+});
+
+describe('e2b template refs', () => {
+  // The guard wants `name:id` so a run records which build produced a number.
+  // The SDK reads `a:b` as template `a` tag `b` and 404s, and takes a bare id.
+  // Both facts are true at once, so the label has to be stripped at the call.
+  it('validates the documented form but hands E2B the bare id', () => {
+    expect(validateTemplate('base:rki5dems9wqfm4r03t7g')).toBe('base:rki5dems9wqfm4r03t7g');
+    expect(resolveTemplateRef('base:rki5dems9wqfm4r03t7g')).toBe('rki5dems9wqfm4r03t7g');
+    expect(resolveTemplateRef('rki5dems9wqfm4r03t7g')).toBe('rki5dems9wqfm4r03t7g');
+    // A mutable alias still has to be refused before it ever reaches E2B.
+    expect(() => validateTemplate('base')).toThrow(/build-id/);
   });
 });

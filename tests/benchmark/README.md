@@ -30,11 +30,29 @@ The local Lurq project `.env` must contain:
 ```dotenv
 DATABASE_URL=postgresql://...
 E2B_API_KEY=e2b_...
-E2B_TEMPLATE=lurq-benchmark-node20-v1:d0f56b7c-f3e4-477b-abb4-092bf3d4cf93
+E2B_TEMPLATE=base:rki5dems9wqfm4r03t7g
 ```
 
-The E2B template reference must be an exact build ID, not the moving public
-`base` template or a mutable tag.
+The E2B template reference must carry an exact ID, never a bare mutable alias
+like `base` — two numbers measured against different images are not comparable.
+
+Two corrections to what this file used to say, both found the first time the
+harness was pointed at a live sandbox on 2026-09-01:
+
+1. **`lurq-benchmark-node20-v1:d0f56b7c-…` does not exist.** It 404s, there is
+   no template definition in this repo to build it from, and the ID is still
+   referenced by `stack-selection-v1.json`, `stack-selection-v2.json` and
+   `failure-detection-v1.json`. Those fixtures are stale. Building our own
+   template and pinning its real ID is still the right end state; until then
+   the public `base` build ID above is what actually runs.
+2. **E2B parses `name:id` as `template:tag`, not `template:build-id`.** It
+   404s on the pinned form and accepts a bare ID. The `name:id` shape is kept
+   because it documents what the image is alongside which build, and
+   `resolveTemplateRef` strips the label before the SDK sees it.
+
+Caveat on `base:rki5dems9wqfm4r03t7g`: that is the template ID E2B reports for
+its public `base` image, not a build ID we control. E2B could rebuild under it.
+It is good enough to get numbers moving and not good enough to publish.
 
 When external models are added, keep secrets in `.env` and record non-secret
 model configuration in the benchmark run artifact:

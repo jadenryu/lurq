@@ -63,6 +63,20 @@ function errText(err: unknown): string {
 
 const toSpec = (p: SandboxPackage): string => (p.version ? `${p.name}@${p.version}` : p.name);
 
+/**
+ * Turn a pinned `name:id` template reference into what the E2B SDK accepts.
+ *
+ * The benchmark pins templates as `name:id` (see `validateTemplate`) because
+ * that records both what the image is and exactly which build a number was
+ * measured against. The SDK does not parse that form: it reads `a:b` as
+ * template `a`, TAG `b`, and 404s. It takes a bare template/build ID. So the
+ * label is documentation for us and noise to E2B — strip it at the boundary.
+ */
+export function resolveTemplateRef(template: string): string {
+  const colon = template.lastIndexOf(':');
+  return colon === -1 ? template : template.slice(colon + 1);
+}
+
 export class E2BSandbox implements SandboxDriver {
   readonly name = 'e2b';
 
@@ -114,7 +128,7 @@ export class E2BSandbox implements SandboxDriver {
       timeoutMs: installTimeout + SMOKE_TIMEOUT_MS * packages.length + 30_000,
     };
     const sandbox = config.E2B_TEMPLATE
-      ? await Sandbox.create(config.E2B_TEMPLATE, createOpts)
+      ? await Sandbox.create(resolveTemplateRef(config.E2B_TEMPLATE), createOpts)
       : await Sandbox.create(createOpts);
 
     try {
@@ -167,7 +181,7 @@ export class E2BSandbox implements SandboxDriver {
       timeoutMs: (install ? INSTALL_TIMEOUT_MS : 0) + timeoutMs + 30_000,
     };
     const sandbox = config.E2B_TEMPLATE
-      ? await Sandbox.create(config.E2B_TEMPLATE, createOpts)
+      ? await Sandbox.create(resolveTemplateRef(config.E2B_TEMPLATE), createOpts)
       : await Sandbox.create(createOpts);
 
     try {
@@ -204,7 +218,7 @@ export class E2BSandbox implements SandboxDriver {
       const { default: Sandbox } = await import('e2b');
       const createOpts = { apiKey: config.E2B_API_KEY, timeoutMs: 30_000 };
       const sandbox = config.E2B_TEMPLATE
-        ? await Sandbox.create(config.E2B_TEMPLATE, createOpts)
+        ? await Sandbox.create(resolveTemplateRef(config.E2B_TEMPLATE), createOpts)
         : await Sandbox.create(createOpts);
       try {
         const nodeOut = await sandbox.commands.run('node --version');
