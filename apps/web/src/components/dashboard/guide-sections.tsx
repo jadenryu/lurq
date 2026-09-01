@@ -194,7 +194,16 @@ export function ToolsSection() {
             <p className="mt-1.5 text-sm text-muted-foreground">{group.blurb}</p>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
               {tools.map((t) => (
-                <Panel key={t.name} padding="tight" className="flex flex-col">
+                // Anchored so usage can link a tool bar straight to what that
+                // tool actually does. A per-tool call count is only meaningful
+                // next to its purpose, and the two lived on different pages
+                // with no way across.
+                <Panel
+                  key={t.name}
+                  id={`tool-${t.name}`}
+                  padding="tight"
+                  className="flex scroll-mt-24 flex-col target:border-signal/50"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <code className="font-mono text-sm text-signal">{t.name}</code>
                     <Chip>tool</Chip>

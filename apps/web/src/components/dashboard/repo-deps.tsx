@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Chip, EmptyState, Panel } from "@/components/dashboard/panel";
 import { TableToolbar } from "@/components/dashboard/table-toolbar";
@@ -41,7 +41,6 @@ function matches(dep: DashboardDep, filter: string): boolean {
  * only "latest" next to a caret range makes every repo look out of date.
  */
 export function RepoDeps({ deps, scanning = false }: { deps: DashboardDep[]; scanning?: boolean }) {
-  const [query, setQuery] = useState("");
 
   /**
    * The filter lives in the URL, not in local state alone.
@@ -59,6 +58,20 @@ export function RepoDeps({ deps, scanning = false }: { deps: DashboardDep[]; sca
   const filter = FILTERS.some((f) => f.id === params.get("show"))
     ? (params.get("show") as string)
     : "all";
+
+  /**
+   * The search box is seeded from the URL too, which is what lets the transitive
+   * panel hand off: a flagged transitive is fixed by upgrading whichever direct
+   * dependency pulls it in, so those names link here pre-searched.
+   *
+   * Typing stays local. Writing a history entry per keystroke would make the
+   * back button a slow rewind of the user's own typing, so the URL is an inbound
+   * channel only — `useEffect` picks up a new `q` when a link changes it, and
+   * nothing pushes back.
+   */
+  const urlQuery = params.get("q") ?? "";
+  const [query, setQuery] = useState(urlQuery);
+  useEffect(() => setQuery(urlQuery), [urlQuery]);
 
   const setFilter = (next: string) => {
     const q = new URLSearchParams(params.toString());

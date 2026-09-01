@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Chip, EmptyState, Panel, PanelHeader } from "@/components/dashboard/panel";
 import {
   Table,
@@ -115,13 +116,22 @@ export function TransitiveRiskPanel({
                   <TableCell className="pr-5 md:pr-6">
                     {risk.pulledInBy.length > 0 ? (
                       <span className="flex flex-wrap gap-1.5">
+                        {/* The paragraph above tells you this risk is fixed by
+                            upgrading whichever direct dependency pulls it in —
+                            and then made you go find it yourself. Each parent
+                            now jumps to its own row in the drift table above,
+                            pre-searched, which is the whole action this panel
+                            was describing. */}
                         {risk.pulledInBy.map((parent) => (
-                          <code
+                          <Link
                             key={parent}
-                            className="rounded-[var(--radius-chip)] border border-border px-1.5 py-0.5 font-mono text-xs"
+                            href={`?q=${encodeURIComponent(parent)}#deps`}
+                            scroll={false}
+                            title={`Find ${parent} in this repo's direct dependencies`}
+                            className="rounded-[var(--radius-chip)] border border-border px-1.5 py-0.5 font-mono text-xs text-ink-2 outline-none transition-colors hover:border-edge-lit hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-signal/50"
                           >
                             {parent}
-                          </code>
+                          </Link>
                         ))}
                       </span>
                     ) : (
