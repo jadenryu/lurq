@@ -152,7 +152,15 @@ export default async function RepoDetailPage({
           armed={repo.policy.enabled}
         />
 
-        <RepoDeps deps={repo.deps} scanning={scanning} />
+        {/* useSearchParams (RepoDeps reads ?show= and ?q=) client-renders the
+            tree up to the nearest Suspense boundary on a prerendered route.
+            This route is dynamic today so nothing bails out, but the Next docs
+            note that on-demand dev rendering hides exactly this — the boundary
+            costs nothing and stops a future static render from taking the whole
+            page client-side. */}
+        <Suspense fallback={null}>
+          <RepoDeps deps={repo.deps} scanning={scanning} />
+        </Suspense>
       </PageBody>
     </div>
   );
