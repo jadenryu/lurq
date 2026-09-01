@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-08-31T15:17:26.183Z",
+  "generatedAt": "2026-09-01T12:41:09.442Z",
   "source": "live",
-  "dataAsOf": "2026-08-31T15:17:22.421Z",
-  "packages": 26759,
-  "packagesScored": 26759,
+  "dataAsOf": "2026-09-01T12:36:53.636Z",
+  "packages": 33587,
+  "packagesScored": 33587,
   "categories": 23,
-  "versionsTracked": 3338737,
-  "apiSurfaces": 17160,
-  "coOccurrencePairs": 15057603,
+  "versionsTracked": 3670793,
+  "apiSurfaces": 18750,
+  "coOccurrencePairs": 18434852,
   "dataSources": 10,
   "npm": {
     "package": "lurqrun",
@@ -18,11 +18,11 @@
     "weeksLive": 9
   },
   "lastSync": {
-    "startedAt": "2026-08-31T06:02:22.362Z",
-    "finishedAt": "2026-08-31T08:21:13.767Z",
-    "packagesSeen": 2305,
-    "packagesUpdated": 2305,
+    "startedAt": "2026-09-01T06:02:33.945Z",
+    "finishedAt": "2026-09-01T07:24:18.426Z",
+    "packagesSeen": 2355,
+    "packagesUpdated": 2355,
     "status": "partial"
   },
-  "syncDays": 46
+  "syncDays": 47
 }
