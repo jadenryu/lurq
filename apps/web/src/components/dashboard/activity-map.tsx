@@ -100,15 +100,32 @@ export function ActivityMap({ series }: { series: Point[] }) {
                 {Array.from({ length: 7 }, (_, d) => {
                   const cell = week[d] ?? null;
                   if (!cell) return <div key={d} className="h-[11px] w-[11px]" />;
+                  const active = cell.count > 0;
                   return (
                     <div
                       key={d}
-                      // Native title: a tooltip that needs no JS, works on
-                      // keyboard focus order, and survives with hydration off.
+                      // Native title: a tooltip that needs no JS and survives
+                      // with hydration off. It used to claim it also worked in
+                      // keyboard focus order, which was not true — a bare <div>
+                      // is not focusable, so the tooltip was pointer-only and
+                      // every one of these 365 facts was unreachable without a
+                      // mouse. `tabIndex` on the days that carry a number fixes
+                      // that; empty days stay out of the tab order, because
+                      // arrowing through 300 silent squares to reach the eight
+                      // that say something is not access, it is a maze.
+                      tabIndex={active ? 0 : undefined}
+                      role={active ? "img" : undefined}
+                      aria-label={
+                        active
+                          ? `${cell.count.toLocaleString()} call${cell.count === 1 ? "" : "s"} on ${fmtDay(cell.date)}`
+                          : undefined
+                      }
                       title={`${cell.count.toLocaleString()} call${cell.count === 1 ? "" : "s"} · ${fmtDay(cell.date)}`}
                       className={cn(
-                        "h-[11px] w-[11px] rounded-[2px] ring-1 ring-inset ring-border/50",
+                        "h-[11px] w-[11px] rounded-[2px] ring-1 ring-inset ring-border/50 outline-none",
                         LEVELS[level(cell.count, q)],
+                        active &&
+                          "transition-[box-shadow,transform] duration-100 hover:scale-[1.35] hover:ring-signal focus-visible:scale-[1.35] focus-visible:ring-2 focus-visible:ring-signal motion-reduce:transition-none motion-reduce:hover:scale-100",
                       )}
                     />
                   );

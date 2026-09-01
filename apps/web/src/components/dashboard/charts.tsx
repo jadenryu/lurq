@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { fmtDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -182,11 +183,18 @@ export function Sparkline({ data, height = 40 }: { data: Point[]; height?: numbe
  * darker-where-bigger ramp would burn the color channel on information the bar
  * length already shows.
  */
+/** One row of a BarList. `href` is optional — a row without one stays inert. */
+export interface BarItem {
+  label: string;
+  count: number;
+  href?: string;
+}
+
 export function BarList({
   items,
   layout = "inline",
 }: {
-  items: { label: string; count: number }[];
+  items: BarItem[];
   /**
    * `inline` puts label · bar · value on one row, only legible in a wide column.
    * `stacked` lifts label and value above a full-width bar, for narrow rails where
@@ -196,6 +204,23 @@ export function BarList({
 }) {
   const max = Math.max(...items.map((t) => t.count), 1);
   const label = "font-mono text-xs lowercase tracking-wide text-muted-foreground";
+  /**
+   * A row becomes a link when the caller gives it somewhere to go. Kept as a
+   * wrapper rather than a prop on the label so the whole row — bar included —
+   * is the hit target: a 24px-wide truncated label is not a click target anyone
+   * should be asked to hit.
+   */
+  const Row = ({ item, children }: { item: BarItem; children: ReactNode }) =>
+    item.href ? (
+      <Link
+        href={item.href}
+        className="group block rounded-[var(--radius-chip)] outline-none transition-colors hover:bg-surface-2/60 focus-visible:ring-2 focus-visible:ring-signal/50"
+      >
+        {children}
+      </Link>
+    ) : (
+      <div className="group">{children}</div>
+    );
   const value = "font-mono text-xs tabular-nums text-foreground";
 
   // Direct value labels on every row are fine here: the list is short and sorted,
@@ -204,7 +229,7 @@ export function BarList({
     return (
       <div className="space-y-3">
         {items.map((t) => (
-          <div key={t.label} className="group">
+          <Row key={t.label} item={t}>
             <div className="flex items-baseline justify-between gap-2">
               <span className={label}>{t.label}</span>
               <span className={value}>{t.count.toLocaleString()}</span>
@@ -218,7 +243,7 @@ export function BarList({
                 style={{ width: `${Math.max((t.count / max) * 100, 1)}%` }}
               />
             </div>
-          </div>
+          </Row>
         ))}
       </div>
     );
@@ -227,7 +252,8 @@ export function BarList({
   return (
     <div className="space-y-2.5">
       {items.map((t) => (
-        <div key={t.label} className="group flex items-center gap-3">
+        <Row key={t.label} item={t}>
+          <div className="flex items-center gap-3">
           <span className={cn("w-24 shrink-0 truncate", label)} title={t.label}>
             {t.label}
           </span>
@@ -240,7 +266,8 @@ export function BarList({
           <span className={cn("w-14 shrink-0 text-right", value)}>
             {t.count.toLocaleString()}
           </span>
-        </div>
+          </div>
+        </Row>
       ))}
     </div>
   );

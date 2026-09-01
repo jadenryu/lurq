@@ -46,23 +46,33 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
           wrapper needs the grid itself, so the scale is matched by hand. */}
       <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StaggerItem>
-          <StatTile label="calls today" value={usage.today} />
+          {/* Every tile on the landing view goes somewhere. This is the first
+              screen anyone sees, and four numbers that do nothing set the
+              expectation that the rest of the dashboard is a poster. */}
+          <StatTile label="calls today" value={usage.today} href="/dashboard/usage" />
         </StaggerItem>
         <StaggerItem>
           <StatTile
             label="active keys"
             value={activeKeys.length}
             hint={keys.length > activeKeys.length ? `${keys.length - activeKeys.length} revoked` : undefined}
+            href="/dashboard/keys"
           />
         </StaggerItem>
         <StaggerItem>
-          <StatTile label="packages added" value={contributions.total} hint="first requested by you" />
+          <StatTile
+            label="packages added"
+            value={contributions.total}
+            hint="first requested by you"
+            href="/dashboard/contributions"
+          />
         </StaggerItem>
         <StaggerItem>
           <StatTile
             label="acceptance"
             value={acceptance === null ? "-" : `${acceptance}%`}
             hint={decided > 0 ? `${accepted}/${decided} recommendations` : "no outcomes yet"}
+            href="/dashboard/activity"
           />
         </StaggerItem>
       </Stagger>
