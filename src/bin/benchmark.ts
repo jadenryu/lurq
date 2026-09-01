@@ -137,6 +137,31 @@ program
       process.exit(1);
     }
 
+    // --cases was declared but never applied, so every run silently executed the
+    // whole suite — a dry-run annoyance, and real money once E2B and provider
+    // calls are in play. An unknown id is a hard error: quietly running zero
+    // cases is the same failure wearing a different hat.
+    if (options.cases) {
+      const wanted = new Set<string>(
+        options.cases.split(',').map((s: string) => s.trim()).filter(Boolean),
+      );
+      const known = new Set([
+        ...suite.cases.map((c) => c.id),
+        ...(suite.failureCases ?? []).map((c) => c.id),
+      ]);
+      const unknown = [...wanted].filter((id) => !known.has(id));
+      if (unknown.length > 0) {
+        console.error(`ERROR: unknown case id(s): ${unknown.join(', ')}`);
+        process.exit(1);
+      }
+      suite = {
+        ...suite,
+        cases: suite.cases.filter((c) => wanted.has(c.id)),
+        failureCases: suite.failureCases?.filter((c) => wanted.has(c.id)),
+      };
+      console.log(`Running ${wanted.size} selected case(s): ${[...wanted].join(', ')}`);
+    }
+
     // Resolve participants
     const activeParticipants: Participant[] = [];
     const ids = options.participants.split(',').map((s: string) => s.trim());
