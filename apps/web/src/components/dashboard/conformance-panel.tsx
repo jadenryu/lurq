@@ -61,7 +61,15 @@ function RepoRow({ repo }: { repo: RepoConformance }) {
         <ul className="mt-3 space-y-1.5">
           {repo.violations.map((v) => (
             <li key={`${v.name}-${v.rule}`} className="flex flex-wrap items-baseline gap-x-2.5">
-              <span className="font-mono text-xs text-foreground">{v.name}</span>
+              {/* The violating package, linked to its own row in that repo's
+                  drift table. A rule violation names a package and then made
+                  you go find it in a list of two hundred. */}
+              <Link
+                href={`/dashboard/repos/${repo.repoId}?q=${encodeURIComponent(v.name)}#deps`}
+                className="rounded-[var(--radius-chip)] font-mono text-xs text-foreground outline-none transition-colors hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
+              >
+                {v.name}
+              </Link>
               <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.12em] text-ink-3">
                 {RULE_LABEL[v.rule] ?? v.rule}
               </span>
@@ -69,8 +77,15 @@ function RepoRow({ repo }: { repo: RepoConformance }) {
             </li>
           ))}
           {repo.total > repo.violations.length && (
-            <li className={eyebrow}>
-              … {(repo.total - repo.violations.length).toLocaleString()} more
+            // Was a dead end: it told you more violations existed and gave you
+            // nowhere to see them.
+            <li>
+              <Link
+                href={`/dashboard/repos/${repo.repoId}`}
+                className={cn(eyebrow, "rounded-[var(--radius-chip)] outline-none transition-colors hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50")}
+              >
+                … {(repo.total - repo.violations.length).toLocaleString()} more in {repo.fullName}
+              </Link>
             </li>
           )}
         </ul>

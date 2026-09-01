@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { relativeTime } from "@/lib/format";
+import { DetailRow, ExpandableRow } from "@/components/dashboard/expandable-row";
 import type { UpgradeRun } from "@/lib/lurq-issuer";
 
 /**
@@ -75,7 +76,10 @@ export function UpgradeRuns({ runs }: { runs: UpgradeRun[] }) {
         <Table>
           <TableHeader>
             <TableRow className="border-border">
-              <TableHead className="pl-5 md:pl-6">package</TableHead>
+              <TableHead className="w-8 pl-3 pr-0 md:pl-4">
+                <span className="sr-only">expand</span>
+              </TableHead>
+              <TableHead>package</TableHead>
               <TableHead>upgrade</TableHead>
               <TableHead>verdict</TableHead>
               <TableHead>call sites</TableHead>
@@ -89,54 +93,139 @@ export function UpgradeRuns({ runs }: { runs: UpgradeRun[] }) {
               const severity = SEVERITY[run.severity];
               const status = STATUS[run.status];
               return (
-                <TableRow key={run.id} className="border-border">
-                  <TableCell className="pl-5 font-mono text-sm md:pl-6">
-                    {run.packageName}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
-                    {run.fromVersion} <span className="text-ink-3">→</span>{" "}
-                    {run.toVersion}
-                  </TableCell>
-                  <TableCell>
-                    <Chip tone={severity.tone}>{severity.label}</Chip>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs tabular-nums">
-                    {run.callSites > 0 ? (
-                      <span title={run.symbolsAffected.join(", ")}>
-                        {run.callSites}
-                        {run.symbolsAffected.length > 0 && (
-                          <span className="ml-1.5 text-ink-3">
-                            {run.symbolsAffected.slice(0, 2).join(", ")}
-                            {run.symbolsAffected.length > 2 &&
-                              ` +${run.symbolsAffected.length - 2}`}
-                          </span>
+                <ExpandableRow
+                  key={run.id}
+                  label={`${run.packageName} ${run.fromVersion} to ${run.toVersion}`}
+                  colSpan={8}
+                  summary={
+                    <>
+                      <TableCell className="font-mono text-sm">{run.packageName}</TableCell>
+                      <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                        {run.fromVersion} <span className="text-ink-3">→</span> {run.toVersion}
+                      </TableCell>
+                      <TableCell>
+                        <Chip tone={severity.tone}>{severity.label}</Chip>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs tabular-nums">
+                        {run.callSites > 0 ? (
+                          <>
+                            {run.callSites}
+                            {run.symbolsAffected.length > 0 && (
+                              <span className="ml-1.5 text-ink-3">
+                                {run.symbolsAffected.slice(0, 2).join(", ")}
+                                {run.symbolsAffected.length > 2 &&
+                                  ` +${run.symbolsAffected.length - 2}`}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-ink-3">-</span>
                         )}
-                      </span>
-                    ) : (
-                      <span className="text-ink-3">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <TestsCell run={run} />
-                  </TableCell>
-                  <TableCell>
-                    {run.prUrl ? (
-                      <a href={run.prUrl} target="_blank" rel="noreferrer">
-                        <Chip tone={status.tone}>{status.label}</Chip>
-                      </a>
-                    ) : (
-                      <Chip tone={status.tone}>{status.label}</Chip>
-                    )}
-                  </TableCell>
-                  <TableCell className="pr-5 font-mono text-xs text-muted-foreground md:pr-6">
-                    {relativeTime(run.createdAt)}
-                  </TableCell>
-                </TableRow>
+                      </TableCell>
+                      <TableCell>
+                        <TestsCell run={run} />
+                      </TableCell>
+                      <TableCell>
+                        {run.prUrl ? (
+                          <a href={run.prUrl} target="_blank" rel="noreferrer">
+                            <Chip tone={status.tone}>{status.label}</Chip>
+                          </a>
+                        ) : (
+                          <Chip tone={status.tone}>{status.label}</Chip>
+                        )}
+                      </TableCell>
+                      <TableCell className="pr-5 font-mono text-xs text-muted-foreground md:pr-6">
+                        {relativeTime(run.createdAt)}
+                      </TableCell>
+                    </>
+                  }
+                  detail={<RunDetail run={run} />}
+                />
               );
             })}
           </TableBody>
         </Table>
       </Panel>
+    </div>
+  );
+}
+
+/**
+ * What the run found, at full length.
+ *
+ * Two of these facts were already fetched and had nowhere to go: the complete
+ * symbol list (the row shows two and hid the rest in a native `title`, which is
+ * unreadable past a handful and unreachable on touch) and `callSiteFiles`, which
+ * was carried on the type and never rendered at all.
+ *
+ * "Which files break" is the entire question someone has when a verdict says
+ * blocking. It was one field away the whole time.
+ */
+function RunDetail({ run }: { run: UpgradeRun }) {
+  return (
+    <div className="space-y-0.5">
+      {run.symbolsAffected.length > 0 && (
+        <DetailRow label="symbols">
+          <span className="flex flex-wrap gap-1.5">
+            {run.symbolsAffected.map((sym) => (
+              <code
+                key={sym}
+                className="rounded-[var(--radius-chip)] border border-edge px-1.5 py-0.5 font-mono text-xs text-ink"
+              >
+                {sym}
+              </code>
+            ))}
+          </span>
+        </DetailRow>
+      )}
+
+      {run.callSiteFiles && run.callSiteFiles.length > 0 && (
+        <DetailRow label="files">
+          <span className="flex flex-col gap-0.5">
+            {run.callSiteFiles.map((file) => (
+              <code key={file} className="font-mono text-xs text-ink">
+                {file}
+              </code>
+            ))}
+          </span>
+        </DetailRow>
+      )}
+
+      {run.callSites > 0 && run.symbolsAffected.length === 0 && (
+        <DetailRow label="call sites">
+          {run.callSites} affected, but the run recorded no symbol names
+        </DetailRow>
+      )}
+
+      {run.filesChanged !== null && (
+        <DetailRow label="changed">
+          {run.filesChanged} file{run.filesChanged === 1 ? "" : "s"} edited by the run
+        </DetailRow>
+      )}
+
+      <DetailRow label="ci run">
+        <a
+          href={run.runUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-[var(--radius-chip)] underline decoration-edge underline-offset-4 outline-none transition-colors hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
+        >
+          open the workflow run
+        </a>
+        {run.prUrl && (
+          <>
+            {" · "}
+            <a
+              href={run.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-[var(--radius-chip)] underline decoration-edge underline-offset-4 outline-none transition-colors hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
+            >
+              open the pull request
+            </a>
+          </>
+        )}
+      </DetailRow>
     </div>
   );
 }
