@@ -217,6 +217,51 @@ export function writeSummary(dir: string, results: BenchmarkResult[]): void {
   }
 }
 
+// ── Per-result predicates ───────────────────────────────────────────────────
+//
+// Both of these are read in three places — the aggregate metrics below, the
+// runner's per-case console line, and the Weave mirror. They live here, once,
+// so a change to what "co-installable" or "lurq says fail" means cannot land in
+// one reader and not the others.
+
+/**
+ * Did this trial produce a stack that filled its slots AND survived reality?
+ *
+ * Deliberately mechanical: it proves filled slots plus safety and E2B behavior.
+ * It does not claim a package semantically fulfils a requirement; that needs
+ * independent review.
+ */
+export function isCoinstallableSlotFilled(r: BenchmarkResult): boolean {
+  const coverageMet = r.coverage.required > 0 && r.coverage.covered >= r.coverage.threshold;
+  const resolved = r.resolution?.attempted === true && r.resolution.installed === true;
+  const allRuntimeLoaded = r.resolution?.loaded.every((load) => load.loaded === true) ?? false;
+  return coverageMet && hasNoBlockingPackage(r) && resolved && allRuntimeLoaded;
+}
+
+/** No package in the proposal is nonexistent, deprecated, archived, unresolvable, or malformed. */
+export function hasNoBlockingPackage(r: BenchmarkResult): boolean {
+  return (
+    r.packageValidity.nonexistent.length === 0 &&
+    r.packageValidity.deprecated.length === 0 &&
+    r.packageValidity.archived.length === 0 &&
+    r.packageValidity.unresolvedVersions.length === 0 &&
+    (r.normalization?.invalidNames.length ?? 0) === 0
+  );
+}
+
+/**
+ * Lurq's verdict on the stack: would preflight have stopped it shipping?
+ *
+ * Note this is `hasNoBlockingPackage` plus highRisk — a high-risk package is
+ * enough for lurq to warn, but not enough to disqualify a stack from counting
+ * as co-installable, which is an install-and-load claim.
+ */
+export function predictedFail(r: BenchmarkResult): boolean {
+  const hasPreflightWarning =
+    !hasNoBlockingPackage(r) || r.packageValidity.highRisk.length > 0;
+  return hasPreflightWarning || r.compatPrediction === 'conflict';
+}
+
 export function computeMetrics(results: BenchmarkResult[]): BenchmarkMetrics {
   if (results.length === 0) {
     return {
@@ -281,20 +326,7 @@ export function computeMetrics(results: BenchmarkResult[]): BenchmarkMetrics {
       }
     }
 
-    // This is deliberately mechanical: it proves filled slots plus safety and
-    // E2B behavior. It does not claim that a package semantically fulfils a
-    // requirement; that needs independent review.
-    const coverageMet =
-      r.coverage.required > 0 && r.coverage.covered >= r.coverage.threshold;
-    const noBlocking =
-      r.packageValidity.nonexistent.length === 0 &&
-      r.packageValidity.deprecated.length === 0 &&
-      r.packageValidity.archived.length === 0 &&
-      r.packageValidity.unresolvedVersions.length === 0 &&
-      (r.normalization?.invalidNames.length ?? 0) === 0;
-    const resolved = r.resolution?.attempted === true && r.resolution.installed === true;
-    const allRuntimeLoaded = r.resolution?.loaded.every((load) => load.loaded === true) ?? false;
-    if (coverageMet && noBlocking && resolved && allRuntimeLoaded) coinstallableSlotFilled++;
+    if (isCoinstallableSlotFilled(r)) coinstallableSlotFilled++;
 
     // Unknown rate
     if (r.compatPrediction === 'unknown') unknowns++;
@@ -318,15 +350,7 @@ export function computeMetrics(results: BenchmarkResult[]): BenchmarkMetrics {
 
     for (const r of results) {
       // Lurq predicts "risky / should not ship" if verify/compat preflight fires.
-      const hasPreflightWarning =
-        r.packageValidity.nonexistent.length > 0 ||
-        r.packageValidity.deprecated.length > 0 ||
-        r.packageValidity.archived.length > 0 ||
-        r.packageValidity.highRisk.length > 0 ||
-        r.packageValidity.unresolvedVersions.length > 0 ||
-        (r.normalization?.invalidNames.length ?? 0) > 0;
-
-      const lurqPredictedFail = hasPreflightWarning || r.compatPrediction === 'conflict';
+      const lurqPredictedFail = predictedFail(r);
 
       // Ground truth is the fixture label (`expectedOutcome`), not E2B alone.
       // Deprecated packages often still install; counting only install failure
