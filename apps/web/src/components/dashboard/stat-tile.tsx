@@ -1,4 +1,6 @@
 import { Children, type ReactNode } from "react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 import { cn } from "@/lib/utils";
 
@@ -55,15 +57,37 @@ export function StatTile({
   value,
   hint,
   trend,
+  href,
 }: {
   label: string;
   value: string | number;
   hint?: string;
   trend?: ReactNode;
+  /**
+   * Where this number came from.
+   *
+   * A stat is a claim, and the first thing anyone wants from a claim is the
+   * rows behind it — "36 behind" is only useful if it takes you to the 36. When
+   * a tile has a destination it becomes a real link: pointer, hover lift, focus
+   * ring, and a caret that appears on hover so the affordance is visible before
+   * the click rather than discovered by accident.
+   *
+   * Tiles without a destination stay inert on purpose. A cursor that changes
+   * over something that does nothing is worse than one that never changes.
+   */
+  href?: string;
 }) {
-  return (
-    <Panel padding="tight" className="flex flex-col justify-between">
-      <p className={eyebrow}>{label}</p>
+  const body = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <p className={eyebrow}>{label}</p>
+        {href && (
+          <ChevronRight
+            aria-hidden
+            className="size-3.5 shrink-0 -translate-x-1 text-ink-3 opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+          />
+        )}
+      </div>
       <div className="mt-3">
         <p className="font-sans text-2xl font-medium tracking-[-0.02em] text-ink md:text-3xl">
           {typeof value === "number" ? value.toLocaleString() : value}
@@ -71,7 +95,29 @@ export function StatTile({
         {hint && <p className="mt-1 font-mono text-[0.65rem] text-ink-3">{hint}</p>}
       </div>
       {trend && <div className="mt-3">{trend}</div>}
-    </Panel>
+    </>
+  );
+
+  if (!href) {
+    return (
+      <Panel padding="tight" className="flex flex-col justify-between">
+        {body}
+      </Panel>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="group rounded-[var(--radius-panel)] outline-none transition-transform duration-150 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg motion-reduce:hover:translate-y-0 motion-reduce:transition-none"
+    >
+      <Panel
+        padding="tight"
+        className="h-full flex-col justify-between transition-colors duration-150 group-hover:border-edge-lit flex"
+      >
+        {body}
+      </Panel>
+    </Link>
   );
 }
 

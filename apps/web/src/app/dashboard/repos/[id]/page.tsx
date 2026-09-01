@@ -88,10 +88,16 @@ export default async function RepoDetailPage({
                 uncovered > 0 ? `${uncovered} queued for indexing` : "full coverage"
               }
             />
+            {/* Each tile links to the rows it counts. A number you cannot open
+                is a claim you have to take on faith, which is the opposite of
+                what this product sells. `href` only where a filter actually
+                exists — a tile that navigates to an unfiltered table is worse
+                than one that stays put. */}
             <StatTile
               label="behind"
               value={drift.anyDrift}
               hint={`${drift.majorDrift} across a major`}
+              href={drift.anyDrift > 0 ? "?show=drifted#deps" : undefined}
             />
             {/* Scoped, not bare. "0" against hundreds of dependencies reads as
                 an all-clear; it is only ever a statement about the packages
@@ -105,8 +111,13 @@ export default async function RepoDetailPage({
                   ? `in the ${drift.depsTracked} indexed`
                   : "on indexed packages"
               }
+              href={drift.advisories > 0 ? "?show=risk#deps" : undefined}
             />
-            <StatTile label="deprecated" value={drift.deprecated} />
+            <StatTile
+              label="deprecated"
+              value={drift.deprecated}
+              href={drift.deprecated > 0 ? "?show=risk#deps" : undefined}
+            />
             {/* "-" rather than 0 when the scan predates the check: an unrun check
                 must never occupy the same cell as one that found nothing. */}
             <StatTile
