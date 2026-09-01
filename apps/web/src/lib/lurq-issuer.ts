@@ -206,6 +206,17 @@ export interface DashboardRepo {
 export interface DashboardDep {
   name: string;
   range: string;
+  /**
+   * Every manifest that declares this package, with that manifest's own range.
+   *
+   * The scan has always computed and sent this; the dashboard type used to drop
+   * it on the floor. It is the answer to the question a monorepo actually has
+   * when it sees drift — *which* of my twelve package.json files pins this, and
+   * to what — so the row expands onto it rather than sending anyone to grep.
+   *
+   * Optional because a scan recorded before this shipped has no such field.
+   */
+  declaredIn?: { path: string; range: string }[];
   resolved: string | null;
   latest: string | null;
   majorsBehind: number;
