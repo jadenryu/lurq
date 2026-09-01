@@ -48,6 +48,53 @@ GEMINI_API_KEY=...
 Never commit a `.env`, a key, raw provider response containing credentials, or
 an E2B access token.
 
+## Optional: mirror the run to Weave (Weights & Biases)
+
+`artifacts/benchmarks/<run>/summary.csv` is the durable record, and it stays
+that way. Weave is a second, hosted view of the same rows: one Evaluation per
+participant, so the with-lurq and without-lurq arms of a run sit side by side
+in the comparison view and every metric drills down into the agent transcript
+that produced it.
+
+```dotenv
+WANDB_API_KEY=...
+WEAVE_PROJECT=lurq-benchmarks     # or "entity/project"
+```
+
+Both unset → the mirror is entirely off and nothing about the run changes.
+This is the default, and benchmarks must keep working with no vendor account.
+
+What gets logged:
+
+| Weave concept | lurq source |
+| --- | --- |
+| Evaluation (one per arm) | `participant.id` |
+| Dataset | suite name |
+| Prediction input / output | `caseId` + `trial` → the `StackProposal` |
+| Scores | per-trial components of `computeMetrics` |
+| Summary | `computeMetrics` verbatim — the same numbers as `summary.csv` |
+| Trace tree | `participant.run` → each `lurq.plan` / `lurq.verify` / `lurq.compat` call |
+| Call attributes | git SHA, E2B template, index size and `data_as_of` window |
+
+Those attributes are the point, not decoration. Two benchmark numbers are only
+comparable if the commit, the sandbox image, and the index's freshness match —
+stamping them on every call means the comparison view can filter on them
+instead of taking a screenshot's word for it.
+
+Guarantees, all enforced in `src/benchmark/weave.ts`:
+
+- **Off by default.** Missing either variable and every entry point returns
+  immediately; `weave` is dynamically imported, so it is never even loaded.
+- **Never fails a run.** Every call is wrapped. A Weave outage becomes a
+  warning; the JSONL and CSV writers are untouched.
+- **Cannot disagree with `summary.csv`.** The scoring predicates are imported
+  from `results.ts`, not restated. `tests/benchmark/weave.test.ts` fails if a
+  future edit lets the two definitions drift.
+
+Caveat: the model participants call provider APIs with raw `fetch`, so token
+counts and cost are **not** captured. Moving them onto the official SDKs
+(`@anthropic-ai/sdk`, `openai`) with Weave's wrappers would add that.
+
 ## Data snapshot before every run
 
 Before executing a benchmark, record:

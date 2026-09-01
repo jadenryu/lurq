@@ -37,6 +37,8 @@ import { GeminiParticipant } from '../benchmark/participants/gemini';
 import { OpenAIWithLurqParticipant } from '../benchmark/participants/openaiWithLurq';
 import { AnthropicWithLurqParticipant } from '../benchmark/participants/anthropicWithLurq';
 import { GeminiWithLurqParticipant } from '../benchmark/participants/geminiWithLurq';
+import { finishWeave, initWeave, logResult, tracedRun } from '../benchmark/weave';
+import { predictedFail } from '../benchmark/results';
 import type { BenchmarkResult, Participant } from '../benchmark/types';
 
 loadEnv();
@@ -177,6 +179,9 @@ program
       : await collectManifest(db, suite, config, sandbox);
     writeManifest(runDir, manifest);
 
+    // Mirror to Weave when WEAVE_PROJECT + WANDB_API_KEY are set; a no-op otherwise.
+    await initWeave(suite, manifest, runId);
+
     const allResults: BenchmarkResult[] = [];
 
     // Branch based on schema version
@@ -261,22 +266,14 @@ program
 
         result.timestamps.finishedAt = new Date().toISOString();
         writeLine(runDir, result);
+        logResult(result);
         allResults.push(result);
         
         if (!result.participantError) {
           const valid = result.packageValidity.existing;
           const total = valid + result.packageValidity.nonexistent.length;
           const resolved = result.resolution?.installed ? 'yes' : (isDryRun ? 'dry' : 'no');
-          const predicted =
-            result.packageValidity.nonexistent.length > 0 ||
-            result.packageValidity.deprecated.length > 0 ||
-            result.packageValidity.archived.length > 0 ||
-            result.packageValidity.highRisk.length > 0 ||
-            result.packageValidity.unresolvedVersions.length > 0 ||
-            (result.normalization?.invalidNames.length ?? 0) > 0 ||
-            result.compatPrediction === 'conflict'
-              ? 'fail'
-              : 'pass';
+          const predicted = predictedFail(result) ? 'fail' : 'pass';
           const labelMatch = predicted === failureCase.expectedResult ? 'hit' : 'miss';
           console.log(
             `  → Expected: ${failureCase.expectedResult} | Lurq: ${predicted} (${labelMatch}) | Pkg: ${valid}/${total} exist | Resolves: ${resolved} | Compat: ${result.compatPrediction}`,
@@ -285,6 +282,7 @@ program
       }
       
       writeSummary(runDir, allResults);
+      await finishWeave(allResults);
       await dbHandle.close();
       console.log(`\\nRun complete. Results written to: artifacts/benchmarks/${runId}/`);
       process.exit(0);
@@ -327,7 +325,7 @@ program
           const maxAttempts = 1 + planRetries;
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-              const proposal = await participant.run(db, benchCase);
+              const proposal = await tracedRun(participant, db)(benchCase);
               result.proposal = proposal;
               result.participantError = null;
               writeRaw(runDir, `${participant.id.replace(/:/g, '-')}-${benchCase.id}`, trial, proposal);
@@ -361,6 +359,7 @@ program
       if (result.participantError || !result.proposal) {
          result.timestamps.finishedAt = new Date().toISOString();
          writeLine(runDir, result);
+         logResult(result);
          allResults.push(result);
          continue;
       }
@@ -404,6 +403,7 @@ program
 
       result.timestamps.finishedAt = new Date().toISOString();
       writeLine(runDir, result);
+      logResult(result);
       allResults.push(result);
       
       if (!result.participantError) {
@@ -418,6 +418,7 @@ program
 
     // Write final summary
     writeSummary(runDir, allResults);
+    await finishWeave(allResults);
     await dbHandle.close();
     console.log(`\nRun complete. Results written to: artifacts/benchmarks/${runId}/`);
     process.exit(0);

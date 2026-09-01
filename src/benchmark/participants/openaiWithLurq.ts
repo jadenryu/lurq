@@ -2,8 +2,7 @@ import type { Database } from '../../db/client';
 import type { BenchmarkCase, Participant, StackProposal } from '../types';
 import { formatPrompt } from './prompt';
 import { getConfig } from '../../core/config';
-import { handlePlan } from '../../mcp/plan';
-import { handleVerify, handleCompat } from '../../mcp/handlers';
+import { lurqTools, callLurqTool } from './tools';
 import {
   FINALIZE_NUDGE,
   WITH_LURQ_MAX_ITERATIONS,
@@ -99,6 +98,8 @@ export class OpenAIWithLurqParticipant implements Participant {
     const key = config.SUMMARY_API_KEY || config.EMBEDDING_API_KEY;
     if (!key) throw new Error('No API key for OpenAI');
 
+    const tools = lurqTools(db);
+
     const messages: any[] = [
       {
         role: 'user',
@@ -152,21 +153,7 @@ export class OpenAIWithLurqParticipant implements Participant {
         for (const call of message.tool_calls) {
           try {
             const args = JSON.parse(call.function.arguments);
-            let resultObj: any = null;
-
-            if (call.function.name === 'plan') {
-              resultObj = await handlePlan(db, { needs: args.needs });
-            } else if (call.function.name === 'verify') {
-              resultObj = await handleVerify(db, { package: args.package });
-            } else if (call.function.name === 'compat') {
-              resultObj = await handleCompat(db, {
-                packages: args.packages,
-                versions: args.versions,
-                node: args.node ?? '20',
-              });
-            } else {
-              resultObj = { error: 'Unknown tool' };
-            }
+            const resultObj = await callLurqTool(tools, call.function.name, args);
 
             messages.push({
               role: 'tool',

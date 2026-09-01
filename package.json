@@ -95,6 +95,7 @@
     "tsup": "^8.2.4",
     "tsx": "^4.19.0",
     "typescript-eslint": "^8.3.0",
-    "vitest": "^2.0.5"
+    "vitest": "^2.0.5",
+    "weave": "^0.16.6"
   }
 }

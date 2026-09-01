@@ -1,8 +1,7 @@
 import type { Database } from '../../db/client';
 import type { BenchmarkCase, Participant, StackProposal } from '../types';
 import { formatPrompt } from './prompt';
-import { handlePlan } from '../../mcp/plan';
-import { handleVerify, handleCompat } from '../../mcp/handlers';
+import { lurqTools, callLurqTool } from './tools';
 import {
   FINALIZE_NUDGE,
   WITH_LURQ_MAX_ITERATIONS,
@@ -88,6 +87,8 @@ export class AnthropicWithLurqParticipant implements Participant {
     const key = process.env.CLAUDE_API_KEY;
     if (!key) throw new Error(`Participant ${this.id} requires CLAUDE_API_KEY in .env`);
 
+    const tools = lurqTools(db);
+
     const messages: any[] = [
       {
         role: 'user',
@@ -141,22 +142,7 @@ export class AnthropicWithLurqParticipant implements Participant {
         const toolResults = [];
         for (const call of toolCalls) {
           try {
-            const args = call.input;
-            let resultObj: any = null;
-
-            if (call.name === 'plan') {
-              resultObj = await handlePlan(db, { needs: args.needs });
-            } else if (call.name === 'verify') {
-              resultObj = await handleVerify(db, { package: args.package });
-            } else if (call.name === 'compat') {
-              resultObj = await handleCompat(db, {
-                packages: args.packages,
-                versions: args.versions,
-                node: args.node ?? '20',
-              });
-            } else {
-              resultObj = { error: 'Unknown tool' };
-            }
+            const resultObj = await callLurqTool(tools, call.name, call.input);
 
             toolResults.push({
               type: 'tool_result',
