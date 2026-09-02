@@ -34,7 +34,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean }) {
   const avatar = (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-control)] border border-border bg-secondary font-mono text-[0.7rem] uppercase text-muted-foreground",
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-control)] border border-border bg-secondary text-[11px] font-medium uppercase text-muted-foreground",
         compact ? "size-7" : "size-8",
       )}
     >

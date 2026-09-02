@@ -20,7 +20,7 @@ const KIND_LABEL: Record<AuditEvent["kind"], string> = {
 function Row({ event }: { event: AuditEvent }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-edge py-3 last:border-b-0">
-      <span className="w-12 shrink-0 font-mono text-[11px] uppercase tracking-wide text-ink-3">
+      <span className="w-12 shrink-0 text-[11px] font-medium uppercase tracking-wide text-ink-3">
         {KIND_LABEL[event.kind]}
       </span>
       <span className="min-w-0 flex-1 text-sm text-foreground">{event.summary}</span>

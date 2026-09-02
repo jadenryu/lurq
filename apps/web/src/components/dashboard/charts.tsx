@@ -287,7 +287,7 @@ export function ChartValues({
               {columns.map((c) => (
                 <th
                   key={c}
-                  className="px-3 py-2 font-mono text-[0.65rem] font-normal uppercase tracking-wide text-ink-3"
+                  className="px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-ink-3"
                 >
                   {c}
                 </th>

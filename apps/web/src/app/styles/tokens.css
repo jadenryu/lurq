@@ -483,7 +483,7 @@ body:has([data-surface="room"]) {
 }
 
 .room-ide-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-size: 15px;
   color: var(--ink-3);
   text-align: center;

@@ -33,8 +33,13 @@ export function GuideSection({
 }) {
   return (
     <section className="scroll-mt-8" id={label.replace(/\s+/g, "-")}>
-      <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">
-        <span className="text-signal">[ {String(index).padStart(2, "0")} ]</span>
+      {/* The bracketed numeral keeps mono — it is a sequence marker and the
+          even character widths are the whole effect. The label beside it is a
+          word, so it is set like every other label on the site. */}
+      <div className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="font-mono tracking-[0.16em] text-signal">
+          [ {String(index).padStart(2, "0")} ]
+        </span>
         <span>{label}</span>
         <span aria-hidden className="h-px flex-1 bg-border" />
       </div>

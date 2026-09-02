@@ -156,11 +156,11 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
       ].join(" ")}
     >
       <header className="flex items-baseline justify-between gap-3">
-        <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.06em] text-ink-3">
           {plan.name}
         </h3>
         {featured ? (
-          <span className="rounded-[3px] border border-edge px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-2">
+          <span className="rounded-[3px] border border-edge px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] text-ink-2">
             {PRICING_FEATURED_LABEL}
           </span>
         ) : null}
@@ -214,7 +214,7 @@ export function Pricing() {
   return (
     <section id="pricing" className="w-full py-24 min-[900px]:py-32">
       <div className="mx-auto w-full max-w-[1180px] px-4 min-[768px]:px-6">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-ink-3">
           {PRICING_EYEBROW}
         </p>
         <h2
