@@ -5,7 +5,7 @@ import {
   LocalEmbeddingProvider,
 } from '../src/search/embeddings';
 import { inferCategory, inferCategoryFromSignals } from '../src/search/categoryInference';
-import { rrfFuse } from '../src/search/recommend';
+import { rrfFuse, recommend } from '../src/search/recommend';
 import { EMBEDDING_DIM } from '../src/core/constants';
 import type { RawPackageSignals } from '../src/ingestion/types';
 
@@ -147,5 +147,46 @@ describe('inferCategoryFromSignals (categorize-on-ingest §2A)', () => {
 
   it('returns null when nothing matches', () => {
     expect(inferCategoryFromSignals(signals({ description: 'zzz qqq vvv' }))).toBeNull();
+  });
+});
+
+describe('recommend degrades instead of failing', () => {
+  // This path only runs during a provider outage, so it only gets exercised
+  // if a test exercises it. The failure it guards against is not "an error" —
+  // it is `plan` reporting every need as unmatched, which an agent reads as
+  // "no package exists for this" and acts on.
+  const brokenProvider = {
+    kind: 'openai' as const,
+    dimensions: EMBEDDING_DIM,
+    id: 'openai:text-embedding-3-small',
+    embed: async () => {
+      throw new Error('HTTP 429 for https://api.openai.com/v1/embeddings');
+    },
+  };
+
+  it('reports the reason rather than throwing when embeddings are unavailable', async () => {
+    const reasons: string[] = [];
+    // A db stub is enough: we assert on the degradation signal, and the query
+    // legs are covered by the integration suite.
+    const db = {
+      select: () => ({ from: () => ({ where: () => ({ orderBy: () => ({ limit: async () => [] }) }) }) }),
+    } as never;
+
+    await expect(
+      recommend(db, { need: 'a react form library', onDegraded: (r) => reasons.push(r) }, brokenProvider),
+    ).resolves.toBeDefined();
+
+    expect(reasons.length).toBeGreaterThan(0);
+    expect(reasons[0]).toMatch(/vector retrieval unavailable/i);
+    expect(reasons[0]).toMatch(/429/);
+  });
+
+  it('fuses a missing vector leg into a pure lexical ranking', () => {
+    // The degraded path leans on rrfFuse being N-ary: an empty vector list must
+    // leave the lexical order intact rather than zeroing every score.
+    const lexical = [{ name: 'zod' }, { name: 'yup' }, { name: 'joi' }];
+    const fused = rrfFuse([[], lexical]);
+    expect(fused.map((f) => f.row.name)).toEqual(['zod', 'yup', 'joi']);
+    expect(fused[0]!.rrf).toBeGreaterThan(fused[2]!.rrf);
   });
 });
