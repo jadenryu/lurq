@@ -493,6 +493,41 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('dependents-backfill')
+    .description('fill direct/indirect dependent counts from deps.dev (resumable)')
+    .option('--limit <n>', 'rows to attempt this run (default 2000)', (v) => parseInt(v, 10))
+    .option('--stratify', 'take the top rows per category instead of globally')
+    .option('--per-category <n>', 'rows per category when stratifying (default 90)', (v) => parseInt(v, 10))
+    .option('--concurrency <n>', 'parallel deps.dev requests (default 6)', (v) => parseInt(v, 10))
+    .action(async (opts: { limit?: number; stratify?: boolean; perCategory?: number; concurrency?: number }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { backfillDependents } = await import('../pipeline/dependents');
+      const { db, close } = createDb();
+      try {
+        let last = 0;
+        const s = await backfillDependents(db, {
+          limit: opts.limit,
+          stratify: opts.stratify,
+          perCategory: opts.perCategory,
+          concurrency: opts.concurrency,
+          onProgress: (done, total) => {
+            if (done - last >= 100 || done === total) {
+              last = done;
+              process.stderr.write(`  ${done}/${total}\r`);
+            }
+          },
+        });
+        console.log(
+          `\nattempted ${s.attempted} · filled ${s.filled} · no-data ${s.missing} · skipped ${s.skipped}`,
+        );
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('compat-backfill')
     .description('backfill compat edges over the top-N popular packages in batches (§4C)')
     .option('--top <n>', 'how many popular packages to cover', (v) => parseInt(v, 10))
