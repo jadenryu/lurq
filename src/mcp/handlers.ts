@@ -149,16 +149,25 @@ export async function handleRecommend(
     'rec',
     cacheKey([input.need, input.category ?? null, input.constraints ?? null]),
     async () => {
+      let degraded: string | null = null;
       const candidates = await recommend(db, {
         need: input.need,
         category: input.category,
         constraints: input.constraints,
         limit: 5,
+        onDegraded: (reason) => {
+          degraded = reason;
+        },
       });
-      return { dataAsOf: await latestDataAsOf(db), candidates };
+      return { dataAsOf: await latestDataAsOf(db), candidates, degraded };
     },
-    // Don't cache empty results — the index may still be populating.
-    { skipCache: (r) => r.candidates.length === 0 },
+    {
+      // Don't cache empty results — the index may still be populating. Nor
+      // degraded ones: a lexical-only ranking written into the shared cache
+      // outlives the outage that produced it and gets served back long after
+      // the vector leg recovers.
+      skipCache: (r) => r.candidates.length === 0 || r.degraded !== null,
+    },
   );
 
   const policy = await getSelectionPolicy(db, ownerId);
