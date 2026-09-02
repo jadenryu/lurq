@@ -497,17 +497,27 @@ export function registerOperatorCommands(program: Command): void {
     .description('measure whether recommend can find a package from a description of what it does')
     .option('--per-category <n>', 'cases per category (default 17)', (v) => parseInt(v, 10))
     .option('--limit <n>', 'candidates retrieved per query (default 25)', (v) => parseInt(v, 10))
+    .option('--cases <path>', 'freeze/replay the case set (built and written if absent)')
     .option('--json <path>', 'write per-case results for a later paired comparison')
     .option('--compare <path>', 'paired McNemar test against a previous --json run')
-    .action(async (opts: { perCategory?: number; limit?: number; json?: string; compare?: string }) => {
+    .action(async (opts: { perCategory?: number; limit?: number; cases?: string; json?: string; compare?: string }) => {
       const { requireConfig } = await import('../core/config');
       requireConfig(['DATABASE_URL']);
       const { createDb } = await import('../db/client');
-      const { buildCases, runCases, computeMetrics, pairedPValue } = await import('../benchmark/retrieval');
+      const { buildCases, runCases, computeMetrics, pairedPValue, saveCases, loadCases, assertSameCases } =
+        await import('../benchmark/retrieval');
       const { db, close } = createDb();
       try {
-        const cases = await buildCases(db, { perCategory: opts.perCategory });
-        console.log(`built ${cases.length} cases across ${new Set(cases.map((c) => c.category)).size} categories`);
+        const { existsSync } = await import('node:fs');
+        let cases;
+        if (opts.cases && existsSync(opts.cases)) {
+          cases = loadCases(opts.cases);
+          console.log(`replaying ${cases.length} frozen cases from ${opts.cases}`);
+        } else {
+          cases = await buildCases(db, { perCategory: opts.perCategory });
+          if (opts.cases) { saveCases(opts.cases, cases); console.log(`froze ${cases.length} cases to ${opts.cases}`); }
+          console.log(`built ${cases.length} cases across ${new Set(cases.map((c) => c.category)).size} categories`);
+        }
         const results = await runCases(db, cases, {
           limit: opts.limit,
           onProgress: (n) => { if (n % 25 === 0) process.stderr.write(`  ${n}/${cases.length}\r`); },
@@ -524,6 +534,7 @@ export function registerOperatorCommands(program: Command): void {
         if (opts.json) { writeFileSync(opts.json, JSON.stringify(results, null, 2)); console.log(`\nwrote ${opts.json}`); }
         if (opts.compare) {
           const before = JSON.parse(readFileSync(opts.compare, 'utf8'));
+          assertSameCases(before, results);
           const p = pairedPValue(before, results);
           console.log(`\npaired vs ${opts.compare}: McNemar exact p = ${p.toFixed(4)}${p < 0.05 ? ' (significant)' : ' (NOT significant)'}`);
         }

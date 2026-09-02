@@ -37,7 +37,8 @@
  * matters, but a change that moves MRR without moving recall is rearranging
  * results that were already there.
  */
-import { and, desc, eq, gt, isNotNull, sql } from 'drizzle-orm';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { packages } from '../db/schema';
 import { getConfig } from '../core/config';
@@ -178,6 +179,47 @@ async function phraseAsNeed(name: string, summary: string): Promise<string | nul
   } catch (err) {
     logger.warn(`retrieval-eval: phrasing failed for ${name} (${err instanceof Error ? err.message : String(err)})`);
     return null;
+  }
+}
+
+/**
+ * Freeze a case set to disk.
+ *
+ * Case selection depends on `direct_dependents`, which the backfill is still
+ * filling — so two independently-built sets drawn minutes apart are NOT the
+ * same experiment. The first paired comparison run this way reported a 7.4
+ * point recall drop at p=0.375, which is incoherent: a drop that size implies
+ * ~29 discordant pairs, and p=0.375 implies about five. The runs had simply
+ * measured different packages.
+ *
+ * A paired test is only meaningful over identical cases, so the case set is
+ * written once and replayed. `loadCases` is what every comparison should use.
+ */
+export function saveCases(path: string, cases: RetrievalCase[]): void {
+  writeFileSync(path, JSON.stringify(cases, null, 2));
+}
+
+export function loadCases(path: string): RetrievalCase[] {
+  return JSON.parse(readFileSync(path, 'utf8')) as RetrievalCase[];
+}
+
+/**
+ * Refuse to compare two runs that did not measure the same thing.
+ *
+ * Silent partial overlap is the dangerous failure: unmatched targets are
+ * skipped, the discordant count collapses, and every p-value comes back
+ * reassuringly non-significant no matter how large the real effect.
+ */
+export function assertSameCases(a: RetrievalResult[], b: RetrievalResult[]): void {
+  const sa = new Set(a.map((r) => r.target));
+  const sb = new Set(b.map((r) => r.target));
+  const shared = [...sa].filter((t) => sb.has(t)).length;
+  const min = Math.min(sa.size, sb.size);
+  if (shared < min) {
+    throw new Error(
+      `Case sets differ: ${shared} shared of ${sa.size}/${sb.size}. ` +
+        `Re-run both sides with the same --cases file; a paired test over drifting cases is meaningless.`,
+    );
   }
 }
 
