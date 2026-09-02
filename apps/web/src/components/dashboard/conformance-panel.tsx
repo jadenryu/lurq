@@ -62,7 +62,7 @@ function RepoRow({ repo }: { repo: RepoConformance }) {
           {repo.violations.map((v) => (
             <li key={`${v.name}-${v.rule}`} className="flex flex-wrap items-baseline gap-x-2.5">
               <span className="font-mono text-xs text-foreground">{v.name}</span>
-              <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.12em] text-ink-3">
+              <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em] text-ink-3">
                 {RULE_LABEL[v.rule] ?? v.rule}
               </span>
               <span className="text-xs text-muted-foreground">{v.reason}</span>
@@ -112,7 +112,7 @@ export function ConformancePanel({ report }: { report: ConformanceReport }) {
       <PanelHeader
         title="what your repos would fail"
         trailing={
-          <span className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+          <span className="text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
             {failing} of {report.repos.length} repos · {violations} violations
           </span>
         }

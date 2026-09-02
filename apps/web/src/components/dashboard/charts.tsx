@@ -276,7 +276,7 @@ export function ChartValues({
 }) {
   return (
     <details className="group mt-4">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3 transition-colors hover:text-foreground">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3 transition-colors hover:text-foreground">
         <span className="transition-transform group-open:rotate-90">›</span>
         values
       </summary>

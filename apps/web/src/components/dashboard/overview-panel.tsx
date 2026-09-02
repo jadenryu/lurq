@@ -11,7 +11,7 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3 transition-colors hover:text-foreground"
+      className="inline-flex items-center gap-1 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3 transition-colors hover:text-foreground"
     >
       {children}
       <ArrowUpRight className="size-3" />

@@ -32,6 +32,14 @@
   /* interaction: never a verdict */
   --mark: #6e96d4;
 
+  /* The entry-point rail, and only that. Deliberately NOT --mark: that token is
+     every interactive affordance on the site, so recolouring it to move one
+     progress bar would repaint every link and focus ring with it. Two values
+     because the bar and the number have different jobs — a 1.5px bar can be as
+     light as it likes, a 10px numeral cannot and still be read. */
+  --rail: #a78bfa;
+  --rail-ink: #7c5cd6;
+
   /* The bloom, defined once. GradientBlob paints it as weather behind the hero
      and the footer; the condensed nav picks the same two stops up as a rim, so
      the bar reads as catching the light rather than as its own accent. Anything
@@ -637,10 +645,13 @@ li:hover > .room-ide-label {
 .room-surface-rail::before {
   content: "";
   position: absolute;
-  left: 5px;
+  left: 4.25px;
   top: 1.05rem;
   bottom: 1.05rem;
-  width: 1px;
+  /* Same width as the fill, so the track and the filled part are one bar rather
+     than a hairline with something thicker drawn over it. */
+  width: 2.5px;
+  border-radius: 999px;
   background: var(--edge);
 }
 
@@ -658,11 +669,12 @@ li:hover > .room-ide-label {
    the bar must not count. */
 .room-surface-fill {
   position: absolute;
-  left: 5px;
+  left: 4.25px;
   top: 1.05rem;
-  width: 1px;
+  width: 2.5px;
+  border-radius: 999px;
   height: calc(var(--fill, 0) * (100% - 2.1rem));
-  background: var(--mark);
+  background: var(--rail);
 }
 
 /* The head. Rides the top of the fill, which is what makes the bar read as
@@ -677,10 +689,10 @@ li:hover > .room-ide-label {
   height: 7px;
   margin-left: -3.5px;
   border-radius: 999px;
-  background: var(--mark);
+  background: var(--rail);
   box-shadow:
-    0 0 0 3px color-mix(in oklab, var(--mark) 20%, transparent),
-    0 0 12px color-mix(in oklab, var(--mark) 55%, transparent);
+    0 0 0 3px color-mix(in oklab, var(--rail) 22%, transparent),
+    0 0 12px color-mix(in oklab, var(--rail) 55%, transparent);
 }
 
 /* One checkpoint in the rail. */
@@ -702,22 +714,11 @@ li:hover > .room-ide-label {
   opacity: 0.55;
 }
 
-/* The stop on the line. Filled with --ground so the track passes behind it
-   rather than through it. */
-.room-surface-stop::before {
-  content: "";
-  position: absolute;
-  left: -1.375rem;
-  top: 0.85rem;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  border: 1px solid var(--edge-lit);
-  background: var(--ground);
-  transition:
-    background-color var(--dur-hover) var(--ease-ui),
-    border-color var(--dur-hover) var(--ease-ui);
-}
+/* No per-stop dot. The rail used to draw a circle beside every row and fill the
+   active one, which made the bar and the list one object: four checkpoints the
+   head had to land on exactly, and any drift between the scroll position and a
+   dot read as a bug. The bar is now its own standalone thing travelling down the
+   side, and the list beside it is just a list. */
 
 .room-surface-stop:hover {
   background: var(--surface);
@@ -727,11 +728,6 @@ li:hover > .room-ide-label {
 .room-surface-stop[data-on] {
   background: var(--surface-2);
   opacity: 1;
-}
-
-.room-surface-stop[data-on]::before {
-  border-color: var(--mark);
-  background: var(--mark);
 }
 
 .room-surface-stop:focus-visible {
@@ -747,8 +743,9 @@ li:hover > .room-ide-label {
   color: var(--ink-3);
 }
 
-.room-surface-stop[data-on] .room-surface-index {
-  color: var(--mark);
+.room-surface-stop[data-on] .room-surface-index,
+.room-surface-block[data-on] .room-surface-index {
+  color: var(--rail-ink);
 }
 
 /* ── The rail, and the four blocks beside it ─────────────────────────────────
