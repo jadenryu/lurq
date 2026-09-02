@@ -60,6 +60,7 @@ import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
+import { addAskSpend, getAskSpendToday } from '../db/askSpend';
 import { applyScope } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
 import {
@@ -462,6 +463,67 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   /** What the dashboard renders: the plan, its state, and the month so far. */
+  /**
+   * Daily Ask ceiling per account, in micro-dollars. Env-overridable because
+   * the right number is a product decision that will move with pricing, and
+   * moving it should not need a deploy of the web app too.
+   */
+  const ASK_DAILY_LIMIT_MICROS = Math.max(
+    0,
+    Math.round(Number(process.env.LURQ_ASK_DAILY_USD ?? '3') * 1_000_000),
+  );
+
+  /**
+   * The Ask budget, read and written by the dashboard's /api/ask.
+   *
+   * Lives here rather than in the web app because the web app has no database —
+   * and because an in-process ledger is per-instance and resets on cold start,
+   * which caps a burst but never a day. This is the copy that holds.
+   *
+   * The ceiling is served alongside the total rather than hardcoded in the web
+   * app: the limit is a product decision that will change, and it should change
+   * in one place that the thing enforcing it reads.
+   */
+  app.get('/ask-budget', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      const spentMicros = await getAskSpendToday(db, ownerId);
+      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+    } catch (err) {
+      // Deliberately a 500, not a zero. A caller that cannot read the ledger
+      // must fail closed, and it can only do that if this says "unknown"
+      // instead of "nothing spent".
+      logger.error('ask budget read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read the Ask budget.' });
+    }
+  });
+
+  app.post('/ask-budget', requireIssuerSecret, async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { ownerId?: unknown; usdMicros?: unknown };
+    const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
+    const micros = Number(body.usdMicros);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    // A negative or absurd charge is a bug or an attempt to credit the ledger.
+    if (!Number.isFinite(micros) || micros < 0 || micros > ASK_DAILY_LIMIT_MICROS) {
+      res.status(400).json({ error: 'usdMicros must be a sane non-negative integer.' });
+      return;
+    }
+    try {
+      const spentMicros = await addAskSpend(db, ownerId, Math.round(micros));
+      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+    } catch (err) {
+      logger.error('ask budget write failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not record Ask spend.' });
+    }
+  });
+
   app.get('/billing/subscription', requireIssuerSecret, async (req: Request, res: Response) => {
     const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
     if (!ownerId) {

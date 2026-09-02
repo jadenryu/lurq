@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
 import { rateLimit } from "@/lib/rate-limit";
+import { fetchAskBudget, recordAskSpend } from "@/lib/lurq-issuer";
 import { costOf, reserveFor } from "@lurq/core/modelPricing";
 
 /**
@@ -230,6 +231,37 @@ export async function POST(req: Request) {
   if (!question) return new Response("A question is required.", { status: 400 });
   if (question.length > 500) return new Response("Question is too long.", { status: 400 });
 
+  /**
+   * The durable ceiling, before anything is spent.
+   *
+   * The in-memory hourly ledger below is a burst guard on one instance; this is
+   * the copy that survives a restart and is shared across every instance, so
+   * this is the one that actually caps a day.
+   *
+   * Fail CLOSED. If the ledger cannot be read we do not know what has been
+   * spent, and the failure mode of guessing "nothing" is that a backend outage
+   * becomes unlimited spend — which is the exact event a budget exists to
+   * prevent. A few minutes of "Ask is unavailable" is the cheaper wrong answer,
+   * and catalog search is untouched either way.
+   */
+  let budget;
+  try {
+    budget = await fetchAskBudget(userId);
+  } catch {
+    return new Response(
+      "Ask is briefly unavailable — its usage ledger could not be read. Catalog search still works.",
+      { status: 503 },
+    );
+  }
+  if (budget.spentMicros >= budget.limitMicros) {
+    return new Response(
+      "You have reached today's Ask limit. It resets at midnight UTC.",
+      { status: 429 },
+    );
+  }
+  /** What is left today, in dollars — the real ceiling for this question. */
+  const remainingUsd = (budget.limitMicros - budget.spentMicros) / 1_000_000;
+
   const client = new Anthropic({ apiKey });
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
 
@@ -252,6 +284,7 @@ export async function POST(req: Request) {
           const reserve = reserveFor(MODEL, MAX_TOKENS);
           if (
             turnCost + reserve > QUESTION_USD ||
+            turnCost + reserve > remainingUsd ||
             spentThisHour(userId) + turnCost + reserve > HOURLY_USD
           ) {
             send(
@@ -329,6 +362,17 @@ export async function POST(req: Request) {
         send(`\n\n${message}`);
       } finally {
         addSpend(userId, turnCost);
+        // Awaited inside the stream's finally so the charge lands before the
+        // response closes. A failure here is logged, not swallowed silently:
+        // an unrecorded charge is spend the next question will not see.
+        if (turnCost > 0) {
+          await recordAskSpend(userId, Math.round(turnCost * 1_000_000)).catch((err) => {
+            console.error(
+              "[lurq] ask spend NOT recorded — the daily budget is under-counting:",
+              err instanceof Error ? err.message : String(err),
+            );
+          });
+        }
         // One structured line per question. Without it a bad answer is
         // unreproducible: you cannot tell whether a prompt change helped, and
         // you cannot see caching working or silently not working. Deliberately
