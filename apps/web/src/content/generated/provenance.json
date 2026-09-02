@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-01T12:41:09.442Z",
+  "generatedAt": "2026-09-02T12:15:15.658Z",
   "source": "live",
   "sources": [
     {
@@ -63,15 +63,15 @@
       "contributes": "the shipped .d.ts the usage axis parses"
     }
   ],
-  "dataAsOf": "2026-09-01T12:36:53.636Z",
-  "versionsTracked": 3670793,
-  "coOccurrencePairs": 18434852,
-  "apiSurfaces": 18750,
-  "syncDays": 47,
+  "dataAsOf": "2026-09-02T08:50:39.923Z",
+  "versionsTracked": 3840932,
+  "coOccurrencePairs": 23305207,
+  "apiSurfaces": 20539,
+  "syncDays": 48,
   "firstSyncAt": "2026-07-15T06:01:10.236Z",
   "lastSync": {
-    "finishedAt": "2026-09-01T07:24:18.426Z",
-    "packagesSeen": 2355,
+    "finishedAt": "2026-09-02T10:55:18.487Z",
+    "packagesSeen": 2358,
     "status": "partial"
   }
 }
