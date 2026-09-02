@@ -38,6 +38,7 @@ import { OpenAIWithLurqParticipant } from '../benchmark/participants/openaiWithL
 import { AnthropicWithLurqParticipant } from '../benchmark/participants/anthropicWithLurq';
 import { GeminiWithLurqParticipant } from '../benchmark/participants/geminiWithLurq';
 import { finishWeave, initWeave, logResult, tracedRun } from '../benchmark/weave';
+import { BudgetExceededError, formatSpend, initBudget, totalSpent } from '../benchmark/budget';
 import { predictedFail } from '../benchmark/results';
 import type { BenchmarkResult, Participant } from '../benchmark/types';
 
@@ -92,6 +93,7 @@ program
   .option('--plan-retries <number>', 'Extra planning attempts after a participant error (default 2)', '2')
   .option('--cases <ids>', 'Comma-separated case IDs to run (runs all if omitted)')
   .option('--dry-run', 'Skip E2B and registry writes (plan + normalize only)')
+  .option('--budget-usd <amount>', 'Hard cap on provider spend; the run halts before a call that would breach it')
   .action(async (options) => {
     const isDryRun = Boolean(options.dryRun);
     const trials = parseInt(options.trials, 10);
@@ -104,6 +106,16 @@ program
       console.error('ERROR: --plan-retries must be a non-negative integer.');
       process.exit(1);
     }
+
+    let budgetUsd: number | null = null;
+    if (options.budgetUsd !== undefined) {
+      budgetUsd = Number(options.budgetUsd);
+      if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
+        console.error('ERROR: --budget-usd must be a positive number.');
+        process.exit(1);
+      }
+    }
+    initBudget(budgetUsd);
 
     const config = getConfig();
 
@@ -317,7 +329,8 @@ program
     console.log('\\n--- Phase 1: Planning ---');
     const plans: { participant: Participant, benchCase: typeof suite.cases[number]; trial: number; result: BenchmarkResult }[] = [];
     
-    for (const participant of activeParticipants) {
+    let budgetHalt = false;
+    planning: for (const participant of activeParticipants) {
       console.log(`\\n>> Planning for participant: ${participant.id} <<`);
       for (const benchCase of suite.cases) {
         for (let trial = 1; trial <= trials; trial++) {
@@ -359,6 +372,11 @@ program
               }
               break;
             } catch (err) {
+              if (err instanceof BudgetExceededError || (err as Error)?.name === 'BudgetExceededError') {
+                budgetHalt = true;
+                result.participantError = String(err);
+                break;
+              }
               result.participantError = String(err);
               if (result.participantError.includes('Slot need text')) {
                 result.lurqDiagnosis = 'planning';
@@ -374,8 +392,14 @@ program
           }
 
           plans.push({ participant, benchCase, trial, result });
+          if (budgetHalt) break planning;
         }
       }
+    }
+
+    if (budgetHalt) {
+      console.error(`\n!! BUDGET STOP at $${totalSpent().toFixed(4)} — planning halted.`);
+      console.error('   Evaluating the proposals already paid for; nothing further is sent to a provider.');
     }
 
     // Phase 2: Evaluation
@@ -443,6 +467,7 @@ program
 
     // Write final summary
     writeSummary(runDir, allResults);
+    if (totalSpent() > 0) console.log(`\nProvider spend:\n${formatSpend()}`);
     await finishWeave(allResults);
     await dbHandle.close();
     console.log(`\nRun complete. Results written to: artifacts/benchmarks/${runId}/`);

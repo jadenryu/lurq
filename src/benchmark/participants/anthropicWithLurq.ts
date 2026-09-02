@@ -2,6 +2,7 @@ import type { Database } from '../../db/client';
 import type { BenchmarkCase, Participant, StackProposal } from '../types';
 import { formatPrompt } from './prompt';
 import { lurqTools, callLurqTool } from './tools';
+import { assertBudget, recordUsage } from '../budget';
 import {
   FINALIZE_NUDGE,
   WITH_LURQ_MAX_ITERATIONS,
@@ -118,6 +119,7 @@ export class AnthropicWithLurqParticipant implements Participant {
         body.tools = TOOLS;
       }
 
+      assertBudget();
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -134,6 +136,7 @@ export class AnthropicWithLurqParticipant implements Participant {
       }
 
       const data = (await res.json()) as any;
+      recordUsage(this.id, this.model, data.usage);
       messages.push({ role: 'assistant', content: data.content });
 
       const toolCalls = (data.content ?? []).filter((c: any) => c.type === 'tool_use');

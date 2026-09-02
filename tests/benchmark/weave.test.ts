@@ -8,6 +8,14 @@ import {
 } from '../../src/benchmark/results';
 import { resolveTemplateRef } from '../../src/sandbox/e2b';
 import { finishWeave, logResult, tracedRun, weaveEnabled } from '../../src/benchmark/weave';
+import {
+  BudgetExceededError,
+  assertBudget,
+  budgetStopped,
+  initBudget,
+  recordUsage,
+  totalSpent,
+} from '../../src/benchmark/budget';
 import type { BenchmarkResult, Participant } from '../../src/benchmark/types';
 
 function baseResult(overrides: Partial<BenchmarkResult> = {}): BenchmarkResult {
@@ -112,5 +120,39 @@ describe('e2b template refs', () => {
     expect(resolveTemplateRef('rki5dems9wqfm4r03t7g')).toBe('rki5dems9wqfm4r03t7g');
     // A mutable alias still has to be refused before it ever reaches E2B.
     expect(() => validateTemplate('base')).toThrow(/build-id/);
+  });
+});
+
+describe('spend cap', () => {
+  // The cap has to hold before the call, not after: a call's cost is only
+  // known once it returns, so checking `spent < limit` lets the next call
+  // overshoot by its own size. These assert the reserve actually reserves.
+  it('refuses the call that would breach the cap, and never the one before', () => {
+    initBudget(5);
+    expect(() => assertBudget()).not.toThrow();
+
+    // $4.40 spent: one more turn could cost up to the $0.50 reserve, and
+    // $4.90 still fits under $5. Allowed.
+    recordUsage('arm', 'claude-opus-5', { input_tokens: 200_000, output_tokens: 136_000 });
+    expect(totalSpent()).toBeCloseTo(4.4, 2);
+    expect(() => assertBudget()).not.toThrow();
+
+    // $4.65 spent: another full turn could reach $5.15. Refused.
+    recordUsage('arm', 'claude-opus-5', { input_tokens: 50_000, output_tokens: 0 });
+    expect(totalSpent()).toBeCloseTo(4.65, 2);
+    expect(() => assertBudget()).toThrow(BudgetExceededError);
+    expect(budgetStopped()).toBe(true);
+  });
+
+  it('prices an unknown model at the most expensive rate, never at zero', () => {
+    initBudget(5);
+    recordUsage('arm', 'some-model-shipped-after-this-table', { input_tokens: 1_000_000, output_tokens: 0 });
+    expect(totalSpent()).toBe(10);
+  });
+
+  it('is unlimited when no cap is set', () => {
+    initBudget(null);
+    recordUsage('arm', 'claude-opus-5', { input_tokens: 100_000_000, output_tokens: 0 });
+    expect(() => assertBudget()).not.toThrow();
   });
 });

@@ -2,6 +2,7 @@ import type { Database } from '../../db/client';
 import type { BenchmarkCase, Participant, StackProposal } from '../types';
 import { formatPrompt } from './prompt';
 import { parseStackProposalJson } from './agentLoop';
+import { assertBudget, recordUsage } from '../budget';
 
 export class AnthropicParticipant implements Participant {
   readonly kind = 'anthropic';
@@ -19,6 +20,7 @@ export class AnthropicParticipant implements Participant {
 
     const prompt = formatPrompt(benchCase);
 
+    assertBudget();
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -39,6 +41,7 @@ export class AnthropicParticipant implements Participant {
     }
 
     const data = await res.json() as any;
+    recordUsage(this.id, this.model, data.usage);
     const textBlock = data.content?.find((c: any) => c.type === 'text');
     const content = textBlock?.text;
     if (!content) {

@@ -29,6 +29,7 @@
  * here: the mirror must never be able to disagree with summary.csv.
  */
 import { computeMetrics, isCoinstallableSlotFilled, hasNoBlockingPackage, predictedFail } from './results';
+import { spendFor } from './budget';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import type {
@@ -46,6 +47,47 @@ type EvalLogger = InstanceType<WeaveModule['EvaluationLogger']>;
 let weave: WeaveModule | null = null;
 let loggers: Map<string, EvalLogger> | null = null;
 let suiteName = '';
+
+/**
+ * Weave object names reject some characters with a 422, and participant ids
+ * carry colons (`anthropic:claude-opus-5`). The benchmark already strips them
+ * for artifact filenames (`writeRaw`); do the same before anything reaches the
+ * trace server.
+ */
+function safeName(raw: string): string {
+  return raw.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'unnamed';
+}
+
+
+/**
+ * Keep a Weave upload failure from killing the run.
+ *
+ * The SDK rejects with a bare `Response` when the trace server refuses a write
+ * (seen: 422 from /obj/create), and nothing in the library catches it — Node's
+ * default handler then takes the whole process down. Rule #2 of this module
+ * says telemetry never fails a run, and a try/catch cannot honour that for a
+ * promise we never receive. So the guard is process-level, but deliberately
+ * narrow: it swallows only rejections carrying a Response from the trace host
+ * and rethrows everything else through the default path, so a real bug in the
+ * benchmark still crashes loudly.
+ *
+ * Losing traces is the acceptable failure here. Losing a paid benchmark run
+ * two cases from the end is not.
+ */
+let rejectionGuardInstalled = false;
+function installRejectionGuard(): void {
+  if (rejectionGuardInstalled) return;
+  rejectionGuardInstalled = true;
+  process.on('unhandledRejection', (reason) => {
+    const isTraceServer =
+      reason instanceof Response && /(^|\.)wandb\.ai$/.test(new URL(reason.url || 'https://x.invalid').hostname);
+    if (isTraceServer) {
+      logger.warn(`Weave upload rejected (${(reason as Response).status}); trace dropped, run continues.`);
+      return;
+    }
+    throw reason;
+  });
+}
 
 /** True once `initWeave` has successfully connected. Cheap guard for hot paths. */
 export function weaveEnabled(): boolean {
@@ -89,6 +131,7 @@ export async function initWeave(
     return false;
   }
 
+  installRejectionGuard();
   loggers = new Map();
   suiteName = suite.suite;
   console.log(`Weave: mirroring run to project "${project}"`);
@@ -109,7 +152,7 @@ export function tracedRun(
   const plain = (benchCase: BenchmarkCase) => participant.run(db, benchCase);
   if (!weave) return plain;
   return weave.op(plain, {
-    name: participant.id,
+    name: safeName(participant.id),
     opKind: 'agent',
     callDisplayName: (benchCase) => `${participant.id} · ${benchCase.id}`,
   });
@@ -118,7 +161,7 @@ export function tracedRun(
 /** Wrap one lurq MCP handler so tool calls nest under the participant's trace. */
 export function tracedTool<A, R>(name: string, fn: (args: A) => Promise<R>): (args: A) => Promise<R> {
   if (!weave) return fn;
-  return weave.op(fn, { name: `lurq.${name}`, opKind: 'tool' });
+  return weave.op(fn, { name: safeName(`lurq.${name}`), opKind: 'tool' });
 }
 
 /**
@@ -136,7 +179,7 @@ export function logResult(result: BenchmarkResult): void {
     let ev = loggers.get(id);
     if (!ev) {
       ev = new weave.EvaluationLogger({
-        name: `${suiteName}:${id}`,
+        name: safeName(`${suiteName}--${id}`),
         description: `lurq benchmark — ${suiteName}, participant ${id}`,
         dataset: suiteName,
         model: { name: model ?? kind },
@@ -191,9 +234,19 @@ export async function finishWeave(allResults: BenchmarkResult[]): Promise<void> 
       const metrics = computeMetrics(allResults.filter((r) => r.participant.id === id));
       // Nulls mean "not measurable in this suite". Weave renders them as empty
       // leaderboard columns for every arm, so drop them rather than ship noise.
-      const summary = Object.fromEntries(
+      const summary: Record<string, unknown> = Object.fromEntries(
         Object.entries(metrics).filter(([, v]) => v !== null),
       );
+      // What the arm cost to produce. A leaderboard without this can't answer
+      // whether an arm is worth its bill — measured from provider usage, so
+      // it is spend, not an estimate.
+      const spend = spendFor(id);
+      if (spend) {
+        summary.costUsd = Number(spend.usd.toFixed(4));
+        summary.inputTokens = spend.inputTokens;
+        summary.outputTokens = spend.outputTokens;
+        summary.providerCalls = spend.calls;
+      }
       await ev.logSummary(summary);
     }
     await weave.flush();
