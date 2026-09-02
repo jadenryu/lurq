@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
 import { rateLimit } from "@/lib/rate-limit";
+import { costOf, reserveFor } from "@lurq/core/modelPricing";
 
 /**
  * Ask a question about your own lurq data.
@@ -30,6 +31,50 @@ import { rateLimit } from "@/lib/rate-limit";
 
 /** Streaming answers, so a multi-tool question doesn't sit on a blank box. */
 export const dynamic = "force-dynamic";
+
+const MODEL = "claude-opus-5";
+const MAX_TOKENS = 2048;
+
+/** Ceiling on one account's spend per rolling hour. */
+const HOURLY_USD = 0.75;
+/** Ceiling on a single question, so one pathological loop can't eat the hour. */
+const QUESTION_USD = 0.25;
+
+/**
+ * Spend per account, per rolling hour.
+ *
+ * A request limiter caps how OFTEN someone asks; it says nothing about what the
+ * asking costs. Ten one-shot questions and ten six-tool questions over a
+ * 300-dependency monorepo are identical to a counter and an order of magnitude
+ * apart on the bill, so the thing actually worth bounding is dollars.
+ *
+ * ponytail: in-memory, per instance, so it caps a burst on one box and resets
+ * on cold start — the same ceiling and the same caveat as lib/rate-limit. A
+ * durable per-account budget needs to live where the money is already counted
+ * (db/usage.ts, behind the issuer), and that is a backend change, not this file.
+ * Named here so the gap is on the record rather than implied to be covered.
+ */
+const spend = new Map<string, { usd: number; reset: number }>();
+
+function spentThisHour(ownerId: string): number {
+  const now = Date.now();
+  const row = spend.get(ownerId);
+  if (!row || now > row.reset) return 0;
+  return row.usd;
+}
+
+function addSpend(ownerId: string, usd: number): void {
+  const now = Date.now();
+  const row = spend.get(ownerId);
+  if (!row || now > row.reset) {
+    if (spend.size > 10_000) {
+      for (const [k, v] of spend) if (now > v.reset) spend.delete(k);
+    }
+    spend.set(ownerId, { usd, reset: now + 3_600_000 });
+    return;
+  }
+  row.usd += usd;
+}
 
 /**
  * Tool inputs are model-generated, so every one is validated here rather than
@@ -191,23 +236,55 @@ export async function POST(req: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       const send = (text: string) => controller.enqueue(new TextEncoder().encode(text));
+      let turnCost = 0;
+      let cacheRead = 0;
+      let turnsUsed = 0;
       try {
         // Bounded turns. The loop is the model's, but the ceiling is ours: a
         // question that cannot be answered in this many reads is one the tools
         // do not cover, and spinning further just spends money to reach the
         // same "I don't know".
         for (let turn = 0; turn < 6; turn++) {
+          turnsUsed = turn + 1;
+          // Reserve before the call, never after: a turn's price is only
+          // known once it returns, so comparing the bare total against the cap
+          // lets the very next call overshoot by its own size.
+          const reserve = reserveFor(MODEL, MAX_TOKENS);
+          if (
+            turnCost + reserve > QUESTION_USD ||
+            spentThisHour(userId) + turnCost + reserve > HOURLY_USD
+          ) {
+            send(
+              turn === 0
+                ? "\n\nYou have reached this hour's usage limit for Ask. Catalog search is unaffected."
+                : "\n\n(Stopped here — this question reached its cost ceiling.)",
+            );
+            break;
+          }
+
           const response = await client.messages.create({
-            model: "claude-opus-5",
-            max_tokens: 2048,
+            model: MODEL,
+            max_tokens: MAX_TOKENS,
             // Low effort on purpose: this reads a handful of JSON blobs and
             // summarises them. It is not the workload that repays deep thinking,
             // and the box is meant to feel instant.
             output_config: { effort: "low" },
-            system: SYSTEM,
+            // Caches the whole stable prefix. Render order is tools → system
+            // → messages, so a breakpoint on the system block covers the five
+            // tool definitions as well — every byte before the question, which
+            // is identical on every request this route ever makes. Cached reads
+            // bill at a tenth of the input rate.
+            //
+            // Watch `cache_read_input_tokens` in the log line below: the
+            // minimum cacheable prefix is model-dependent (512–4096 tokens) and
+            // a prefix under it silently does not cache rather than erroring.
+            system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
             tools: TOOLS,
             messages,
           });
+
+          turnCost += costOf(MODEL, response.usage);
+          cacheRead += response.usage.cache_read_input_tokens ?? 0;
 
           for (const block of response.content) {
             if (block.type === "text" && block.text) send(block.text);
@@ -251,6 +328,23 @@ export async function POST(req: Request) {
         console.warn("[lurq] ask failed:", err instanceof Error ? err.message : String(err));
         send(`\n\n${message}`);
       } finally {
+        addSpend(userId, turnCost);
+        // One structured line per question. Without it a bad answer is
+        // unreproducible: you cannot tell whether a prompt change helped, and
+        // you cannot see caching working or silently not working. Deliberately
+        // NOT the question text — that is the user's data and it does not need
+        // to be in a log to make the call debuggable.
+        console.log(
+          JSON.stringify({
+            at: "ask",
+            owner: userId,
+            turns: turnsUsed,
+            chars: question.length,
+            cacheReadTokens: cacheRead,
+            usd: Number(turnCost.toFixed(5)),
+            hourUsd: Number(spentThisHour(userId).toFixed(5)),
+          }),
+        );
         controller.close();
       }
     },
