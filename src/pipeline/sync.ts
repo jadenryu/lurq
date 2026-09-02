@@ -393,6 +393,8 @@ export function assemblePackageRow(p: {
     openIssues: p.input.openIssues,
     closedIssues: p.input.closedIssues,
     scorecard: p.input.scorecard,
+    directDependents: p.input.directDependents ?? null,
+    indirectDependents: p.input.indirectDependents ?? null,
     bundleMinGzipKb: p.input.bundleMinGzipKb,
     advisories: p.input.advisories,
     peerDependencies: r?.peerDependencies ?? null,
