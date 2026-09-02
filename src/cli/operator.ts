@@ -493,6 +493,46 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('retrieval-eval')
+    .description('measure whether recommend can find a package from a description of what it does')
+    .option('--per-category <n>', 'cases per category (default 17)', (v) => parseInt(v, 10))
+    .option('--limit <n>', 'candidates retrieved per query (default 25)', (v) => parseInt(v, 10))
+    .option('--json <path>', 'write per-case results for a later paired comparison')
+    .option('--compare <path>', 'paired McNemar test against a previous --json run')
+    .action(async (opts: { perCategory?: number; limit?: number; json?: string; compare?: string }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { buildCases, runCases, computeMetrics, pairedPValue } = await import('../benchmark/retrieval');
+      const { db, close } = createDb();
+      try {
+        const cases = await buildCases(db, { perCategory: opts.perCategory });
+        console.log(`built ${cases.length} cases across ${new Set(cases.map((c) => c.category)).size} categories`);
+        const results = await runCases(db, cases, {
+          limit: opts.limit,
+          onProgress: (n) => { if (n % 25 === 0) process.stderr.write(`  ${n}/${cases.length}\r`); },
+        });
+        const m = computeMetrics(results);
+        console.log(
+          `\ncases ${m.cases} · recall@1 ${(100 * m.recallAt1).toFixed(1)}% · recall@5 ${(100 * m.recallAt5).toFixed(1)}%` +
+            ` · recall@25 ${(100 * m.recallAt25).toFixed(1)}% · MRR ${m.mrr.toFixed(3)}`,
+        );
+        const worst = Object.entries(m.byCategory).sort((a, b) => a[1].recallAt25 - b[1].recallAt25).slice(0, 6);
+        console.log('\nweakest categories (recall@25):');
+        for (const [cat, b] of worst) console.log(`  ${cat.padEnd(24)} ${(100 * b.recallAt25).toFixed(0)}%  (${b.cases} cases)`);
+        const { writeFileSync, readFileSync } = await import('node:fs');
+        if (opts.json) { writeFileSync(opts.json, JSON.stringify(results, null, 2)); console.log(`\nwrote ${opts.json}`); }
+        if (opts.compare) {
+          const before = JSON.parse(readFileSync(opts.compare, 'utf8'));
+          const p = pairedPValue(before, results);
+          console.log(`\npaired vs ${opts.compare}: McNemar exact p = ${p.toFixed(4)}${p < 0.05 ? ' (significant)' : ' (NOT significant)'}`);
+        }
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('dependents-backfill')
     .description('fill direct/indirect dependent counts from deps.dev (resumable)')
     .option('--limit <n>', 'rows to attempt this run (default 2000)', (v) => parseInt(v, 10))
