@@ -50,15 +50,68 @@ export function CommandPalette({
 
   const results = useMemo(() => searchCapabilities(query, 6), [query]);
 
+  /**
+   * Two modes, one box.
+   *
+   * Catalog search stays exactly as it was — local, instant, offline-capable,
+   * and incapable of inventing a capability. Ask is the second mode, for the
+   * question a keyword matcher structurally cannot answer: not "what can lurq
+   * do" but "what is true about MY account". It only runs on Enter against the
+   * Ask row, never per keystroke, so the default path costs nothing.
+   */
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const abort = useRef<AbortController | null>(null);
+
+  const ask = useCallback(async (question: string) => {
+    abort.current?.abort();
+    const controller = new AbortController();
+    abort.current = controller;
+    setAsking(true);
+    setAnswer("");
+    try {
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        setAnswer(
+          res.status === 503
+            ? "Ask is not configured on this deployment. Catalog search above still works."
+            : await res.text().catch(() => "Something went wrong."),
+        );
+        return;
+      }
+      // Streamed so a multi-tool question shows its first sentence rather than
+      // holding a blank box for the whole tool loop.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setAnswer((prev) => (prev ?? "") + decoder.decode(value, { stream: true }));
+      }
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") setAnswer("Could not reach lurq.");
+    } finally {
+      setAsking(false);
+    }
+  }, []);
+
   /** Every open/close goes through here, so a reopened palette always starts
    *  fresh instead of resuming the last search. Reset on the event rather than
    *  in an effect watching `open` — that would be a second render pass to undo
    *  state we already knew was stale at the moment it closed. */
   const change = useCallback(
     (next: boolean) => {
+      abort.current?.abort();
       setQuery("");
       setActive(0);
       setCopied(null);
+      setAnswer(null);
+      setAsking(false);
       onOpenChange(next);
     },
     [onOpenChange],
@@ -98,18 +151,24 @@ export function CommandPalette({
     [change, router],
   );
 
+  /** Ask needs a real question, not a stray keystroke. */
+  const canAsk = query.trim().length > 8;
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => {
+        // +1 row: the Ask row sits below the catalog matches.
+        const rows = results.length + (canAsk ? 1 : 0);
         const next = e.key === "ArrowDown" ? i + 1 : i - 1;
-        return (next + results.length) % Math.max(results.length, 1);
+        return (next + rows) % Math.max(rows, 1);
       });
       return;
     }
-    if (e.key === "Enter" && results[active]) {
+    if (e.key === "Enter") {
       e.preventDefault();
-      run(results[active]);
+      if (active === results.length) void ask(query.trim());
+      else if (results[active]) run(results[active]);
     }
   };
 
@@ -177,6 +236,49 @@ export function CommandPalette({
               </button>
             );
           })}
+
+          {/* The second mode. Below the catalog matches, never instead of them:
+              a question about the product is answered instantly from the local
+              index, and only a question about YOUR data is worth a round trip. */}
+          {canAsk && (
+            <button
+              role="option"
+              aria-selected={active === results.length}
+              onClick={() => void ask(query.trim())}
+              onMouseMove={() => setActive(results.length)}
+              className={cn(
+                "mt-1 flex w-full items-start gap-3 rounded-[var(--radius-control)] border-t border-border px-3 py-2.5 text-left transition-colors",
+                active === results.length ? "bg-secondary" : "hover:bg-muted/50",
+              )}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-foreground">
+                  Ask about your own repos, drift and usage
+                </p>
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                  Reads your account and answers from what it finds — never from memory.
+                </p>
+              </div>
+              <span className="shrink-0 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+                {asking ? "reading" : "ask"}
+              </span>
+            </button>
+          )}
+
+          {answer !== null && (
+            <div className="mt-2 rounded-[var(--radius-control)] border border-edge bg-surface-2/50 px-3 py-2.5">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-2">
+                {answer}
+                {asking && (
+                  <span
+                    aria-hidden
+                    className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-px animate-pulse bg-signal/70"
+                  />
+                )}
+              </p>
+              {asking && <span className="sr-only">Reading your account…</span>}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">

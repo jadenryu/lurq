@@ -418,6 +418,28 @@ export const recommendationOutcomes = pgTable(
 );
 
 /**
+ * Durable per-account spend on dashboard Ask, one row per UTC day.
+ *
+ * Deliberately NOT a column on `owner_usage_daily`. That table says of itself
+ * that it is display-only and its writes are fire-and-forget, so an undercount
+ * on a DB hiccup is acceptable there — and a budget that undercounts on a hiccup
+ * is not a budget. Writes here are awaited and their failures propagate.
+ *
+ * Micro-dollars as an integer, not USD as a real: this column is only ever read
+ * by adding to it, and a float accumulator drifts. 1_000_000 = $1.
+ */
+export const askSpendDaily = pgTable(
+  'ask_spend_daily',
+  {
+    ownerId: text('owner_id').notNull(),
+    /** UTC day, 'YYYY-MM-DD'. */
+    date: date('date').notNull(),
+    usdMicros: bigint('usd_micros', { mode: 'number' }).notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.date] })],
+);
+
+/**
  * Per-user, per-day, per-tool call counts for the dashboard usage view. Keyed by
  * ownerId (not per-key — a user can hold multiple keys; the dashboard is
  * per-individual). Display-only, not a billing ledger: writes are fire-and-forget

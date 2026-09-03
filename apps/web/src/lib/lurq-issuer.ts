@@ -206,6 +206,17 @@ export interface DashboardRepo {
 export interface DashboardDep {
   name: string;
   range: string;
+  /**
+   * Every manifest that declares this package, with that manifest's own range.
+   *
+   * The scan has always computed and sent this; the dashboard type used to drop
+   * it on the floor. It is the answer to the question a monorepo actually has
+   * when it sees drift — *which* of my twelve package.json files pins this, and
+   * to what — so the row expands onto it rather than sending anyone to grep.
+   *
+   * Optional because a scan recorded before this shipped has no such field.
+   */
+  declaredIn?: { path: string; range: string }[];
   resolved: string | null;
   latest: string | null;
   majorsBehind: number;
@@ -551,4 +562,29 @@ export async function openBillingPortal(ownerId: string): Promise<string | null>
   if (!res.ok) throw new LurqIssuerError("Could not open the billing portal.", 502);
   const data = (await res.json()) as { url?: string };
   return data.url ?? null;
+}
+
+/**
+ * The durable Ask budget. One signed write reserves a question's worst case and
+ * a second settles the difference; each returns the day's running total and the
+ * ceiling, so no separate read is needed.
+ *
+ * It throws rather than returning a default, and that is the point — a caller
+ * enforcing a spend cap has to be able to tell "under the cap" apart from
+ * "could not reach the cap", and a helper that swallows the failure and hands
+ * back zero turns an outage into unlimited spend.
+ */
+export interface AskBudget {
+  spentMicros: number;
+  limitMicros: number;
+}
+
+export async function recordAskSpend(ownerId: string, usdMicros: number): Promise<AskBudget> {
+  const res = await issuerFetch("/ask-budget", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, usdMicros }),
+  });
+  if (!res.ok) throw new LurqIssuerError("Could not record Ask spend.", res.status);
+  return (await res.json()) as AskBudget;
 }

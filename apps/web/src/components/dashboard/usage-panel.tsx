@@ -84,7 +84,16 @@ export function UsagePanel({ usage, days }: { usage: DashboardUsage; days: numbe
             }
           />
           <div className="mt-5">
-            <BarList items={usage.byTool.map((t) => ({ label: t.tool, count: t.count }))} />
+            {/* Each tool links to its entry in the guide. A call count without
+                a way to learn what the tool does is trivia; the two facts lived
+                on separate pages with nothing between them. */}
+            <BarList
+              items={usage.byTool.map((t) => ({
+                label: t.tool,
+                count: t.count,
+                href: `/dashboard/guide#tool-${t.tool}`,
+              }))}
+            />
           </div>
         </Panel>
       )}

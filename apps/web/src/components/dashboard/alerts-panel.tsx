@@ -59,17 +59,25 @@ export function AlertsPanel({ alerts }: { alerts: RepoAlert[] }) {
             key={alert.id}
             className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-edge pt-2 first:border-0 first:pt-0"
           >
-            <span className="font-mono text-sm">
+            {/* The package is the subject of the alert, so it is the link —
+                and it lands on that package's own row in the repo's drift
+                table rather than on the repo. The footnote below has always
+                said to open a repository for the migration brief; it used to
+                leave the actual finding of it as an exercise. */}
+            <Link
+              href={`/dashboard/repos/${alert.repoId}?q=${encodeURIComponent(alert.packageName)}#deps`}
+              className="rounded-[var(--radius-chip)] font-mono text-sm outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
+            >
               {alert.packageName}
               <span className="text-ink-2/60">
                 {" "}
                 {alert.fromVersion ?? alert.range} → {alert.toVersion}
               </span>
-            </span>
+            </Link>
             <RangeCell alert={alert} />
             <Link
               href={`/dashboard/repos/${alert.repoId}`}
-              className="font-mono text-xs text-ink-2 hover:text-signal"
+              className="rounded-[var(--radius-chip)] font-mono text-xs text-ink-2 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
             >
               {alert.repoFullName}
             </Link>

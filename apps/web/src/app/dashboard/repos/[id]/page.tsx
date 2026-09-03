@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MigrationBrief } from "@/components/dashboard/migration-brief";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
@@ -11,7 +11,7 @@ import { ScanProgress } from "@/components/dashboard/scan-progress";
 import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
 import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
 import { UpgradeRuns } from "@/components/dashboard/upgrade-runs";
-import { StatTile } from "@/components/dashboard/stat-tile";
+import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { buttonVariants } from "@/components/ui/button";
 import { loadRepo, loadRepoBrief } from "@/lib/dashboard-data";
 import { relativeTime } from "@/lib/format";
@@ -71,7 +71,7 @@ export default async function RepoDetailPage({
         }
       />
 
-      <div className="mt-8 space-y-6">
+      <PageBody>
         {/* Polls this route until the first scan lands, so the page fills itself
             in instead of waiting for someone to guess that rescan is the only
             thing that ever re-reads the data. */}
@@ -80,7 +80,7 @@ export default async function RepoDetailPage({
         {repo.lastScanError && <InlineError>{repo.lastScanError}</InlineError>}
 
         {drift && (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <StatRow>
             <StatTile
               label="tracked"
               value={drift.depsTracked}
@@ -88,10 +88,16 @@ export default async function RepoDetailPage({
                 uncovered > 0 ? `${uncovered} queued for indexing` : "full coverage"
               }
             />
+            {/* Each tile links to the rows it counts. A number you cannot open
+                is a claim you have to take on faith, which is the opposite of
+                what this product sells. `href` only where a filter actually
+                exists — a tile that navigates to an unfiltered table is worse
+                than one that stays put. */}
             <StatTile
               label="behind"
               value={drift.anyDrift}
               hint={`${drift.majorDrift} across a major`}
+              href={drift.anyDrift > 0 ? "?show=drifted#deps" : undefined}
             />
             {/* Scoped, not bare. "0" against hundreds of dependencies reads as
                 an all-clear; it is only ever a statement about the packages
@@ -105,8 +111,13 @@ export default async function RepoDetailPage({
                   ? `in the ${drift.depsTracked} indexed`
                   : "on indexed packages"
               }
+              href={drift.advisories > 0 ? "?show=risk#deps" : undefined}
             />
-            <StatTile label="deprecated" value={drift.deprecated} />
+            <StatTile
+              label="deprecated"
+              value={drift.deprecated}
+              href={drift.deprecated > 0 ? "?show=risk#deps" : undefined}
+            />
             {/* "-" rather than 0 when the scan predates the check: an unrun check
                 must never occupy the same cell as one that found nothing. */}
             <StatTile
@@ -114,7 +125,7 @@ export default async function RepoDetailPage({
               value={drift.conflicts ?? "-"}
               hint={drift.conflicts === null ? "rescan to check" : "at latest versions"}
             />
-          </div>
+          </StatRow>
         )}
 
         {/* The brief fans out to one surface diff per upgrade, so it streams in
@@ -141,8 +152,16 @@ export default async function RepoDetailPage({
           armed={repo.policy.enabled}
         />
 
-        <RepoDeps deps={repo.deps} scanning={scanning} />
-      </div>
+        {/* useSearchParams (RepoDeps reads ?show= and ?q=) client-renders the
+            tree up to the nearest Suspense boundary on a prerendered route.
+            This route is dynamic today so nothing bails out, but the Next docs
+            note that on-demand dev rendering hides exactly this — the boundary
+            costs nothing and stops a future static render from taking the whole
+            page client-side. */}
+        <Suspense fallback={null}>
+          <RepoDeps deps={repo.deps} scanning={scanning} />
+        </Suspense>
+      </PageBody>
     </div>
   );
 }
