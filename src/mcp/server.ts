@@ -15,13 +15,11 @@ import {
   handleCompare,
   handleCompat,
   handleEvaluate,
-  handleRecommend,
   handleReportOutcome,
   handleUsage,
   handleVerify,
 } from './handlers';
 import { handleDiagram } from './diagram';
-import { handlePlan } from './plan';
 import { timed } from './metrics';
 import { compact } from './compact';
 import {
@@ -29,12 +27,10 @@ import {
   COMPAT_NODE_DESCRIPTION,
   COMPAT_PACKAGES_DESCRIPTION,
   COMPAT_VERSIONS_DESCRIPTION,
-  PLAN_DESCRIPTION,
   VERIFY_DESCRIPTION,
 } from './toolDescriptions';
 import { recordUsage } from '../db/usage';
 
-const categoryEnum = z.enum(CATEGORIES as unknown as [Category, ...Category[]]);
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
 // Validate package names at the trust boundary. A name flows straight into a
@@ -96,22 +92,6 @@ export function buildMcpServer(
         void recordUsage(db, ctx.ownerId ?? null, tool);
       }
     })();
-
-  server.registerTool(
-    'recommend',
-    {
-      title: 'Recommend packages',
-      description:
-        'Recommend the best current npm packages for a described need, fresh, objectively scored, with confidence labels. Call before choosing or hand-rolling a dependency.',
-      inputSchema: {
-        need: z.string().min(1).describe('Natural-language description of what you need'),
-        category: categoryEnum.optional().describe('Optional taxonomy category to restrict to'),
-        constraints: constraintsSchema,
-      },
-    },
-    async (args) =>
-      json(await run('recommend', () => handleRecommend(db, args, ctx.ownerId ?? null))),
-  );
 
   server.registerTool(
     'evaluate',
@@ -196,41 +176,6 @@ export function buildMcpServer(
       },
     },
     async (args) => json(await run('diagram', () => handleDiagram(db, args))),
-  );
-
-  server.registerTool(
-    'plan',
-    {
-      title: 'Plan a stack from a program description',
-      description: PLAN_DESCRIPTION,
-      inputSchema: {
-        document: z
-          .string()
-          .optional()
-          .describe('Detailed description of the program (spec/README); lurq decomposes it into components'),
-        needs: z
-          .array(
-            z.object({
-              need: z.string().min(1).describe('A component that needs a library'),
-              category: categoryEnum.optional(),
-            }),
-          )
-          .optional()
-          .describe('Pre-decomposed components (skip if you pass a document)'),
-        using: z
-          .array(npmName)
-          .max(12)
-          .optional()
-          .describe(
-            'Packages you have already decided on. lurq pins these as fixed slots, recommends only the remaining needs, and checks/optimizes the whole stack around your picks.',
-          ),
-        optimize: z
-          .enum(['speed', 'balanced'])
-          .optional()
-          .describe("'speed' prefers the lightest-bundle option per slot; default 'balanced'"),
-      },
-    },
-    async (args) => json(await run('plan', () => handlePlan(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(

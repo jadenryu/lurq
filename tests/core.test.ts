@@ -43,7 +43,6 @@ describe('cli program', () => {
     const names = program.commands.map((c) => c.name());
     for (const expected of [
       'serve',
-      'recommend',
       'evaluate',
       'compare',
       'verify',

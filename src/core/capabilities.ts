@@ -53,16 +53,6 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['hallucinated', 'typosquat', 'slopsquat', 'fake', 'malicious', 'safe', 'exists'],
   },
   {
-    id: 'recommend',
-    title: 'Pick a package for a need',
-    question: 'What should I use for this?',
-    answer:
-      'Returns evidence-scored candidates for a described need, with a confidence label on each. Ranks from current signals, not from what was popular at a training cutoff.',
-    mcp: 'recommend',
-    cli: 'lurq recommend "<what you need>"',
-    aliases: ['choose', 'library', 'best', 'alternative', 'which'],
-  },
-  {
     id: 'evaluate',
     title: 'Read the evidence on a package',
     question: 'Is this package healthy, maintained, and worth adopting?',
@@ -112,22 +102,11 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['breaking', 'removed', 'changed', 'migration', 'major'],
   },
   {
-    id: 'plan',
-    title: 'Turn a spec into a stack',
-    question: 'I have a project description — what should I build it with?',
-    answer:
-      'Decomposes a written spec into component slots, recommends a scored package per slot, and optimises the set for compatibility. A starter stack, not an architecture.',
-    mcp: 'plan',
-    cli: 'lurq plan <file.md> --open',
-    aliases: ['spec', 'readme', 'greenfield', 'scaffold', 'roadmap', 'stack'],
-  },
-  {
     id: 'diagram',
     title: 'Draw the stack',
     question: 'Can I see this as a diagram?',
-    answer: 'Renders a planned or existing stack as a Mermaid graph other tools can parse.',
+    answer: 'Renders an existing stack as a Mermaid graph other tools can parse.',
     mcp: 'diagram',
-    cli: 'lurq plan <file.md> --html <out.html>',
     aliases: ['mermaid', 'visual', 'chart', 'architecture', 'graph'],
   },
   {
