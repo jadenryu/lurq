@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
 import { rateLimit } from "@/lib/rate-limit";
-import { fetchAskBudget, recordAskSpend } from "@/lib/lurq-issuer";
+import { recordAskSpend } from "@/lib/lurq-issuer";
 import { costOf, reserveFor } from "@lurq/core/modelPricing";
 
 /**
@@ -244,23 +244,59 @@ export async function POST(req: Request) {
    * prevent. A few minutes of "Ask is unavailable" is the cheaper wrong answer,
    * and catalog search is untouched either way.
    */
-  let budget;
+  /**
+   * Reserve this question's worst case BEFORE answering it, then refund the
+   * unused part once the real cost is known.
+   *
+   * Reading the total and spending against it is a race: two questions from one
+   * account in flight together both read the same figure, both believe they
+   * have the whole remainder, and both spend it. Charging up front closes that,
+   * because the reserve is an atomic increment — the second question reads a
+   * total that already contains the first one's worst case.
+   *
+   * The failure mode inverts, deliberately. If this process dies mid-answer the
+   * reserve is never refunded and the account is over-charged until midnight,
+   * where the old shape under-charged. For a ceiling, over is the correct
+   * direction to be wrong.
+   */
+  const reserveMicros = Math.round(QUESTION_USD * 1_000_000);
+  let afterReserve: number;
+  let limitMicros: number;
   try {
-    budget = await fetchAskBudget(userId);
+    // The reserve response carries the ceiling too, so this is one round trip,
+    // not a read followed by a write.
+    ({ spentMicros: afterReserve, limitMicros } = await recordAskSpend(userId, reserveMicros));
   } catch {
+    // Fail CLOSED. Without a ledger we do not know what has been spent, and
+    // guessing "nothing" turns a backend outage into unlimited spend — the
+    // exact event a budget exists to prevent. Catalog search is untouched.
     return new Response(
-      "Ask is briefly unavailable — its usage ledger could not be read. Catalog search still works.",
+      "Ask is briefly unavailable — its usage ledger could not be reached. Catalog search still works.",
       { status: 503 },
     );
   }
-  if (budget.spentMicros >= budget.limitMicros) {
-    return new Response(
-      "You have reached today's Ask limit. It resets at midnight UTC.",
-      { status: 429 },
-    );
+
+  /** Hand the reserve back. Used on every exit path, including the refusal. */
+  const settle = async (actualUsd: number) => {
+    const delta = Math.round(actualUsd * 1_000_000) - reserveMicros;
+    if (delta === 0) return;
+    await recordAskSpend(userId, delta).catch((err) => {
+      console.error(
+        "[lurq] ask spend NOT settled — today's budget is now wrong for this account:",
+        err instanceof Error ? err.message : String(err),
+      );
+    });
+  };
+
+  if (limitMicros > 0 && afterReserve > limitMicros) {
+    await settle(0); // give the reserve straight back; nothing was spent
+    return new Response("You have reached today's Ask limit. It resets at midnight UTC.", {
+      status: 429,
+    });
   }
-  /** What is left today, in dollars — the real ceiling for this question. */
-  const remainingUsd = (budget.limitMicros - budget.spentMicros) / 1_000_000;
+
+  /** This question may not exceed what it reserved. */
+  const remainingUsd = QUESTION_USD;
 
   const client = new Anthropic({ apiKey });
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
@@ -365,14 +401,8 @@ export async function POST(req: Request) {
         // Awaited inside the stream's finally so the charge lands before the
         // response closes. A failure here is logged, not swallowed silently:
         // an unrecorded charge is spend the next question will not see.
-        if (turnCost > 0) {
-          await recordAskSpend(userId, Math.round(turnCost * 1_000_000)).catch((err) => {
-            console.error(
-              "[lurq] ask spend NOT recorded — the daily budget is under-counting:",
-              err instanceof Error ? err.message : String(err),
-            );
-          });
-        }
+        // Refund the slice of the reserve this question did not use.
+        await settle(turnCost);
         // One structured line per question. Without it a bad answer is
         // unreproducible: you cannot tell whether a prompt change helped, and
         // you cannot see caching working or silently not working. Deliberately

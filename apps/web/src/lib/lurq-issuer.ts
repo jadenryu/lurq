@@ -565,23 +565,18 @@ export async function openBillingPortal(ownerId: string): Promise<string | null>
 }
 
 /**
- * The durable Ask budget. Two calls per question: read the day's total before
- * spending, record what was actually spent after.
+ * The durable Ask budget. One signed write reserves a question's worst case and
+ * a second settles the difference; each returns the day's running total and the
+ * ceiling, so no separate read is needed.
  *
- * Both throw rather than returning a default. That is the point — a caller
+ * It throws rather than returning a default, and that is the point — a caller
  * enforcing a spend cap has to be able to tell "under the cap" apart from
- * "could not read the cap", and a helper that swallows the failure and hands
+ * "could not reach the cap", and a helper that swallows the failure and hands
  * back zero turns an outage into unlimited spend.
  */
 export interface AskBudget {
   spentMicros: number;
   limitMicros: number;
-}
-
-export async function fetchAskBudget(ownerId: string): Promise<AskBudget> {
-  const res = await issuerFetch(`/ask-budget?ownerId=${encodeURIComponent(ownerId)}`);
-  if (!res.ok) throw new LurqIssuerError("Could not read the Ask budget.", res.status);
-  return (await res.json()) as AskBudget;
 }
 
 export async function recordAskSpend(ownerId: string, usdMicros: number): Promise<AskBudget> {

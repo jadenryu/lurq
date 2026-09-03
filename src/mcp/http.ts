@@ -510,9 +510,13 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       res.status(400).json({ error: 'ownerId is required.' });
       return;
     }
-    // A negative or absurd charge is a bug or an attempt to credit the ledger.
-    if (!Number.isFinite(micros) || micros < 0 || micros > ASK_DAILY_LIMIT_MICROS) {
-      res.status(400).json({ error: 'usdMicros must be a sane non-negative integer.' });
+    // Signed: a caller reserves its worst case up front and refunds the unused
+    // part after, so a refund is a legitimate negative. Bounded either way — a
+    // single call may not move the ledger by more than a whole day's ceiling,
+    // which turns a bug in the caller into a wrong number rather than a
+    // bottomless credit.
+    if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DAILY_LIMIT_MICROS) {
+      res.status(400).json({ error: 'usdMicros must be a finite delta within one day\'s limit.' });
       return;
     }
     try {
