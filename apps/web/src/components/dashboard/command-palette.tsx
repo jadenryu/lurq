@@ -189,7 +189,7 @@ export function CommandPalette({
         <DialogTitle className="sr-only">Search what lurq can do</DialogTitle>
 
         <div className="flex items-center gap-3 border-b border-border px-4">
-          <span className="font-mono text-sm text-ink-3" aria-hidden>
+          <span className="text-sm text-ink-3" aria-hidden>
             ›
           </span>
           <input
@@ -202,7 +202,7 @@ export function CommandPalette({
             onKeyDown={onKeyDown}
             placeholder="what are you trying to do?"
             aria-label="Search what lurq can do"
-            className="h-12 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-ink-3"
+            className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-3"
           />
         </div>
 
@@ -230,7 +230,7 @@ export function CommandPalette({
                     </p>
                   )}
                 </div>
-                <span className="shrink-0 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+                <span className="shrink-0 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
                   {copied === c.id ? "copied" : action.label}
                 </span>
               </button>
@@ -281,7 +281,7 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
           <span>↑↓ move · ⏎ run · esc close</span>
           <span>your agent can ask this too: the `capabilities` tool</span>
         </div>
@@ -303,7 +303,7 @@ export function CommandPaletteTrigger({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 rounded-[var(--radius-control)] border border-border px-3 py-2 font-mono text-xs text-muted-foreground transition-colors hover:border-signal/45 hover:text-foreground",
+        "flex items-center gap-2 rounded-[var(--radius-control)] border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-signal/45 hover:text-foreground",
         className,
       )}
     >

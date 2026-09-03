@@ -78,7 +78,7 @@ export function UsagePanel({ usage, days }: { usage: DashboardUsage; days: numbe
           <PanelHeader
             title="by tool"
             trailing={
-              <span className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+              <span className="text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
                 last {days} days
               </span>
             }

@@ -57,7 +57,7 @@ export function ActivityMap({ series }: { series: Point[] }) {
       <PanelHeader
         title="activity map"
         trailing={
-          <span className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+          <span className="text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
             {total.toLocaleString()} calls · {series.length} days
           </span>
         }
@@ -161,7 +161,7 @@ export function ActivityMap({ series }: { series: Point[] }) {
           zeroes is not an accessible alternative, it's a haystack. */}
       {active.length > 0 && (
         <details className="group mt-4">
-          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3 transition-colors hover:text-foreground">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3 transition-colors hover:text-foreground">
             <span className="transition-transform group-open:rotate-90">›</span>
             active days
           </summary>

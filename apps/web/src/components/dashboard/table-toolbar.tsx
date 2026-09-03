@@ -92,4 +92,4 @@ export function TableToolbar({
 
 /** Shared header-cell styling so every dashboard table matches. */
 export const thClass =
-  "font-mono text-xs font-normal uppercase tracking-wide text-ink-3";
+  "text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3";

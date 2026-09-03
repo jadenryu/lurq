@@ -179,7 +179,7 @@ export function ProvenanceOrbit() {
                 <span className="block font-sans text-[22px] font-medium tracking-[-0.02em] text-ink">
                   {stat.value}
                 </span>
-                <span className="mt-1 block font-mono text-[11px] text-ink-3">{stat.label}</span>
+                <span className="mt-1 block text-[11px] font-medium text-ink-3">{stat.label}</span>
               </dd>
             </div>
           ))}

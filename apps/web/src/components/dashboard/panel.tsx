@@ -75,6 +75,11 @@ export function PanelHeader({
  * Small outline chip. `tone` carries state, using the reserved status hues from
  * the soft syntax palette: never a solid saturated badge, and never a status
  * color standing in for plain identity (that's what `neutral` is for).
+ *
+ * Set in Geist, not mono. A chip is a label — "deprecated", "2 majors" — and
+ * mono micro-caps on a label is the template chrome this file already retired
+ * once for `eyebrow`. Mono is reserved for things whose characters matter:
+ * versions, package names, paths, commands, key prefixes.
  */
 export function Chip({
   children,
@@ -90,7 +95,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center whitespace-nowrap rounded-[var(--radius-chip)] border px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wide",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded-[var(--radius-chip)] border px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
         tone === "neutral" && "border-edge text-ink-2",
         tone === "good" && "border-ok/35 text-ok",
         tone === "bad" && "border-bad/40 text-bad",

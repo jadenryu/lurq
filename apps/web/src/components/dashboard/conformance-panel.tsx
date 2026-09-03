@@ -127,7 +127,7 @@ export function ConformancePanel({ report }: { report: ConformanceReport }) {
       <PanelHeader
         title="what your repos would fail"
         trailing={
-          <span className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+          <span className="text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
             {failing} of {report.repos.length} repos · {violations} violations
           </span>
         }

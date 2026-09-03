@@ -75,7 +75,7 @@ function isActive(pathname: string, href: string): boolean {
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const reduce = useReducedMotion();
   const className = cn(
-    "relative flex items-center rounded-[var(--radius-control)] py-2 pl-4 pr-3 font-mono text-sm lowercase tracking-wide transition-colors",
+    "relative flex items-center rounded-[var(--radius-control)] py-2 pl-4 pr-3 text-sm lowercase tracking-[-0.005em] transition-colors",
     active
       ? "bg-secondary text-foreground"
       : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -122,7 +122,7 @@ function NavGroup({
 }) {
   return (
     <div>
-      <p className="px-4 pb-2 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
+      <p className="px-4 pb-2 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
         {label}
       </p>
       <div className="flex flex-col gap-0.5">
@@ -182,7 +182,7 @@ export function DashboardNav() {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "relative shrink-0 snap-start rounded-[var(--radius-control)] px-3 py-1.5 font-mono text-sm lowercase tracking-wide transition-colors",
+                    "relative shrink-0 snap-start rounded-[var(--radius-control)] px-3 py-1.5 text-sm lowercase tracking-[-0.005em] transition-colors",
                     active
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground",

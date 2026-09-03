@@ -97,7 +97,7 @@ export function SiteFooter() {
             <div className="grid flex-1 grid-cols-2 gap-8 min-[560px]:grid-cols-3">
               {COLUMNS.map((col) => (
                 <div key={col.heading}>
-                  <h2 className="font-mono text-[11px] tracking-[0.1em] text-ink-3">
+                  <h2 className="text-[11px] font-medium tracking-[0.04em] text-ink-3">
                     {col.heading}
                   </h2>
                   <ul className="mt-4 flex flex-col gap-2.5">

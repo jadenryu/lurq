@@ -78,7 +78,7 @@ export default function Home() {
 
         <div className="w-full px-4 py-16 min-[768px]:px-6 min-[900px]:py-20">
           <div className="mx-auto flex aspect-video w-full max-w-[1000px] items-center justify-center overflow-hidden rounded-2xl border border-dashed border-edge">
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-ink-3">
               Product video
             </p>
           </div>

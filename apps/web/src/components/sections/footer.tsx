@@ -46,7 +46,7 @@ export function Footer() {
 
           {columns.map((col) => (
             <div key={col.title}>
-              <h4 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+              <h4 className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground/70">
                 {col.title}
               </h4>
               <ul className="mt-4 space-y-3">
