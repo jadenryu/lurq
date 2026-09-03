@@ -49,8 +49,16 @@ describe('Railway service configs (sync / api / discover)', () => {
   it('lurq-discover (railway.discover.json): periodic worker, not sync', () => {
     expect(discover.deploy.startCommand).toContain('worker --once');
     expect(discover.deploy.startCommand).not.toMatch(/\bsync\b/);
-    expect(discover.deploy.cronSchedule).toBe('*/15 * * * *');
+    expect(discover.deploy.cronSchedule).toBe('0 * * * *');
     expect(discover.deploy.restartPolicyType).toBe('NEVER');
+    // --cap and --extract move together with the schedule. Measured against the
+    // production index: 11.9s fixed per cycle, 5.6s per package, 1.75s per
+    // extraction — so hourly at 400/200 is ~43min of a 60min window, the same
+    // headroom the 15-minute schedule had at 100/50, and the same daily
+    // throughput. Scaling the cron without scaling these would quietly cut
+    // ingestion or surface extraction by 75%.
+    expect(discover.deploy.startCommand).toContain('--cap 400');
+    expect(discover.deploy.startCommand).toContain('--extract 200');
   });
 
   it('exactly one repo Railway config runs operator sync (no duplicate cron in git)', () => {
