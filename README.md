@@ -121,12 +121,10 @@ carries a `dataAsOf` timestamp so your agents know how fresh the information is.
 
 | Tool | What it answers |
 |---|---|
-| `recommend` | Best current packages for a described need (≤5, scored, with confidence) |
 | `evaluate` | Full evidence read for one package — scores, advisories, usage guide |
 | `compare` | 2–5 packages ranked head-to-head |
 | `verify` | Is this package real, healthy, and not risky? *(anti-hallucination guard)* |
 | `compat` | Will these packages actually install together? (peer/engine constraints) |
-| `plan` | Source every slot in a stack at once, checked for cross-slot coherence |
 | `diagram` | A reference-architecture Mermaid diagram for a stack |
 | `usage` | A version's *real* public API — symbols and signatures from its shipped `.d.ts` |
 | `resolve_surface` | The exact export surface of one package version |
@@ -143,8 +141,7 @@ exists in no changelog and no model's training data.
 The same index, scriptable. Every capability is a subcommand.
 
 ```bash
-# Discovery
-lurq recommend "a form library for react"
+# Evidence
 lurq evaluate zod
 lurq compare date-fns dayjs moment
 lurq verify jsonwebtoken
@@ -155,7 +152,6 @@ lurq versions react                        # stored version timeline
 
 # Stacks
 lurq compat next react react-dom           # do these install together?
-lurq plan ./project.md                     # a description in, a scored stack out
 
 # Upgrades
 lurq upgrade-plan .                        # what's behind, and what each upgrade removes
@@ -231,7 +227,7 @@ cadence, maintenance, advisories, deprecations, license, bundle cost.
 
 **Executed** — an isolated sandbox (E2B, with a local driver for trusted work) that
 installs and imports a package version. Results are recorded in the compatibility matrix.
-Compatibility is established through co-installation. `compat` and `plan` read those edges, which is why lurq can tell you 
+Compatibility is established through co-installation. `compat` reads those edges, which is why lurq can tell you 
 that an entire stack holds together.
 
 Executable proof allows lurq to look beyond changelogs and training data.
@@ -240,9 +236,8 @@ Executable proof allows lurq to look beyond changelogs and training data.
 
 ## How ranking works
 
-Deterministic, and public. **No model sits in the ranking path** — `recommend` is
-hybrid vector + full-text search over precomputed scores, which is why lurq is fast,
-cheap, and reproducible.
+Deterministic, and public. **No model sits in the scoring path** — health and quality
+are computed from recorded signals, which is why lurq is fast, cheap, and reproducible.
 
 ```
 health  = maintenance 0.35 · adoption 0.30 · reliability 0.25 · efficiency 0.10

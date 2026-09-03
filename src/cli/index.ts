@@ -109,18 +109,6 @@ export function buildProgram(): Command {
   // Help lists commands in registration order, so the ones a user actually runs
   // come first and the server/scripting plumbing sits at the bottom.
   program
-    .command('recommend')
-    .argument('<need>', 'natural-language description of what you need')
-    .description('recommend the best current packages for a described need')
-    .option('--category <category>', 'restrict to a taxonomy category')
-    .option('--min-confidence <level>', 'proven | emerging | promising | unproven')
-    .option('--json', 'output JSON instead of a table')
-    .action(async (need: string, opts: { category?: string; minConfidence?: string; json?: boolean }) => {
-      const { runRecommend } = await import('./commands');
-      await runRecommend(need, opts);
-    });
-
-  program
     .command('evaluate')
     .argument('<package>', 'npm package name')
     .description('full evidence read for one package (scores, signals, usage guide)')
@@ -197,19 +185,6 @@ export function buildProgram(): Command {
     .action(async (pkgs: string[], opts: { json?: boolean; pin?: string[] }) => {
       const { runCompat } = await import('./commands');
       await runCompat(pkgs, opts);
-    });
-
-  program
-    .command('plan')
-    .argument('<file>', 'path to a markdown file describing your program')
-    .description('turn a program description into an evidence-scored package plan + roadmap')
-    .option('--optimize <mode>', "ranking bias: 'speed' (lightest bundle) or 'balanced'")
-    .option('--html <path>', 'write the roadmap as a self-contained HTML visualization')
-    .option('--open', 'render the roadmap to HTML and open it in your browser')
-    .option('--json', 'output the full plan as JSON')
-    .action(async (file: string, opts: { optimize?: string; json?: boolean; html?: string; open?: boolean }) => {
-      const { runPlan } = await import('./commands');
-      await runPlan(file, opts);
     });
 
   // ── Upgrade autopilot ─────────────────────────────────────────────────────
