@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import {
   CliSection,
   ConnectSection,
@@ -27,7 +27,7 @@ export default async function DashboardGuidePage() {
         subtitle="Connect it once. Your agent calls it on its own from then on."
       />
 
-      <div className="mt-10 space-y-14">
+      <PageBody variant="prose">
         <GuideSection
           index={1}
           label="connect"
@@ -80,7 +80,7 @@ export default async function DashboardGuidePage() {
         >
           <CliSection />
         </GuideSection>
-      </div>
+      </PageBody>
     </div>
   );
 }

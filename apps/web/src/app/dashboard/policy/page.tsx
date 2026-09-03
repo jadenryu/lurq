@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { InlineError, Panel, eyebrow } from "@/components/dashboard/panel";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { ConformancePanel } from "@/components/dashboard/conformance-panel";
 import { SelectionPolicyPanel } from "@/components/dashboard/selection-policy";
 import { loadConformance, loadSelectionPolicy } from "@/lib/dashboard-data";
@@ -32,7 +32,7 @@ export default async function PolicyPage() {
         demo={demo}
       />
 
-      <div className="mt-8 space-y-6">
+      <PageBody>
         {failed && (
           <InlineError>
             The policy service is unreachable, so these rules could not be loaded. What you
@@ -72,7 +72,7 @@ export default async function PolicyPage() {
             </p>
           </div>
         </Panel>
-      </div>
+      </PageBody>
     </div>
   );
 }
