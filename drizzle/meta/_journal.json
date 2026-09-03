@@ -218,6 +218,13 @@
       "when": 1788390119215,
       "tag": "0030_steady_mathemanic",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788475809710,
+      "tag": "0031_redundant_maginty",
+      "breakpoints": true
     }
   ]
 }

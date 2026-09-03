@@ -13,6 +13,7 @@ import {
 import { parseGithub } from '../../src/ingestion/sources/github';
 import {
   parseScorecard,
+  parseDependents,
   parseAdvisoryKeys,
   parseAdvisoryDetail,
   severityFromCvss,
@@ -188,5 +189,27 @@ describe('bundlephobia parser', () => {
   it('converts gzip bytes to KB', () => {
     expect(parseBundleSize({ gzip: 12288 })).toBe(12);
     expect(parseBundleSize({})).toBeNull();
+  });
+});
+
+describe('deps.dev dependent counts', () => {
+  it('keeps direct and indirect separate', () => {
+    // The real shape from api.deps.dev ...:dependents
+    expect(parseDependents({ dependentCount: 6456, directDependentCount: 1760, indirectDependentCount: 4786 }))
+      .toEqual({ direct: 1760, indirect: 4786 });
+  });
+
+  it('returns null rather than guessing when either count is missing', () => {
+    // A partial payload must not silently become a zero: zero direct dependents
+    // is a strong claim ("nobody chose this") and absence is not evidence of it.
+    expect(parseDependents({ dependentCount: 10 })).toBeNull();
+    expect(parseDependents({ directDependentCount: 5 })).toBeNull();
+    expect(parseDependents(null)).toBeNull();
+    expect(parseDependents({ directDependentCount: '5', indirectDependentCount: 1 })).toBeNull();
+  });
+
+  it('preserves a genuine zero', () => {
+    expect(parseDependents({ directDependentCount: 0, indirectDependentCount: 0 }))
+      .toEqual({ direct: 0, indirect: 0 });
   });
 });
