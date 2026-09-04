@@ -28,6 +28,8 @@ export interface ScanResult {
   partial: boolean;
   /** False when the repo has no dependency graph, so transitives were not read. */
   transitivesRead: boolean;
+  /** The repository has no commits yet. A successful scan of nothing. */
+  empty: boolean;
   error?: string;
 }
 
@@ -36,7 +38,7 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
   const base = { repoId: repo.id, fullName: repo.fullName };
   try {
     const branch = repo.defaultBranch ?? 'main';
-    const { manifests, installCommand, partial } = await fetchManifests(
+    const { manifests, installCommand, partial, empty } = await fetchManifests(
       repo.installationId,
       repo.fullName,
       branch,
@@ -56,6 +58,7 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
       majorDrift: drift.majorDrift,
       partial,
       transitivesRead: resolvedTree !== null,
+      empty,
     };
   } catch (err) {
     // A revoked installation is the common case and deserves an actionable
@@ -77,6 +80,7 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
       majorDrift: 0,
       partial: false,
       transitivesRead: false,
+      empty: false,
       error: message,
     };
   }

@@ -133,8 +133,9 @@ export async function createCheckoutSession(
   const customer = await customerFor(db, req.ownerId, req.email);
   if (!customer) return null;
 
-  const base = getConfig().LURQ_WEB_URL.replace(/\/$/, '');
-  const session = await stripe.checkout.sessions.create({
+  const config = getConfig();
+  const base = config.LURQ_WEB_URL.replace(/\/$/, '');
+  const params: Stripe.Checkout.SessionCreateParams = {
     mode: 'subscription',
     customer,
     line_items: [{ price, quantity: 1 }],
@@ -148,12 +149,24 @@ export async function createCheckoutSession(
     subscription_data: { metadata: { ownerId: req.ownerId, tier: req.tier } },
     metadata: { ownerId: req.ownerId, tier: req.tier },
     allow_promotion_codes: true,
-    // Stripe Tax works out VAT/sales tax per the customer's address. This is the
-    // half of merchant-of-record we can buy; registration and remittance are
-    // still ours, which is the tradeoff taken when Stripe was chosen over a MoR.
+    // Stripe Tax works out VAT/sales tax per the customer's address. On its own
+    // that is only half of merchant-of-record: registration and remittance stay
+    // ours. STRIPE_MANAGED_PAYMENTS below buys the other half when it is on.
+    // Left enabled either way — it is what calculates tax when it is off, and
+    // Managed Payments supersedes rather than conflicts with it when it is on.
     automatic_tax: { enabled: true },
     billing_address_collection: 'auto',
-  });
+  };
+
+  if (config.STRIPE_MANAGED_PAYMENTS) {
+    // Not in stripe@22.6.0's types yet. Assigned through a narrow cast rather
+    // than widening the whole params object, so every other parameter stays
+    // type-checked — and rather than bumping the SDK, which would move the
+    // pinned API version's object shapes out from under handleEvent.
+    (params as Record<string, unknown>).managed_payments = { enabled: true };
+  }
+
+  const session = await stripe.checkout.sessions.create(params);
   return session.url;
 }
 

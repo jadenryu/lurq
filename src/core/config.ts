@@ -106,6 +106,22 @@ const EnvSchema = z.object({
   /** Signing secret for `POST /billing/webhook`. Unset → the endpoint is 404. */
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Price id backing the Pro plan. Unset → Pro cannot be checked out. */
+  /**
+   * Turn on Stripe Managed Payments: Stripe becomes merchant of record and
+   * takes over indirect tax registration and remittance, dispute handling and
+   * fraud, which is the half `automatic_tax` alone does not buy.
+   *
+   * Off by default and deliberately a switch rather than a constant. The
+   * account has to be enrolled and its products carry an eligible `tax_code`
+   * before Stripe will accept the parameter; sending it from an ineligible
+   * account fails the Checkout Session create, which breaks buying entirely.
+   * So this flips on once the dashboard says the account is eligible, and
+   * flips back off in one variable if it is not.
+   */
+  STRIPE_MANAGED_PAYMENTS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   STRIPE_PRICE_PRO: z.string().min(1).optional(),
   /** Price id backing Enterprise. Normally unset: Enterprise is sold by
    *  conversation, and `contactOnly` in core/plans.ts is what the page reads. */

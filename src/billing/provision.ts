@@ -35,6 +35,20 @@ export const WEBHOOK_EVENTS = [
 /** Stamped on everything this creates, so a re-run can find its own work. */
 const MARKER = 'lurq_tier';
 
+/**
+ * Stripe tax code for the products, and a prerequisite for Managed Payments,
+ * which refuses any product without an eligible one.
+ *
+ * `txcd_10103100` is the SaaS category. Set on every product whether or not
+ * Managed Payments is switched on, because it is inert until then and getting
+ * it in place early is what makes enabling the flag a one-variable change.
+ *
+ * Worth confirming against the tax-code picker in the Stripe dashboard rather
+ * than taking this constant's word for it: the code decides what tax gets
+ * charged and remitted, and the wrong one is wrong in a direction that matters.
+ */
+const TAX_CODE = 'txcd_10103100';
+
 export interface ProvisionResult {
   env: Record<string, string>;
   notes: string[];
@@ -79,11 +93,20 @@ async function findPrice(
 async function provisionPlan(stripe: Stripe, plan: Plan, notes: string[]): Promise<string> {
   let product = await findProduct(stripe, plan.tier);
   if (product) {
-    notes.push(`product for ${plan.tier}: reused ${product.id}`);
+    // A product created before Managed Payments existed has no tax code, and
+    // without one the Checkout Session is rejected. Patch rather than skip, so
+    // a re-run repairs the account instead of reporting it as already fine.
+    if (product.tax_code == null) {
+      product = await stripe.products.update(product.id, { tax_code: TAX_CODE });
+      notes.push(`product for ${plan.tier}: reused ${product.id}, set tax_code ${TAX_CODE}`);
+    } else {
+      notes.push(`product for ${plan.tier}: reused ${product.id}`);
+    }
   } else {
     product = await stripe.products.create({
       name: `lurq ${plan.name}`,
       description: plan.tagline,
+      tax_code: TAX_CODE,
       metadata: { [MARKER]: plan.tier },
     });
     notes.push(`product for ${plan.tier}: created ${product.id}`);

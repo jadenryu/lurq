@@ -59,6 +59,40 @@ export interface DeclaredDep {
  * views: the merged range answers "how far behind is this repo", the file list
  * answers "which package.json does the agent bump".
  */
+/**
+ * `semver.minVersion`, but null instead of a throw.
+ *
+ * A package.json range is whatever npm accepts, which is a strictly larger
+ * language than semver ranges: `latest` and other dist-tags, `*`, `workspace:*`,
+ * `catalog:`, `file:../x`, `link:`, `github:owner/repo`, git URLs, and
+ * `npm:alias@^1`. `semver.minVersion` throws a TypeError on every one of them.
+ *
+ * That throw used to escape all the way to `scanRepo`, which catches it and
+ * writes `last_scan_error` — so a single `"dep": "latest"` anywhere in a repo
+ * discarded that repo's entire drift result. 91 of 155 connected repos had no
+ * manifests stored, reporting `Invalid comparator: latest`.
+ *
+ * Null is the honest answer: a dependency pinned to a dist-tag or a local path
+ * has no semver floor, so it has no computable drift. It is still a real
+ * dependency and still counted — it just carries no version comparison.
+ */
+export function rangeFloor(range: string): string | null {
+  try {
+    return semver.minVersion(range)?.version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** `semver.maxSatisfying`, null instead of a throw. Same reason as {@link rangeFloor}. */
+export function bestSatisfying(versions: string[], range: string): string | null {
+  try {
+    return semver.maxSatisfying(versions, range, { includePrerelease: false });
+  } catch {
+    return null;
+  }
+}
+
 export function declaredDeps(manifests: RepoManifest[]): Map<string, DeclaredDep> {
   const out = new Map<string, DeclaredDep>();
   for (const manifest of manifests) {
@@ -69,8 +103,10 @@ export function declaredDeps(manifests: RepoManifest[]): Map<string, DeclaredDep
         continue;
       }
       existing.declaredIn.push({ path: manifest.path, range });
-      const current = semver.minVersion(existing.range);
-      const candidate = semver.minVersion(range);
+      // A range with no semver floor cannot be compared, so it cannot win the
+      // "lowest declared range" contest — but it must not throw either.
+      const current = rangeFloor(existing.range);
+      const candidate = rangeFloor(range);
       if (current && candidate && semver.lt(candidate, current)) existing.range = range;
     }
   }
@@ -146,10 +182,7 @@ export function depDrift(
   const latest = indexed.latestVersion;
   // `maxSatisfying` needs the candidate list; when the index has no timeline yet,
   // fall back to the range's own floor rather than reporting no drift at all.
-  const resolved =
-    semver.maxSatisfying(knownVersions, range, { includePrerelease: false }) ??
-    semver.minVersion(range)?.version ??
-    null;
+  const resolved = bestSatisfying(knownVersions, range) ?? rangeFloor(range);
 
   let majorsBehind = 0;
   if (resolved && latest && semver.valid(resolved) && semver.valid(latest)) {
