@@ -5,7 +5,7 @@
  * Two things write here: the Stripe webhook, and `grantPlan` for a plan sold
  * before a processor existed. Everything else reads.
  */
-import { and, desc, eq, gte, like, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, like, lte, or, sql } from 'drizzle-orm';
 import { isServed, planFor, type Plan, type Tier } from '../core/plans';
 import type { Database } from './client';
 import { ownerUsageDaily, subscriptions, type SubscriptionRow } from './schema';
@@ -131,7 +131,17 @@ export async function applySubscriptionEvent(
         lastEventAt: update.eventAt,
         updatedAt: new Date(),
       },
-      setWhere: sql`${subscriptions.lastEventAt} is null or ${subscriptions.lastEventAt} <= ${update.eventAt}`,
+      // Typed operators, NOT a raw sql`` template. Drizzle applies a column's
+      // type mapper only to values it can attribute to a column, so a Date
+      // interpolated into sql`` reaches postgres.js unconverted and the driver
+      // throws "The \"string\" argument must be of type string ... Received an
+      // instance of Date". That threw on every event this table has ever seen:
+      // the webhook 200s before doing the work, so Stripe recorded success,
+      // never retried, and every paid account silently stayed on free.
+      setWhere: or(
+        isNull(subscriptions.lastEventAt),
+        lte(subscriptions.lastEventAt, update.eventAt),
+      ),
     })
     .returning({ ownerId: subscriptions.ownerId });
   return result.length > 0;
