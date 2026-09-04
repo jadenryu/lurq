@@ -158,13 +158,16 @@ export async function createCheckoutSession(
     billing_address_collection: 'auto',
   };
 
-  if (config.STRIPE_MANAGED_PAYMENTS) {
-    // Not in stripe@22.6.0's types yet. Assigned through a narrow cast rather
-    // than widening the whole params object, so every other parameter stays
-    // type-checked — and rather than bumping the SDK, which would move the
-    // pinned API version's object shapes out from under handleEvent.
-    (params as Record<string, unknown>).managed_payments = { enabled: true };
-  }
+  // Sent on every session, true or false, because Stripe applies an account-level
+  // default when the parameter is absent — so omitting it would let a dashboard
+  // toggle decide, and the symptom of that disagreeing with our products is a 400
+  // in someone's checkout. Not in stripe@22.6.0's types yet, so it goes on via a
+  // narrow cast rather than widening the whole params object (every other
+  // parameter stays checked) and rather than bumping the SDK, which would move
+  // the pinned API version's object shapes out from under handleEvent.
+  (params as Record<string, unknown>).managed_payments = {
+    enabled: config.STRIPE_MANAGED_PAYMENTS,
+  };
 
   const session = await stripe.checkout.sessions.create(params);
   return session.url;

@@ -107,20 +107,24 @@ const EnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Price id backing the Pro plan. Unset → Pro cannot be checked out. */
   /**
-   * Turn on Stripe Managed Payments: Stripe becomes merchant of record and
-   * takes over indirect tax registration and remittance, dispute handling and
-   * fraud, which is the half `automatic_tax` alone does not buy.
+   * Whether Stripe Managed Payments applies to our Checkout Sessions: Stripe as
+   * merchant of record, taking over indirect tax registration and remittance,
+   * disputes and fraud — the half `automatic_tax` alone does not buy.
    *
-   * Off by default and deliberately a switch rather than a constant. The
-   * account has to be enrolled and its products carry an eligible `tax_code`
-   * before Stripe will accept the parameter; sending it from an ineligible
-   * account fails the Checkout Session create, which breaks buying entirely.
-   * So this flips on once the dashboard says the account is eligible, and
-   * flips back off in one variable if it is not.
+   * ALWAYS SENT, in both directions, and that is the point. Managed Payments has
+   * an account-level default (on, for accounts created since it shipped), so
+   * omitting the parameter hands the decision to a dashboard toggle instead of
+   * to config. That is action at a distance: the same deploy behaves differently
+   * per account, and the failure it produces is a 400 at the moment someone
+   * tries to pay. Sending it explicitly makes the deployment the authority.
+   *
+   * Defaults true to match the account default. Every product must carry an
+   * eligible `tax_code` (see billing/provision.ts) or Stripe rejects the session,
+   * so `false` is the one-variable escape hatch if eligibility is ever in doubt.
    */
   STRIPE_MANAGED_PAYMENTS: z
     .enum(['true', 'false'])
-    .default('false')
+    .default('true')
     .transform((v) => v === 'true'),
   STRIPE_PRICE_PRO: z.string().min(1).optional(),
   /** Price id backing Enterprise. Normally unset: Enterprise is sold by
