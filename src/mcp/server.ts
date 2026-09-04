@@ -31,7 +31,6 @@ import {
 } from './toolDescriptions';
 import { recordUsage } from '../db/usage';
 
-const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
 // Validate package names at the trust boundary. A name flows straight into a
 // registry URL (`registry.npmjs.org/${name}`) and the response cache key, so
@@ -44,18 +43,6 @@ export const npmName = z
   .min(1)
   .max(214)
   .regex(/^(?:@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/i, 'Invalid npm package name');
-
-// No `runtime` filter: lurq stores no per-package runtime signal, so the field
-// was accepted and silently ignored — an agent asking for browser-only packages
-// got the unfiltered list back. Restore it when ingestion records the manifest's
-// `browser` field / `exports` browser condition, not before.
-const constraintsSchema = z
-  .object({
-    license: z.string().optional(),
-    maxBundleKb: z.number().positive().optional(),
-    minConfidence: confidenceEnum.optional(),
-  })
-  .optional();
 
 /** Wrap any result object as a compact MCP text response. `compact` strips
  *  null/empty fields so the agent's context only carries signal (§12.4). */

@@ -358,7 +358,17 @@ export async function scoreCase(
       perPackage,
       referenced,
       missing,
-      missRate: missing.length / referenced.length,
+      // null, not 0/0. `referenced` is empty when the generated code used the
+      // pinned package without touching any symbol this scanner recognises, and
+      // no rate is defined over zero symbols. NaN would be worse than wrong
+      // here: the aggregate below filters unverifiable cases with
+      // `missRate !== null`, and NaN passes that test, so the case would be
+      // counted as SCORED and — having no missing symbols — as CLEAN. That
+      // inflates `scored`, deflates `symbolsPerCase`, and biases `caseMissRate`
+      // downward, all silently. `null` routes it to `unverifiable`, which is
+      // what the early return at the top of this function already does for the
+      // same condition.
+      missRate: referenced.length > 0 ? missing.length / referenced.length : null,
       ...(opts.keepCode ? { code } : {}),
     };
   } finally {
@@ -388,7 +398,28 @@ export async function runMissRate(
     }
   }
 
-  const scored = results.filter((r) => r.missRate !== null);
+  return aggregateMissRate(results, model, samples);
+}
+
+/**
+ * Roll per-case results into the report. Split out from `runMissRate` so the
+ * arithmetic is reachable without a model call or a sandbox — the M0 headline
+ * numbers come from here, and they were previously only exercised by a run that
+ * costs money.
+ *
+ * `scored` is every case a rate could be computed for. The filter is
+ * `Number.isFinite`, not `!== null`: NaN is not null, so a `0/0` case used to
+ * pass as scored and, having no missing symbols, as clean — inflating `scored`,
+ * deflating `symbolsPerCase`, and biasing `caseMissRate` toward zero. The
+ * division that produced NaN is fixed above; this stays defensive because the
+ * cost of being wrong here is a quietly optimistic headline number.
+ */
+export function aggregateMissRate(
+  results: CaseResult[],
+  model: string,
+  samples: number,
+): MissRateReport {
+  const scored = results.filter((r) => r.missRate !== null && Number.isFinite(r.missRate));
   const totalReferenced = scored.reduce((a, r) => a + r.referenced.length, 0);
   const totalMissing = scored.reduce((a, r) => a + r.missing.length, 0);
   const p = totalReferenced ? totalMissing / totalReferenced : null;

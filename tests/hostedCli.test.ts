@@ -202,37 +202,6 @@ describe('selection-policy reporting', () => {
     else delete process.env.LURQ_ENDPOINT;
   });
 
-  // policy/types.ts: exclusions are reported, never silently dropped, because an
-  // agent (or a person) told "here are 3 options" when 5 were found will
-  // re-derive the blocked one and install it directly.
-  it('prints what a policy refused, and why, under the recommend table', async () => {
-    reply = {
-      body: toolResult({
-        candidates: [{ name: 'ky', healthScore: 82, confidence: 'proven', weeklyDownloads: 1 }],
-        excluded: [{ name: 'axios', rule: 'denied', reason: 'use our internal http client' }],
-      }),
-    };
-    const { runRecommend } = await import('../src/cli/commands');
-    await runRecommend('an http client', {});
-
-    const text = out.join('\n');
-    expect(text).toContain('ky');
-    expect(text).toContain('policy refused 1');
-    expect(text).toContain('axios');
-    expect(text).toContain('use our internal http client');
-  });
-
-  it('says nothing about policy when no rules are in force', async () => {
-    reply = {
-      body: toolResult({
-        candidates: [{ name: 'ky', healthScore: 82, confidence: 'proven', weeklyDownloads: 1 }],
-      }),
-    };
-    const { runRecommend } = await import('../src/cli/commands');
-    await runRecommend('an http client', {});
-    expect(out.join('\n')).not.toContain('policy');
-  });
-
   it('leads an evaluate with a blocked verdict rather than burying it', async () => {
     reply = {
       body: toolResult({

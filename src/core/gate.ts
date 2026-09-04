@@ -35,8 +35,8 @@ const OWNER_HASH = '9675c37e56783e747e4a89ee3919d95d1364f2e5dd0f14501b0f878f8cc3
  *  - `sync`/`discover`/`rescore`/`db`/`keys` — operator/infra commands that all
  *    require DATABASE_URL, which a public installer never has. Gating them adds no
  *    protection (a keyless user can't run them anyway) while risking the owner's
- *    own deploy. The gate's real job is the user-facing commands (recommend,
- *    evaluate, compare, verify, plan, install, install-skill, weights).
+ *    own deploy. The gate's real job is the user-facing commands (evaluate,
+ *    compare, verify, usage, install, install-skill, weights).
  */
 const ALLOWED = new Set([
   '-v', '--version', '-h', '--help', 'help',

@@ -5,13 +5,11 @@
  */
 import semver from 'semver';
 import { loadEnv, requireConfig } from '../core/config';
-import { openInBrowser } from '../core/open';
 import { resolveApiKey } from '../core/userConfig';
-import { isCategory, type Category, type Confidence } from '../core/types';
 import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
 import { getPackageVersions } from '../db/packages';
-import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from '../mcp/handlers';
+import { handleCompare, handleEvaluate, handleVerify } from '../mcp/handlers';
 import { CONFIDENCE, QUALITY_WEIGHTS } from '../scoring/weights';
 import {
   activeWeightsPath,
@@ -95,84 +93,6 @@ export interface RecommendCliOpts {
   json?: boolean;
 }
 
-/**
- * The disqualifying facts about a candidate, or a dash.
- *
- * `—` here means "checked, nothing wrong", which is why the column is always
- * rendered rather than appearing only when something is flagged: a column that
- * comes and goes teaches the reader nothing when it is absent.
- */
-function candidateFlags(c: {
-  deprecated?: boolean;
-  archived?: boolean;
-  advisories?: number;
-}): string {
-  const flags = [
-    c.deprecated && red('deprecated'),
-    c.archived && yellow('archived'),
-    c.advisories ? yellow(`${c.advisories} advisory`) : null,
-  ].filter(Boolean) as string[];
-  return flags.length ? flags.join(' ') : dim('—');
-}
-
-export async function runRecommend(need: string, opts: RecommendCliOpts): Promise<void> {
-  if (opts.category && !isCategory(opts.category)) {
-    throw new Error(`Unknown category "${opts.category}".`);
-  }
-  const args = {
-    need,
-    category: opts.category as Category | undefined,
-    constraints: opts.minConfidence
-      ? { minConfidence: opts.minConfidence as Confidence }
-      : undefined,
-  };
-  const res = await fromIndex('recommend', args, (db) => handleRecommend(db, args));
-
-  if (opts.json) return console.log(JSON.stringify(res, null, 2));
-  const candidates = res.candidates ?? [];
-  if (candidates.length === 0) {
-    console.log('No matching packages found.');
-    return;
-  }
-  console.log(
-    table(
-      ['Package', 'Health', 'Quality', 'Confidence', 'Weekly', 'Latest', 'Category', 'Flags'],
-      candidates.map((c) => [
-        c.name,
-        String(c.healthScore),
-        c.qualityScore != null ? String(c.qualityScore) : '—',
-        confidenceLabel(c.confidence),
-        formatNumber(c.weeklyDownloads),
-        c.latestVersion ?? '—',
-        c.category ?? '—',
-        // Last, and the only coloured cell: it is the column that can reverse
-        // the decision the other seven are supporting, so it reads as a verdict
-        // at the end of the row rather than as one more attribute among them.
-        candidateFlags(c),
-      ]),
-    ),
-  );
-  printExclusions(res);
-  console.log(dim(`\ndata as of ${formatDate(res.dataAsOf)}`));
-}
-
-/**
- * Show what a selection policy refused, when one is in force.
- *
- * policy/types.ts is explicit that exclusions are reported and never silently
- * dropped, for a concrete reason: told "here are 3 options" when 5 were found,
- * an agent re-derives the blocked one from training and installs it directly.
- * The same holds for a person at a terminal. The hosted path is the one that
- * carries a verdict at all, since policy is owner-scoped and the local path
- * passes no owner.
- */
-function printExclusions(res: object): void {
-  if (!('excluded' in res)) return;
-  const excluded = (res.excluded ?? []) as { name: string; rule: string; reason: string }[];
-  if (excluded.length === 0) return;
-  console.log(yellow(`\npolicy refused ${excluded.length}:`));
-  for (const e of excluded) console.log(`  ${e.name}  ${dim(`${e.rule}: ${e.reason}`)}`);
-}
 
 export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promise<void> {
   const res = await fromIndex('evaluate', { package: pkg }, (db) =>
@@ -394,77 +314,6 @@ export interface PlanCliOpts {
   json?: boolean;
   html?: string;
   open?: boolean;
-}
-
-export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
-  const { readFileSync } = await import('node:fs');
-  let document: string;
-  try {
-    document = readFileSync(file, 'utf8');
-  } catch {
-    throw new Error(`Could not read "${file}".`);
-  }
-  if (opts.optimize && opts.optimize !== 'speed' && opts.optimize !== 'balanced') {
-    throw new Error("--optimize must be 'speed' or 'balanced'.");
-  }
-  const args = { document, optimize: opts.optimize as 'speed' | 'balanced' | undefined };
-  const res = await fromIndex('plan', args, async (db) => {
-    const { handlePlan } = await import('../mcp/plan');
-    return handlePlan(db, args);
-  });
-
-  if (opts.json) return console.log(JSON.stringify(res, null, 2));
-  if (!('slots' in res)) {
-    console.log(res.note);
-    return;
-  }
-
-  // Visualization: render the roadmap to a portable HTML file and optionally open it.
-  if (opts.html || opts.open) {
-    const { writeFileSync } = await import('node:fs');
-    const { tmpdir } = await import('node:os');
-    const { join } = await import('node:path');
-    const { renderPlanHtml } = await import('./planView');
-    const out = opts.html ?? join(tmpdir(), `lurq-plan-${Date.now()}.html`);
-    writeFileSync(out, renderPlanHtml(res), 'utf8');
-    console.log(`Roadmap written to ${out}`);
-    if (opts.open) openInBrowser(out);
-  }
-
-  console.log(
-    table(
-      ['Component', 'Layer', 'Recommended', 'Health', 'Confidence', 'Alternatives'],
-      (res.slots ?? []).map((s) => [
-        s.need.length > 32 ? s.need.slice(0, 31) + '…' : s.need,
-        s.layer,
-        s.recommended
-          ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}`
-          : dim('—'),
-        s.recommended ? String(s.recommended.healthScore) : '—',
-        s.recommended ? confidenceLabel(s.recommended.confidence) : '—',
-        (s.alternatives ?? []).map((a) => a.name).join(', ') || '—',
-      ]),
-    ),
-  );
-  if ((res.unmatched ?? []).length) console.log(yellow(`\nNo match for: ${(res.unmatched ?? []).join(', ')}`));
-
-  if (res.compatibility) {
-    const c = res.compatibility;
-    const col = c.overall === 'compatible' ? green : c.overall === 'conflict' ? red : dim;
-    console.log('\n' + bold('Compatibility: ') + col(c.overall));
-    for (const s of res.slots ?? []) {
-      if (s.swappedFrom && s.recommended) {
-        console.log(green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`));
-      }
-    }
-    for (const cf of c.conflicts ?? []) console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
-    if (c.unverified?.length) console.log(dim(`  unverified: ${c.unverified.join(', ')}`));
-  }
-
-  console.log('\n' + bold('Roadmap (Mermaid):'));
-  console.log(res.mermaid);
-  console.log(dim(`\n${res.note}`));
-  console.log(dim(`data as of ${formatDate(res.dataAsOf)}`));
 }
 
 export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<void> {
