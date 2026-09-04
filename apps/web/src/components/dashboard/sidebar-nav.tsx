@@ -49,6 +49,13 @@ const ACCOUNT: NavItem[] = [
   // Metered API consumption: the year map, the trend, the per-tool split.
   // "credits" is what the reader is actually spending.
   { href: "/dashboard/usage", label: "credits" },
+  // Directly under credits, because "how much have I used" and "what am I paying
+  // for it" are one question asked twice. Until now nothing linked here at all:
+  // the page existed but was reachable only via Stripe's post-checkout redirect,
+  // so anyone who wanted to change a card or cancel had no route to it. An
+  // unreachable cancellation path is not merely awkward — it is the thing every
+  // processor requires you to provide.
+  { href: "/dashboard/billing", label: "billing" },
   { href: "/dashboard/notifications", label: "notifications" },
   { href: "/dashboard/preferences", label: "preferences" },
   // Sixth row, and the one place a reader can get back to a key they closed the
