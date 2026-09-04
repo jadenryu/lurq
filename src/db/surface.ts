@@ -14,7 +14,7 @@ import type { Database } from './client';
 import { claims, entities, observations, surfaceQueue, symbols } from './schema';
 import type { SurfaceQueueRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
-import type { EntityRef } from '../graph/types';
+import { canonicalKey, type EntityRef } from '../graph/types';
 import type { ExtractedSurface, ExtractionTier } from '../surface/types';
 
 /** The entity ref for a package version's surface. */
@@ -181,4 +181,80 @@ export async function bumpSurfaceAttempt(db: Database, id: number): Promise<void
     .update(surfaceQueue)
     .set({ attempts: sql`${surfaceQueue.attempts} + 1` })
     .where(eq(surfaceQueue.id, id));
+}
+
+/**
+ * Is a surface already stored for this exact `package@version`?
+ *
+ * Read-only on purpose: `isExtractionCached` goes through `upsertEntity` and so
+ * *creates* the entity as a side effect of asking about it, which is fine when
+ * you are about to extract but wrong when you are only deciding whether to
+ * enqueue. Asking "do we have this?" must not bring it into existence.
+ */
+export async function hasStoredSurface(
+  db: Database,
+  pkg: string,
+  version: string,
+  tier: ExtractionTier = 'shipped_js_ast',
+  tenantId = 0,
+): Promise<boolean> {
+  const key = canonicalKey(surfaceRef(pkg, version));
+  const [row] = await db
+    .select({ id: entities.id })
+    .from(entities)
+    .where(and(eq(entities.canonicalKey, key), eq(entities.tenantId, tenantId)))
+    .limit(1);
+  if (!row) return false;
+  const [sym] = await db
+    .select({ id: symbols.id })
+    .from(symbols)
+    .where(and(eq(symbols.entityId, row.id), eq(symbols.tier, tier)))
+    .limit(1);
+  return sym !== undefined;
+}
+
+/**
+ * Make `version` diffable by ensuring its predecessor is also extracted.
+ *
+ * A surface on its own answers "what does this export". The question that
+ * actually bites — "what did this release remove or rename" — needs two adjacent
+ * versions, and that is exactly what a model trained before the release cannot
+ * know. Coverage was one version deep for all but 4.5% of packages, which is why
+ * the diff existed but almost never had anything to compare.
+ *
+ * Bounded on purpose: N-1 only, never the whole timeline. One extra extraction
+ * per package, once, and thereafter the publish feed keeps the pair rolling
+ * forward on its own. Full history would be 91 versions per package for a
+ * question nobody asks — people upgrade from the version they are on.
+ */
+export async function enqueuePreviousSurface(
+  db: Database,
+  pkg: string,
+  version: string,
+  history: { version: string }[],
+): Promise<boolean> {
+  const previous = previousVersion(history, version);
+  if (previous === null) return false;
+  if (await hasStoredSurface(db, pkg, previous)) return false;
+  await enqueueSurface(db, pkg, previous);
+  return true;
+}
+
+/**
+ * The version published immediately before `version`, given a newest-first
+ * timeline. Null when there is nothing to compare against.
+ *
+ * Ordering comes from `published_at`, not from semver, and that is deliberate:
+ * a backport releasing 3.9.2 after 4.0.0 shipped means the predecessor by time
+ * is not the predecessor by number. The question a diff answers is "what changed
+ * when this was released", so publication order is the honest one.
+ */
+export function previousVersion(
+  history: { version: string }[],
+  version: string,
+): string | null {
+  const idx = history.findIndex((h) => h.version === version);
+  // Not in the timeline, or already the oldest we know: nothing to compare to.
+  if (idx === -1 || idx + 1 >= history.length) return null;
+  return history[idx + 1]!.version ?? null;
 }

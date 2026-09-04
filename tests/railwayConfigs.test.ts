@@ -49,7 +49,10 @@ describe('Railway service configs (sync / api / discover)', () => {
   it('lurq-discover (railway.discover.json): periodic worker, not sync', () => {
     expect(discover.deploy.startCommand).toContain('worker --once');
     expect(discover.deploy.startCommand).not.toMatch(/\bsync\b/);
-    expect(discover.deploy.cronSchedule).toBe('*/15 * * * *');
+    // Hourly, in bigger batches (see the --cap/--extract above). Pinned to an
+    // exact string on purpose: the cadence and the batch size are one decision,
+    // so changing either should be a conscious edit to both.
+    expect(discover.deploy.cronSchedule).toBe('0 * * * *');
     expect(discover.deploy.restartPolicyType).toBe('NEVER');
   });
 

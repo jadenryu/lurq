@@ -27,7 +27,7 @@ import { checkCompat } from '../compat/check';
 import { assembleMembers } from '../compat/members';
 import { optimizeStack } from '../compat/optimize';
 import type { CompatMember } from '../compat/peerCompat';
-import { getCompatEdges } from '../db/compat';
+import { getSandboxEdges } from '../db/compat';
 import { logger } from '../core/logger';
 import {
   isCategory,
@@ -367,7 +367,7 @@ async function resolveCompat(db: Database, slots: PlanSlot[]): Promise<CompatOut
     ];
     const [{ members }, edges] = await Promise.all([
       assembleMembers(db, allNames),
-      getCompatEdges(db, allNames),
+      getSandboxEdges(db, allNames),
     ]);
     const metaByName = new Map(members.map((m) => [m.name, m]));
     const sandboxConflicts = new Set(

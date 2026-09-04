@@ -93,7 +93,16 @@ export function draftAlert(
     range: declared.range,
     fromVersion,
     toVersion,
-    inRange: semver.satisfies(toVersion, declared.range, { includePrerelease: false }),
+    // `satisfies` throws on the non-semver ranges npm accepts (`latest`,
+    // `workspace:*`, `file:../x`), and this runs off the publish feed — one such
+    // dependency would take down alerting for that release across every repo.
+    //
+    // False means "we could not establish that this range admits the new
+    // version", not "it is safe". Same discipline as everywhere else here: not
+    // knowing is never evidence.
+    inRange: semver.validRange(declared.range)
+      ? semver.satisfies(toVersion, declared.range, { includePrerelease: false })
+      : false,
   };
 }
 

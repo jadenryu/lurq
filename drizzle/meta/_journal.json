@@ -225,6 +225,13 @@
       "when": 1788475809710,
       "tag": "0031_redundant_maginty",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788553749642,
+      "tag": "0032_stack_resolutions",
+      "breakpoints": true
     }
   ]
 }

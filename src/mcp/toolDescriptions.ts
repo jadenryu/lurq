@@ -28,7 +28,7 @@ export const VERIFY_DESCRIPTION =
   'Confirm an npm package is real, healthy, and not risky before installing, guards against hallucinated or typosquatted dependency names. Checks the live registry.';
 
 export const COMPAT_DESCRIPTION =
-  'Check whether a set of packages forms a coherent stack: peer-dependency and engine-range compatibility across the whole set (instant, from declared metadata), plus any recorded sandbox-verified conflicts. Returns the exact clashing constraints. Read-only, does not run installs. Call before committing to a multi-package stack.';
+  'Check whether a set of packages forms a coherent stack. Resolves the whole set the way npm would and returns a definitive verdict: compatible, conflict (with the exact clashing constraints), or unknown. Checks peer-dependency and engine ranges from declared metadata, plus any recorded sandbox conflicts. Read-only, never installs or executes package code. Call before committing to a multi-package stack.';
 
 /**
  * The `packages` parameter carries the batching instruction, not just the
@@ -37,10 +37,10 @@ export const COMPAT_DESCRIPTION =
  * actually did before this said otherwise.
  */
 export const COMPAT_PACKAGES_DESCRIPTION =
-  'The full candidate stack to check together, 2–8 npm package names. Pass every package in one call, checking pairs separately misses conflicts that only appear across the whole set, and costs a round trip each.';
+  'The full candidate stack to check together, 2–30 npm package names — a whole package.json dependency list is the intended input. Pass every package in one call: conflicts routinely appear only across the whole set (a peer range three packages deep), so checking pairs separately misses them and costs a round trip each.';
 
 export const COMPAT_VERSIONS_DESCRIPTION =
-  'Optional exact versions keyed by package name (use when not checking latest)';
+  'Optional exact versions keyed by package name, e.g. {"react":"19.0.0"} (use when not checking latest). Must be exact semver versions, not ranges.';
 
 export const COMPAT_NODE_DESCRIPTION =
   'Optional target Node runtime (e.g. "20" or "20.20.2") for engines.node checks';

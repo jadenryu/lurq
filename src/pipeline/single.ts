@@ -35,7 +35,6 @@ import {
 import { packages, seedPackages, type PackageRow } from '../db/schema';
 import { emitPublishAlerts } from '../github/alerts';
 import { assemblePackageRow } from './sync';
-import { mineEdgesForPackage } from './mineEdges';
 // Safe module cycle: ingestQueue imports syncOnePackage from here, but both
 // bindings are used only at call time, never at module-eval, so ESM resolves it.
 import { enqueueIngest, runIngest } from './ingestQueue';
@@ -159,10 +158,6 @@ export async function syncOnePackage(
     // failure here silently zeroes drift for the package.
     logger.warn(`version timeline write failed for ${name}: ${(err as Error).message}`),
   );
-  // Mint observed compat edges from this package's resolved closure (§4B
-  // Trigger 1). Best-effort — mineEdgesForPackage swallows its own errors.
-  await mineEdgesForPackage(db, name, signals.registry?.latestVersion ?? null, undefined, now);
-
   const row = (await getPackageByName(db, name))!;
   // Every path that learns of a new release goes through here — the `_changes`
   // follower, the daily re-sync, and on-demand ingest — so this is the one place

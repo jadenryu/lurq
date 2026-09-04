@@ -926,3 +926,53 @@ export type NewSubscriptionRow = typeof subscriptions.$inferInsert;
 
 export type SelectionPolicyRow = typeof selectionPolicies.$inferSelect;
 export type NewSelectionPolicyRow = typeof selectionPolicies.$inferInsert;
+
+/**
+ * A resolved stack — one row per distinct package set, keyed by exact versions.
+ *
+ * This replaces pairwise `compat_edges` as the compatibility mechanism, for two
+ * reasons that are both about correctness before cost:
+ *
+ *   1. **npm resolves sets, not pairs.** Three packages can be compatible in
+ *      every pair and still fail together — a diamond dependency or a peer range
+ *      that only becomes unsatisfiable with all three present. A pairwise model
+ *      cannot express the conflicts npm actually reports, so it was answering a
+ *      different question than the one asked.
+ *   2. **Pairs are quadratic, sets are not.** One row per asked stack instead of
+ *      C(n,2) per stack. Storage tracks *demand* — how many distinct stacks
+ *      humans assemble — instead of tracking the square of the catalog.
+ *
+ * `names` duplicates the names already in `packages` because invalidation asks
+ * "which stacks contain X?" on every npm publish, and that has to be one indexed
+ * lookup rather than a scan over jsonb.
+ *
+ * Only definitive results are ever written. A resolve that times out or fails on
+ * the network is inconclusive and must not be cached — a stored non-answer would
+ * poison that stack until something evicted it.
+ */
+export const stackResolutions = pgTable(
+  'stack_resolutions',
+  {
+    id: serial('id').primaryKey(),
+    /** Canonical `name@version|name@version|…`, sorted. The cache key. */
+    setKey: text('set_key').notNull().unique(),
+    /** The exact members this verdict is about. */
+    packages: jsonb('packages').$type<{ name: string; version: string }[]>().notNull(),
+    /** Names only, for publish-driven invalidation. */
+    names: text('names').array().notNull(),
+    /** True when npm produced a lockfile for the set. */
+    resolved: boolean('resolved').notNull(),
+    /** 'ERESOLVE' for a proven conflict; null when it resolved. */
+    reason: text('reason'),
+    /** npm's own error text on a conflict — it names the packages and ranges. */
+    detail: text('detail'),
+    resolvedAt: ts('resolved_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('stack_resolutions_names_idx').using('gin', table.names),
+    index('stack_resolutions_resolved_at_idx').on(table.resolvedAt),
+  ],
+);
+
+export type StackResolutionRow = typeof stackResolutions.$inferSelect;
+export type NewStackResolutionRow = typeof stackResolutions.$inferInsert;

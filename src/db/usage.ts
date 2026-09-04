@@ -107,3 +107,60 @@ export async function getUsageByTool(
 
   return rows.map((r) => ({ tool: r.tool, count: Number(r.count) }));
 }
+
+export interface UsageRetentionReport {
+  /** Rows older than the cutoff. */
+  stale: number;
+  /** Rows kept. */
+  retained: number;
+  /** Oldest date still present, ISO 'YYYY-MM-DD'. Null when the table is empty. */
+  oldest: string | null;
+  /** True when rows were actually removed; false for a dry run. */
+  applied: boolean;
+}
+
+/**
+ * Report on — and optionally delete — usage counters older than `keepDays`.
+ *
+ * This table is the one that grows without bound as users arrive: one row per
+ * owner, per day, per tool. At 10k users with 10% daily active that is ~3.3M
+ * rows a year, and ~33M if they are all active daily. Left alone it becomes the
+ * next `compat_edges`, and it holds display-only counters — its own schema
+ * comment says an undercount on a DB hiccup is acceptable — so old rows are not
+ * worth what they cost.
+ *
+ * DRY RUN BY DEFAULT. `apply` has to be passed explicitly, because this is the
+ * only function in the codebase that removes production rows and a retention
+ * sweep is not something that should be able to happen by accident, on a timer,
+ * or as a side effect of calling something that sounds like a read.
+ *
+ * If a longer history is ever wanted, the upgrade is a monthly rollup table
+ * written before the sweep, not a longer window on the daily rows.
+ */
+export async function pruneUsageCounters(
+  db: Database,
+  opts: { keepDays?: number; apply?: boolean } = {},
+): Promise<UsageRetentionReport> {
+  const keepDays = opts.keepDays ?? 90;
+  const applied = opts.apply === true;
+  const cutoff = sql`(current_date - make_interval(days => ${keepDays}))::date`;
+
+  const [counts] = await db
+    .select({
+      stale: sql<number>`count(*) filter (where ${ownerUsageDaily.date} < ${cutoff})::int`,
+      retained: sql<number>`count(*) filter (where ${ownerUsageDaily.date} >= ${cutoff})::int`,
+      oldest: sql<string | null>`min(${ownerUsageDaily.date})::text`,
+    })
+    .from(ownerUsageDaily);
+
+  const report: UsageRetentionReport = {
+    stale: counts?.stale ?? 0,
+    retained: counts?.retained ?? 0,
+    oldest: counts?.oldest ?? null,
+    applied,
+  };
+  if (!applied || report.stale === 0) return report;
+
+  await db.delete(ownerUsageDaily).where(sql`${ownerUsageDaily.date} < ${cutoff}`);
+  return report;
+}

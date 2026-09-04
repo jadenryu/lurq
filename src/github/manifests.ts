@@ -12,6 +12,7 @@ import { installationGet } from './app';
 import { detectInstallCommand } from './workflow';
 import { REPO_MANIFEST_CAP, type RepoManifest } from './types';
 import { logger } from '../core/logger';
+import { HttpError } from '../core/http';
 
 export interface InstallationRepo {
   fullName: string;
@@ -115,6 +116,16 @@ export function parseManifest(path: string, json: unknown): RepoManifest | null 
 
 export interface ManifestScan {
   manifests: RepoManifest[];
+  /**
+   * True when the repository has no commits at all.
+   *
+   * Distinct from `manifests: []`, which means "there are commits, none of them
+   * declare dependencies". Both are successful scans, but only one of them is
+   * something the user might want to act on, and telling a person their repo has
+   * "0 dependencies" when it actually has no code yet is a confusing answer to a
+   * question they did not ask.
+   */
+  empty: boolean;
   /** Install command for the repo's actual package manager, from its lockfile. */
   installCommand: string;
   /** True when the repo has more manifests than we read, or GitHub truncated the
@@ -129,10 +140,23 @@ export async function fetchManifests(
   fullName: string,
   branch: string,
 ): Promise<ManifestScan> {
-  const tree = await installationGet<TreeResponse>(
-    installationId,
-    `/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
-  );
+  let tree: TreeResponse;
+  try {
+    tree = await installationGet<TreeResponse>(
+      installationId,
+      `/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+    );
+  } catch (err) {
+    // GitHub answers 409 for a repository with no commits. That is a fact about
+    // the repo, not a failure of ours — a freshly created repo someone connected
+    // before pushing anything is the common case. Treating it as an error left
+    // `last_scan_error` set on a perfectly healthy repo, and the dashboard shows
+    // that next to fresh numbers as though something were currently broken.
+    if (err instanceof HttpError && err.status === 409) {
+      return { manifests: [], installCommand: detectInstallCommand([]), partial: false, empty: true };
+    }
+    throw err;
+  }
   const nodes = tree.tree ?? [];
   const allPaths = manifestPaths(nodes);
   // Root-level lockfiles only: a nested one belongs to a workspace, not to the
@@ -164,5 +188,6 @@ export async function fetchManifests(
     manifests,
     installCommand: detectInstallCommand(lockfiles),
     partial: Boolean(tree.truncated) || allPaths.length > paths.length,
+    empty: false,
   };
 }

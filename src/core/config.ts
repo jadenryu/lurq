@@ -44,6 +44,28 @@ const EnvSchema = z.object({
   SUMMARY_MODEL: z.string().min(1).default('gpt-4o-mini'),
   SUMMARY_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
 
+  /**
+   * How many `npm install --package-lock-only` processes may run at once.
+   *
+   * Each one holds npm's arborist tree in memory — 200-500MB for a real stack —
+   * so this is a memory cap wearing a concurrency hat. Eight concurrent resolves
+   * is ~3GB and will OOM a small container; the work is network-bound anyway, so
+   * raising it buys throughput only until the box runs out of RAM.
+   */
+  LURQ_RESOLVE_CONCURRENCY: z.coerce.number().int().positive().max(32).default(4),
+  /**
+   * Where npm keeps its metadata cache for stack resolution.
+   *
+   * Point this at a persistent volume in production. A warm cache is the
+   * difference between 8.6s and 19.2s on a 15-package stack (measured), and an
+   * ephemeral container filesystem means every redeploy pays cold cost again for
+   * the first few hundred resolves. Unset = npm's default location.
+   */
+  LURQ_NPM_CACHE_DIR: z.string().min(1).optional(),
+  /** Budget for one stack resolve. Past this the answer is `unknown`, never a
+   *  guess — and nothing is cached, so the next ask gets a real attempt. */
+  LURQ_RESOLVE_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
+
   LURQ_SYNC_CONCURRENCY: z.coerce.number().int().positive().max(50).default(5),
   /** Stalest non-seed packages the daily sync refreshes on top of the seed list.
    *  This is the rotation rate for everything discovery ingested: index size /
@@ -84,6 +106,22 @@ const EnvSchema = z.object({
   /** Signing secret for `POST /billing/webhook`. Unset → the endpoint is 404. */
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   /** Price id backing the Pro plan. Unset → Pro cannot be checked out. */
+  /**
+   * Turn on Stripe Managed Payments: Stripe becomes merchant of record and
+   * takes over indirect tax registration and remittance, dispute handling and
+   * fraud, which is the half `automatic_tax` alone does not buy.
+   *
+   * Off by default and deliberately a switch rather than a constant. The
+   * account has to be enrolled and its products carry an eligible `tax_code`
+   * before Stripe will accept the parameter; sending it from an ineligible
+   * account fails the Checkout Session create, which breaks buying entirely.
+   * So this flips on once the dashboard says the account is eligible, and
+   * flips back off in one variable if it is not.
+   */
+  STRIPE_MANAGED_PAYMENTS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   STRIPE_PRICE_PRO: z.string().min(1).optional(),
   /** Price id backing Enterprise. Normally unset: Enterprise is sold by
    *  conversation, and `contactOnly` in core/plans.ts is what the page reads. */

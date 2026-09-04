@@ -11,11 +11,9 @@ import {
   compatEdges,
   compatVerifyQueue,
   packages,
-  resolvedClosures,
   type CompatEdgeRow,
   type CompatVerifyQueueRow,
   type NewCompatEdgeRow,
-  type ResolvedClosureRow,
 } from './schema';
 
 export interface CompatMetadataRow {
@@ -88,110 +86,31 @@ export async function upsertCompatEdge(db: Database, edge: NewCompatEdgeRow): Pr
     .onConflictDoUpdate({ target: [...CONFLICT_TARGET], set: conflictSet() });
 }
 
-/** Max rows per compat_edges INSERT. Fat closures (10k+ pairs) must not become
- *  one mega-statement — that OOMs Node and trips Postgres param limits. Chunks
- *  lose per-closure atomicity; fine for loss-tolerant `observed` mints. */
-export const EDGE_UPSERT_CHUNK = 250;
-
-/** Split `items` into consecutive slices of at most `size`. Exported for tests. */
-export function chunk<T>(items: T[], size: number): T[][] {
-  if (size <= 0) throw new Error(`chunk size must be positive, got ${size}`);
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
 /**
- * Batch-upsert edges (§4F write-behind for high-volume, loss-tolerant `observed`
- * mints). Writes in chunks of {@link EDGE_UPSERT_CHUNK} so large closures stay
- * within Postgres bind limits and Drizzle AST depth. The caller MUST pass a
- * batch with unique conflict keys (Postgres rejects the same ON CONFLICT target
- * twice per statement) — one resolved closure's canonical pairs are unique by
- * construction; each chunk inherits that. Same precedence as the single upsert;
- * verified/conflict/score writes stay individual (durable).
- */
-export async function upsertCompatEdgesBatch(db: Database, edges: NewCompatEdgeRow[]): Promise<void> {
-  if (edges.length === 0) return;
-  for (const part of chunk(edges, EDGE_UPSERT_CHUNK)) {
-    await db
-      .insert(compatEdges)
-      .values(part)
-      .onConflictDoUpdate({ target: [...CONFLICT_TARGET], set: conflictSet() });
-  }
-}
-
-/**
- * Upsert for the daily re-mine pass (§4B trigger 2). That pass re-reads the
- * *same* persisted closures with no network, so it has genuine news only about
- * pairs it has never seen before. An existing same-or-stronger edge is therefore
- * left completely untouched:
+ * Sandbox-established edges only — `verified` and `conflict`.
  *
- *   - no witness bump. `witness_count` is documented as "distinct resolved graphs
- *     an edge was witnessed in", but accruing +1 per pass made it count *cron
- *     runs*: 47.1M updates against 1.31M rows, a median stored value of 29 where
- *     the true count is 1, and 54% of edges advertising >5 witnesses for a single
- *     resolved graph.
- *   - no `ran_at` refresh. The evidence is as old as the closure it came from,
- *     not as new as the pass that re-read it.
+ * These are the rows that are *not* derivable from anything else: a real
+ * co-install that passed or failed under VM isolation. `observed` edges are
+ * deliberately excluded, because the set-level resolve now answers the question
+ * they were mined to answer, and answers it about the exact versions asked for
+ * rather than whatever versions a third party's dependency tree happened to pin.
  *
- * `setWhere` is what makes skipping a *real* no-write: Postgres writes a new row
- * version for `DO UPDATE` even when every assigned value is identical, so the
- * predicate — not the SET list — is what keeps 97% of these writes off the disk.
- * Because it fires only when the incoming edge *strictly* outranks the stored
- * one, the SET can assign unconditionally: a weaker `declared` edge is still
- * upgraded to `observed`, while `verified`/`conflict` are never downgraded.
+ * Scoped by name, not by version: a sandbox conflict at neighbouring versions is
+ * still the best information anyone has about the pair, and `checkCompat` labels
+ * the version mismatch rather than hiding the row.
  */
-export async function upsertObservedEdgesRemine(
-  db: Database,
-  edges: NewCompatEdgeRow[],
-): Promise<void> {
-  if (edges.length === 0) return;
-  for (const part of chunk(edges, EDGE_UPSERT_CHUNK)) {
-    await db
-      .insert(compatEdges)
-      .values(part)
-      .onConflictDoUpdate({
-        target: [...CONFLICT_TARGET],
-        set: {
-          status: sql`excluded.status`,
-          provenance: sql`excluded.provenance`,
-          driver: sql`excluded.driver`,
-          ranAt: sql`excluded.ran_at`,
-        },
-        setWhere: sql`${provenanceRank(sql`excluded.provenance`)} > ${provenanceRank(compatEdges.provenance)}`,
-      });
-  }
-}
-
-/** Persist a resolved closure once (§4B); refresh nodes if the version reappears
- *  (a republish under the same version — rare, but keep the freshest). */
-export async function persistClosure(
-  db: Database,
-  packageName: string,
-  version: string,
-  nodes: { name: string; version: string }[],
-): Promise<void> {
-  await db
-    .insert(resolvedClosures)
-    .values({ packageName, version, nodes })
-    .onConflictDoUpdate({
-      target: [resolvedClosures.packageName, resolvedClosures.version],
-      set: { nodes, fetchedAt: new Date() },
-    });
-}
-
-/** All persisted closures — the daily re-mine pass reads these with no network. */
-export async function getAllClosures(db: Database): Promise<ResolvedClosureRow[]> {
-  return db.select().from(resolvedClosures);
-}
-
-/** All stored edges whose both endpoints are within the given package names. */
-export async function getCompatEdges(db: Database, names: string[]): Promise<CompatEdgeRow[]> {
+export async function getSandboxEdges(db: Database, names: string[]): Promise<CompatEdgeRow[]> {
   if (names.length === 0) return [];
   return db
     .select()
     .from(compatEdges)
-    .where(and(inArray(compatEdges.packageA, names), inArray(compatEdges.packageB, names)));
+    .where(
+      and(
+        inArray(compatEdges.packageA, names),
+        inArray(compatEdges.packageB, names),
+        inArray(compatEdges.provenance, ['verified', 'conflict']),
+      ),
+    );
 }
 
 // ── Pure pair helpers (§4C) ──────────────────────────────────────────────────
@@ -199,16 +118,6 @@ export async function getCompatEdges(db: Database, names: string[]): Promise<Com
 /** Canonical `a|b` key for a name pair, order-independent. */
 export function pairKey(a: string, b: string): string {
   return a <= b ? `${a}|${b}` : `${b}|${a}`;
-}
-
-/** True if every C(K,2) pair in a batch already has an edge in `covered`. */
-export function fullyCovered(batch: string[], covered: Set<string>): boolean {
-  for (let i = 0; i < batch.length; i++) {
-    for (let j = i + 1; j < batch.length; j++) {
-      if (!covered.has(pairKey(batch[i]!, batch[j]!))) return false;
-    }
-  }
-  return true;
 }
 
 /** Canonical order-independent key for a whole package set (queue dedup). */

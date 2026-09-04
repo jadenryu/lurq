@@ -1,18 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalPair, compatSetKey } from '../src/db/compat';
 import { edgeMatchesVersions, enumeratePairs, gradeOverall } from '../src/compat/check';
-import { deriveCompatEdges, fullyCovered, pairKey } from '../src/pipeline/compat';
-import type { SandboxSetResult } from '../src/sandbox/types';
+import { stackKey } from '../src/db/stackResolutions';
+import { summarizeEresolve } from '../src/pipeline/resolveCheck';
 
-describe('backfill gate (§4C)', () => {
-  it('skips a batch only when every pair is already covered', () => {
-    const covered = new Set([pairKey('a', 'b'), pairKey('a', 'c'), pairKey('b', 'c')]);
-    expect(fullyCovered(['a', 'b', 'c'], covered)).toBe(true);
-    // Missing b|c → not covered → must run.
-    covered.delete(pairKey('b', 'c'));
-    expect(fullyCovered(['a', 'b', 'c'], covered)).toBe(false);
-  });
-});
+const m = (name: string, version: string) => ({ name, version });
+import { deriveCompatEdges, pairKey } from '../src/pipeline/compat';
+import type { SandboxSetResult } from '../src/sandbox/types';
 
 describe('compatSetKey (self-heal dedup)', () => {
   it('is order-independent and dedups names, so one set enqueues once', () => {
@@ -21,27 +15,73 @@ describe('compatSetKey (self-heal dedup)', () => {
   });
 });
 
-describe('gradeOverall (evidence-graded verdict)', () => {
-  const proven = new Set([pairKey('a', 'b')]);
+describe('gradeOverall (set-level verdict, no `likely`)', () => {
+  const base = { hasConflict: false, hasUnverifiedMember: false } as const;
   it('proven conflict wins over everything', () => {
     expect(
-      gradeOverall({ hasConflict: true, hasUnverifiedMember: true, memberNames: ['a', 'b'], provenCompatible: proven }),
+      gradeOverall({ ...base, hasConflict: true, hasUnverifiedMember: true, resolution: 'resolved' }),
     ).toBe('conflict');
+  });
+  it("npm's ERESOLVE is a conflict even with nothing declared", () => {
+    expect(gradeOverall({ ...base, resolution: 'conflict' })).toBe('conflict');
   });
   it('an un-ingested member is unknown', () => {
     expect(
-      gradeOverall({ hasConflict: false, hasUnverifiedMember: true, memberNames: ['a', 'b'], provenCompatible: proven }),
+      gradeOverall({ ...base, hasUnverifiedMember: true, resolution: 'resolved' }),
     ).toBe('unknown');
   });
-  it('compatible only when every pair has a positive edge', () => {
-    expect(
-      gradeOverall({ hasConflict: false, hasUnverifiedMember: false, memberNames: ['a', 'b'], provenCompatible: proven }),
-    ).toBe('compatible');
+  it('an inconclusive resolve is unknown, never a hedge', () => {
+    expect(gradeOverall({ ...base, resolution: 'inconclusive' })).toBe('unknown');
   });
-  it('no conflict but unproven is likely, never compatible', () => {
-    expect(
-      gradeOverall({ hasConflict: false, hasUnverifiedMember: false, memberNames: ['a', 'c'], provenCompatible: proven }),
-    ).toBe('likely');
+  it('a set npm resolved is compatible', () => {
+    expect(gradeOverall({ ...base, resolution: 'resolved' })).toBe('compatible');
+  });
+  it('never returns the retired `likely` verdict', () => {
+    const verdicts = (['resolved', 'conflict', 'inconclusive'] as const).flatMap((resolution) =>
+      [true, false].flatMap((hasConflict) =>
+        [true, false].map((hasUnverifiedMember) =>
+          gradeOverall({ hasConflict, hasUnverifiedMember, resolution }),
+        ),
+      ),
+    );
+    expect(verdicts).not.toContain('likely');
+  });
+});
+
+describe('stackKey (the cache key is the set AND its versions)', () => {
+  it('is order-independent, so the same stack asked two ways hits once', () => {
+    expect(stackKey([m('react', '19.0.0'), m('next', '16.0.1')])).toBe(
+      stackKey([m('next', '16.0.1'), m('react', '19.0.0')]),
+    );
+  });
+  it('separates versions, so react@18 never answers for react@19', () => {
+    expect(stackKey([m('react', '18.3.1')])).not.toBe(stackKey([m('react', '19.0.0')]));
+  });
+});
+
+describe('summarizeEresolve', () => {
+  it('keeps the lines naming the clash and drops npm\'s --force advice', () => {
+    const out = summarizeEresolve(
+      [
+        'npm error code ERESOLVE',
+        'npm error While resolving: my-app@1.0.0',
+        'npm error Found: react@19.2.8',
+        'npm error Could not resolve dependency:',
+        'npm error peer react@"^18.0.0" from next@14.1.3',
+        'npm error Fix the upstream dependency conflict, or retry',
+        'npm error this command with --force or --legacy-peer-deps',
+      ].join('\n'),
+    );
+    expect(out).toContain('Found: react@19.2.8');
+    expect(out).toContain('peer react@"^18.0.0" from next@14.1.3');
+    expect(out).not.toContain('--legacy-peer-deps');
+  });
+  it('always says something, even on output it cannot parse', () => {
+    expect(summarizeEresolve('ERESOLVE something unfamiliar')).toBeTruthy();
+  });
+  it('caps length, because this is stored and returned over the wire', () => {
+    const long = Array.from({ length: 200 }, (_, i) => `npm error Found: pkg-${i}@1.0.0`).join('\n');
+    expect(summarizeEresolve(long).length).toBeLessThanOrEqual(600);
   });
 });
 
