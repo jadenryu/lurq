@@ -65,7 +65,9 @@ export function registerOperatorCommands(program: Command): void {
         }
         if (tierC) {
           const dep = surface.symbols.filter((x) => x.deprecated);
-          console.log(`  tier C · ${surface.symbols.length} declared symbol(s), ${dep.length} @deprecated`);
+          console.log(
+            `  tier C · ${surface.symbols.length} declared symbol(s), ${dep.length} @deprecated`,
+          );
           if (dep.length) console.log(`  deprecated: ${dep.map((x) => x.path).join(', ')}`);
           console.log('  NOTE: type-level only, never evidence of runtime existence');
         }
@@ -94,7 +96,10 @@ export function registerOperatorCommands(program: Command): void {
     .option('--fetch-missing', 'fetch uninstalled deps from the registry')
     .option('--json', 'output the full report as JSON')
     .action(
-      async (dirs: string[], opts: { includeDev?: boolean; fetchMissing?: boolean; json?: boolean }) => {
+      async (
+        dirs: string[],
+        opts: { includeDev?: boolean; fetchMissing?: boolean; json?: boolean },
+      ) => {
         const { replayRepo } = await import('../benchmark/replay');
         const reports = [];
         for (const dir of dirs) {
@@ -125,7 +130,9 @@ export function registerOperatorCommands(program: Command): void {
           }
         }
         const overall = ref ? ((miss / ref) * 100).toFixed(1) : 'n/a';
-        console.log(`\n  HUMAN BASELINE: ${overall}% symbol miss rate (${miss}/${ref}) over ${reports.length} repo(s)`);
+        console.log(
+          `\n  HUMAN BASELINE: ${overall}% symbol miss rate (${miss}/${ref}) over ${reports.length} repo(s)`,
+        );
         console.log('  Compare against the agent arm from `miss-rate`, that comparison is M0.');
       },
     );
@@ -134,7 +141,9 @@ export function registerOperatorCommands(program: Command): void {
     .command('miss-rate')
     .description('M0 controlled arm, how often does model-authored code reference absent symbols?')
     .option('--model <name>', 'model id, gpt-* | claude-* | gemini-* (default gpt-4o-mini)')
-    .option('--samples <n>', 'samples per case; >1 is required for a meaningful number', (v) => parseInt(v, 10))
+    .option('--samples <n>', 'samples per case; >1 is required for a meaningful number', (v) =>
+      parseInt(v, 10),
+    )
     .option('--suite <path>', 'case file (default tests/benchmark/miss-rate-v1.json)')
     .option('--limit <n>', 'run only the first N cases (pilot)', (v) => parseInt(v, 10))
     .option('--show-code', 'include the generated source in JSON output')
@@ -180,8 +189,12 @@ export function registerOperatorCommands(program: Command): void {
           }
         }
         const pct = (n: number | null) => (n === null ? 'n/a' : `${(n * 100).toFixed(1)}%`);
-        console.log(`\n  symbol miss rate: ${pct(report.symbolMissRate)} (${report.totalMissing}/${report.totalReferenced})`);
-        console.log(`  case miss rate:   ${pct(report.caseMissRate)}, samples with >=1 absent symbol`);
+        console.log(
+          `\n  symbol miss rate: ${pct(report.symbolMissRate)} (${report.totalMissing}/${report.totalReferenced})`,
+        );
+        console.log(
+          `  case miss rate:   ${pct(report.caseMissRate)}, samples with >=1 absent symbol`,
+        );
         console.log(
           `  symbols/sample:   ${report.symbolsPerCase?.toFixed(1) ?? 'n/a'} referenced (the exposure N)`,
         );
@@ -209,7 +222,12 @@ export function registerOperatorCommands(program: Command): void {
       for (const r of refs) {
         console.log(`${r.package} (${r.symbols.size} symbol(s))`);
         for (const [sym, uses] of r.symbols) {
-          console.log(`  ${sym}  ${uses.slice(0, 3).map((u) => `${u.file}:${u.line}`).join(', ')}`);
+          console.log(
+            `  ${sym}  ${uses
+              .slice(0, 3)
+              .map((u) => `${u.file}:${u.line}`)
+              .join(', ')}`,
+          );
         }
       }
     });
@@ -233,7 +251,10 @@ export function registerOperatorCommands(program: Command): void {
 
       let names: string[];
       if (opts.packages) {
-        names = opts.packages.split(',').map((s) => s.trim()).filter(Boolean);
+        names = opts.packages
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
       } else {
         // §6.4.7: never sample from search relevance — it is name-weighted and
         // biases toward packages matching the seed terms. The curated seed list
@@ -247,7 +268,10 @@ export function registerOperatorCommands(program: Command): void {
           .slice(0, opts.limit ?? 20);
       }
 
-      const report = await runValidation(names.map((name) => ({ name })), { sandbox });
+      const report = await runValidation(
+        names.map((name) => ({ name })),
+        { sandbox },
+      );
       if (opts.json) {
         console.log(JSON.stringify(report, null, 2));
         return;
@@ -320,14 +344,28 @@ export function registerOperatorCommands(program: Command): void {
         process.exitCode = 1;
         return;
       }
-      console.log(`${diff.package} ${diff.fromVersion ?? '?'} → ${diff.toVersion ?? '?'} (tier ${diff.tier})`);
+      console.log(
+        `${diff.package} ${diff.fromVersion ?? '?'} → ${diff.toVersion ?? '?'} (tier ${diff.tier})`,
+      );
       const line = (label: string, items: string[]) => {
         if (items.length) console.log(`  ${label}: ${items.join(', ')}`);
       };
-      line(`removed (${diff.removed.length})`, diff.removed.map((s) => s.path));
-      line(`arity changed`, diff.arityChanged.map((a) => `${a.path} ${a.from}→${a.to}`));
-      line(`type-only removed (breaks tsc, not node)`, diff.typeOnlyRemoved.map((s) => s.path));
-      line(`added (${diff.added.length})`, diff.added.map((s) => s.path));
+      line(
+        `removed (${diff.removed.length})`,
+        diff.removed.map((s) => s.path),
+      );
+      line(
+        `arity changed`,
+        diff.arityChanged.map((a) => `${a.path} ${a.from}→${a.to}`),
+      );
+      line(
+        `type-only removed (breaks tsc, not node)`,
+        diff.typeOnlyRemoved.map((s) => s.path),
+      );
+      line(
+        `added (${diff.added.length})`,
+        diff.added.map((s) => s.path),
+      );
       if (!diff.removed.length && !diff.arityChanged.length) console.log('  no runtime breakage');
     });
 
@@ -377,12 +415,18 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('worker')
-    .description('run the autonomous discovery loop (discover → ingest → mine → extract → rescore); Ctrl-C stops it cleanly (§4G)')
+    .description(
+      'run the autonomous discovery loop (discover → ingest → mine → extract → rescore); Ctrl-C stops it cleanly (§4G)',
+    )
     .option('--interval <sec>', 'seconds between cycles (default 900)', (v) => parseInt(v, 10))
     .option('--cap <n>', 'candidates ingested per cycle', (v) => parseInt(v, 10))
     .option('--extract <n>', 'API surfaces extracted per cycle', (v) => parseInt(v, 10))
-    .option('--compat-verify <n>', 'demand-driven compat-verify sets drained per cycle', (v) => parseInt(v, 10))
-    .option('--surface <n>', 'demand-driven surface extractions drained per cycle', (v) => parseInt(v, 10))
+    .option('--compat-verify <n>', 'demand-driven compat-verify sets drained per cycle', (v) =>
+      parseInt(v, 10),
+    )
+    .option('--surface <n>', 'demand-driven surface extractions drained per cycle', (v) =>
+      parseInt(v, 10),
+    )
     .option('--once', 'run exactly one cycle and exit')
     .action(
       async (opts: {
@@ -409,7 +453,9 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('rescore')
-    .description('re-derive health scores from cached breakdowns using current weights (no re-ingest)')
+    .description(
+      're-derive health scores from cached breakdowns using current weights (no re-ingest)',
+    )
     .option('--json', 'output the rescore summary as JSON')
     .action(async (opts: { json?: boolean }) => {
       const { requireConfig } = await import('../core/config');
@@ -421,7 +467,7 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('repos-scan')
-    .description('re-read every connected repo\'s manifests and recompute its drift')
+    .description("re-read every connected repo's manifests and recompute its drift")
     .option('--json', 'output the per-repo scan results as JSON')
     .action(async (opts: { json?: boolean }) => {
       const { requireConfig } = await import('../core/config');
@@ -485,7 +531,9 @@ export function registerOperatorCommands(program: Command): void {
   program
     .command('compat-run')
     .argument('<packages...>', 'npm package names to co-install and verify')
-    .description('co-install a set in the sandbox (UNSAFE without VM isolation), record edges, then read compatibility')
+    .description(
+      'co-install a set in the sandbox (UNSAFE without VM isolation), record edges, then read compatibility',
+    )
     .option('--json', 'output JSON')
     .action(async (pkgs: string[], opts: { json?: boolean }) => {
       const { runCompat } = await import('./commands');
@@ -629,7 +677,31 @@ export function registerOperatorCommands(program: Command): void {
       await runKeysRevoke(prefixOrId);
     });
 
-  const billing = program.command('billing').description('Stripe billing setup');
+  const billing = program.command('billing').description('billing setup and manual grants');
+  billing
+    .command('grant <ownerId>')
+    .description('grant a paid plan for money collected outside Stripe')
+    .option('--tier <tier>', 'plan to grant', 'pro')
+    .requiredOption('--months <n>', 'how long before it lapses (1-36)')
+    .action(async (ownerId: string, opts: { tier: string; months: string }) => {
+      const { runBillingGrant } = await import('./billing');
+      await runBillingGrant(ownerId, opts);
+    });
+  billing
+    .command('grants')
+    .description('every manual grant, soonest to lapse first')
+    .option('--json', 'machine-readable output')
+    .action(async (opts: { json?: boolean }) => {
+      const { runBillingGrants } = await import('./billing');
+      await runBillingGrants(opts);
+    });
+  billing
+    .command('revoke <ownerId>')
+    .description('end a manual grant now')
+    .action(async (ownerId: string) => {
+      const { runBillingRevoke } = await import('./billing');
+      await runBillingRevoke(ownerId);
+    });
   billing
     .command('setup')
     .description('create/reuse the Stripe products, prices and webhook, then print the env vars')

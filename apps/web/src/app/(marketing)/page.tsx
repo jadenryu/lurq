@@ -6,13 +6,14 @@ import { CapabilityGrid } from "@/components/site/capability-grid";
 import { ProvenanceOrbit } from "@/components/site/provenance-orbit";
 import { DriftBoard } from "@/components/site/drift-board";
 import { SurfaceSwitch } from "@/components/site/surface-switch";
+import { Pricing } from "@/components/site/pricing";
 import { SiteFooter } from "@/components/site/footer";
 import { Faq } from "@/components/site/faq";
 import { Contact } from "@/components/site/contact";
 
 /**
  * ORDER. Claim, demonstration, problem, surface, receipts, distribution, setup,
- * questions, contact. (Price sits between setup and questions when it is on.)
+ * price, questions, contact.
  *
  * The page is read by three people and this sequence is the compromise between
  * them. A developer wants to see it work before being told anything, so the
@@ -96,20 +97,12 @@ export default function Home() {
             the answer to a question the reader now has, rather than an install
             guide for a product they had not been shown. */}
         <SurfaceSwitch />
-        {/* ── PRICING ──────────────────────────────────────────────────────
-            Held back until payments are actually on. The section and its cards
-            are built and tested (components/site/pricing.tsx, priced from
-            core/plans.ts); what is missing is Stripe configured on serve-http,
-            and without it the Pro card's button errors on click instead of
-            degrading. Cost is the question that follows "here is how to install
-            it", so when it returns it returns HERE, before the FAQ.
-
-            To bring it back: restore the import and this one line, re-add the
-            footer link in components/site/footer.tsx, and set the Stripe
-            variables per docs/billing.md.
-
+        {/* Cost is the question that follows "here is how to install it", so
+            it sits between setup and the FAQ. Cards are priced from
+            core/plans.ts, the same table the 402 meters against. The Pro button
+            degrades to "Checkout isn't available yet" plus a contact link when
+            Stripe is unset, so this is safe to ship ahead of live keys. */}
         <Pricing />
-            ─────────────────────────────────────────────────────────────── */}
         <Faq />
         <Contact />
       </main>
