@@ -44,6 +44,28 @@ const EnvSchema = z.object({
   SUMMARY_MODEL: z.string().min(1).default('gpt-4o-mini'),
   SUMMARY_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
 
+  /**
+   * How many `npm install --package-lock-only` processes may run at once.
+   *
+   * Each one holds npm's arborist tree in memory — 200-500MB for a real stack —
+   * so this is a memory cap wearing a concurrency hat. Eight concurrent resolves
+   * is ~3GB and will OOM a small container; the work is network-bound anyway, so
+   * raising it buys throughput only until the box runs out of RAM.
+   */
+  LURQ_RESOLVE_CONCURRENCY: z.coerce.number().int().positive().max(32).default(4),
+  /**
+   * Where npm keeps its metadata cache for stack resolution.
+   *
+   * Point this at a persistent volume in production. A warm cache is the
+   * difference between 8.6s and 19.2s on a 15-package stack (measured), and an
+   * ephemeral container filesystem means every redeploy pays cold cost again for
+   * the first few hundred resolves. Unset = npm's default location.
+   */
+  LURQ_NPM_CACHE_DIR: z.string().min(1).optional(),
+  /** Budget for one stack resolve. Past this the answer is `unknown`, never a
+   *  guess — and nothing is cached, so the next ask gets a real attempt. */
+  LURQ_RESOLVE_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
+
   LURQ_SYNC_CONCURRENCY: z.coerce.number().int().positive().max(50).default(5),
   /** Stalest non-seed packages the daily sync refreshes on top of the seed list.
    *  This is the rotation rate for everything discovery ingested: index size /

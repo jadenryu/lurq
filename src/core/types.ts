@@ -186,8 +186,13 @@ export type PeerMeta = Record<string, { optional?: boolean }>;
 /** One incompatibility found across a set of packages. */
 export interface CompatConflict {
   /** Where the conflict came from. `peer-deps`/`engines` are Tier-1 (metadata,
-   *  instant, deterministic); `sandbox` is Tier-2 (empirical co-install). */
-  source: 'peer-deps' | 'engines' | 'sandbox';
+   *  instant, deterministic); `resolve` is npm's own ERESOLVE on the whole set;
+   *  `sandbox` is the empirical co-install under VM isolation.
+   *
+   *  A `resolve` conflict is about the SET, not a pair — npm reports that these
+   *  packages cannot coexist, not which two are at fault — so `packages` carries
+   *  every member and `enumeratePairs` deliberately does not attribute it. */
+  source: 'peer-deps' | 'engines' | 'sandbox' | 'resolve';
   /** The packages involved in the conflict. */
   packages: string[];
   detail: string;
@@ -238,27 +243,55 @@ export interface CompatEvidence {
 }
 
 /**
+ * How the set-level verdict was established.
+ *
+ * `source` distinguishes a cache hit from a resolve we just ran, which matters
+ * for a caller deciding whether the answer is worth re-checking: a cached entry
+ * is exact for those versions and immutable, but it was minted at `at` and the
+ * publish that would have invalidated it may not have been seen yet.
+ */
+export interface CompatResolution {
+  source: 'cache' | 'resolved';
+  /** True when npm produced a lockfile for the exact set. */
+  resolved: boolean;
+  /** 'ERESOLVE' for a proven conflict; null when it resolved. */
+  reason: 'ERESOLVE' | null;
+  /** npm's own message on a conflict — names the packages and ranges. */
+  detail?: string;
+  /** ISO timestamp the resolution was established. */
+  at: string;
+}
+
+/**
  * `compat` output: whole-architecture compatibility for a set of packages.
  * Tier-1 peer-dependency/engine analysis + any Tier-2 sandbox conflicts.
  */
 export interface CompatOutput {
   packages: string[];
-  /** Evidence-graded verdict:
-   *  - `conflict`   — a proven incompatibility (peer-range violation or conflict edge).
-   *  - `compatible` — every pair is *positively evidenced* (verified/observed edge).
-   *  - `likely`     — no conflict found, but not proven; absence of a declared
-   *                   conflict is not proof, so an unverified set is never `compatible`.
-   *  - `unknown`    — a member has no metadata yet (not ingested). */
-  overall: 'compatible' | 'likely' | 'conflict' | 'unknown';
+  /** Verdict about the *set*, not its pairs:
+   *  - `conflict`   — proven broken: a peer-range violation, a sandbox conflict,
+   *                   or npm's own ERESOLVE on this exact set.
+   *  - `compatible` — npm resolved these exact versions together.
+   *  - `unknown`    — genuinely undetermined: a member we have no version for, or
+   *                   a resolve that could not complete. Never a hedge on a set
+   *                   we did resolve.
+   *
+   *  There is deliberately no `likely`. It meant "no pair is known to be broken",
+   *  which is a statement about our coverage rather than about the packages, and
+   *  it was the answer real stacks got almost every time. */
+  overall: 'compatible' | 'conflict' | 'unknown';
   conflicts: CompatConflict[];
   /** Packages lurq has no compatibility metadata for (counted toward `unknown`). */
   unverified: string[];
   /** The exact members the check ran over, name + resolved version. Versions are
    *  always surfaced here, and the structure is stable for later scraping. */
   checked: { name: string; version: string | null }[];
-  /** Stored edges among these packages with their evidence strength (§4B) — lets
-   *  agents (and metrics) see *why* a pair is called compatible, not just that. */
+  /** Sandbox-established edges among these packages (verified/conflict) — the
+   *  one pairwise signal that is not derivable from a set resolution. */
   evidence: CompatEvidence[];
+  /** How the set-level verdict was reached. Absent when a declared conflict made
+   *  a resolve unnecessary, or when a member had no version to key on. */
+  resolution?: CompatResolution;
   /** Every unordered pair among `checked`, each with its own verdict — exactly
    *  n(n−1)/2 entries. `conflicts` lists only what went wrong; this lists what
    *  was compared, which is what lets a caller show coverage rather than just

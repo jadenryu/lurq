@@ -5,6 +5,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import semver from 'semver';
 import { SERVER_NAME, VERSION } from '../core/constants';
 import { CATEGORIES, type Category } from '../core/types';
 import { searchCapabilities } from '../core/capabilities';
@@ -48,6 +49,23 @@ export const npmName = z
   .min(1)
   .max(214)
   .regex(/^(?:@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/i, 'Invalid npm package name');
+
+/**
+ * An exact semver version, and nothing else.
+ *
+ * This is a trust boundary, not a formatting preference. A caller-supplied
+ * version string ends up as a dependency value in the `package.json` that
+ * `resolveSet` hands to npm. Anything that is not a semver version is a
+ * different kind of specifier — `git+ssh://host/repo`, `file:../x`, a tarball
+ * URL — and npm will dutifully go fetch it, which turns this parameter into
+ * caller-directed network egress from our container. `semver.valid` accepts
+ * exactly the versions `assembleMembers` can pin against and nothing else.
+ */
+export const exactVersion = z
+  .string()
+  .trim()
+  .max(256)
+  .refine((v) => semver.valid(v) !== null, 'Must be an exact semver version, e.g. "19.0.0"');
 
 // No `runtime` filter: lurq stores no per-package runtime signal, so the field
 // was accepted and silently ignored — an agent asking for browser-only packages
@@ -144,8 +162,8 @@ export function buildMcpServer(
       title: 'Check package compatibility',
       description: COMPAT_DESCRIPTION,
       inputSchema: {
-        packages: z.array(npmName).min(2).max(8).describe(COMPAT_PACKAGES_DESCRIPTION),
-        versions: z.record(z.string()).optional().describe(COMPAT_VERSIONS_DESCRIPTION),
+        packages: z.array(npmName).min(2).max(30).describe(COMPAT_PACKAGES_DESCRIPTION),
+        versions: z.record(exactVersion).optional().describe(COMPAT_VERSIONS_DESCRIPTION),
         node: z.string().optional().describe(COMPAT_NODE_DESCRIPTION),
       },
     },

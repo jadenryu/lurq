@@ -194,6 +194,33 @@ export async function getCompatEdges(db: Database, names: string[]): Promise<Com
     .where(and(inArray(compatEdges.packageA, names), inArray(compatEdges.packageB, names)));
 }
 
+/**
+ * Sandbox-established edges only — `verified` and `conflict`.
+ *
+ * These are the rows that are *not* derivable from anything else: a real
+ * co-install that passed or failed under VM isolation. `observed` edges are
+ * deliberately excluded, because the set-level resolve now answers the question
+ * they were mined to answer, and answers it about the exact versions asked for
+ * rather than whatever versions a third party's dependency tree happened to pin.
+ *
+ * Scoped by name, not by version: a sandbox conflict at neighbouring versions is
+ * still the best information anyone has about the pair, and `checkCompat` labels
+ * the version mismatch rather than hiding the row.
+ */
+export async function getSandboxEdges(db: Database, names: string[]): Promise<CompatEdgeRow[]> {
+  if (names.length === 0) return [];
+  return db
+    .select()
+    .from(compatEdges)
+    .where(
+      and(
+        inArray(compatEdges.packageA, names),
+        inArray(compatEdges.packageB, names),
+        inArray(compatEdges.provenance, ['verified', 'conflict']),
+      ),
+    );
+}
+
 // ── Pure pair helpers (§4C) ──────────────────────────────────────────────────
 
 /** Canonical `a|b` key for a name pair, order-independent. */
