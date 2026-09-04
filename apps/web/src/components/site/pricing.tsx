@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useState } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 
 import {
   PRICING_BODY,
@@ -11,10 +11,10 @@ import {
   PRICING_HEAD,
   PRICING_INHERITS,
   PRICING_NOTE,
-} from "@/content/pricing";
-import { CONTACT_EMAIL } from "@/content/copy";
-import { useRevealOnce } from "@/lib/use-reveal-once";
-import { PLAN_LIST, type Plan } from "@lurq/core/plans";
+} from '@/content/pricing';
+import { CONTACT_EMAIL } from '@/content/copy';
+import { useRevealOnce } from '@/lib/use-reveal-once';
+import { PLAN_LIST, type Plan } from '@lurq/core/plans';
 
 /**
  * Three plans on the room surface, after the reader has been shown how to
@@ -39,18 +39,18 @@ import { PLAN_LIST, type Plan } from "@lurq/core/plans";
 
 /** How the price reads. Whole dollars, because every plan is whole dollars. */
 function priceLabel(plan: Plan): string {
-  return plan.priceCents === 0 ? "$0" : `$${Math.round(plan.priceCents / 100)}`;
+  return plan.priceCents === 0 ? '$0' : `$${Math.round(plan.priceCents / 100)}`;
 }
 
 /** The allowance line, pulled out of the feature list into its own row. */
 function allowanceLabel(plan: Plan): string {
   return plan.monthlyCalls === null
-    ? "Uncapped hosted calls"
-    : `${plan.monthlyCalls.toLocaleString("en-US")} hosted calls a month`;
+    ? 'Uncapped hosted calls'
+    : `${plan.monthlyCalls.toLocaleString('en-US')} hosted calls a month`;
 }
 
 const BTN =
-  "inline-flex w-full items-center justify-center rounded-md px-4 py-2.5 text-[13px] font-medium transition-[background-color,border-color,color,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark disabled:cursor-not-allowed disabled:opacity-60";
+  'inline-flex w-full items-center justify-center rounded-md px-4 py-2.5 text-[13px] font-medium transition-[background-color,border-color,color,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark disabled:cursor-not-allowed disabled:opacity-60';
 const BTN_FILLED = `${BTN} bg-ink text-ground hover:bg-white`;
 const BTN_OUTLINE = `${BTN} border border-edge text-ink hover:border-ink`;
 
@@ -62,17 +62,24 @@ const BTN_OUTLINE = `${BTN} border border-edge text-ink hover:border-ink`;
  * href at render time. Failure is shown in place instead of thrown, because the
  * one thing worse than a checkout that will not open is one that silently does
  * nothing when clicked.
+ *
+ * Before Stripe is configured, checkout answers 503 with `contact: true`. That
+ * is a correct response and a dead end for the person clicking it, so this falls
+ * through to /api/billing/request, which mails us the owner id needed to grant
+ * the plan by hand. The click still means "I want to buy this" either way; only
+ * the fulfilment differs, and that is our problem rather than theirs.
  */
 function BuyButton({ plan }: { plan: Plan }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requested, setRequested] = useState(false);
   const { isSignedIn } = useAuth();
 
   // Signed out, checkout would bounce off a 401. Send them to sign up first and
   // come back, rather than opening Stripe for an account that does not exist.
   if (!isSignedIn) {
     return (
-      <Link href={`/sign-up?next=${encodeURIComponent("/#pricing")}`} className={BTN_FILLED}>
+      <Link href={`/sign-up?next=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
         {`Start ${plan.name}`}
       </Link>
     );
@@ -82,31 +89,59 @@ function BuyButton({ plan }: { plan: Plan }) {
     setPending(true);
     setError(null);
     try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tier: plan.tier }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
+      const data = (await res.json()) as { url?: string; error?: string; contact?: boolean };
       if (data.url) {
         window.location.href = data.url;
         return;
       }
-      setError(data.error ?? "Could not start checkout.");
+      // Billing not switched on yet. Take the request instead of showing them a
+      // door that does not open.
+      if (data.contact) {
+        const ask = await fetch('/api/billing/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tier: plan.tier }),
+        });
+        const asked = (await ask.json()) as { ok?: boolean; error?: string };
+        if (asked.ok) {
+          setRequested(true);
+          setPending(false);
+          return;
+        }
+        setError(asked.error ?? 'Could not send that request.');
+        setPending(false);
+        return;
+      }
+      setError(data.error ?? 'Could not start checkout.');
     } catch {
-      setError("Could not reach the billing service.");
+      setError('Could not reach the billing service.');
     }
     setPending(false);
   };
 
+  // Terminal state: the button is spent, and repeating the click would only mail
+  // us the same account again.
+  if (requested) {
+    return (
+      <p role="status" className="text-[13px] leading-[1.6] text-ink-2">
+        Request received. We will email you an invoice and switch the plan on from there.
+      </p>
+    );
+  }
+
   return (
     <>
       <button type="button" onClick={buy} disabled={pending} className={BTN_FILLED}>
-        {pending ? "Opening checkout…" : `Start ${plan.name}`}
+        {pending ? 'Opening checkout…' : `Start ${plan.name}`}
       </button>
       {error ? (
         <p role="alert" className="mt-2 text-[12px] leading-[1.5] text-conflict">
-          {error}{" "}
+          {error}{' '}
           <a href="#contact" className="underline underline-offset-2">
             Get in touch
           </a>
@@ -123,7 +158,7 @@ function PlanAction({ plan }: { plan: Plan }) {
   if (plan.contactOnly) {
     return (
       <a
-        href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("lurq Enterprise")}`}
+        href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('lurq Enterprise')}`}
         className={BTN_OUTLINE}
       >
         Talk to us
@@ -137,23 +172,23 @@ function PlanAction({ plan }: { plan: Plan }) {
   // signed in for the reason the nav gives: offering "Get started" to someone
   // who already started is a dead end.
   return (
-    <Link href={isSignedIn ? "/dashboard" : "/sign-up"} className={BTN_OUTLINE}>
-      {isSignedIn ? "Go to dashboard" : "Get started"}
+    <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className={BTN_OUTLINE}>
+      {isSignedIn ? 'Go to dashboard' : 'Get started'}
     </Link>
   );
 }
 
 function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previous?: Plan }) {
-  const featured = plan.tier === "pro";
+  const featured = plan.tier === 'pro';
 
   return (
     <article
       data-card
-      style={{ ["--reveal-at" as string]: `${120 + index * 80}ms` }}
+      style={{ ['--reveal-at' as string]: `${120 + index * 80}ms` }}
       className={[
-        "room-cap-card relative isolate flex flex-col rounded-[10px] p-6 min-[720px]:p-7",
-        featured ? "shadow-[0_0_0_1px_var(--edge-lit)]" : "",
-      ].join(" ")}
+        'room-cap-card relative isolate flex flex-col rounded-[10px] p-6 min-[720px]:p-7',
+        featured ? 'shadow-[0_0_0_1px_var(--edge-lit)]' : '',
+      ].join(' ')}
     >
       <header className="flex items-baseline justify-between gap-3">
         <h3 className="text-[11px] font-medium uppercase tracking-[0.06em] text-ink-3">
@@ -220,9 +255,9 @@ export function Pricing() {
         <h2
           className="mt-4 max-w-[20ch] font-sans font-medium text-ink"
           style={{
-            fontSize: "clamp(1.75rem, 3.4vw, 2.5rem)",
+            fontSize: 'clamp(1.75rem, 3.4vw, 2.5rem)',
             lineHeight: 1.1,
-            letterSpacing: "-0.028em",
+            letterSpacing: '-0.028em',
           }}
         >
           {PRICING_HEAD}
@@ -231,7 +266,7 @@ export function Pricing() {
 
         <div
           ref={ref}
-          data-playing={played ? "true" : "false"}
+          data-playing={played ? 'true' : 'false'}
           className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-3"
         >
           {PLAN_LIST.map((plan, i) => (
