@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
-import { AccountMenu } from "@/components/dashboard/account-menu";
-import { CommandPalette, CommandPaletteTrigger } from "@/components/dashboard/command-palette";
-import { Logo } from "@/components/common/logo";
-import { cn } from "@/lib/utils";
+import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
+import { AccountMenu } from '@/components/dashboard/account-menu';
+import { CommandPalette, CommandPaletteTrigger } from '@/components/dashboard/command-palette';
+import { Logo } from '@/components/common/logo';
+import { cn } from '@/lib/utils';
 
 interface NavItem {
   href: string;
@@ -32,30 +32,37 @@ interface NavItem {
  * docs page.
  */
 const WORKSPACE: NavItem[] = [
-  { href: "/dashboard", label: "overview" },
+  { href: '/dashboard', label: 'overview' },
   // The repositories page: connect a repo, scan it, let lurq keep it current.
   // "autopilot" is what the page has always been for — the per-repo section is
   // already anchored `#autopilot` — and it names the outcome instead of the
   // noun.
-  { href: "/dashboard/repos", label: "autopilot" },
-  { href: "/dashboard/policy", label: "policy" },
-  { href: "/dashboard/audit", label: "audit log" },
-  { href: "/dashboard/contributions", label: "contributions" },
+  { href: '/dashboard/repos', label: 'autopilot' },
+  { href: '/dashboard/policy', label: 'policy' },
+  { href: '/dashboard/audit', label: 'audit log' },
+  { href: '/dashboard/contributions', label: 'contributions' },
 ];
 
 const ACCOUNT: NavItem[] = [
-  { href: "/dashboard/profile", label: "profile" },
-  { href: "/dashboard/activity", label: "activity" },
+  { href: '/dashboard/profile', label: 'profile' },
+  { href: '/dashboard/activity', label: 'activity' },
   // Metered API consumption: the year map, the trend, the per-tool split.
   // "credits" is what the reader is actually spending.
-  { href: "/dashboard/usage", label: "credits" },
-  { href: "/dashboard/notifications", label: "notifications" },
-  { href: "/dashboard/preferences", label: "preferences" },
+  { href: '/dashboard/usage', label: 'credits' },
+  // Directly under credits, because "how much have I used" and "what am I paying
+  // for it" are one question asked twice. Until now nothing linked here at all:
+  // the page existed but was reachable only via Stripe's post-checkout redirect,
+  // so anyone who wanted to change a card or cancel had no route to it. An
+  // unreachable cancellation path is not merely awkward — it is the thing every
+  // processor requires you to provide.
+  { href: '/dashboard/billing', label: 'billing' },
+  { href: '/dashboard/notifications', label: 'notifications' },
+  { href: '/dashboard/preferences', label: 'preferences' },
   // Sixth row, and the one place a reader can get back to a key they closed the
   // tab on. `lurq setup` opens this URL and the docs quickstart links straight
   // to it, so it has to be findable from inside the product too.
-  { href: "/dashboard/keys", label: "api keys" },
-  { href: "/dashboard/support", label: "support" },
+  { href: '/dashboard/keys', label: 'api keys' },
+  { href: '/dashboard/support', label: 'support' },
 ];
 
 /** Both rails, in reading order. The mobile tab row is one flat list. */
@@ -63,7 +70,7 @@ const ALL: NavItem[] = [...WORKSPACE, ...ACCOUNT];
 
 /** `/dashboard` is only active on an exact match, every other route is a prefix. */
 function isActive(pathname: string, href: string): boolean {
-  return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+  return href === '/dashboard' ? pathname === href : pathname.startsWith(href);
 }
 
 /**
@@ -75,10 +82,10 @@ function isActive(pathname: string, href: string): boolean {
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const reduce = useReducedMotion();
   const className = cn(
-    "relative flex items-center rounded-[var(--radius-control)] py-2 pl-4 pr-3 text-sm lowercase tracking-[-0.005em] transition-colors",
+    'relative flex items-center rounded-[var(--radius-control)] py-2 pl-4 pr-3 text-sm lowercase tracking-[-0.005em] transition-colors',
     active
-      ? "bg-secondary text-foreground"
-      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+      ? 'bg-secondary text-foreground'
+      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
   );
   const inner = (
     <>
@@ -97,7 +104,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
           aria-hidden
           className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-signal"
           transition={
-            reduce ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
+            reduce ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 42, mass: 0.7 }
           }
         />
       )}
@@ -105,7 +112,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
     </>
   );
   return (
-    <Link href={item.href} aria-current={active ? "page" : undefined} className={className}>
+    <Link href={item.href} aria-current={active ? 'page' : undefined} className={className}>
       {inner}
     </Link>
   );
@@ -180,12 +187,12 @@ export function DashboardNav() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={active ? 'page' : undefined}
                   className={cn(
-                    "relative shrink-0 snap-start rounded-[var(--radius-control)] px-3 py-1.5 text-sm lowercase tracking-[-0.005em] transition-colors",
+                    'relative shrink-0 snap-start rounded-[var(--radius-control)] px-3 py-1.5 text-sm lowercase tracking-[-0.005em] transition-colors',
                     active
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? 'bg-secondary text-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {active && (
@@ -196,7 +203,7 @@ export function DashboardNav() {
                       transition={
                         reduce
                           ? { duration: 0 }
-                          : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
+                          : { type: 'spring', stiffness: 520, damping: 42, mass: 0.7 }
                       }
                     />
                   )}
