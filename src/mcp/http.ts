@@ -16,6 +16,7 @@ import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
+import { formatError } from '../core/errors';
 import { CAPABILITIES, searchCapabilities } from '../core/capabilities';
 import {
   createKey,
@@ -434,7 +435,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       }
       res.status(200).json({ url });
     } catch (err) {
-      logger.error('checkout failed:', err instanceof Error ? err.message : String(err));
+      logger.error('checkout failed:', formatError(err));
       res.status(502).json({ error: 'Could not start checkout.' });
     }
   });
@@ -457,7 +458,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       }
       res.status(200).json({ url });
     } catch (err) {
-      logger.error('portal failed:', err instanceof Error ? err.message : String(err));
+      logger.error('portal failed:', formatError(err));
       res.status(502).json({ error: 'Could not open the billing portal.' });
     }
   });
@@ -516,7 +517,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     // which turns a bug in the caller into a wrong number rather than a
     // bottomless credit.
     if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DAILY_LIMIT_MICROS) {
-      res.status(400).json({ error: 'usdMicros must be a finite delta within one day\'s limit.' });
+      res.status(400).json({ error: "usdMicros must be a finite delta within one day's limit." });
       return;
     }
     try {
@@ -601,7 +602,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         if (row) invalidateEntitlement(row.ownerId);
       }
     } catch (err) {
-      logger.error('billing webhook failed:', err instanceof Error ? err.message : String(err));
+      logger.error('billing webhook failed:', formatError(err));
     }
   });
 
