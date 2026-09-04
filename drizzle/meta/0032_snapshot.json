@@ -1,6 +1,6 @@
 {
-  "id": "82ff9322-bd4f-496b-b51b-e15788d253f5",
-  "prevId": "2b6ed8d0-ee71-4372-8bed-c9ec03789eae",
+  "id": "aaf1a40f-b205-4df5-9e9e-2292cae11de4",
+  "prevId": "82ff9322-bd4f-496b-b51b-e15788d253f5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1879,6 +1879,107 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stack_resolutions": {
+      "name": "stack_resolutions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "set_key": {
+          "name": "set_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "packages": {
+          "name": "packages",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "names": {
+          "name": "names",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolved": {
+          "name": "resolved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "stack_resolutions_names_idx": {
+          "name": "stack_resolutions_names_idx",
+          "columns": [
+            {
+              "expression": "names",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "stack_resolutions_resolved_at_idx": {
+          "name": "stack_resolutions_resolved_at_idx",
+          "columns": [
+            {
+              "expression": "resolved_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "stack_resolutions_set_key_unique": {
+          "name": "stack_resolutions_set_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "set_key"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

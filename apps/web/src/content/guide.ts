@@ -55,27 +55,11 @@ export const TOOL_GROUPS: { id: GuideTool["group"]; label: string; blurb: string
 
 export const TOOLS: GuideTool[] = [
   {
-    name: "recommend",
-    group: "choose",
-    purpose:
-      "Best current packages for a need you describe, up to five, each scored with a confidence label. The one to call before settling on anything from memory, or before hand-rolling something that already exists.",
-    prompt: "what should I use for form validation in a React app?",
-    input: "need · optional category · optional constraints (runtime, license, max bundle KB, min confidence)",
-  },
-  {
     name: "compare",
     group: "choose",
     purpose: "Two to five named packages side by side, ranked by health score.",
     prompt: "compare zod, valibot and yup for me",
     input: "packages (2–5)",
-  },
-  {
-    name: "plan",
-    group: "choose",
-    purpose:
-      "A spec or README becomes an evidence-scored build plan: one lurq-scored package per component, plus a Mermaid roadmap. Pin what you've already decided and it recommends only the gaps, then optimizes the whole stack around your picks.",
-    prompt: "here's my project spec, plan the stack, I'm already using Next.js and Postgres",
-    input: "document and/or needs[] · optional using[] · optimize: speed | balanced",
   },
   {
     name: "verify",

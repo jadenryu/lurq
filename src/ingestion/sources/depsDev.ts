@@ -8,7 +8,7 @@
 import { CACHE_TTL } from '../../core/constants';
 import { httpGetJson, type HttpResponse } from '../../core/http';
 import type { Advisory, AdvisorySeverity } from '../../core/types';
-import type { DepsDevData } from '../types';
+import type { DependentCounts, DepsDevData } from '../types';
 
 const HOST = 'api.deps.dev';
 const MAX_ADVISORIES = 10;
@@ -212,15 +212,62 @@ export async function fetchDirectDependencies(
   }
 }
 
+/**
+ * Dependent counts, split into direct and indirect (§9.4).
+ *
+ * `directDependentCount` is the number of packages that name this one in their
+ * own manifest — a human typed it into a package.json. `indirectDependentCount`
+ * is everything that merely inherited it through someone else's tree.
+ *
+ * The RATIO between them is the useful part, and it is not a popularity signal.
+ * `fetchDependencyNames` above notes that lurq deliberately does not rank by
+ * dependent COUNT, because raw counts re-import the popularity bias that
+ * discovery (§2B) exists to avoid. That reasoning holds and this does not
+ * violate it: share and volume rank things oppositely. Measured on the live
+ * index, `@radix-ui/rect` has 30,363 dependents — hugely popular — of which
+ * 0.0% are direct, because nothing imports it on purpose; `ag-grid-react` has
+ * 12 dependents of which 91.7% are direct. Volume says the first is a hundred
+ * times more important. Share says only the second was ever chosen, which is
+ * the question `recommend` is actually asking.
+ *
+ * Best-effort, like every other source here: null on any failure, never fatal.
+ */
+export async function fetchDependents(
+  name: string,
+  version: string,
+  fetchImpl?: typeof fetch,
+): Promise<DependentCounts | null> {
+  const url = `https://${HOST}/v3alpha/systems/npm/packages/${encodeName(name)}/versions/${encodeURIComponent(version)}:dependents`;
+  try {
+    const { data } = await httpGetJson<any>(url, {
+      host: HOST,
+      ttlMs: CACHE_TTL.depsDev,
+      fetchImpl,
+    });
+    return parseDependents(data);
+  } catch {
+    return null;
+  }
+}
+
+/** Split out for unit testing without a network round trip. */
+export function parseDependents(json: any): DependentCounts | null {
+  const direct = json?.directDependentCount;
+  const indirect = json?.indirectDependentCount;
+  if (typeof direct !== 'number' || typeof indirect !== 'number') return null;
+  return { direct, indirect };
+}
+
 export async function fetchDepsDev(
   name: string,
   version: string | null,
   repo: { owner: string; repo: string } | null,
   fetchImpl?: typeof fetch,
 ): Promise<DepsDevData> {
-  const [scorecard, advisories] = await Promise.all([
+  const [scorecard, advisories, dependents] = await Promise.all([
     repo ? fetchScorecard(repo.owner, repo.repo, fetchImpl) : Promise.resolve(null),
     version ? fetchAdvisories(name, version, fetchImpl) : Promise.resolve([]),
+    version ? fetchDependents(name, version, fetchImpl) : Promise.resolve(null),
   ]);
-  return { scorecard, advisories };
+  return { scorecard, advisories, dependents };
 }

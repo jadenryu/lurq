@@ -5,8 +5,8 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "node dist-operator/bin/operator.js worker --once --cap 100 --extract 50",
-    "cronSchedule": "*/15 * * * *",
+    "startCommand": "node dist-operator/bin/operator.js worker --once --cap 400 --extract 200",
+    "cronSchedule": "0 * * * *",
     "restartPolicyType": "NEVER",
     "numReplicas": 1,
     "region": "us-east4-eqdc4a"

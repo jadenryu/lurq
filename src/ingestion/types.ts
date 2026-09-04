@@ -79,10 +79,19 @@ export interface GithubRepoData {
   releasesLast12mo: number | null;
 }
 
+export interface DependentCounts {
+  /** Packages naming this one in their own manifest — a deliberate choice. */
+  direct: number;
+  /** Packages that inherited it through someone else's dependency tree. */
+  indirect: number;
+}
+
 export interface DepsDevData {
   /** OpenSSF Scorecard, 0–10 (§9.4). */
   scorecard: number | null;
   advisories: Advisory[];
+  /** Direct/indirect dependent split; null when deps.dev has no data. */
+  dependents?: DependentCounts | null;
 }
 
 export interface BundlephobiaData {

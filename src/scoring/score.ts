@@ -34,6 +34,15 @@ export interface ScoringInput {
   openIssues: number | null;
   closedIssues: number | null;
   scorecard: number | null;
+  /**
+   * Dependent counts, split. Persisted now and deliberately NOT yet folded into
+   * any score: the separation between chosen and inherited is measured (junk
+   * median 36 direct, real-library median 1032), but how it should weigh is not,
+   * and lurq has no retrieval eval to prove a weighting helps rather than just
+   * moves the numbers. Collect first, score once it can be shown to work.
+   */
+  directDependents?: number | null;
+  indirectDependents?: number | null;
   advisories: Advisory[];
   deprecated: boolean;
   archived: boolean;
@@ -74,6 +83,8 @@ export function toScoringInput(signals: RawPackageSignals, category: Category | 
     openIssues: github?.openIssues ?? null,
     closedIssues: github?.closedIssues ?? null,
     scorecard: depsDev?.scorecard ?? null,
+    directDependents: depsDev?.dependents?.direct ?? null,
+    indirectDependents: depsDev?.dependents?.indirect ?? null,
     advisories: depsDev?.advisories ?? [],
     deprecated: registry?.deprecated ?? false,
     archived: github?.archived ?? false,

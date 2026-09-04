@@ -102,6 +102,18 @@ export const packages = pgTable(
     weeklyDownloads: bigint('weekly_downloads', { mode: 'number' }),
     downloadGrowth90d: real('download_growth_90d'),
     stars: integer('stars'),
+    /**
+     * Dependent counts from deps.dev, kept split rather than summed.
+     *
+     * `direct_dependents` counts packages that name this one in their own
+     * manifest; `indirect_dependents` counts those that inherited it through
+     * someone else's tree. The ratio is what distinguishes a library a human
+     * chose from plumbing npm dragged in — a distinction weekly downloads and
+     * GitHub stars both fail to make, because a monorepo's internal utility
+     * inherits its parent's stars and every sibling's download volume.
+     */
+    directDependents: integer('direct_dependents'),
+    indirectDependents: integer('indirect_dependents'),
     openIssues: integer('open_issues'),
     closedIssues: integer('closed_issues'),
 

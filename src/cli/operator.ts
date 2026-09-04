@@ -588,6 +588,92 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('retrieval-eval')
+    .description('measure whether recommend can find a package from a description of what it does')
+    .option('--per-category <n>', 'cases per category (default 17)', (v) => parseInt(v, 10))
+    .option('--limit <n>', 'candidates retrieved per query (default 25)', (v) => parseInt(v, 10))
+    .option('--cases <path>', 'freeze/replay the case set (built and written if absent)')
+    .option('--json <path>', 'write per-case results for a later paired comparison')
+    .option('--compare <path>', 'paired McNemar test against a previous --json run')
+    .action(async (opts: { perCategory?: number; limit?: number; cases?: string; json?: string; compare?: string }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { buildCases, runCases, computeMetrics, pairedPValue, saveCases, loadCases, assertSameCases } =
+        await import('../benchmark/retrieval');
+      const { db, close } = createDb();
+      try {
+        const { existsSync } = await import('node:fs');
+        let cases;
+        if (opts.cases && existsSync(opts.cases)) {
+          cases = loadCases(opts.cases);
+          console.log(`replaying ${cases.length} frozen cases from ${opts.cases}`);
+        } else {
+          cases = await buildCases(db, { perCategory: opts.perCategory });
+          if (opts.cases) { saveCases(opts.cases, cases); console.log(`froze ${cases.length} cases to ${opts.cases}`); }
+          console.log(`built ${cases.length} cases across ${new Set(cases.map((c) => c.category)).size} categories`);
+        }
+        const results = await runCases(db, cases, {
+          limit: opts.limit,
+          onProgress: (n) => { if (n % 25 === 0) process.stderr.write(`  ${n}/${cases.length}\r`); },
+        });
+        const m = computeMetrics(results);
+        console.log(
+          `\ncases ${m.cases} · recall@1 ${(100 * m.recallAt1).toFixed(1)}% · recall@5 ${(100 * m.recallAt5).toFixed(1)}%` +
+            ` · recall@25 ${(100 * m.recallAt25).toFixed(1)}% · MRR ${m.mrr.toFixed(3)}`,
+        );
+        const worst = Object.entries(m.byCategory).sort((a, b) => a[1].recallAt25 - b[1].recallAt25).slice(0, 6);
+        console.log('\nweakest categories (recall@25):');
+        for (const [cat, b] of worst) console.log(`  ${cat.padEnd(24)} ${(100 * b.recallAt25).toFixed(0)}%  (${b.cases} cases)`);
+        const { writeFileSync, readFileSync } = await import('node:fs');
+        if (opts.json) { writeFileSync(opts.json, JSON.stringify(results, null, 2)); console.log(`\nwrote ${opts.json}`); }
+        if (opts.compare) {
+          const before = JSON.parse(readFileSync(opts.compare, 'utf8'));
+          assertSameCases(before, results);
+          const p = pairedPValue(before, results);
+          console.log(`\npaired vs ${opts.compare}: McNemar exact p = ${p.toFixed(4)}${p < 0.05 ? ' (significant)' : ' (NOT significant)'}`);
+        }
+      } finally {
+        await close();
+      }
+    });
+
+  program
+    .command('dependents-backfill')
+    .description('fill direct/indirect dependent counts from deps.dev (resumable)')
+    .option('--limit <n>', 'rows to attempt this run (default 2000)', (v) => parseInt(v, 10))
+    .option('--stratify', 'take the top rows per category instead of globally')
+    .option('--per-category <n>', 'rows per category when stratifying (default 90)', (v) => parseInt(v, 10))
+    .option('--concurrency <n>', 'parallel deps.dev requests (default 6)', (v) => parseInt(v, 10))
+    .action(async (opts: { limit?: number; stratify?: boolean; perCategory?: number; concurrency?: number }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { backfillDependents } = await import('../pipeline/dependents');
+      const { db, close } = createDb();
+      try {
+        let last = 0;
+        const s = await backfillDependents(db, {
+          limit: opts.limit,
+          stratify: opts.stratify,
+          perCategory: opts.perCategory,
+          concurrency: opts.concurrency,
+          onProgress: (done, total) => {
+            if (done - last >= 100 || done === total) {
+              last = done;
+              process.stderr.write(`  ${done}/${total}\r`);
+            }
+          },
+        });
+        console.log(
+          `\nattempted ${s.attempted} · filled ${s.filled} · no-data ${s.missing} · skipped ${s.skipped}`,
+        );
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('compat-backfill')
     .description('backfill compat edges over the top-N popular packages in batches (§4C)')
     .option('--top <n>', 'how many popular packages to cover', (v) => parseInt(v, 10))

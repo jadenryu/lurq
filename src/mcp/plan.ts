@@ -190,8 +190,20 @@ export async function handlePlan(
   const needs = (decomposed?.needs ?? []).slice(0, MAX_SLOTS);
   const source = decomposed?.source ?? 'needs';
 
+  // Retrieval can degrade to lexical-only when the embedding provider is
+  // unavailable. That must reach the caller: `unmatched` reads to an agent as
+  // "no package exists for this need", which is a very different claim from
+  // "lurq's search was running on one leg".
+  let degradedReason: string | null = null;
   const safeRecommend = (need: string, category: Category | undefined) =>
-    recommend(db, { need, category, limit: PER_SLOT }).catch((err) => {
+    recommend(db, {
+      need,
+      category,
+      limit: PER_SLOT,
+      onDegraded: (reason) => {
+        degradedReason ??= reason;
+      },
+    }).catch((err) => {
       logger.warn(`plan: recommend failed for "${need}": ${(err as Error).message}`);
       return [] as Candidate[];
     });
@@ -305,7 +317,7 @@ export async function handlePlan(
     slots,
     unmatched,
     mermaid,
-    note: planNote(source, unmatched.length, optimize, framework),
+    note: planNote(source, unmatched.length, optimize, framework, degradedReason),
     compatibility,
   };
 }
@@ -405,6 +417,7 @@ function planNote(
   unmatched: number,
   optimize: string,
   framework: string | null,
+  degraded: string | null,
 ): string {
   const base =
     source === 'heuristic'
@@ -419,7 +432,12 @@ function planNote(
     : '';
   const tail = unmatched ? ` ${unmatched} need(s) had no tracked match (listed in \`unmatched\`).` : '';
   const opt = optimize === 'speed' ? ' Ranking favored the lightest-bundle option per slot.' : '';
-  return base + grounding + ctx + opt + tail;
+  // Leads the note rather than trailing it: if the ranking is degraded, that is
+  // the first thing a reader needs to know about every pick below it.
+  const degradedWarning = degraded
+    ? `DEGRADED: semantic search was unavailable (${degraded}), so these picks come from keyword matching alone and are materially less reliable than usual. Treat them as a shortlist to verify, and re-run when search recovers. `
+    : '';
+  return degradedWarning + base + grounding + ctx + opt + tail;
 }
 
 /** Merge duplicate needs (same text), keeping the first category hint seen. */

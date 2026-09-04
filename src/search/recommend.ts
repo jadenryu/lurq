@@ -14,6 +14,7 @@ import { computeComposite } from '../scoring';
 import { CONFIDENCE_WEIGHT, RANKING, loadWeights } from '../scoring/weights';
 import { inferCategory } from './categoryInference';
 import { createEmbeddingProvider, type EmbeddingProvider } from './embeddings';
+import { logger } from '../core/logger';
 
 export interface RecommendConstraints {
   license?: string;
@@ -26,6 +27,12 @@ export interface RecommendOptions {
   category?: Category;
   constraints?: RecommendConstraints;
   limit?: number;
+  /**
+   * Called when this search ran without its vector leg. The results are still
+   * real, just weaker — callers that surface answers to an agent should pass
+   * the reason along so nobody mistakes a degraded ranking for a confident one.
+   */
+  onDegraded?: (reason: string) => void;
 }
 
 /** Ladder ORDER, for the minConfidence filter only — not the ranking weight
@@ -80,8 +87,31 @@ export async function recommend(
   provider: EmbeddingProvider = createEmbeddingProvider(),
 ): Promise<Candidate[]> {
   const limit = Math.min(Math.max(opts.limit ?? 3, 1), 5);
-  const [queryVec] = await provider.embed([opts.need]);
-  if (!queryVec) return [];
+
+  // The embedding provider is a paid third party, so it WILL be unavailable
+  // sometimes — an exhausted balance, a rate limit, an outage. Before this,
+  // that turned into a raw HTTP error thrown at the agent from `recommend`,
+  // and into "every need unmatched" from `plan` (whose safeRecommend swallows
+  // the throw). The second is the dangerous one: an agent reads it as "lurq
+  // knows of no package for this", which is a confident wrong answer.
+  //
+  // Lexical retrieval alone is materially worse than hybrid, but it is a real
+  // answer from the same index. Degrade to it and say so, rather than
+  // returning nothing and letting the caller infer the wrong thing.
+  //
+  // Note we do NOT fall back to the local embedder here: stored vectors live
+  // in the provider's space, and a cosine distance across two embedding spaces
+  // is noise wearing the costume of a ranking.
+  let queryVec: number[] | null = null;
+  try {
+    queryVec = (await provider.embed([opts.need]))[0] ?? null;
+  } catch (err) {
+    queryVec = null;
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn(`recommend: vector retrieval unavailable (${reason}); using lexical only.`);
+    opts.onDegraded?.(`vector retrieval unavailable: ${reason}`);
+  }
+  if (!queryVec) opts.onDegraded?.('vector retrieval unavailable');
 
   const category = opts.category ?? inferCategory(opts.need);
   const pool = Math.max(limit * 5, 25);
@@ -125,7 +155,8 @@ interface Fused {
  */
 async function hybridSearch(
   db: Database,
-  queryVec: number[],
+  /** null when the embedding provider is unavailable — lexical leg only. */
+  queryVec: number[] | null,
   providerId: string,
   need: string,
   constraints: RecommendConstraints | undefined,
@@ -133,9 +164,11 @@ async function hybridSearch(
   pool: number,
 ): Promise<Fused[]> {
   const [vectorRows, lexicalRows] = await Promise.all([
-    runVectorQuery(db, queryVec, providerId, constraints, category, pool),
+    queryVec ? runVectorQuery(db, queryVec, providerId, constraints, category, pool) : [],
     runLexicalQuery(db, need, constraints, category, pool),
   ]);
+  // rrfFuse is already N-ary, so an empty vector leg degrades to a pure
+  // lexical ranking without a second code path.
   return rrfFuse([vectorRows, lexicalRows]);
 }
 
