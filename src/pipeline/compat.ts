@@ -11,20 +11,18 @@ import {
   bumpCompatVerifyAttempt,
   canonicalPair,
   deleteCompatVerify,
-  fullyCovered,
-  getCompatEdges,
   getPendingCompatVerify,
-  pairKey,
   upsertCompatEdge,
 } from '../db/compat';
+import { getStackResolution, recordStackResolution, stackKey } from '../db/stackResolutions';
 import { getPackageByName, getTopPackageNames } from '../db/packages';
 import { getSandbox } from '../sandbox';
 import type { SandboxSetResult } from '../sandbox/types';
 import { resolveSet } from './resolveCheck';
 
-// Re-exported: the pure pair helpers live in the light db layer (so the query
-// path can use them without pulling in the sandbox), but they were minted here.
-export { fullyCovered, pairKey } from '../db/compat';
+// Re-exported: the pure pair helper lives in the light db layer (so the query
+// path can use it without pulling in the sandbox), but it was minted here.
+export { pairKey } from '../db/compat';
 
 export interface CompatEdge {
   a: string;
@@ -142,11 +140,17 @@ export interface ResolveCompatResult {
 }
 
 /**
- * Tier-2 resolve-only verify (§4C): resolve a package set with npm (no install,
- * no VM) and mint `observed`-class edges — a proven co-resolution, but not the
- * runtime proof a sandbox gives, so it never overrides a `verified`/`conflict`.
- * An ERESOLVE on a pair is a real `conflict`. Inconclusive resolves (network,
- * timeout) throw so the caller can retry rather than record a false result.
+ * Tier-2 resolve-only verify: resolve a package set with npm (no install, no VM)
+ * and record the verdict against the exact set.
+ *
+ * This used to fan the result out into pairwise `observed` edges. It no longer
+ * does, and the reason is not just storage: a set resolving is a fact about the
+ * *set*. Splitting it into C(n,2) pairs asserts something npm never said — that
+ * each pair independently works — and loses the only thing that made the run
+ * worth doing, which is that these packages resolve *together*.
+ *
+ * Inconclusive resolves (network, timeout) throw so the caller can retry rather
+ * than record a false result. Nothing is cached on that path.
  */
 async function resolveVerifyCompatibility(
   db: Database,
@@ -161,18 +165,39 @@ async function resolveVerifyCompatibility(
   const res = await resolveSet(
     resolved.map((r) => ({ name: r.name, version: r.version === 'latest' ? null : r.version })),
   );
-  const edges = pairwiseEdges(resolved, res.resolved);
-  await persistCompatEdges(db, edges, 'observed', 'npm-resolve');
-  return { edges, resolved: res.resolved };
+  // A member we could not pin has no place in a version-keyed cache entry.
+  const pinned = resolved.filter((r) => r.version !== 'latest');
+  if (pinned.length === resolved.length && pinned.length >= 2) {
+    await recordStackResolution(db, {
+      members: pinned.map((r) => ({ name: r.name, version: r.version })),
+      resolved: res.resolved,
+      reason: res.reason,
+      detail: res.detail ?? null,
+    }).catch((err: unknown) => logger.warn(`compat: caching resolution failed: ${String(err)}`));
+  }
+  return { edges: pairwiseEdges(resolved, res.resolved), resolved: res.resolved };
 }
 
 // ── Targeted backfill (§4C) ───────────────────────────────────────────────────
 
-/** Name-pair keys that already have *any* stored edge among `names` — the pairs
- *  a sandbox run would waste itself on (§4C: sandbox is only for unverified). */
-async function coveredPairs(db: Database, names: string[]): Promise<Set<string>> {
-  const edges = await getCompatEdges(db, names);
-  return new Set(edges.map((e) => pairKey(e.packageA, e.packageB)));
+/**
+ * Has this exact set already been resolved? The backfill skips it if so.
+ *
+ * Set-level, where the old check was pairwise. That is a real narrowing: a batch
+ * whose pairs were each seen in some *other* combination used to count as
+ * covered, which is precisely the inference npm's resolver does not support —
+ * pairwise coverage never proved the batch resolves together. Now a batch is
+ * skipped only when this batch, at these versions, actually resolved.
+ */
+async function alreadyResolved(db: Database, names: string[]): Promise<boolean> {
+  const members: { name: string; version: string }[] = [];
+  for (const name of [...new Set(names)]) {
+    const version = (await getPackageByName(db, name))?.latestVersion;
+    if (!version) return false; // cannot key on it, so treat as uncovered
+    members.push({ name, version });
+  }
+  if (members.length < 2) return true;
+  return (await getStackResolution(db, stackKey(members)).catch(() => null)) !== null;
 }
 
 export interface BackfillResult {
@@ -184,11 +209,15 @@ export interface BackfillResult {
 type BatchRunner = (db: Database, batch: string[]) => Promise<{ edges: CompatEdge[] }>;
 
 /**
- * Batch the top-N popular tracked packages and settle each batch with `runner`,
- * minting edges for every pair that mining/Tier-0 left uncovered (§4C). One
- * K-package run yields all C(K,2) edges, so per-edge cost is sublinear; batches
- * already fully covered are skipped — no wasted run. The runner is the tier:
- * sandbox (runtime proof, expensive) or resolve-only (co-resolution, cheap).
+ * Batch the top-N popular tracked packages and settle each batch with `runner`.
+ * Batches already resolved at these versions are skipped — no wasted run. The
+ * runner is the tier: sandbox (runtime proof, expensive) or resolve-only
+ * (co-resolution, cheap).
+ *
+ * `batchSize` is worth raising well above its default before running this in
+ * anger. npm's cost is dominated by fetching packuments rather than by how many
+ * packages are in the set, so a batch of 20 measured ~31ms per covered pair
+ * against ~450ms at a batch of 5.
  */
 async function runBackfill(
   db: Database,
@@ -199,7 +228,6 @@ async function runBackfill(
   const topN = opts.topN ?? 50;
   const batchSize = Math.max(2, opts.batchSize ?? 5);
   const names = await getTopPackageNames(db, topN);
-  const covered = await coveredPairs(db, names);
 
   let verified = 0;
   let batches = 0;
@@ -207,7 +235,7 @@ async function runBackfill(
   for (let i = 0; i < names.length; i += batchSize) {
     const batch = names.slice(i, i + batchSize);
     if (batch.length < 2) continue;
-    if (fullyCovered(batch, covered)) {
+    if (await alreadyResolved(db, batch)) {
       skipped++;
       continue;
     }
@@ -251,14 +279,19 @@ export interface DrainResult {
 }
 
 /**
- * Drain the demand-driven compat-verify queue (§4C): pop the oldest pending sets
- * (capped) and settle each with the *resolve-only* tier (npm resolution, no VM),
- * minting observed/conflict edges so a real `compat` query that missed gets a
- * real answer on the next ask — cheaply. A set already covered by edges since it
- * was queued (backfill/remine/another drain got there first) is dropped without
- * any work; a set that keeps failing (network/timeout — never a proven conflict)
- * is dropped after MAX attempts so a bad request can't wedge the queue. Runtime
- * proof (the sandbox tier) stays with the deliberate `compat-backfill` path.
+ * Drain the compat-verify queue: pop the oldest pending sets (capped) and settle
+ * each in the *sandbox* — a real co-install under VM isolation.
+ *
+ * The queue's job changed. It used to hold sets whose verdict was unknown, so a
+ * cheap resolve could turn the next ask from `likely` into an answer. `compat`
+ * now resolves inline, so by the time anything lands here the set has already
+ * been proven to *install*. What is left unproven is whether it actually *runs*,
+ * and that is exactly what the sandbox tier establishes — the one claim neither
+ * a resolution nor a dependency graph can make.
+ *
+ * A set resolved since it was queued is dropped without work; a set that keeps
+ * failing (network/timeout — never a proven conflict) is dropped after MAX
+ * attempts so a bad request cannot wedge the queue.
  */
 export async function drainCompatVerifyQueue(
   db: Database,
@@ -270,12 +303,12 @@ export async function drainCompatVerifyQueue(
   let dropped = 0;
   for (const req of pending) {
     const names = req.packages;
-    if (fullyCovered(names, await coveredPairs(db, names))) {
+    if (await alreadyResolved(db, names)) {
       await deleteCompatVerify(db, req.id);
       continue;
     }
     try {
-      const { edges } = await resolveVerifyCompatibility(db, names);
+      const { edges } = await verifyCompatibility(db, names, {});
       verified += edges.length;
       await deleteCompatVerify(db, req.id);
     } catch (err) {
@@ -288,7 +321,7 @@ export async function drainCompatVerifyQueue(
     }
   }
   logger.info(
-    `compat-verify: ${verified} edge(s) from ${pending.length} queued set(s), ${dropped} dropped`,
+    `compat-verify(sandbox): ${verified} edge(s) from ${pending.length} queued set(s), ${dropped} dropped`,
   );
   return { processed: pending.length, verified, dropped };
 }

@@ -28,7 +28,7 @@ import type {
   CompatResolution,
 } from '../core/types';
 import type { Database } from '../db/client';
-import { getSandboxEdges, pairKey } from '../db/compat';
+import { enqueueCompatVerify, getSandboxEdges, pairKey } from '../db/compat';
 import {
   getStackResolution,
   recordStackResolution,
@@ -205,6 +205,17 @@ async function settle(
     reason: result.reason,
     detail: result.detail ?? null,
   }).catch((err) => logger.warn(`compat: caching resolution failed: ${String(err)}`));
+
+  // A set that resolves is proven to *install*. Whether it actually *runs* is a
+  // stronger claim that only the sandbox can make, so escalate it there —
+  // deduped on the set key, never blocking, and only on a fresh resolve so a
+  // cache hit does not re-queue work already pending.
+  if (result.resolved) {
+    await enqueueCompatVerify(
+      db,
+      pinned.map((m) => m.name),
+    ).catch(() => {});
+  }
 
   return {
     resolution: {

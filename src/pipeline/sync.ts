@@ -10,7 +10,6 @@
 import { invalidateCache } from '../core/cache';
 import { getConfig } from '../core/config';
 import { pMap } from '../core/concurrency';
-import { formatError } from '../core/errors';
 import { setCacheBypassRead } from '../core/http';
 import { logger } from '../core/logger';
 import { classifyRuntimeTarget } from '../core/runtimeTarget';
@@ -36,7 +35,6 @@ import {
 import { createDb, type Database } from '../db/client';
 import {
   finishSyncRun,
-  getAllPackageNames,
   getSeedTargets,
   getStaleRefreshTargets,
   latestVersionsFor,
@@ -45,7 +43,6 @@ import {
   upsertPackageVersions,
 } from '../db/packages';
 import { emitPublishAlerts } from '../github/alerts';
-import { mineEdgesForPackage, remineAllClosures } from './mineEdges';
 import { isFrontendCategory } from '../core/types';
 import type { NewPackageRow, SyncError } from '../db/schema';
 
@@ -53,10 +50,6 @@ export interface SyncOptions {
   full?: boolean;
   packageName?: string;
 }
-
-/** Post-sync edge mining concurrency. Kept at 1 so fat dependency trees cannot
- *  spike heap the way concurrent mega-upserts did on the Railway sync cron. */
-export const SYNC_MINE_CONCURRENCY = 1;
 
 export interface SyncSummary {
   seen: number;
@@ -266,25 +259,10 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
       updated++;
     }
 
-    // ── Mine observed compat edges (§4B) ─────────────────────────────────────
-    // Every ingested package's resolved closure is a co-installation witness;
-    // mint free `observed` edges among its tracked nodes. Tracked set loaded once
-    // (§4B step 2). Best-effort; concurrency 1 caps peak memory for fat trees
-    // (ingest above stays concurrent).
-    const tracked = new Set(await getAllPackageNames(handle.db));
-    await pMap(
-      ok,
-      (c) => mineEdgesForPackage(handle.db, c.target.name, c.signals.registry?.latestVersion ?? null, tracked, now),
-      SYNC_MINE_CONCURRENCY,
-    );
-    // Trigger 2 (§4B): a full sync is the daily cron — re-mine every persisted
-    // closure against the *current* tracked set (no network) so packages tracked
-    // since the closure was captured get fully linked within 24h. Best-effort.
-    if (!opts.packageName) {
-      await remineAllClosures(handle.db).catch((err) =>
-        logger.warn(`re-mine pass failed: ${formatError(err)}`),
-      );
-    }
+    // Compat edges are no longer mined here. A pairwise expansion of every
+    // ingested closure was writing ~5.9M rows a day to answer a question the
+    // set-level resolver now answers directly, about the exact versions asked
+    // for rather than whatever a third party's tree happened to pin.
 
     const status: SyncSummary['status'] =
       updated === 0 ? 'failed' : allErrors.length > 0 ? 'partial' : 'success';
