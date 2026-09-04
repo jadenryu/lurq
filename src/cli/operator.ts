@@ -312,7 +312,7 @@ export function registerOperatorCommands(program: Command): void {
       const { db, close } = createDb();
       try {
         if (opts.package) {
-          const outcome = await extractAndStore(db, opts.package, opts.packageVersion ?? null);
+          const { outcome } = await extractAndStore(db, opts.package, opts.packageVersion ?? null);
           console.log(`${opts.package}@${opts.packageVersion ?? 'latest'}: ${outcome}`);
         } else {
           const s = await drainSurfaceQueue(db, { limit: opts.limit });

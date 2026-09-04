@@ -31,6 +31,7 @@ import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { enqueueCandidates, getQueuedNames } from '../db/discovery';
 import { getAllPackageNames } from '../db/packages';
+import { enqueueSurface } from '../db/surface';
 import { getWatchCursor, setWatchCursor } from '../db/watch';
 import { syncOnePackage } from './single';
 
@@ -184,6 +185,22 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
             logger.warn(`watch: re-sync failed for ${change.id}: ${String(err)}`),
           );
           resynced++;
+          // A publish is the only moment a new API surface exists, and this feed
+          // is the only place we learn about one within seconds of it landing.
+          //
+          // This is what makes surface coverage dynamic instead of a curated
+          // list. It follows npm rather than choosing packages, so the long tail
+          // — half of all publish volume, and per the drift study the place
+          // models have the weakest priors (18.7% vs 8.3% at low in-degree) — is
+          // covered by construction rather than by remembering to add it.
+          //
+          // Null version means "whatever latest resolves to at extraction time",
+          // which is what the re-sync above just moved it to. Deduped by
+          // spec_key, so a package publishing twenty times an hour costs one
+          // pending row, and never blocking: the worker does the work.
+          await enqueueSurface(db, change.id, null).catch((err) =>
+            logger.warn(`watch: surface enqueue failed for ${change.id}: ${String(err)}`),
+          );
         } else if (route === 'enqueue') {
           // Record it locally as we buffer, so the same package publishing twenty
           // times in an hour costs one insert attempt rather than twenty.

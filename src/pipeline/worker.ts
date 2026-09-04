@@ -109,7 +109,7 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         const s = await drainSurfaceQueue(handle.db, { limit: surfacePerCycle });
         if (s.drained) {
           logger.info(
-            `worker: surface drain, ${s.stored} stored, ${s.cached} cached, ${s.undeclared} undeclared, ${s.failed} failed`,
+            `worker: surface drain, ${s.stored} stored, ${s.cached} cached, ${s.undeclared} undeclared, ${s.backfilled} predecessor(s) queued, ${s.failed} failed`,
           );
         }
       } finally {
