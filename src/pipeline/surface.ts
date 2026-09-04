@@ -16,12 +16,14 @@ import {
   bumpSurfaceAttempt,
   dropSurfaceQueue,
   enqueuePreviousSurface,
+  enqueueSurface,
   getPendingSurfaces,
   isExtractionCached,
   storeSurface,
   surfaceRef,
 } from '../db/surface';
 import { getPackageVersions } from '../db/packages';
+import { getPackagesMissingSurface, getPackagesWithSurface } from '../db/apiSurfaces';
 import { fetchAndExtract } from '../surface/fetch';
 
 /**
@@ -142,6 +144,74 @@ export async function drainSurfaceQueue(
         'surface extraction failed',
       );
     }
+  }
+  return s;
+}
+
+export interface BackfillSummary {
+  scanned: number;
+  /** Latest versions queued for packages that had no surface at all. */
+  queuedLatest: number;
+  /** Predecessors queued so an existing surface becomes diffable. */
+  queuedPrevious: number;
+}
+
+/**
+ * One-time backfill to give the existing catalog version depth.
+ *
+ * The publish hook in `watch` only sees releases from now on, so on its own it
+ * would take as long as the catalog's release cadence to make anything
+ * comparable. This walks what is already tracked and fills the two gaps behind
+ * it: packages with no surface at all (half the catalog), and packages with one
+ * surface and nothing to diff it against (all but ~4.5%).
+ *
+ * Enqueues only — it never fetches or extracts. The worker drains at whatever
+ * rate its budget allows, so a backfill of the whole catalog cannot outrun the
+ * registry or starve the demand-driven queue it shares.
+ */
+export async function backfillSurfaces(
+  db: Database,
+  opts: { limit?: number } = {},
+): Promise<BackfillSummary> {
+  const limit = opts.limit ?? 500;
+  const s: BackfillSummary = { scanned: 0, queuedLatest: 0, queuedPrevious: 0 };
+
+  // Gap 1: no surface at all. `getPackagesMissingSurface` already samples these.
+  const missing = await getPackagesMissingSurface(db, limit);
+  for (const row of missing) {
+    s.scanned++;
+    await enqueueSurface(db, row.name, row.version).then(
+      () => {
+        s.queuedLatest++;
+      },
+      (err: unknown) =>
+        logger.warn({ pkg: row.name, err: formatError(err) }, 'backfill: could not queue latest'),
+    );
+  }
+
+  // Gap 2: a surface exists but has no predecessor, so it cannot be diffed.
+  // Sampled rather than ordered, for the same reason `getPackagesMissingSurface`
+  // is: a package that can never gain a predecessor (its first ever release)
+  // stays in this set forever, and a stable ordering would let the head of it
+  // starve the tail indefinitely.
+  const withSurface = await getPackagesWithSurface(db, limit);
+  for (const row of withSurface) {
+    s.scanned++;
+    await enqueuePreviousSurface(
+      db,
+      row.name,
+      row.version,
+      await getPackageVersions(db, row.name, VERSION_LOOKBACK),
+    ).then(
+      (queued) => {
+        if (queued) s.queuedPrevious++;
+      },
+      (err: unknown) =>
+        logger.warn(
+          { pkg: row.name, err: formatError(err) },
+          'backfill: could not queue predecessor',
+        ),
+    );
   }
   return s;
 }

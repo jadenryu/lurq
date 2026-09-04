@@ -68,3 +68,32 @@ export async function upsertSurface(
       set: { surface, extractedAt: new Date() },
     });
 }
+
+/**
+ * Tracked packages whose latest version *does* have a surface — the input to the
+ * predecessor backfill, which needs somewhere to start from.
+ *
+ * Randomly sampled for the same reason as {@link getPackagesMissingSurface}: a
+ * package whose latest release is also its first can never gain a predecessor
+ * and so never leaves this set, and a stable ordering would let those rows sit
+ * at the head forever while the tail is never reached.
+ */
+export async function getPackagesWithSurface(
+  db: Database,
+  limit = 100,
+): Promise<{ name: string; version: string }[]> {
+  const rows = await db
+    .select({ name: packages.name, version: packages.latestVersion })
+    .from(packages)
+    .innerJoin(
+      apiSurfaces,
+      and(
+        eq(apiSurfaces.packageName, packages.name),
+        eq(apiSurfaces.version, packages.latestVersion),
+      ),
+    )
+    .where(isNotNull(packages.latestVersion))
+    .orderBy(sql`random()`)
+    .limit(limit);
+  return rows.filter((r): r is { name: string; version: string } => r.version !== null);
+}

@@ -326,6 +326,53 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('surface-backfill')
+    .description('give the existing catalog version depth, so surface diffs have something to compare')
+    .option('--limit <n>', 'packages to sample per gap this run (default 500)', (v) => parseInt(v, 10))
+    .action(async (opts: { limit?: number }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { backfillSurfaces } = await import('../pipeline/surface');
+      const { db, close } = createDb();
+      try {
+        const s = await backfillSurfaces(db, { limit: opts.limit });
+        console.log(
+          `scanned ${s.scanned} · queued ${s.queuedLatest} latest · queued ${s.queuedPrevious} predecessor(s)`,
+        );
+        console.log('nothing extracted here — `surface-drain` does the work.');
+      } finally {
+        await close();
+      }
+    });
+
+  program
+    .command('usage-prune')
+    .description('report on stale dashboard usage counters (DRY RUN unless --apply)')
+    .option('--keep-days <n>', 'days of history to retain (default 90)', (v) => parseInt(v, 10))
+    .option('--apply', 'actually delete. Without this, nothing is removed.')
+    .action(async (opts: { keepDays?: number; apply?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { pruneUsageCounters } = await import('../db/usage');
+      const { db, close } = createDb();
+      try {
+        const r = await pruneUsageCounters(db, { keepDays: opts.keepDays, apply: opts.apply });
+        console.log(
+          `owner_usage_daily: ${r.retained} within window · ${r.stale} older than ${opts.keepDays ?? 90}d · oldest ${r.oldest ?? 'n/a'}`,
+        );
+        console.log(
+          r.applied
+            ? `deleted ${r.stale} row(s).`
+            : 'DRY RUN — nothing deleted. Re-run with --apply to remove them.',
+        );
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('surface-diff')
     .argument('<dirA>', 'package directory at the FROM version')
     .argument('<dirB>', 'package directory at the TO version')
