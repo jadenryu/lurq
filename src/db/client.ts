@@ -37,6 +37,12 @@ export function createDb(opts: { max?: number } = {}): DbHandle {
   const { DATABASE_URL } = requireConfig(['DATABASE_URL']);
   const sql = postgres(DATABASE_URL!, {
     max: opts.max ?? 10,
+    // ponytail: Neon bills compute by the hour and only suspends when nothing is
+    // connected. postgres.js holds idle connections forever by default, so a
+    // long-lived process (serve-http, watch) pinned the compute awake 24/7 even
+    // with zero traffic. Drop them after a minute; reconnect through the pooler
+    // is cheap. Raise if reconnect latency ever shows up in p99.
+    idle_timeout: 60,
     onnotice: () => {},
     connection: { statement_timeout: STATEMENT_TIMEOUT_MS },
   });
