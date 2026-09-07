@@ -58,7 +58,8 @@
     "operator:prod": "LURQ_ENV_FILE=.env.production tsx src/bin/operator.ts",
     "prepublishOnly": "npm test && npm run build",
     "content:drift": "tsx scripts/gen-drift.ts",
-    "content:landing": "tsx scripts/build-landing-content.mts"
+    "content:landing": "tsx scripts/build-landing-content.mts",
+    "content:releases": "tsx scripts/gen-releases.ts"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",

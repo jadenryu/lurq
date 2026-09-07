@@ -19,13 +19,44 @@ import { DOCS_URL } from "@/lib/site-links";
  * Every link here goes somewhere that exists. There is no Careers page, no Blog,
  * no Customers, and inventing them to fill a column is how a footer starts
  * lying about the size of the thing behind it.
+ *
+ * WRITTEN OUT RATHER THAN DERIVED FROM content/nav.ts. The mega menu carries
+ * twenty destinations with a blurb each; a footer carries a short label and
+ * wants the four or five per column that a reader scans. Deriving one from the
+ * other means either a footer with nine Product links or a nav data file
+ * carrying `showInFooter` flags, and both are worse than two lists that a person
+ * keeps in step. The rule for keeping them in step is the one above: a link here
+ * has to resolve.
+ *
+ * The Solutions column is new and is the reason this was edited. Those pages had
+ * existed for a pass before anything below the fold pointed at them.
  */
 const COLUMNS = [
   {
     heading: "Product",
     links: [
-      { label: "Docs", href: DOCS_URL },
+      { label: "All tools", href: "/product" },
+      { label: "Verify", href: "/product/verify" },
+      { label: "Compat", href: "/product/compat" },
+      { label: "Diff surface", href: "/product/diff_surface" },
       { label: "Pricing", href: "/#pricing" },
+    ],
+  },
+  {
+    heading: "Solutions",
+    links: [
+      { label: "Agent-assisted coding", href: "/solutions/agent-coding" },
+      { label: "Upgrades and migrations", href: "/solutions/upgrades" },
+      { label: "Pre-merge gating", href: "/solutions/ci" },
+      { label: "Supply-chain defence", href: "/solutions/supply-chain" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
+      { label: "Docs", href: DOCS_URL },
+      { label: "Changelog", href: "/changelog" },
+      { label: "Evidence", href: "/proof" },
       { label: "Dashboard", href: "/dashboard" },
       { label: "npm", href: "https://www.npmjs.com/package/lurqrun", external: true },
     ],
@@ -36,6 +67,7 @@ const COLUMNS = [
       { label: "About", href: "/about" },
       { label: "Partnerships", href: "/partnerships" },
       { label: "Book a demo", href: "/book-demo" },
+      { label: "GitHub", href: REPO_URL, external: true },
     ],
   },
   {
@@ -44,7 +76,6 @@ const COLUMNS = [
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
       { label: "License", href: "/license" },
-      { label: "GitHub", href: REPO_URL, external: true },
     ],
   },
 ] as const;
@@ -95,7 +126,7 @@ export function SiteFooter() {
               <p className="mt-4 text-[13px] leading-[1.6] text-ink-2">{FOOTER_BLURB}</p>
             </div>
 
-            <div className="grid flex-1 grid-cols-2 gap-8 min-[560px]:grid-cols-3">
+            <div className="grid flex-1 grid-cols-2 gap-x-8 gap-y-10 min-[560px]:grid-cols-3 min-[1024px]:grid-cols-5">
               {COLUMNS.map((col) => (
                 <div key={col.heading}>
                   <h2 className="text-[11px] font-medium tracking-[0.04em] text-ink-3">

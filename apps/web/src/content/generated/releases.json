@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2026-09-07T18:55:41.212Z",
+  "source": "GET https://registry.npmjs.org/lurqrun",
+  "package": "lurqrun",
+  "latest": "0.1.1",
+  "releases": [
+    {
+      "version": "0.1.1",
+      "publishedAt": "2026-09-04T16:45:30.120Z"
+    },
+    {
+      "version": "0.1.0",
+      "publishedAt": "2026-08-10T00:18:02.490Z"
+    },
+    {
+      "version": "0.0.10",
+      "publishedAt": "2026-08-09T23:59:01.161Z"
+    },
+    {
+      "version": "0.0.9",
+      "publishedAt": "2026-08-09T22:42:20.724Z"
+    },
+    {
+      "version": "0.0.8",
+      "publishedAt": "2026-08-09T21:14:26.150Z"
+    },
+    {
+      "version": "0.0.7",
+      "publishedAt": "2026-08-09T04:08:00.357Z"
+    },
+    {
+      "version": "0.0.6",
+      "publishedAt": "2026-08-05T18:47:49.077Z"
+    },
+    {
+      "version": "0.0.5",
+      "publishedAt": "2026-07-15T02:14:23.189Z"
+    },
+    {
+      "version": "0.0.4",
+      "publishedAt": "2026-07-15T01:56:13.974Z"
+    },
+    {
+      "version": "0.0.3",
+      "publishedAt": "2026-07-03T21:41:08.209Z"
+    },
+    {
+      "version": "0.0.2",
+      "publishedAt": "2026-06-24T05:08:42.430Z"
+    },
+    {
+      "version": "0.0.1",
+      "publishedAt": "2026-06-23T19:08:54.069Z"
+    }
+  ]
+}

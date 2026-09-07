@@ -23,11 +23,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REQUIRED = [
   'apps/web/src/content/hero-run.json',
   'apps/web/src/content/generated/drift.json',
+  'apps/web/src/content/generated/releases.json',
 ] as const;
 
 const REGENERATE: Record<string, string> = {
   'apps/web/src/content/hero-run.json': 'npx tsx scripts/gen-hero-run.ts',
   'apps/web/src/content/generated/drift.json': 'npm run content:drift',
+  'apps/web/src/content/generated/releases.json': 'npm run content:releases',
 };
 
 async function main(): Promise<void> {
