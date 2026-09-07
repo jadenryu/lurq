@@ -225,14 +225,23 @@ export const markFor = (host: string) => SOURCE_MARKS[host] ?? Dot;
  * GROUPED BY PROVIDER, not one hue per source. Three red marks on the ring are
  * the three npm endpoints and both violets are GitHub, so the colour carries
  * something instead of just being ten colours.
+ *
+ * EXPORTED NOW, because this is the site's only real palette and the figures
+ * were starving without it. components/site/figures.tsx draws every tool
+ * diagram, and its first version used --edge-lit and --ink-3 for structure with
+ * a verdict hue for the one mark that mattered: correct by the letter of the
+ * rules in capability-figures.tsx, and the result was eleven grey drawings that
+ * read as generated filler. These seven are already tuned to sit on --ground at
+ * matching weight, which is the hard part and is done. Reusing them beats
+ * picking a second set by eye.
  */
-const NPM = "oklch(0.68 0.19 20)"; /* crimson */
-const GITHUB = "oklch(0.71 0.16 295)"; /* violet */
-const DEPS = "oklch(0.71 0.16 248)"; /* blue */
-const SCORECARD = "oklch(0.75 0.15 158)"; /* teal-green */
-const OSV = "oklch(0.79 0.16 72)"; /* amber */
-const BUNDLE = "oklch(0.77 0.13 200)"; /* cyan */
-const JSDELIVR = "oklch(0.73 0.17 340)"; /* magenta */
+export const NPM = "oklch(0.68 0.19 20)"; /* crimson */
+export const GITHUB = "oklch(0.71 0.16 295)"; /* violet */
+export const DEPS = "oklch(0.71 0.16 248)"; /* blue */
+export const SCORECARD = "oklch(0.75 0.15 158)"; /* teal-green */
+export const OSV = "oklch(0.79 0.16 72)"; /* amber */
+export const BUNDLE = "oklch(0.77 0.13 200)"; /* cyan */
+export const JSDELIVR = "oklch(0.73 0.17 340)"; /* magenta */
 
 const TINTS: Record<string, string> = {
   "registry.npmjs.org": NPM,

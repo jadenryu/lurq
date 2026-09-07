@@ -23,6 +23,7 @@
  * STILL NO NUMBERS OR NAMES. Same rule, same reason: a labelled axis is a claim,
  * and a claim needs a provenance line the figure cannot carry.
  */
+import { FIGURES_V2 } from "@/components/site/figures";
 import {
   CONFLICT,
   FIGURES,
@@ -521,15 +522,21 @@ export function OutcomeFigure({ id, fit }: FigureProps) {
  * deliberately the same drawing.
  */
 export const DIAGRAMS = {
-  verify: VerifyFigure,
+  /* THREE ARE REBUILT, EIGHT ARE NOT, AND THIS MAP IS THE SEAM.
+     figures.tsx draws labelled technical drawings with real data and real
+     colour; everything still pointing at this file is the old unlabelled
+     geometry. The three below are the exemplars, deliberately the three whose
+     findings can be sourced. See the header of figures.tsx for why the old set
+     read as generated, and expect the rest of this map to migrate. */
+  verify: FIGURES_V2.verify,
   evaluate: FIGURES.health,
   compare: CompareFigure,
-  compat: FIGURES.pairs,
+  compat: FIGURES_V2.compat,
   engines: FIGURES.engines,
   usage: FIGURES.surface,
   diagram: FIGURES.stack,
   resolve: ResolveFigure,
-  diff: DiffFigure,
+  diff: FIGURES_V2.diff,
   capabilities: CapabilitiesFigure,
   outcome: OutcomeFigure,
 } as const;
