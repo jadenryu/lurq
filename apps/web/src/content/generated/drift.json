@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-06T11:44:32.769Z",
+  "generatedAt": "2026-09-07T13:38:11.308Z",
   "source": "lurq index: package_versions joined to packages",
   "reproduce": "npx tsx scripts/gen-drift.ts",
   "cutoffs": [
@@ -13,8 +13,8 @@
   "buckets": {
     "2026-05-01": {
       "totals": {
-        "drifted": 2589,
-        "tracked": 37867
+        "drifted": 2616,
+        "tracked": 38258
       },
       "rows": [
         {
@@ -101,8 +101,8 @@
     },
     "2026-02-16": {
       "totals": {
-        "drifted": 3339,
-        "tracked": 35409
+        "drifted": 3362,
+        "tracked": 35754
       },
       "rows": [
         {
@@ -189,8 +189,8 @@
     },
     "2026-01-01": {
       "totals": {
-        "drifted": 3654,
-        "tracked": 34147
+        "drifted": 3681,
+        "tracked": 34478
       },
       "rows": [
         {
@@ -277,8 +277,8 @@
     },
     "2025-12-01": {
       "totals": {
-        "drifted": 3764,
-        "tracked": 33375
+        "drifted": 3794,
+        "tracked": 33705
       },
       "rows": [
         {
@@ -365,8 +365,8 @@
     },
     "2025-08-01": {
       "totals": {
-        "drifted": 4235,
-        "tracked": 31221
+        "drifted": 4265,
+        "tracked": 31519
       },
       "rows": [
         {
@@ -453,8 +453,8 @@
     },
     "2025-01-01": {
       "totals": {
-        "drifted": 4933,
-        "tracked": 28957
+        "drifted": 4964,
+        "tracked": 29223
       },
       "rows": [
         {
