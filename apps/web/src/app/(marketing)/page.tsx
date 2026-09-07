@@ -2,7 +2,6 @@ import { SiteNav } from "@/components/site/nav";
 import { Hero } from "@/components/site/hero";
 import { IdeMarquee } from "@/components/site/ide-marquee";
 import { AgentSession } from "@/components/site/agent-session";
-import { HowItWorks } from "@/components/site/how-it-works";
 import { CapabilityGrid } from "@/components/site/capability-grid";
 import { ProductShowcase } from "@/components/site/product-showcase";
 import { ProvenanceOrbit } from "@/components/site/provenance-orbit";
@@ -15,8 +14,8 @@ import { Faq } from "@/components/site/faq";
 import { Contact } from "@/components/site/contact";
 
 /**
- * ORDER. Claim, compatibility, demonstration, mechanism, problem, surface,
- * schema, provenance, use cases, setup, price, questions, contact.
+ * ORDER. Claim, compatibility, demonstration, problem, surface, schema,
+ * provenance, use cases, setup, price, questions, contact.
  *
  * The page is read by three people and this sequence is the compromise between
  * them. A developer wants to see it work before being told anything, so the
@@ -34,7 +33,7 @@ import { Contact } from "@/components/site/contact";
  *   customers to show. Overruled: it looks right there, and it does answer the
  *   first question the hero raises, which is "does this work with what I use".
  *
- *   DriftBoard was sixth and is now fifth. It is the only section that argues
+ *   DriftBoard was sixth and is now fourth. It is the only section that argues
  *   the problem exists, and it does it with our own index rather than an
  *   assertion. Burying the evidence for the premise below four sections of
  *   solution is backwards.
@@ -43,14 +42,13 @@ import { Contact } from "@/components/site/contact";
  *   order is: here is what goes wrong, here is the call that catches it, here is
  *   everything it can answer, here is where all of that comes from.
  *
- * THREE SECTIONS ADDED IN THIS PASS.
+ * TWO SECTIONS ADDED IN THIS PASS.
  *
- *   HowItWorks, fourth. The page had no answer anywhere to the most load-bearing
- *   fact about the product: that the call happens in the gap BEFORE an install
- *   rather than after one. It was in the footer blurb and nowhere else, and a
- *   reader could finish the whole page believing this was a linter. It sits
- *   directly under the session because the session has just shown a call landing
- *   and the obvious next question is where that call sits in time.
+ *   A third, HowItWorks, was added and then removed at request. It was a
+ *   three-panel diagram of where the call sits in time, and it was measured
+ *   causing a 0.82 cumulative layout shift on its own (good is under 0.1). The
+ *   claim it carried has not been lost: the agent session above demonstrates the
+ *   same thing by showing a call land before an install.
  *
  *   ProductShowcase, seventh, immediately after the grid. The grid names five
  *   questions; this names all ten tools and prints the request body for each.
@@ -86,9 +84,6 @@ export default function Home() {
             the fastest way to make a claim credible is to show the thing
             doing it. */}
         <AgentSession />
-        {/* The session showed a call. This says where in time that call sits,
-            which is the one thing the page never stated. */}
-        <HowItWorks />
         {/* The session caught one conflict in one stack. This is the same
             failure at index scale, measured against published training cutoffs,
             and it is the section that proves the premise rather than restating

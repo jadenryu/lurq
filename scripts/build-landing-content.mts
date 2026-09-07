@@ -138,6 +138,62 @@ const [counts] = (await sql`
     (select count(*) from compat_edges)                                    as compat_edges,
     (select max(data_as_of) from packages)                                 as data_as_of`) as Row[];
 
+/*
+ * Stack resolutions, in a query of their own and allowed to fail.
+ *
+ * `stack_resolutions` supersedes `compat_edges` as the compatibility mechanism.
+ * See the table's comment in src/db/schema.ts: npm resolves SETS, not pairs, and
+ * three packages can be compatible in every pair and still fail together, so a
+ * pairwise count was measuring a mechanism the product no longer uses.
+ *
+ * SEPARATE, AND IN A TRY. The obvious version puts two more subselects in the
+ * counts query above, and it takes the whole generator down with a 42P01 in any
+ * environment where the migration has not been applied yet — which is every
+ * developer's local database until it is. Postgres resolves table names at parse
+ * time, so `case when to_regclass(…) is null` does not help: the statement fails
+ * before the CASE is ever evaluated. A separate statement is the only thing that
+ * can be caught.
+ *
+ * A null here is "not measured", not "zero", and the landing page treats it that
+ * way: it keeps rendering the old figure under its old label rather than
+ * printing 0 stacks against a table that simply is not there.
+ *
+ * compat_edges is still counted and still emitted. It is a real number about a
+ * real table, and a build that silently dropped it from the data would be
+ * deleting history to make a point. What changes is which one the page renders.
+ */
+let stacks: { total: number | null; held: number | null } = { total: null, held: null };
+try {
+  const [row] = (await sql`
+    select count(*) as total,
+           count(*) filter (where resolved) as held
+    from stack_resolutions`) as Row[];
+  stacks = { total: n(row?.total), held: n(row?.held) };
+} catch (err) {
+  console.warn(
+    `  stack_resolutions not readable (${
+      err instanceof Error ? err.message.split('\n')[0] : String(err)
+    }) — emitting null. Run the migration, then re-run this script.`,
+  );
+}
+
+/*
+ * `stack_resolutions` supersedes `compat_edges`, so the landing page's
+ * compatibility figure has to move with it. See the table's own comment in
+ * src/db/schema.ts: npm resolves SETS, not pairs, and three packages can be
+ * compatible in every pair and still fail together. A pairwise count was
+ * therefore measuring a mechanism the product no longer uses.
+ *
+ * compat_edges is still counted and still emitted. It is a real number about a
+ * real table and dropping it from the data would make this build the one that
+ * silently deleted history. What changed is which of the two the page renders.
+ *
+ * The count is deliberately of ALL rows, with the resolved subset alongside it.
+ * A stack that npm refused to resolve is still a stack this index has an answer
+ * for, and counting only the successes would report the catalogue as if every
+ * set in it were compatible.
+ */
+
 const [lastSync] = (await sql`
   select started_at, finished_at, packages_seen, packages_updated, status
   from sync_runs where finished_at is not null
@@ -178,6 +234,8 @@ await write('stats.json', {
   versionsTracked: n(counts?.versions),
   apiSurfaces: n(counts?.api_surfaces),
   coOccurrencePairs: n(counts?.compat_edges),
+  stacksResolved: stacks.total,
+  stacksHeld: stacks.held,
   dataSources: SOURCES.length,
   npm: {
     package: NPM_PACKAGE,
@@ -206,6 +264,8 @@ await write('provenance.json', {
   dataAsOf: iso(counts?.data_as_of),
   versionsTracked: n(counts?.versions),
   coOccurrencePairs: n(counts?.compat_edges),
+  stacksResolved: stacks.total,
+  stacksHeld: stacks.held,
   apiSurfaces: n(counts?.api_surfaces),
   syncDays: n(syncCadence?.days),
   firstSyncAt: iso(syncCadence?.first_run),

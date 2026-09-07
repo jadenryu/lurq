@@ -98,22 +98,37 @@ const READ_ON = new Date(stats.dataAsOf).toLocaleDateString("en-GB", {
   timeZone: "UTC",
 });
 
+/**
+ * The compatibility figure, which is mid-pivot.
+ *
+ * `stack_resolutions` supersedes `compat_edges`: npm resolves SETS, not pairs,
+ * and three packages can be compatible in every pair and still fail together
+ * (see the table's comment in src/db/schema.ts). So "version pairs graded" was
+ * reporting the size of a mechanism the product has moved off.
+ *
+ * It is READ DEFENSIVELY because the generator cannot always produce it. The
+ * table is in schema.ts but is not migrated everywhere yet, and
+ * build-landing-content.mts emits null rather than failing the whole run when
+ * the relation is missing. `stacksResolved` is therefore absent from
+ * generated/provenance.json until someone runs the generator against a database
+ * that has the table.
+ *
+ * THE OLD FIGURE IS NOT KEPT AS A FALLBACK. That was the first version of this
+ * and it is the wrong call: a stale metric that looks current is worse than a
+ * missing one, and the whole argument of this section is that our numbers are
+ * checkable. The row simply carries one fewer figure until the real one exists,
+ * and gains it back automatically when it does. Nothing here will ever print a
+ * pairwise count under a stacks label.
+ */
+const stacksResolved: number | null =
+  (provenance as { stacksResolved?: number | null }).stacksResolved ?? null;
+
 export const PROVENANCE_STATS = [
   { value: stats.packages.toLocaleString("en-US"), label: "packages indexed" },
   { value: String(SOURCES.length), label: "sources" },
   { value: provenance.versionsTracked.toLocaleString("en-US"), label: "versions tracked" },
-  /**
-   * "co-install pairs" was wrong twice over and this section cannot afford it.
-   *
-   * The figure is `select count(*) from compat_edges`, unfiltered. The unique
-   * index is (package_a, version_a, package_b, version_b), so a row is a pair of
-   * *versions*, not a pair of packages. And `status` is not filtered, so pairs
-   * recorded as conflicts, which by definition do not co-install, were being
-   * counted as ones that do. The generator's own witness query adds
-   * `and status = 'compatible'` for exactly that reason.
-   *
-   * "graded" is what every row genuinely has in common: it has a verdict.
-   */
-  { value: provenance.coOccurrencePairs.toLocaleString("en-US"), label: "version pairs graded" },
+  ...(stacksResolved === null
+    ? []
+    : [{ value: stacksResolved.toLocaleString("en-US"), label: "stacks resolved" }]),
   { value: READ_ON, label: "last read" },
 ] as const;

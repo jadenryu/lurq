@@ -58,7 +58,11 @@ export const FIGURES = [
   { value: fmt(stats.packages), label: "packages scored", note: "Every one has a full evidence read behind it." },
   { value: fmt(stats.versionsTracked), label: "versions tracked", note: "Not just latest: the history is what makes a diff possible." },
   { value: fmt(stats.apiSurfaces), label: "API surfaces extracted", note: "Symbol tables read from shipped files." },
-  { value: fmt(stats.coOccurrencePairs), label: "co-install pairs", note: "Observed combinations behind a compatibility verdict." },
+  // The pairwise figure that used to sit here is gone with the pivot to
+  // stack_resolutions. See the long note in content/provenance.ts: a count of
+  // compat_edges measures a mechanism the product has moved off, and this page
+  // in particular cannot afford a metric that looks current and is not. It
+  // returns as "stacks resolved" the moment the generator can produce it.
   { value: String(stats.categories), label: "categories", note: "How a package is placed into a stack layer." },
   { value: String(stats.dataSources), label: "upstream sources", note: "All ten named below." },
 ];

@@ -2149,6 +2149,17 @@ li:hover > .room-ide-label {
 /* Spacing as explicit margins rather than a flex `gap`, so Sign in takes its own
    spacing with it when it collapses. Under `gap` the row would keep a 28px hole
    where a zero-width item used to be. */
+/* The centre group: the four section links.
+
+   `gap`, unlike .room-nav-links below, because nothing in here collapses. That
+   rule uses margins specifically so Sign in can take its own spacing with it
+   when the pill condenses, and copying the workaround into a group that has no
+   collapsing child would be cargo cult. */
+.room-nav-center {
+  align-items: center;
+  gap: 28px;
+}
+
 .room-nav-links {
   display: flex;
   align-items: center;
@@ -2423,224 +2434,10 @@ li:hover > .room-ide-label {
      branch in pair-plate.tsx, which sets --plate-w and never starts the rAF. */
 }
 
-/* ── Mega menu ───────────────────────────────────────────────────────────────
-   The nav grew three panels. Everything below is the chrome for them; which
-   panel is open is Base UI's problem, and components/site/nav.tsx only names
-   the destinations.
-
-   WHY BASE UI AND NOT A DIV. The bar had two links and a button when it was
-   built. A hover-opened panel is a different component: it owns focus order,
-   the escape key, the pointer-safe triangle between a trigger and the panel
-   under it, aria-expanded on the right element, and the rule that hovering a
-   second trigger swaps the panel rather than opening a second one. Every one of
-   those is a bug we would have shipped. @base-ui/react was already a dependency
-   and already ships navigation-menu, so this cost nothing but the styling.
-
-   THE PANEL MORPHS, IT DOES NOT CROSS-FADE. Popup carries --popup-width and
-   --popup-height, set from whichever Content is current, so moving from Product
-   (three columns and a rail) to Resources (three narrow columns) animates the
-   box between the two sizes while the old content slides out and the new one
-   slides in from the side it was activated from. A cross-fade between two boxes
-   of different sizes reads as a flicker; this reads as one object changing
-   shape, which is the only reason to build a mega menu rather than a dropdown.
-   ─────────────────────────────────────────────────────────────────────────── */
-
-.room-menu-list {
-  display: flex;
-  align-items: center;
-}
-
-/* The trigger has to be indistinguishable from the plain links beside it at
-   rest. A menu that advertises itself with a box or a fill turns the bar into a
-   toolbar. The only thing it adds is the caret, and the caret is 9px. */
-.room-menu-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--ink-2);
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1;
-  cursor: default;
-  transition: color var(--dur-hover) var(--ease-ui);
-}
-
-.room-menu-trigger:hover,
-.room-menu-trigger[data-popup-open] {
-  color: var(--ink);
-}
-
-.room-menu-trigger:focus-visible {
-  outline: 2px solid var(--mark);
-  outline-offset: 4px;
-  border-radius: 3px;
-}
-
-.room-menu-icon {
-  display: inline-flex;
-  transition: transform var(--dur) var(--ease-ui);
-}
-
-.room-menu-trigger[data-popup-open] .room-menu-icon {
-  transform: rotate(180deg);
-}
-
-/* Above the bar's z-50. The panel is portalled, so it is not inside the bar's
-   stacking context and cannot inherit its way there. */
-.room-menu-positioner {
-  z-index: 60;
-  /* Base UI sets these from the active content, and the positioner has to spend
-     them or it collapses to the trigger's width and the popup overflows a box
-     that is 90px wide. --transform-origin is set here too and inherits down to
-     the popup, which is what makes the panel scale up out of the trigger it was
-     opened from rather than out of its own centre. */
-  width: var(--positioner-width);
-  height: var(--positioner-height);
-  max-width: var(--available-width);
-  transition-property: top, left, right, bottom;
-  transition-duration: var(--dur);
-  transition-timing-function: var(--ease-ui);
-}
-
-/* The first open has no previous position to travel from, and Base UI says so
-   with data-instant. Without this the panel flies in from wherever the last one
-   happened to be, or from 0,0 on the very first open. */
-.room-menu-positioner[data-instant] {
-  transition: none;
-}
-
-/* A raised panel, by the room's rule: opaque fill, one lit top edge, depth from
-   a cast shadow. Nothing here filters what is behind it. */
-.room-menu-popup {
-  width: var(--popup-width);
-  height: var(--popup-height);
-  overflow: hidden;
-  border: 1px solid var(--edge);
-  border-top-color: var(--edge-lit);
-  border-radius: 14px;
-  background-color: var(--surface);
-  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.85);
-  transform-origin: var(--transform-origin);
-  transition-property: width, height, opacity, transform;
-  transition-duration: var(--dur);
-  transition-timing-function: var(--ease-ui);
-}
-
-.room-menu-popup[data-starting-style],
-.room-menu-popup[data-ending-style] {
-  opacity: 0;
-  transform: scale(0.97) translateY(-6px);
-}
-
-/* Clips the two contents while one is leaving and the other arriving. Sized by
-   the popup, which is sized by the active content: the loop closes here. */
-.room-menu-viewport {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* Absolute, so an outgoing panel does not push an incoming one down the page
-   for the length of the transition. */
-.room-menu-content {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  padding: 20px;
-  transition-property: opacity, transform;
-  transition-duration: var(--dur);
-  transition-timing-function: var(--ease-ui);
-}
-
-/* Direction is the whole trick. A panel entering because you moved right should
-   arrive from the right, and the one it replaced should leave to the left, so
-   the row of triggers and the panel under it agree about which way you went.
-   Base UI reports it; these four rules spend it. */
-.room-menu-content[data-starting-style][data-activation-direction="left"],
-.room-menu-content[data-ending-style][data-activation-direction="right"] {
-  opacity: 0;
-  transform: translateX(-32px);
-}
-
-.room-menu-content[data-starting-style][data-activation-direction="right"],
-.room-menu-content[data-ending-style][data-activation-direction="left"] {
-  opacity: 0;
-  transform: translateX(32px);
-}
-
-/* Opening from nothing, or closing to nothing: no direction, so no slide. */
-.room-menu-content[data-starting-style],
-.room-menu-content[data-ending-style] {
-  opacity: 0;
-}
-
-/* A menu row. The hover fill is --surface-2, the same step every other raised
-   inset row on the site uses, rather than a tint of --mark: highlighting a
-   destination is not an interaction verdict. */
-.room-menu-row {
-  display: block;
-  border-radius: 8px;
-  padding: 8px 10px;
-  text-decoration: none;
-  transition:
-    background-color var(--dur-hover) var(--ease-ui),
-    color var(--dur-hover) var(--ease-ui);
-}
-
-.room-menu-row:hover {
-  background-color: var(--surface-2);
-}
-
-.room-menu-row:focus-visible {
-  outline: 2px solid var(--mark);
-  outline-offset: 2px;
-}
-
-/* The arrow only exists on hover, and only moves 2px. A row that slides its
-   whole label on hover is a row that reflows under the cursor. */
-.room-menu-row-arrow {
-  display: inline-block;
-  opacity: 0;
-  transform: translateX(-2px);
-  transition:
-    opacity var(--dur-hover) var(--ease-ui),
-    transform var(--dur-hover) var(--ease-ui);
-}
-
-.room-menu-row:hover .room-menu-row-arrow {
-  opacity: 0.6;
-  transform: translateX(0);
-}
-
-/* The promoted rail on the right of a panel. Inset rather than raised: it is
-   part of the panel, not a card floating on it. */
-.room-menu-feature {
-  display: flex;
-  flex-direction: column;
-  border-radius: 10px;
-  border: 1px solid var(--edge);
-  background-color: var(--surface-2);
-  padding: 16px;
-  text-decoration: none;
-  transition: border-color var(--dur-hover) var(--ease-ui);
-}
-
-.room-menu-feature:hover {
-  border-color: var(--edge-lit);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .room-menu-positioner,
-  .room-menu-popup,
-  .room-menu-content,
-  .room-menu-icon {
-    transition-duration: 1ms;
-  }
-}
+/* The mega-menu block that used to sit here is gone with the component. See the
+   header of components/site/nav.tsx for why: the panels never rendered, and they
+   were the wrong component for a nav with four destinations. .room-sheet-* below
+   is kept and still in use. */
 
 /* ── Mobile nav ──────────────────────────────────────────────────────────────
    Below 900px the panels are gone and the whole IA is one scrolling sheet.
@@ -2716,106 +2513,6 @@ li:hover > .room-ide-label {
   .room-sheet,
   .room-sheet-backdrop {
     transition-duration: 1ms;
-  }
-}
-
-/* ── The mechanism diagram ───────────────────────────────────────────────────
-   Three stage panels with a wire layer behind them, and a plinth underneath.
-
-   HTML FOR THE WORDS, SVG FOR THE WIRES. The stages could have been one big
-   drawing and the first pass was: 1200x520, every label as a <text>. It broke
-   in the three ways a text-in-SVG diagram always breaks. The type does not
-   inherit the page's scale so it drifts from every other heading by a few
-   percent; it cannot wrap, so the same figure is unreadable at 375px and
-   sparse at 1440; and a screen reader gets a picture with a caption instead of
-   three headings and three paragraphs. Splitting them means the wires scale and
-   the words reflow, which is what each of the two is good at.
-
-   The wire layer is `position: absolute; inset: 0` under the grid and is purely
-   decorative, so it is aria-hidden and nothing in it carries meaning that is
-   not also written in the panels above it.
-   ─────────────────────────────────────────────────────────────────────────── */
-
-.room-flow {
-  position: relative;
-}
-
-/* Panels sit above the wires, and the wires run behind their edges rather than
-   stopping at them, so the line reads as passing through the stage instead of
-   being interrupted by it. */
-.room-flow-stage {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--edge);
-  border-top-color: var(--edge-lit);
-  border-radius: 12px;
-  background-color: var(--surface);
-  padding: 20px;
-  box-shadow: 0 20px 48px -32px rgba(0, 0, 0, 0.8);
-}
-
-/* The middle stage is the product. It is the only panel that is lit, and the
-   lift is one border step plus a rim rather than an accent fill: a coloured
-   card in a row of grey ones reads as a pricing table's "most popular" badge,
-   which is a sales device and this is a diagram. */
-.room-flow-stage[data-primary="true"] {
-  border-color: var(--edge-lit);
-  background-color: var(--surface-2);
-}
-
-.room-flow-stage[data-primary="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background-image: linear-gradient(140deg, var(--bloom-from), var(--bloom-to));
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0.34;
-  pointer-events: none;
-}
-
-/* The pulse only runs once the section has been reached, and then keeps
-   running. A looping animation on a panel that is 2,000px below the fold is a
-   compositor layer held for the whole session for something nobody has seen. */
-.room-flow[data-playing="true"] .room-wire-pulse {
-  animation-play-state: running;
-}
-
-.room-flow .room-wire-pulse {
-  animation-play-state: paused;
-}
-
-/* Slower than the nav's 2.6s. This wire is 900 units long against that one's
-   320, and at the same duration the dash crosses the whole diagram in a blink
-   and reads as a flicker rather than as a request travelling. */
-.room-flow .room-wire-pulse {
-  stroke-dasharray: 40 900;
-  animation-duration: 3.4s;
-}
-
-/* The plinth. Inset, not raised: the index is what the three stages stand on,
-   and a second raised panel under a row of raised panels is two floors. */
-.room-flow-plinth {
-  border: 1px solid var(--edge);
-  border-radius: 12px;
-  background-color: color-mix(in oklab, var(--surface) 60%, var(--ground));
-}
-
-@media (prefers-reduced-motion: reduce), (scripting: none) {
-  .room-flow .room-wire-pulse {
-    animation: none;
-    opacity: 0.5;
-    stroke-dasharray: none;
   }
 }
 
@@ -2929,33 +2626,6 @@ li:hover > .room-ide-label {
 @media (prefers-reduced-motion: reduce) {
   .room-tool-indicator {
     transition-duration: 1ms;
-  }
-}
-
-/* The stage panels reveal on scroll rather than on load, on the same mechanism
-   the capability bento uses: opacity 0 with the animation paused, and
-   data-playing from one IntersectionObserver starts it. This section is
-   ~2,500px down the page, so a load-time reveal would have finished long before
-   anyone reached it, which is a reveal nobody sees.
-
-   `both` fill, and the (scripting: none) escape hatch below, are both copied
-   from that block deliberately: nothing sets data-playing without script, and a
-   diagram stuck on its first frame is four empty boxes. */
-.room-flow [data-card] {
-  opacity: 0;
-  animation: room-reveal-panel var(--dur-reveal) var(--ease-reveal)
-    calc(var(--reveal-at, 0ms) * var(--reveal-scale)) both;
-  animation-play-state: paused;
-}
-
-.room-flow[data-playing="true"] [data-card] {
-  animation-play-state: running;
-}
-
-@media (scripting: none) {
-  .room-flow [data-card] {
-    animation: none;
-    opacity: 1;
   }
 }
 
