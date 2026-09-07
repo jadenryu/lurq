@@ -26,25 +26,29 @@
  * weights stay honest at every span.
  */
 
-const STRUCT = "var(--edge-lit)";
+export const STRUCT = "var(--edge-lit)";
 /* The graph paper only, one step below STRUCT. The dots used to be drawn in
    --edge-lit like the structure they sit under, which put the background at the
    same value as the foreground and left the orange and the green competing with
    a lit grid instead of reading against a dark one. */
-const PAPER = "var(--edge)";
-const INK = "var(--ink)";
-const MARK = "var(--ink-3)";
-const HELD = "var(--held)";
-const CONFLICT = "var(--conflict)";
+export const PAPER = "var(--edge)";
+export const INK = "var(--ink)";
+export const MARK = "var(--ink-3)";
+export const HELD = "var(--held)";
+export const CONFLICT = "var(--conflict)";
 
-type FigureProps = { id: string };
+export type FigureProps = {
+  id: string;
+  /** Passed straight through to Frame. See the note on its `fit` prop. */
+  fit?: "slice" | "meet";
+};
 
 /**
  * Trig results differ in the last digit between the Node render and the browser
  * one, and React serialises the raw float into the attribute, so anything
  * derived from Math.cos/sin has to be rounded or it is a hydration mismatch.
  */
-const round2 = (n: number): number => Math.round(n * 100) / 100;
+export const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * Depth, and no hue at all.
@@ -60,7 +64,7 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
  * being a flat rectangle. Every hue on this card now belongs to a verdict.
  * `at` moves the light per card so the five are not one repeated texture.
  */
-function Wash({ id, at }: { id: string; at: [number, number] }) {
+export function Wash({ id, at }: { id: string; at: [number, number] }) {
   return (
     <>
       <defs>
@@ -83,7 +87,7 @@ function Wash({ id, at }: { id: string; at: [number, number] }) {
  * Every coordinate in every figure below is a multiple of 2 against this pitch,
  * so marks land on or between dots rather than at arbitrary offsets.
  */
-function Paper({ id }: { id: string }) {
+export function Paper({ id }: { id: string }) {
   return (
     <>
       <defs>
@@ -104,13 +108,26 @@ function Paper({ id }: { id: string }) {
  * covers the bottom two, so what a reader actually saw was one bracket top-left
  * and a clipped something top-right: stray punctuation, not a crop frame.
  */
-function Frame({ id, children }: { id: string; children: React.ReactNode }) {
+export function Frame({
+  id,
+  children,
+  /**
+   * `slice` is the bento tile: the figure is the card's picture and is meant to
+   * be cropped by it. `meet` is the tool page, where the same drawing is the
+   * whole panel and cropping it would cut off the half that carries the point.
+   */
+  fit = "slice",
+}: {
+  id: string;
+  children: React.ReactNode;
+  fit?: "slice" | "meet";
+}) {
   return (
     <svg
       aria-hidden
       viewBox="0 0 480 340"
       fill="none"
-      preserveAspectRatio="xMidYMid slice"
+      preserveAspectRatio={`xMidYMid ${fit}`}
       className="absolute inset-0 h-full w-full"
     >
       <Paper id={id} />
@@ -137,10 +154,10 @@ function Frame({ id, children }: { id: string; children: React.ReactNode }) {
  *
  * Both numbers move if the figure height in capability-grid.tsx does.
  */
-export function HealthFigure({ id }: FigureProps) {
+export function HealthFigure({ id, fit }: FigureProps) {
   const rows = [0.86, 0.62, 0.94, 0.46, 0.78, 0.58];
   return (
-    <Frame id={id}>
+    <Frame id={id} fit={fit}>
       <Wash id={id} at={[0.74, 0.24]} />
       {/* The stack runs 92..240 too, so the two halves of the card share a top
           and a bottom instead of each finding their own. */}
@@ -205,7 +222,7 @@ export function HealthFigure({ id }: FigureProps) {
  * the band caps the height at 176, so square cells left two thirds of the widest
  * tile on the page empty. Stretching x is the compromise that keeps six rows.
  */
-export function PairsFigure({ id }: FigureProps) {
+export function PairsFigure({ id, fit }: FigureProps) {
   const n = 7;
   const pitchX = 46;
   const pitchY = 28;
@@ -217,7 +234,7 @@ export function PairsFigure({ id }: FigureProps) {
     for (let c = 0; c < r; c++) cells.push({ r, c, bad: conflicts.has(`${r}-${c}`) });
   }
   return (
-    <Frame id={id}>
+    <Frame id={id} fit={fit}>
       <Wash id={id} at={[0.24, 0.2]} />
       {/* x is off-centre by design. Centring the whole triangle put its visible
           mass (the top four rows, the only ones above the scrim) well left of
@@ -256,7 +273,7 @@ export function PairsFigure({ id }: FigureProps) {
 }
 
 /** Vertical column ranges against one horizontal runtime. */
-export function EnginesFigure({ id }: FigureProps) {
+export function EnginesFigure({ id, fit }: FigureProps) {
   // [top, bottom] of each package's supported span, in figure coordinates.
   const cols: [number, number][] = [
     [70, 250],
@@ -269,7 +286,7 @@ export function EnginesFigure({ id }: FigureProps) {
   ];
   const runtime = 118;
   return (
-    <Frame id={id}>
+    <Frame id={id} fit={fit}>
       <Wash id={id} at={[0.82, 0.7]} />
       {[70, 120, 170, 220, 270].map((y) => (
         <line key={y} x1="40" y1={y} x2="440" y2={y} stroke={STRUCT} strokeWidth="1" opacity="0.28" />
@@ -315,7 +332,7 @@ export function EnginesFigure({ id }: FigureProps) {
  * ragged right edge read as the drawing having been cropped rather than as the
  * signatures being different lengths.
  */
-export function SurfaceFigure({ id }: FigureProps) {
+export function SurfaceFigure({ id, fit }: FigureProps) {
   // [depth, width, state], state 0 unchanged, 1 added, -1 gone.
   const rows: [number, number, number][] = [
     [0, 230, 0],
@@ -333,7 +350,7 @@ export function SurfaceFigure({ id }: FigureProps) {
   const y0 = 40;
   const dy = 32;
   return (
-    <Frame id={id}>
+    <Frame id={id} fit={fit}>
       <Wash id={id} at={[0.5, 0.16]} />
       {rows.map(([depth, w, state], i) => {
         const x = x0 + depth * step;
@@ -386,10 +403,10 @@ export function SurfaceFigure({ id }: FigureProps) {
 }
 
 /** Stacked slabs: one stack, chosen against itself. */
-export function StackFigure({ id }: FigureProps) {
+export function StackFigure({ id, fit }: FigureProps) {
   const slabs = [0, 1, 2, 3, 4];
   return (
-    <Frame id={id}>
+    <Frame id={id} fit={fit}>
       <Wash id={id} at={[0.2, 0.78]} />
       {slabs.map((i) => {
         const x = 84 + i * 24;
