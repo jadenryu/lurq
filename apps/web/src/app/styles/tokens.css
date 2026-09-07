@@ -2718,3 +2718,216 @@ li:hover > .room-ide-label {
     transition-duration: 1ms;
   }
 }
+
+/* ── The mechanism diagram ───────────────────────────────────────────────────
+   Three stage panels with a wire layer behind them, and a plinth underneath.
+
+   HTML FOR THE WORDS, SVG FOR THE WIRES. The stages could have been one big
+   drawing and the first pass was: 1200x520, every label as a <text>. It broke
+   in the three ways a text-in-SVG diagram always breaks. The type does not
+   inherit the page's scale so it drifts from every other heading by a few
+   percent; it cannot wrap, so the same figure is unreadable at 375px and
+   sparse at 1440; and a screen reader gets a picture with a caption instead of
+   three headings and three paragraphs. Splitting them means the wires scale and
+   the words reflow, which is what each of the two is good at.
+
+   The wire layer is `position: absolute; inset: 0` under the grid and is purely
+   decorative, so it is aria-hidden and nothing in it carries meaning that is
+   not also written in the panels above it.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.room-flow {
+  position: relative;
+}
+
+/* Panels sit above the wires, and the wires run behind their edges rather than
+   stopping at them, so the line reads as passing through the stage instead of
+   being interrupted by it. */
+.room-flow-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--edge);
+  border-top-color: var(--edge-lit);
+  border-radius: 12px;
+  background-color: var(--surface);
+  padding: 20px;
+  box-shadow: 0 20px 48px -32px rgba(0, 0, 0, 0.8);
+}
+
+/* The middle stage is the product. It is the only panel that is lit, and the
+   lift is one border step plus a rim rather than an accent fill: a coloured
+   card in a row of grey ones reads as a pricing table's "most popular" badge,
+   which is a sales device and this is a diagram. */
+.room-flow-stage[data-primary="true"] {
+  border-color: var(--edge-lit);
+  background-color: var(--surface-2);
+}
+
+.room-flow-stage[data-primary="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background-image: linear-gradient(140deg, var(--bloom-from), var(--bloom-to));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+/* The pulse only runs once the section has been reached, and then keeps
+   running. A looping animation on a panel that is 2,000px below the fold is a
+   compositor layer held for the whole session for something nobody has seen. */
+.room-flow[data-playing="true"] .room-wire-pulse {
+  animation-play-state: running;
+}
+
+.room-flow .room-wire-pulse {
+  animation-play-state: paused;
+}
+
+/* Slower than the nav's 2.6s. This wire is 900 units long against that one's
+   320, and at the same duration the dash crosses the whole diagram in a blink
+   and reads as a flicker rather than as a request travelling. */
+.room-flow .room-wire-pulse {
+  stroke-dasharray: 40 900;
+  animation-duration: 3.4s;
+}
+
+/* The plinth. Inset, not raised: the index is what the three stages stand on,
+   and a second raised panel under a row of raised panels is two floors. */
+.room-flow-plinth {
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background-color: color-mix(in oklab, var(--surface) 60%, var(--ground));
+}
+
+@media (prefers-reduced-motion: reduce), (scripting: none) {
+  .room-flow .room-wire-pulse {
+    animation: none;
+    opacity: 0.5;
+    stroke-dasharray: none;
+  }
+}
+
+/* ── Tool showcase ───────────────────────────────────────────────────────────
+   Ten chips and one panel that swaps under them.
+
+   WHY CHIPS AND NOT THE RAIL. surface-switch already owns the vertical-rail
+   silhouette on this page, and two sections running the same layout back to
+   back read as one section that scrolled badly. Ten items also do not fit a
+   rail without a scroll: a rail with its own scrollbar is a listbox pretending
+   to be navigation.
+
+   The indicator is a sliding box behind the active chip rather than a border
+   under it. An underline needs a baseline to sit on and these chips wrap onto a
+   second row at 720px, at which point an underline is drawing under one row
+   while the active chip is on the other.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.room-tool-list {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.room-tool-tab {
+  position: relative;
+  z-index: 1;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  padding: 6px 13px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: default;
+  transition:
+    color var(--dur-hover) var(--ease-ui),
+    border-color var(--dur-hover) var(--ease-ui);
+}
+
+.room-tool-tab:hover {
+  border-color: var(--edge-lit);
+  color: var(--ink);
+}
+
+.room-tool-tab[data-selected] {
+  border-color: transparent;
+  color: var(--ground);
+}
+
+.room-tool-tab:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+}
+
+/* Base UI hands the indicator the active tab's box in these four variables, so
+   the slide is a transform on one element rather than a class on eleven. */
+.room-tool-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: var(--active-tab-width);
+  height: var(--active-tab-height);
+  border-radius: 999px;
+  background-color: var(--ink);
+  transform: translate(var(--active-tab-left), var(--active-tab-top));
+  transition:
+    transform var(--dur) var(--ease-ui),
+    width var(--dur) var(--ease-ui),
+    height var(--dur) var(--ease-ui);
+}
+
+/* The first paint has no previous position, so without this the pill flies in
+   from the top-left corner of the list on load. */
+.room-tool-indicator[data-instant] {
+  transition: none;
+}
+
+.room-tool-panel[data-selected] {
+  animation: room-reveal-opacity var(--dur) var(--ease-ui);
+}
+
+/* The code column. A pre inside a panel, with the panel's own header bar, so it
+   reads as an artifact rather than as a styled blockquote. */
+.room-code {
+  overflow-x: auto;
+  border-radius: 0 0 9px 9px;
+  background-color: var(--ground);
+  padding: 14px 16px;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+
+.room-code-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--edge);
+  background-color: var(--surface-2);
+  border-radius: 9px 9px 0 0;
+  padding: 8px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-tool-indicator {
+    transition-duration: 1ms;
+  }
+}
