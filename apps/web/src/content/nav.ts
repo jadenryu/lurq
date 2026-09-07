@@ -184,7 +184,7 @@ export const SOLUTIONS_MENU: NavMenu = {
     eyebrow: "Start here",
     title: "One command, then it is in every assistant you have",
     body: "Setup finds the clients already installed and writes a keyed MCP entry and a skill file for each of them.",
-    href: "/#install",
+    href: "/#use",
     cta: "See the setup",
   },
 };
