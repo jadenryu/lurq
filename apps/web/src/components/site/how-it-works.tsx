@@ -107,7 +107,7 @@ export function HowItWorks() {
               <article
                 key={stage.index}
                 data-primary={i === 1 ? "true" : undefined}
-                data-reveal="panel"
+                data-card
                 style={{ ["--reveal-at" as string]: `${120 + i * 110}ms` }}
                 className="room-flow-stage"
               >
@@ -130,7 +130,7 @@ export function HowItWorks() {
               curves above it read as going somewhere rather than as decoration
               that happens to bend. */}
           <div
-            data-reveal="panel"
+            data-card
             style={{ ["--reveal-at" as string]: "460ms" }}
             className="room-flow-plinth mt-5 px-5 py-5 min-[900px]:mt-8 min-[900px]:px-7 min-[900px]:py-6"
           >

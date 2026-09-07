@@ -145,7 +145,7 @@ export default async function ToolPage({ params }: { params: Promise<{ tool: str
                 request
               </span>
             </div>
-            <pre className="room-code">{tool.call}</pre>
+            <pre className="room-code" tabIndex={0}>{tool.call}</pre>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-edge border-t-edge-lit">
@@ -155,7 +155,7 @@ export default async function ToolPage({ params }: { params: Promise<{ tool: str
                 shape, not an answer
               </span>
             </div>
-            <pre className="room-code">{tool.shape}</pre>
+            <pre className="room-code" tabIndex={0}>{tool.shape}</pre>
           </div>
         </div>
 

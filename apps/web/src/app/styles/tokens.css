@@ -2931,3 +2931,41 @@ li:hover > .room-ide-label {
     transition-duration: 1ms;
   }
 }
+
+/* The stage panels reveal on scroll rather than on load, on the same mechanism
+   the capability bento uses: opacity 0 with the animation paused, and
+   data-playing from one IntersectionObserver starts it. This section is
+   ~2,500px down the page, so a load-time reveal would have finished long before
+   anyone reached it, which is a reveal nobody sees.
+
+   `both` fill, and the (scripting: none) escape hatch below, are both copied
+   from that block deliberately: nothing sets data-playing without script, and a
+   diagram stuck on its first frame is four empty boxes. */
+.room-flow [data-card] {
+  opacity: 0;
+  animation: room-reveal-panel var(--dur-reveal) var(--ease-reveal)
+    calc(var(--reveal-at, 0ms) * var(--reveal-scale)) both;
+  animation-play-state: paused;
+}
+
+.room-flow[data-playing="true"] [data-card] {
+  animation-play-state: running;
+}
+
+@media (scripting: none) {
+  .room-flow [data-card] {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* A scrollable region has to be reachable from the keyboard (WCAG 2.1.1): the
+   code panels scroll sideways on a narrow viewport, and without a tabindex the
+   only way to read the right-hand end of a line is a pointer. The components
+   carry tabIndex={0}; this is the focus ring that has to come with it, because a
+   focusable element with no visible focus state is a worse bug than the one
+   being fixed. */
+.room-code:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: -2px;
+}

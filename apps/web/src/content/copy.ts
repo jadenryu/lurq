@@ -23,6 +23,7 @@
  * turn mechanical by the third repeat.
  */
 import stats from "@/content/generated/stats.json";
+import releases from "@/content/generated/releases.json";
 
 export const INSTALL_COMMAND = "npx lurqrun";
 
@@ -50,7 +51,22 @@ export const STATUS_OK_LABEL = "api.lurq.run responding";
 
 // ── hero ─────────────────────────────────────────────────────────────────────
 
-export const EYEBROW_VERSION = `v${stats.npm.latestVersion}`;
+/**
+ * Read from the registry file, not from stats.json.
+ *
+ * stats.json carries an `npm.latestVersion` and it is a snapshot taken whenever
+ * the stats pipeline last ran, which is not whenever a version was last
+ * published. It said 0.1.0 while the registry had 0.1.1, so the hero chip was
+ * advertising a version one release behind and linking to an npm page that
+ * disagreed with it, which is the exact failure this chip exists to rule out:
+ * "the version it states is checkable in one click" is the only reason to print
+ * a version here at all.
+ *
+ * generated/releases.json is written by scripts/gen-releases.ts straight from
+ * `GET registry.npmjs.org/lurqrun`, so its `latest` is npm's own dist-tag and
+ * cannot lag a publish.
+ */
+export const EYEBROW_VERSION = `v${releases.latest ?? stats.npm.latestVersion}`;
 export const EYEBROW_NPM = "live on npm";
 export const EYEBROW_LICENSE = "MIT";
 export const NPM_PACKAGE_URL = "https://www.npmjs.com/package/lurqrun";

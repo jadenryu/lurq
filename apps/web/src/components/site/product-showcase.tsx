@@ -4,7 +4,6 @@ import { Tabs } from "@base-ui/react/tabs";
 import Link from "next/link";
 import { DIAGRAMS } from "@/components/site/diagrams";
 import { SHOWCASE_HEAD, TOOLS } from "@/content/tools";
-import { useRevealOnce } from "@/lib/use-reveal-once";
 
 /**
  * All ten tools, one at a time, with the schema each one takes.
@@ -32,8 +31,6 @@ import { useRevealOnce } from "@/lib/use-reveal-once";
  * is one transform rather than a class on every chip.
  */
 export function ProductShowcase() {
-  const { ref, played } = useRevealOnce<HTMLDivElement>();
-
   return (
     <section id="tools-detail" className="w-full px-4 py-24 min-[768px]:px-6 min-[900px]:py-32">
       <div className="mx-auto w-full max-w-[1180px]">
@@ -60,13 +57,7 @@ export function ProductShowcase() {
           </Link>
         </div>
 
-        <div
-          ref={ref}
-          data-reveal="panel"
-          style={{ ["--reveal-at" as string]: "80ms" }}
-          data-playing={played ? "true" : undefined}
-          className="mt-8"
-        >
+        <div data-reveal="panel" style={{ ["--reveal-at" as string]: "80ms" }} className="mt-8">
           <Tabs.Root defaultValue={TOOLS[0].slug}>
             <Tabs.List className="room-tool-list">
               <Tabs.Indicator className="room-tool-indicator" />
@@ -126,7 +117,7 @@ export function ProductShowcase() {
                             request
                           </span>
                         </div>
-                        <pre className="room-code">{tool.call}</pre>
+                        <pre className="room-code" tabIndex={0}>{tool.call}</pre>
                       </div>
 
                       <div className="overflow-hidden rounded-xl border border-edge border-t-edge-lit">
@@ -140,7 +131,7 @@ export function ProductShowcase() {
                             shape, not an answer
                           </span>
                         </div>
-                        <pre className="room-code">{tool.shape}</pre>
+                        <pre className="room-code" tabIndex={0}>{tool.shape}</pre>
                       </div>
                     </div>
 
