@@ -62,7 +62,7 @@ export default function SolutionsIndex() {
                         <Link
                           key={slug}
                           href={`/product/${slug}`}
-                          className="rounded-full border border-edge px-2.5 py-1 font-mono text-[11.5px] text-ink-2 transition-[border-color,color] duration-[--dur-hover] hover:border-edge-lit hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                          className="rounded-full border border-edge px-2.5 py-1 font-mono text-[11.5px] text-ink-2 transition-[border-color,color] duration-(--dur-hover) hover:border-edge-lit hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
                         >
                           {slug}
                         </Link>
@@ -72,7 +72,7 @@ export default function SolutionsIndex() {
 
                   <Link
                     href={`/solutions/${solution.slug}`}
-                    className="mt-6 inline-block text-[13px] text-mark transition-[opacity] duration-[--dur-hover] hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                    className="mt-6 inline-block text-[13px] text-mark transition-[opacity] duration-(--dur-hover) hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
                   >
                     Read the whole case
                     <span aria-hidden className="pl-1">

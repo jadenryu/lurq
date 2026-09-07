@@ -96,7 +96,7 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
               <Link
                 key={toolSlug}
                 href={`/product/${toolSlug}`}
-                className="flex flex-col rounded-xl border border-edge border-t-edge-lit bg-surface p-5 transition-[border-color] duration-[--dur-hover] hover:border-edge-lit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                className="flex flex-col rounded-xl border border-edge border-t-edge-lit bg-surface p-5 transition-[border-color] duration-(--dur-hover) hover:border-edge-lit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
               >
                 <p className="font-mono text-[12px] text-ink">{tool.slug}</p>
                 <p className="mt-2 flex-1 text-[13px] leading-[1.6] text-ink-2">{tool.question}</p>
@@ -125,7 +125,7 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
             <CopyCommandButton command={INSTALL_COMMAND} label={INSTALL_COMMAND} variant="solid" />
             <Link
               href="/solutions"
-              className="inline-flex h-11 items-center rounded-md border border-edge px-5 text-[14px] text-ink-2 transition-[color,border-color] duration-[--dur-hover] hover:border-edge-lit hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+              className="inline-flex h-11 items-center rounded-md border border-edge px-5 text-[14px] text-ink-2 transition-[color,border-color] duration-(--dur-hover) hover:border-edge-lit hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
             >
               The other three cases
             </Link>

@@ -181,7 +181,7 @@ export default async function ToolPage({ params }: { params: Promise<{ tool: str
               <Link
                 key={slug}
                 href={`/product/${other.slug}`}
-                className="group rounded-xl border border-edge bg-surface p-5 transition-[border-color] duration-[--dur-hover] hover:border-edge-lit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                className="group rounded-xl border border-edge bg-surface p-5 transition-[border-color] duration-(--dur-hover) hover:border-edge-lit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
               >
                 <p className="font-mono text-[12px] text-ink">{other.slug}</p>
                 <p className="mt-2 text-[13px] leading-[1.6] text-ink-2">{other.question}</p>
@@ -190,7 +190,7 @@ export default async function ToolPage({ params }: { params: Promise<{ tool: str
           })}
           <a
             href={DOCS_URL}
-            className="rounded-xl border border-edge bg-surface p-5 transition-[border-color] duration-[--dur-hover] hover:border-edge-lit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+            className="rounded-xl border border-edge bg-surface p-5 transition-[border-color] duration-(--dur-hover) hover:border-edge-lit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
           >
             <p className="font-mono text-[12px] text-ink">
               docs

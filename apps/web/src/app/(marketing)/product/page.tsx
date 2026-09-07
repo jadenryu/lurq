@@ -42,14 +42,14 @@ export default function ProductIndex() {
               <Link
                 key={tool.slug}
                 href={`/product/${tool.slug}`}
-                className="group flex flex-col rounded-xl border border-edge border-t-edge-lit bg-surface p-5 transition-[border-color,background-color] duration-[--dur-hover] hover:border-edge-lit hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                className="group flex flex-col rounded-xl border border-edge border-t-edge-lit bg-surface p-5 transition-[border-color,background-color] duration-(--dur-hover) hover:border-edge-lit hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
               >
                 <p className="font-mono text-[12px] text-ink">{tool.slug}</p>
                 <h3 className="mt-2.5 text-[15px] font-medium leading-snug text-ink">
                   {tool.question}
                 </h3>
                 <p className="mt-2 flex-1 text-[13px] leading-[1.6] text-ink-2">{tool.lead}</p>
-                <span className="mt-4 text-[12.5px] text-mark opacity-0 transition-opacity duration-[--dur-hover] group-hover:opacity-100">
+                <span className="mt-4 text-[12.5px] text-mark opacity-0 transition-opacity duration-(--dur-hover) group-hover:opacity-100">
                   Read the schema
                   <span aria-hidden className="pl-1">
                     →
@@ -86,13 +86,13 @@ export default function ProductIndex() {
         <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3">
           <Link
             href="/#use"
-            className="inline-flex h-10 items-center rounded-md bg-ink px-4 text-[13.5px] font-medium text-ground transition-[background-color] duration-[--dur-hover] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+            className="inline-flex h-10 items-center rounded-md bg-ink px-4 text-[13.5px] font-medium text-ground transition-[background-color] duration-(--dur-hover) hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
           >
             See the setup
           </Link>
           <a
             href={DOCS_URL}
-            className="text-[13px] text-ink-2 transition-[color] duration-[--dur-hover] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+            className="text-[13px] text-ink-2 transition-[color] duration-(--dur-hover) hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
           >
             Full reference in the docs
             <span aria-hidden className="pl-1">

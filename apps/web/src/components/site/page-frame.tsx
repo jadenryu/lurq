@@ -66,7 +66,7 @@ export function PageFrame({
                   href={back.href}
                   data-reveal
                   style={{ ["--reveal-at" as string]: "120ms" }}
-                  className="text-[12.5px] text-ink-3 transition-[color] duration-[--dur-hover] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                  className="text-[12.5px] text-ink-3 transition-[color] duration-(--dur-hover) hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
                 >
                   <span aria-hidden className="pr-1">
                     ←

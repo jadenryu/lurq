@@ -211,13 +211,13 @@ export default function ProofPage() {
           <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
             <Link
               href="/#contact"
-              className="inline-flex h-10 items-center rounded-md bg-ink px-4 text-[13.5px] font-medium text-ground transition-[background-color] duration-[--dur-hover] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+              className="inline-flex h-10 items-center rounded-md bg-ink px-4 text-[13.5px] font-medium text-ground transition-[background-color] duration-(--dur-hover) hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
             >
               Send one
             </Link>
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="font-mono text-[12.5px] text-ink-2 transition-[color] duration-[--dur-hover] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+              className="font-mono text-[12.5px] text-ink-2 transition-[color] duration-(--dur-hover) hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
             >
               {CONTACT_EMAIL}
             </a>

@@ -51,7 +51,7 @@ export function SolutionsStrip() {
                 {/* The figure is cropped here, not fitted: these tiles are 3:2
                     and the drawings are 4:3, and letterboxing four of them in a
                     row puts eight grey bars across the section. */}
-                <div className="relative h-[132px] overflow-hidden rounded-lg border border-edge bg-surface transition-[border-color] duration-[--dur-hover] group-hover:border-edge-lit">
+                <div className="relative h-[132px] overflow-hidden rounded-lg border border-edge bg-surface transition-[border-color] duration-(--dur-hover) group-hover:border-edge-lit">
                   <Figure id={`solution-${solution.slug}`} />
                 </div>
 
@@ -62,7 +62,7 @@ export function SolutionsStrip() {
                   {solution.name}
                 </h3>
                 <p className="mt-2 text-[13px] leading-[1.6] text-ink-2">{solution.blurb}</p>
-                <span className="mt-3 inline-block text-[12.5px] text-mark opacity-0 transition-opacity duration-[--dur-hover] group-hover:opacity-100">
+                <span className="mt-3 inline-block text-[12.5px] text-mark opacity-0 transition-opacity duration-(--dur-hover) group-hover:opacity-100">
                   Read it
                   <span aria-hidden className="pl-1">
                     →

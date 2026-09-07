@@ -114,7 +114,7 @@ export default function ChangelogPage() {
                         href={REPO_URL}
                         target="_blank"
                         rel="noopener"
-                        className="text-mark transition-[opacity] duration-[--dur-hover] hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+                        className="text-mark transition-[opacity] duration-(--dur-hover) hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
                       >
                         Open the repo
                         <span aria-hidden className="pl-1 text-[10px] opacity-70">
