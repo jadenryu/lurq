@@ -7,8 +7,12 @@
  * standing-instructions file. Nothing afterwards needs `npx`, a shell export,
  * or a second command.
  *
- * It opens the dashboard in a browser, walks the three steps in the terminal,
- * takes the pasted key, validates it against the endpoint, and writes:
+ * It opens the browser at a page that hands the key straight back to this
+ * process over localhost, so nothing is copied or pasted: the user signs in and
+ * that is the entire interaction. See browserAuth.ts. When that cannot work — an
+ * SSH session, a headless box, a self-hosted endpoint our dashboard has never
+ * issued a key for — it falls back to the old paste prompt, which still works.
+ * Either way it validates the key against the endpoint and writes:
  *   - `~/.lurq/config.json`: so `lurq recommend` &c. work in any directory
  *   - each agent's MCP config: a keyed HTTP entry, no DATABASE_URL anywhere
  *   - each agent's skill / rules file: so it reaches for lurq unprompted
@@ -153,6 +157,29 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
         default: true,
       });
       if (!reuse) apiKey = undefined;
+    }
+
+    // The browser hands the key back by itself. Tried first, and only for the
+    // hosted service: a self-hoster's key comes from their own machine and our
+    // dashboard has never seen it. See browserAuth.ts for why this is worth a
+    // listener, and for every way it falls back to the paste below.
+    if (!apiKey && !selfHosted) {
+      const { keyViaBrowser } = await import('./browserAuth');
+      console.log('  Sign in and this machine gets its key. Nothing to copy.\n');
+      process.stdout.write('  Waiting for the browser… ');
+      const handoff = await keyViaBrowser({
+        noOpen: opts.noOpen,
+        // Printed rather than only opened: the browser may not have launched,
+        // and a spinner pointing at a URL nobody can see is a hung flow.
+        onUrl: (link) => console.log(`\n\n  ${dim(link)}\n`),
+      });
+      if (handoff) {
+        apiKey = handoff.key;
+        console.log(green(`  ✓ key received${handoff.label ? dim(` (${handoff.label})`) : ''}\n`));
+      } else {
+        console.log(yellow('  no response'));
+        console.log(dim('  Falling back to pasting it in.\n'));
+      }
     }
 
     if (!apiKey) {

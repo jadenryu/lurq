@@ -56,9 +56,10 @@ export const SURFACES: Surface[] = [
     command: "npx lurqrun",
     chrome: "lurq · setup",
     detail:
-      "Setup opens the dashboard for your key, then works out which assistants are installed and writes both a keyed MCP entry and a skill file for each. Your key is stored for the CLI too, so there is no second command and nothing to export.",
+      "Setup opens a browser, and signing in is the whole interaction: the key is handed back to the terminal on its own, with nothing to copy. Then it works out which assistants are installed and writes both a keyed MCP entry and a skill file for each. Your key is stored for the CLI too, so there is no second command and nothing to export.",
     lines: [
       { kind: "cmd", text: "lurq setup" },
+      { kind: "ok", text: "signed in · key received from the browser" },
       { kind: "ok", text: "key validated · saved to ~/.lurq/config.json" },
       { kind: "ok", text: "detected Claude Code, Cursor, VS Code" },
       { kind: "ok", text: "wrote 3 keyed MCP entries + 2 skill files" },
