@@ -128,13 +128,19 @@ function CapabilityCard({ feature, index }: { feature: Capability; index: number
         </div>
 
         {/* ── BACK ───────────────────────────────────────────────────────────
-            Not a button: it holds three of its own. */}
+            The same arrangement as the front, for the same reason: the face is
+            the target. Its hit layer sits over the panel and under the two copy
+            buttons, so the card turns back over from anywhere except the two
+            places where a click means something else. */}
         <div inert={!flipped} className="room-cap-face room-cap-back">
-          <CallPanel
-            call={feature.call}
-            question={feature.title}
-            onClose={() => setFlipped(false)}
-          />
+          <CallPanel call={feature.call} question={feature.title} />
+          <button
+            type="button"
+            onClick={() => setFlipped(false)}
+            className="room-cap-hit"
+          >
+            <span className="sr-only">Back to the question: {feature.title}</span>
+          </button>
         </div>
       </div>
     </article>

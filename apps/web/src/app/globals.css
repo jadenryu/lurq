@@ -159,6 +159,9 @@
   --verified: #1b5e4a; /* deep pine, checked and held */
   --conflict: #c1440e; /* vermilion, flagged */
   --declared: #8a8a82; /* graphite, stated, not tested */
+  /* Light-mode only, and the site is forced dark (see layout.tsx), so nothing
+     renders this. The dark block below resolves --mark to --ink: on this route
+     interaction has no hue of its own. */
   --mark: #2b4c7e; /* prussian blue, interaction only */
 
   /* The dark surfaces are the same ink family, not a second palette: a press
@@ -242,10 +245,17 @@
    The three semantic hues map onto the room's verdict rules exactly, which is
    what makes this an alias rather than a coincidence:
      · --signal is interaction (links, focus, active tab, data marks) → --mark,
-       which tokens.css defines as "interaction: never a verdict"
+       which tokens.css now defines as --ink: on this route interaction has no
+       hue of its own, so a link and a heading are the same colour and only a
+       finding is coloured
      · --ok / --bad are outcomes → --held / --conflict, the verdict pair
    Keeping those separate is the rule the room is built on; collapsing them
    would let a chart bar read as a verdict.
+
+   THAT MAPPING IS NOW THE ONLY DEFINITION. --signal used to hold #4a63c8 here
+   while tokens.css held #6e96d4 for the same job, and --bad resolved to a
+   vermilion that was not the one the site flagged with. Two palettes, one
+   product. Every hue on both routes is decided in tokens.css.
    ───────────────────────────────────────────────────────────────────────────── */
 .dark {
   --background: var(--ground);
@@ -270,11 +280,11 @@
   --signal-muted: color-mix(in oklab, var(--mark) 62%, var(--ground));
   --ok: var(--held);
   --bad: var(--conflict);
-  /* Deliberately still a literal. The room runs on three verdict colours and
-     "needs attention" is not one of them, it is the demo-data chip and the
-     revoked-key warning, which are notices about the page rather than findings
-     in the data. A fourth hue that only ever appears on chrome. */
-  --warn: #e6c07a;
+  /* THE LAST LITERAL, and it goes. It was a fourth hue for the demo-data chip
+     and the revoked-key warning: notices about the page rather than findings in
+     the data, which is exactly the argument for not colouring them. They are
+     chrome, so they take the colour chrome takes. */
+  --warn: var(--ink-2);
   --destructive: var(--conflict);
   --border: var(--edge); /* hairline */
   --input: var(--edge-lit);

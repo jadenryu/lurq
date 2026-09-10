@@ -24,21 +24,38 @@
      --surface (4.83:1) and --ground (5.31:1). */
   --ink-3: #82827a;
 
-  /* verdicts: a verdict and nothing else. Never a button, never decoration. */
+  /* ── THE ONLY TWO COLOURS ──────────────────────────────────────────────
+     A verdict and nothing else. Never a button, never decoration.
+
+     They are the only hues left on the route, and that is the theme rather than
+     an accident of it. This palette had four accent families running at once —
+     a blue for links, a violet for one progress bar, an orange bloom, and the
+     verdict pair — plus two different blues for the same job and two different
+     oranges for the same verdict, one set in this file and one in globals.css.
+     Nothing on the page could tell you whether a colour meant something.
+
+     So: interaction is ink, structure is edge, and colour means a finding. The
+     product's whole argument is evidence over recall, and a page where green
+     means "it held" and nothing else is coloured makes that argument in the
+     palette instead of only in the copy. This is also the rule the file already
+     stated on the line above and then broke five tokens later.
+     ─────────────────────────────────────────────────────────────────────── */
   --held: #5bae92;
-  --conflict: #e86a3c;
+  /* One vermilion, not two. globals.css had #c1440e for the same verdict; the
+     dashboard and the site were flagging the same thing in different colours. */
+  --conflict: #d4482a;
   --declared: #8e8e86; /* always an outlined chip, never colour alone */
 
-  /* interaction: never a verdict */
-  --mark: #6e96d4;
+  /* ── INTERACTION ───────────────────────────────────────────────────────────
+     THE NAME SURVIVES, THE HUE DOES NOT. --mark names a role, "the one thing on
+     the page that is not data", and the point of this theme is that the role no
+     longer owns a colour of its own. Every link, focus ring, active tab and
+     copy-confirm on both the site and the dashboard resolves here, so this one
+     line is the whole of the change at ~40 call sites.
 
-  /* The entry-point rail, and only that. Deliberately NOT --mark: that token is
-     every interactive affordance on the site, so recolouring it to move one
-     progress bar would repaint every link and focus ring with it. Two values
-     because the bar and the number have different jobs — a 1.5px bar can be as
-     light as it likes, a 10px numeral cannot and still be read. */
-  --rail: #a78bfa;
-  --rail-ink: #7c5cd6;
+     Ink rather than a lighter step: a focus ring has to clear 3:1 against the
+     surface it lands on, and --ink-2 does not against --surface-2. */
+  --mark: var(--ink);
 
   /* The bloom, defined once. GradientBlob paints it as weather behind the hero
      and the footer; the condensed nav picks the same two stops up as a rim, so
@@ -47,17 +64,17 @@
   --bloom-from: oklch(0.646 0.222 41.116);
   --bloom-to: oklch(0.488 0.243 264.376);
 
-  /* Package tile palette: decorative identity, never a verdict. Currently
-     unused: the letter tiles these coloured went out with the row list when the
-     plate replaced it. Kept because §2 of the spec still declares them and the
-     next surface that needs to tell packages apart should reach for these rather
-     than invent a second set. */
-  --tile-1: #4a6fa5;
-  --tile-2: #7a5c9e;
-  --tile-3: #a66a3f;
-  --tile-4: #3f7a6b;
-  --tile-5: #96524e;
-  --tile-6: #5a6b8c;
+  /* THE SIX TILE COLOURS ARE GONE. Decorative package identity, zero call sites,
+     and carried for a spec section rather than for anything on screen. A palette
+     of six unused hues sitting in the file is how a monochrome route grows a
+     second design: the next person who needs to tell two things apart finds
+     them and reaches. If that surface ever exists, tell things apart with
+     position, glyph or weight.
+
+     The bloom below is the one place colour is still allowed to be atmosphere,
+     and it is deliberate: it is weather behind the hero and the footer, it
+     never lands on a control, and it is what keeps a monochrome page from
+     reading as a wireframe. */
 
   /* type: the faces already in the repo (lib/fonts.ts), unchanged. */
   --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
@@ -725,7 +742,7 @@ li:hover > .room-ide-label {
   width: 9px;
   border-radius: 999px;
   height: calc(var(--fill, 0) * (100% - 2.1rem));
-  background: var(--rail);
+  background: var(--ink);
 }
 
 /* The head. Rides the top of the fill, which is what makes the bar read as
@@ -740,10 +757,10 @@ li:hover > .room-ide-label {
   height: 17px;
   margin-left: -8.5px;
   border-radius: 999px;
-  background: var(--rail);
+  background: var(--ink);
   box-shadow:
-    0 0 0 5px color-mix(in oklab, var(--rail) 20%, transparent),
-    0 0 22px color-mix(in oklab, var(--rail) 60%, transparent);
+    0 0 0 5px color-mix(in oklab, var(--ink) 20%, transparent),
+    0 0 22px color-mix(in oklab, var(--ink) 60%, transparent);
 }
 
 /* One checkpoint in the rail. */
@@ -796,7 +813,7 @@ li:hover > .room-ide-label {
 
 .room-surface-stop[data-on] .room-surface-index,
 .room-surface-block[data-on] .room-surface-index {
-  color: var(--rail-ink);
+  color: var(--ink-2);
 }
 
 /* ── The rail, and the four blocks beside it ─────────────────────────────────
@@ -2766,7 +2783,7 @@ li:hover > .room-ide-label {
   flex-shrink: 0;
   height: 38px;
   padding: 0 1.15rem;
-  /* Oblong. See the note on --radius-pill in the button section below. */
+  /* Oblong, like every other control the page offers. */
   border-radius: 999px;
   background: var(--mark);
   color: var(--ground);
@@ -2839,6 +2856,9 @@ li:hover > .room-ide-label {
 
 /* The target: a transparent button laid over the whole front face. See the note
    in capability-grid.tsx for why it is over the face rather than around it. */
+/* The target, on BOTH faces: a transparent button laid over the whole of one.
+   See the note in capability-grid.tsx for why it is over the face rather than
+   around it, and why the back has one too. */
 .room-cap-hit {
   position: absolute;
   inset: 0;
@@ -2929,37 +2949,6 @@ li:hover > .room-ide-label {
   padding: 0.7rem 0.75rem 0.7rem 1.15rem;
 }
 
-/* The way back. A labelled pill, not a glyph: see the note in call-panel.tsx.
-   It is the first thing in the bar and the first thing in the tab order, which
-   is the order somebody wants it in. */
-.room-call-back {
-  display: inline-flex;
-  height: 26px;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0 0.7rem 0 0.55rem;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--ink-2);
-  transition:
-    color var(--dur-hover) var(--ease-ui),
-    border-color var(--dur-hover) var(--ease-ui),
-    background-color var(--dur-hover) var(--ease-ui);
-}
-
-.room-call-back:hover {
-  border-color: var(--edge-lit);
-  background: var(--surface-2);
-  color: var(--ink);
-}
-
-.room-call-back:focus-visible {
-  outline: 2px solid var(--mark);
-  outline-offset: 2px;
-}
 
 /* Scrolls rather than clips. The longest body here is four lines and every card
    has room for it, but a card in a narrow column at 320px does not, and a call
@@ -2994,7 +2983,12 @@ li:hover > .room-ide-label {
   color: var(--ink-3);
 }
 
+/* ABOVE THE HIT LAYER. The whole back face turns the card over on click, and
+   the hit button sits at z-index 20 over everything in this panel. These two
+   are the exception: a click here copies, it does not turn the card. */
 .room-call-actions {
+  position: relative;
+  z-index: 30;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;

@@ -14,7 +14,11 @@ import type { Call } from "@/content/capabilities";
  * day that has already passed. The body is a real request against a real
  * schema, and it is checkable. A response would be neither.
  *
- * TWO BUTTONS, because there are two people holding this card. One is going to
+ * TWO BUTTONS, AND THEY ARE THE ONLY TWO. Everything else on this face turns
+ * the card back over, so the actions are the one region that has to sit above
+ * the hit layer. See `.room-call-actions` in tokens.css.
+ *
+ * There are two of them because there are two people holding this card. One is going to
  * paste JSON into an editor that already has lurq connected, and wants exactly
  * the body. The other is in a chat window, has never installed anything, and
  * wants a paragraph that will make an assistant do the right thing. Copying the
@@ -108,36 +112,16 @@ function CopyButton({
   );
 }
 
-export function CallPanel({
-  call,
-  question,
-  onClose,
-}: {
-  call: Call;
-  question: string;
-  onClose: () => void;
-}) {
+export function CallPanel({ call, question }: { call: Call; question: string }) {
   return (
     <div className="room-call">
-      {/* The way back, and it is a labelled button rather than the bare chevron
-          it started as. A 13px glyph in the corner of a panel is not an exit:
-          people turned a card over and could not find the way back, which on a
-          card that only holds one thing is the whole interaction broken. It
-          leads the bar, it says the word, and Escape does it too. */}
+      {/* No close button. The card is a card: you turn it back over by clicking
+          it, anywhere that is not one of the two copy buttons. That went
+          through a chevron and then a labelled pill before landing here, and
+          both were the same mistake — putting the exit in a corner of an object
+          whose whole front face is already a click target. */}
       <div className="room-call-bar">
-        <button type="button" onClick={onClose} className="room-call-back">
-          <svg aria-hidden viewBox="0 0 16 16" width="12" height="12" fill="none">
-            <path
-              d="M9.5 4 5.5 8l4 4"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Back
-        </button>
-        <span className="ml-auto font-mono text-[11px] text-ink-3">lurq · {call.tool}</span>
+        <span className="font-mono text-[11px] text-ink-3">lurq · {call.tool}</span>
       </div>
 
       {/* The call. `pre` rather than a highlighter: this is twelve tokens of
