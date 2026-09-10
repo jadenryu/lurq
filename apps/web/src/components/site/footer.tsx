@@ -20,43 +20,27 @@ import { DOCS_URL } from "@/lib/site-links";
  * no Customers, and inventing them to fill a column is how a footer starts
  * lying about the size of the thing behind it.
  *
- * WRITTEN OUT RATHER THAN DERIVED FROM content/nav.ts. The mega menu carries
- * twenty destinations with a blurb each; a footer carries a short label and
- * wants the four or five per column that a reader scans. Deriving one from the
- * other means either a footer with nine Product links or a nav data file
- * carrying `showInFooter` flags, and both are worse than two lists that a person
- * keeps in step. The rule for keeping them in step is the one above: a link here
- * has to resolve.
- *
- * The Solutions column is new and is the reason this was edited. Those pages had
- * existed for a pass before anything below the fold pointed at them.
+ * THE PRODUCT AND SOLUTIONS COLUMNS ARE GONE, and so is the Changelog and
+ * Evidence pair, because the pages under them were removed. What is left is what
+ * still resolves: the sections of this page, the docs, the app, and the standing
+ * company and legal pages. A footer that keeps a column after its rooms are
+ * demolished is the exact failure the note above is about, just slower.
  */
 const COLUMNS = [
   {
     heading: "Product",
     links: [
-      { label: "All tools", href: "/product" },
-      { label: "Verify", href: "/product/verify" },
-      { label: "Compat", href: "/product/compat" },
-      { label: "Diff surface", href: "/product/diff_surface" },
+      { label: "What it does", href: "/#tools" },
+      { label: "Where it comes from", href: "/#sources" },
+      { label: "Ways in", href: "/#use" },
       { label: "Pricing", href: "/#pricing" },
-    ],
-  },
-  {
-    heading: "Solutions",
-    links: [
-      { label: "Agent-assisted coding", href: "/solutions/agent-coding" },
-      { label: "Upgrades and migrations", href: "/solutions/upgrades" },
-      { label: "Pre-merge gating", href: "/solutions/ci" },
-      { label: "Supply-chain defence", href: "/solutions/supply-chain" },
     ],
   },
   {
     heading: "Resources",
     links: [
       { label: "Docs", href: DOCS_URL },
-      { label: "Changelog", href: "/changelog" },
-      { label: "Evidence", href: "/proof" },
+      { label: "Questions", href: "/#faq" },
       { label: "Dashboard", href: "/dashboard" },
       { label: "npm", href: "https://www.npmjs.com/package/lurqrun", external: true },
     ],

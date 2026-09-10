@@ -6,7 +6,6 @@ import { CapabilityGrid } from "@/components/site/capability-grid";
 import { ProductShowcase } from "@/components/site/product-showcase";
 import { ProvenanceOrbit } from "@/components/site/provenance-orbit";
 import { DriftBoard } from "@/components/site/drift-board";
-import { SolutionsStrip } from "@/components/site/solutions-strip";
 import { SurfaceSwitch } from "@/components/site/surface-switch";
 import { Pricing } from "@/components/site/pricing";
 import { SiteFooter } from "@/components/site/footer";
@@ -42,26 +41,25 @@ import { Contact } from "@/components/site/contact";
  *   order is: here is what goes wrong, here is the call that catches it, here is
  *   everything it can answer, here is where all of that comes from.
  *
- * TWO SECTIONS ADDED IN THIS PASS.
+ * WHAT WAS ADDED, AND WHAT WAS TAKEN BACK OUT.
  *
- *   A third, HowItWorks, was added and then removed at request. It was a
- *   three-panel diagram of where the call sits in time, and it was measured
- *   causing a 0.82 cumulative layout shift on its own (good is under 0.1). The
- *   claim it carried has not been lost: the agent session above demonstrates the
- *   same thing by showing a call land before an install.
+ *   HowItWorks was added and then removed at request. It was a three-panel
+ *   diagram of where the call sits in time, and it was measured causing a 0.82
+ *   cumulative layout shift on its own (good is under 0.1). The claim it carried
+ *   has not been lost: the agent session above demonstrates the same thing by
+ *   showing a call land before an install.
  *
  *   ProductShowcase, seventh, immediately after the grid. The grid names five
  *   questions; this names all ten tools and prints the request body for each.
- *   That is the escalation a developer wants and the site had no page for: it
- *   was possible to read every word here without ever seeing what an agent
- *   actually sends. It goes BEFORE the orbit rather than after, because the
- *   orbit's job is to answer "from what", and it answers it better after ten
- *   claims than after five.
+ *   That is the escalation a developer wants: it was possible to read every word
+ *   here without ever seeing what an agent actually sends. It goes BEFORE the
+ *   orbit rather than after, because the orbit's job is to answer "from what",
+ *   and it answers it better after ten claims than after five.
  *
- *   SolutionsStrip, ninth. Four doors into the four use-case pages, placed after
- *   the product is fully explained and before the install section. "When would I
- *   use this" is a question a reader can only have once they know what it does,
- *   and it is the last one standing between them and the setup instructions.
+ *   SolutionsStrip is gone, along with the /solutions, /product, /proof and
+ *   /changelog pages it and the nav pointed at. It was four doors and nothing
+ *   else, so it could not outlive the rooms behind them. This page is the site
+ *   again: one scroll, and the tool detail lives in the docs.
  *
  * There is no #limits section. It was a dashed placeholder for months. The
  * hero's qualifier now points at the FAQ, where "What doesn't work yet?" is the
@@ -119,9 +117,6 @@ export default function Home() {
             the answer is also the asset: ten hosts, and the index built on top
             of them. */}
         <ProvenanceOrbit />
-        {/* Now that it is clear what this does, the last question before setup:
-            when would I reach for it. Four doors, four pages. */}
-        <SolutionsStrip />
         {/* The first section that tells anyone how to actually get it. Setup as
             the answer to a question the reader now has, rather than an install
             guide for a product they had not been shown. */}

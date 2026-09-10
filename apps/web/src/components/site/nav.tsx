@@ -6,7 +6,6 @@ import { Dialog } from "@base-ui/react/dialog";
 import { useAuth } from "@clerk/nextjs";
 import { Wordmark } from "@/components/site/wordmark";
 import { NAV_CTA, NAV_DASHBOARD, NAV_DOCS, NAV_SIGN_IN } from "@/content/copy";
-import { MENUS } from "@/content/nav";
 import { DOCS_URL } from "@/lib/site-links";
 
 /**
@@ -31,14 +30,15 @@ import { DOCS_URL } from "@/lib/site-links";
  * writing down because the fix is not obvious and the failure is silent.
  *
  * It was ALSO the wrong component for this site. A mega menu is what you build
- * when the nav cannot fit the destinations, and this nav has four. The panels'
- * entire contents are the /product and /solutions index pages, which is one
- * click away either way, so the panels bought a hover interaction that does not
- * exist on a phone and a class of bug that does. Four links cannot break.
+ * when the nav cannot fit the destinations, and this nav has four. The panels
+ * bought a hover interaction that does not exist on a phone and a class of bug
+ * that does. Four links cannot break.
  *
- * If the product ever has enough surface that four links stop covering it, the
- * thing to reach for is Base UI's navigation-menu again, with the content laid
- * out in normal flow and the popup sized by it.
+ * The destinations have since shrunk further: /product, /solutions, /proof and
+ * /changelog were removed, so every link up here is a section of this page or
+ * the docs. If the product ever has enough surface that four links stop covering
+ * it, the thing to reach for is Base UI's navigation-menu again, with the
+ * content laid out in normal flow and the popup sized by it.
  *
  * Geometry and colour live in tokens.css (.room-nav-*, .room-sheet-*). This file
  * owns which of the two bar states is current.
@@ -59,15 +59,16 @@ const TRANSITION_MS = 280;
 
 /**
  * The bar's own links. Four, and the order is the order a reader needs them:
- * what it is, when to use it, how to call it, what it costs.
+ * what it is, how to get it, how to call it, what it costs.
  *
- * Deliberately NOT the twenty destinations in content/nav.ts. Those are all
- * reachable from the two index pages and from the footer, and a bar that lists
- * everything is a sitemap someone has pinned to the top of the window.
+ * All four now point at sections of this page or at the docs, because the pages
+ * the first two used to open no longer exist. That is a smaller nav rather than
+ * a worse one: every destination is one scroll or one hop, and nothing up here
+ * can rot into a 404.
  */
 const LINKS: { label: string; href: string; external?: boolean }[] = [
-  { label: "Product", href: "/product" },
-  { label: "Solutions", href: "/solutions" },
+  { label: "What it does", href: "/#tools" },
+  { label: "Ways in", href: "/#use" },
   { label: NAV_DOCS, href: DOCS_URL, external: true },
   { label: "Pricing", href: "/#pricing" },
 ];
@@ -78,9 +79,11 @@ const linkClass =
 /**
  * The sheet, for everything under 900px.
  *
- * This is where content/nav.ts still earns its keep: a phone gets the FULL
- * twenty destinations, because there is room to scroll and no hover to lose.
- * Flat, not an accordion, so nothing needs tapping before a link is visible.
+ * The same four links the bar carries, not a separate list. It used to render
+ * the twenty destinations from content/nav.ts on the argument that a phone has
+ * room to scroll; that file is gone with the pages it addressed, and four links
+ * do not need a second source of truth. Flat, not an accordion, so nothing needs
+ * tapping before a link is visible.
  *
  * Dialog rather than a hand-rolled overlay: focus trap, scroll lock, escape and
  * inert background are four things worth not writing twice. Unlike the panels
@@ -116,39 +119,32 @@ function Sheet({ signedIn }: { signedIn: boolean | undefined }) {
             </Dialog.Close>
           </div>
 
-          {MENUS.flatMap((menu) =>
-            menu.columns.map((col) => (
-              <div key={`${menu.label}-${col.heading}`}>
-                <p className="room-sheet-heading">
-                  {menu.label} · {col.heading}
-                </p>
-                {col.links.map((link) =>
-                  link.external ? (
-                    <a
-                      key={link.href}
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener"
-                      className="room-sheet-row"
-                      onClick={close}
-                    >
-                      {link.label}
-                      <span aria-hidden className="text-[11px] text-ink-3">
-                        ↗
-                      </span>
-                    </a>
-                  ) : (
-                    <Link key={link.href} href={link.href} className="room-sheet-row" onClick={close}>
-                      {link.label}
-                      <span aria-hidden className="text-[11px] text-ink-3">
-                        →
-                      </span>
-                    </Link>
-                  ),
-                )}
-              </div>
-            )),
-          )}
+          <div className="mt-6">
+            {LINKS.map((link) =>
+              link.external ? (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener"
+                  className="room-sheet-row"
+                  onClick={close}
+                >
+                  {link.label}
+                  <span aria-hidden className="text-[11px] text-ink-3">
+                    ↗
+                  </span>
+                </a>
+              ) : (
+                <Link key={link.href} href={link.href} className="room-sheet-row" onClick={close}>
+                  {link.label}
+                  <span aria-hidden className="text-[11px] text-ink-3">
+                    →
+                  </span>
+                </Link>
+              ),
+            )}
+          </div>
 
           <div className="mt-8 flex flex-col gap-3">
             <Link

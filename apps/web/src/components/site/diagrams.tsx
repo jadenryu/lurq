@@ -11,7 +11,7 @@
  * ranges are the engines check inside compat, its indented tree is usage, and
  * its stacked slabs are diagram. Redrawing those would give the same tool two
  * different pictures on two pages, which is worse than reuse: a reader who saw
- * the dial on the landing page should recognise it on /product/evaluate. Only
+ * the dial in one section should recognise it in the next. Only
  * the six with no existing picture are drawn below.
  *
  * SILHOUETTE RULE, inherited. No two figures in the combined set of eleven share
@@ -518,7 +518,7 @@ export function OutcomeFigure({ id, fit }: FigureProps) {
  * Eleven figures, five of them the bento's.
  *
  * The reuse is named here rather than hidden behind a copy, so a reader of this
- * map can see that /product/evaluate and the landing page's first card are
+ * map can see that the showcase's evaluate panel and the first card are
  * deliberately the same drawing.
  */
 export const DIAGRAMS = {

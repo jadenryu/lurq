@@ -1,5 +1,4 @@
 import { PLAN_LIST } from "@lurq/core/plans";
-import { SOLUTIONS } from "@/content/solutions";
 import { TOOLS } from "@/content/tools";
 import { faqs } from "@/content/faq";
 import { SITE_ORIGIN } from "@/lib/site";
@@ -27,9 +26,12 @@ import releases from "@/content/generated/releases.json";
  * tool name on a landing page is a typo, and here it is a tool call an agent
  * will actually attempt.
  *
- * Format follows llmstxt.org: an H1, a blockquote summary, then sections of
- * markdown links. It is markdown, served as text/plain so crawlers and curl
- * both get it verbatim.
+ * Format follows llmstxt.org: an H1, a blockquote summary, then sections. It is
+ * markdown, served as text/plain so crawlers and curl both get it verbatim.
+ *
+ * Tools are named rather than linked. The per-tool pages were removed with the
+ * rest of the /product tree, and a link list pointing at 404s is worse for the
+ * reader this file is written for than a plain list of names is.
  */
 
 /** Long enough to be worth caching, short enough that a release shows up fast. */
@@ -76,17 +78,13 @@ The hosted MCP endpoint is \`https://api.lurq.run/mcp\` (JSON-RPC over HTTP, \`A
 
 ## Tools
 
-${TOOLS.map((t) => `- [${t.slug}](${SITE_ORIGIN}/product/${t.slug}): ${t.whenToCall}`).join("\n")}
+${TOOLS.map((t) => `- \`${t.slug}\`: ${t.whenToCall}`).join("\n")}
 
 ## What it costs
 
 ${PLAN_LIST.map((p) => `- ${p.name}, ${money(p.priceCents)}: ${p.monthlyCalls === null ? "uncapped" : `${fmt(p.monthlyCalls)}`} hosted calls a month.`).join("\n")}
 
 The free tier is usable without a card and without talking to anyone.
-
-## Where it pays off
-
-${SOLUTIONS.map((s) => `- [${s.title}](${SITE_ORIGIN}/solutions/${s.slug})`).join("\n")}
 
 ## Questions people ask first
 
@@ -99,9 +97,6 @@ ${faqs
 
 - [Site](${SITE_ORIGIN})
 - [Docs](${SITE_ORIGIN}/docs)
-- [Every tool](${SITE_ORIGIN}/product)
-- [Evidence behind the index](${SITE_ORIGIN}/proof)
-- [Changelog](${SITE_ORIGIN}/changelog)
 - [npm](https://www.npmjs.com/package/lurqrun)
 `;
 

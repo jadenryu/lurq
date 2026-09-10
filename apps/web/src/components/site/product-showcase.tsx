@@ -1,9 +1,9 @@
 "use client";
 
 import { Tabs } from "@base-ui/react/tabs";
-import Link from "next/link";
 import { DIAGRAMS } from "@/components/site/diagrams";
 import { SHOWCASE_HEAD, TOOLS } from "@/content/tools";
+import { DOCS_URL } from "@/lib/site-links";
 
 /**
  * All ten tools, one at a time, with the schema each one takes.
@@ -45,16 +45,19 @@ export function ProductShowcase() {
           >
             {SHOWCASE_HEAD}
           </h2>
-          <Link
-            href="/product"
+          {/* The per-tool pages this used to open are gone. The docs are where
+              the long form lives now, and pointing at a room that was
+              demolished is worse than pointing at nothing. */}
+          <a
+            href={DOCS_URL}
             className="shrink-0 text-[13px] text-mark transition-[opacity] hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
             style={{ transitionDuration: "var(--dur-hover)" }}
           >
-            Every tool in full
+            Every tool in the docs
             <span aria-hidden className="pl-1">
               →
             </span>
-          </Link>
+          </a>
         </div>
 
         <div data-reveal="panel" style={{ ["--reveal-at" as string]: "80ms" }} className="mt-8">
@@ -92,17 +95,6 @@ export function ProductShowcase() {
                       <p className="mt-6 border-t border-edge pt-4 font-mono text-[11px] leading-[1.55] text-ink-3">
                         Call it {tool.whenToCall.charAt(0).toLowerCase() + tool.whenToCall.slice(1)}
                       </p>
-
-                      <Link
-                        href={`/product/${tool.slug}`}
-                        className="mt-5 text-[13px] text-mark transition-[opacity] hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
-                        style={{ transitionDuration: "var(--dur-hover)" }}
-                      >
-                        How {tool.slug} works
-                        <span aria-hidden className="pl-1">
-                          →
-                        </span>
-                      </Link>
                     </div>
 
                     {/* The artifact. Two stacked panels rather than one with a
