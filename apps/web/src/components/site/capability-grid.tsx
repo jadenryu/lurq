@@ -11,7 +11,7 @@ import {
 } from "@/content/capabilities";
 
 /**
- * The tool surface as a bento: five cards, two wide over three narrow.
+ * The tool surface as a 2x2: four cards, one question each.
  *
  * The card is mostly picture. Its figure fills the whole tile and the words sit
  * over the bottom of it on a blurred plate, which is the arrangement that makes
@@ -19,8 +19,16 @@ import {
  * The previous pass had this inverted, a small diagram above four lines of
  * prose, and no amount of tuning the diagram fixes a card that is 90% text.
  *
- * The outer corners are rounded and the inner ones are not, so the five tiles
- * read as one slab that has been cut, rather than as five floating cards.
+ * The four tiles are BUTTED TOGETHER, no gap, and only the outer four corners
+ * are rounded, so the grid is one slab that has been cut into quarters rather
+ * than four cards that happen to be adjacent. Which corner belongs to which tile
+ * is nth-child in tokens.css rather than a class per card: it is a property of
+ * the arrangement, and the card should not have to know its own index to be
+ * drawn correctly.
+ *
+ * The bento this replaces was five tiles, two wide over three narrow. With the
+ * fifth card gone (see content/capabilities.ts) that shape left a hole, and a
+ * bento with a gap in it reads as a tile that failed to load.
  *
  * Reveal is the page's own: one IntersectionObserver, a CSS schedule in
  * --reveal-at, no animation library. framer-motion and clsx, which the
@@ -47,36 +55,15 @@ import {
  * screen.
  */
 
-type Span = { grid: string; corner: string };
-
-/**
- * Placement lives here rather than in the content file: which tile is wide is a
- * layout decision, and content should not have to know the column count.
- * Order is the reading order: real, together, node, api, stack.
- */
-const SPANS: Span[] = [
-  { grid: "min-[900px]:col-span-3", corner: "min-[900px]:rounded-tl-[16px]" },
-  { grid: "min-[900px]:col-span-3", corner: "min-[900px]:rounded-tr-[16px]" },
-  { grid: "min-[900px]:col-span-2", corner: "min-[900px]:rounded-bl-[16px]" },
-  { grid: "min-[900px]:col-span-2", corner: "" },
-  { grid: "min-[900px]:col-span-2", corner: "min-[900px]:rounded-br-[16px]" },
-];
-
 function CapabilityCard({ feature, index }: { feature: Capability; index: number }) {
   const Figure = FIGURES[feature.figure];
-  const span = SPANS[index] ?? { grid: "", corner: "" };
   const [flipped, setFlipped] = useState(false);
 
   return (
     <article
       data-card
       style={{ ["--reveal-at" as string]: `${120 + index * 80}ms` }}
-      className={[
-        "room-cap-card group relative isolate flex flex-col overflow-hidden",
-        "rounded-[10px]",
-        span.grid,
-        span.corner,
-      ].join(" ")}
+      className="room-cap-card group relative isolate flex flex-col overflow-hidden rounded-[10px]"
     >
       <div data-flipped={flipped || undefined} className="room-cap-flip">
         {/* ── FRONT ──────────────────────────────────────────────────────────
@@ -214,7 +201,7 @@ export function CapabilityGrid() {
         <div
           ref={ref}
           data-playing={playing ? "true" : undefined}
-          className="room-cap-grid mt-8 grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 min-[900px]:grid-cols-6"
+          className="room-cap-grid mt-8 grid grid-cols-1 gap-3 min-[560px]:grid-cols-2"
         >
           {CAPABILITIES.map((feature, i) => (
             <CapabilityCard key={feature.title} feature={feature} index={i} />

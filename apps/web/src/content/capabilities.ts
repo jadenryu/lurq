@@ -56,9 +56,9 @@ export type Call = {
 
 /**
  * Bodies rewritten for rhythm, not for content: every claim is the one that was
- * here before. Four of the five closed on a "not X, only Y" clause, which is a
- * shape that stops registering by the third card, and all five ran to the same
- * two-sentence length. They now vary, and the one short body is deliberate.
+ * here before. They all closed on a "not X, only Y" clause, which is a shape
+ * that stops registering by the third card, and all ran to the same
+ * two-sentence length. They now vary.
  */
 export const CAPABILITIES: Capability[] = [
   {
@@ -117,26 +117,24 @@ export const CAPABILITIES: Capability[] = [
       note: "The delta from the version the model knows to the one you are installing.",
     },
   },
-  {
-    title: "What should the whole stack be?",
-    body: "Describe the project and lurq fills every gap. It's quick because compatible sets are already stored.",
-    backedBy: "recommend · plan",
-    figure: "stack",
-    call: {
-      tool: "diagram",
-      body: `{
-  "stack": ["next", "drizzle-orm", "postgres", "clerk"]
-}`,
-      note: "A reference architecture keyed by layer, and the gaps the stack has not filled.",
-    },
-  },
 ];
 
 /**
- * `report_outcome` had a sixth card and lost it. Five is the lineup that was
- * actually asked for, and the bento wants five: two wide, three narrow. A sixth
- * forced a uniform 3x2, which is the grid this section is moving away from.
- * The tool is still live and still in the docs; it just isn't a headline.
+ * TWO CARDS HAVE BEEN CUT, and the second one is the interesting deletion.
+ *
+ * `report_outcome` went first: it is live and it is in the docs, it is just not
+ * a headline.
+ *
+ * "What should the whole stack be?" went second, and it went because the back of
+ * a card is a harder test than the front. Its `backedBy` read `recommend · plan`
+ * and neither is registered on the MCP server: both were shelved. The card had
+ * survived a long time as prose, because prose can describe a capability that
+ * does not answer a call. The moment every card had to print the call an agent
+ * makes, the one card with no call to print had nowhere to hide.
+ *
+ * Bring it back when `recommend` ships, with its own call. Do not bring it back
+ * pointing at a neighbouring tool: that is how the front of a card starts
+ * claiming something the back cannot demonstrate.
  */
 
 /**

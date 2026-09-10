@@ -598,6 +598,42 @@ li:hover > .room-ide-label {
   }
 }
 
+/* ── The slab ────────────────────────────────────────────────────────────────
+   Four tiles butted together into one rectangle: no gap, square inner corners,
+   and 16px on the four outer ones. Below 560px it is a single column of
+   separate cards, where a gap is right and a shared outer radius would put a
+   rounded corner in the middle of a stack.
+
+   nth-child rather than a class per card. Which corner a tile owns is a fact
+   about the arrangement, not about the question printed on it, and a card that
+   has to be told its own index in order to be drawn is a card that breaks the
+   day the order changes. */
+@media (min-width: 560px) {
+  .room-cap-grid {
+    gap: 0;
+  }
+
+  .room-cap-grid [data-card] {
+    border-radius: 0;
+  }
+
+  .room-cap-grid [data-card]:nth-child(1) {
+    border-top-left-radius: 16px;
+  }
+
+  .room-cap-grid [data-card]:nth-child(2) {
+    border-top-right-radius: 16px;
+  }
+
+  .room-cap-grid [data-card]:nth-child(3) {
+    border-bottom-left-radius: 16px;
+  }
+
+  .room-cap-grid [data-card]:nth-child(4) {
+    border-bottom-right-radius: 16px;
+  }
+}
+
 .room-cap-grid [data-card],
 .room-price-grid [data-card] {
   opacity: 0;

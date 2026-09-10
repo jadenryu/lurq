@@ -3,12 +3,15 @@
  *
  * TWO RULES, both learned by breaking them.
  *
- * 1. FIVE FORMS, NOT ONE. An earlier pass drew engines, surface and stack as
- *    rows of horizontal bars, which made three of the five cards the same
- *    picture. The vocabulary is now deliberately disjoint: a dial, a triangular
- *    matrix, vertical column ranges, an indented tree, and stacked slabs. No two
- *    share a silhouette, so the row reads as five instruments rather than one
- *    chart recoloured five times.
+ * 1. ONE FORM PER CARD. An earlier pass drew engines and surface as rows of
+ *    horizontal bars, which made half the cards the same picture. The
+ *    vocabulary is deliberately disjoint: a dial, a triangular matrix, vertical
+ *    column ranges, and an indented tree. No two share a silhouette, so the grid
+ *    reads as four instruments rather than one chart recoloured four times.
+ *
+ *    A fifth, stacked slabs, was drawn for "what should the whole stack be" and
+ *    was deleted with that card. See content/capabilities.ts for why the card
+ *    went: it had no callable tool behind it.
  *
  * 2. COLOUR IS A VERDICT, NOT INK. tokens.css is explicit that --held and
  *    --conflict are "a verdict and nothing else. Never a button, never
@@ -402,57 +405,11 @@ export function SurfaceFigure({ id, fit }: FigureProps) {
   );
 }
 
-/** Stacked slabs: one stack, chosen against itself. */
-export function StackFigure({ id, fit }: FigureProps) {
-  const slabs = [0, 1, 2, 3, 4];
-  return (
-    <Frame id={id} fit={fit}>
-      <Wash id={id} at={[0.2, 0.78]} />
-      {slabs.map((i) => {
-        const x = 84 + i * 24;
-        const y = 54 + i * 48;
-        const chosen = i === 2;
-        return (
-          <g key={i}>
-            <rect
-              x={x}
-              y={y}
-              width="258"
-              height="40"
-              rx="2"
-              fill={INK}
-              fillOpacity={chosen ? 0.09 : 0.04}
-              stroke={chosen ? MARK : STRUCT}
-              strokeWidth="1"
-            />
-            <rect x={x + 18} y={y + 16} width="10" height="8" rx="1" fill={MARK} opacity="0.7" />
-            <rect
-              x={x + 40}
-              y={y + 17}
-              width={chosen ? 152 : 112 + i * 10}
-              height="6"
-              rx="1"
-              fill={INK}
-              opacity={chosen ? 0.42 : 0.2}
-            />
-          </g>
-        );
-      })}
-      {/* The spine: what makes it a stack and not five separate answers. */}
-      <path d="M382 80L262 272" stroke={STRUCT} strokeWidth="1" strokeDasharray="4 5" opacity="0.9" />
-      {slabs.map((i) => (
-        <circle key={i} cx={382 - i * 30} cy={80 + i * 48} r="3.5" fill={i === 2 ? HELD : STRUCT} />
-      ))}
-    </Frame>
-  );
-}
-
 export const FIGURES = {
   health: HealthFigure,
   pairs: PairsFigure,
   engines: EnginesFigure,
   surface: SurfaceFigure,
-  stack: StackFigure,
 } as const;
 
 export type FigureName = keyof typeof FIGURES;
