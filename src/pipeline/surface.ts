@@ -19,11 +19,12 @@ import {
   enqueueSurface,
   getPendingSurfaces,
   isExtractionCached,
+  getPackagesMissingGraphSurface,
   storeSurface,
   surfaceRef,
 } from '../db/surface';
 import { getPackageVersions } from '../db/packages';
-import { getPackagesMissingSurface, getPackagesWithSurface } from '../db/apiSurfaces';
+import { getPackagesWithSurface } from '../db/apiSurfaces';
 import { fetchAndExtract } from '../surface/fetch';
 
 /**
@@ -176,8 +177,15 @@ export async function backfillSurfaces(
   const limit = opts.limit ?? 500;
   const s: BackfillSummary = { scanned: 0, queuedLatest: 0, queuedPrevious: 0 };
 
-  // Gap 1: no surface at all. `getPackagesMissingSurface` already samples these.
-  const missing = await getPackagesMissingSurface(db, limit);
+  // Gap 1: no surface in the GRAPH store, which is what `resolve_surface` and
+  // `diff_surface` read. This deliberately does NOT use the api_surfaces query:
+  // that table is the flat per-version export list behind `usage`, and the
+  // proactive worker pass both selects on it and writes to it. A package already
+  // covered there was therefore invisible to this backfill even when the
+  // diffable store had never seen it — which is exactly how graph coverage ended
+  // up an order of magnitude below api_surfaces coverage while every pass
+  // reported itself healthy.
+  const missing = await getPackagesMissingGraphSurface(db, limit);
   for (const row of missing) {
     s.scanned++;
     await enqueueSurface(db, row.name, row.version).then(

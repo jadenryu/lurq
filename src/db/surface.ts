@@ -9,9 +9,9 @@
  *
  * Nothing here executes package code; extraction upstream is static (§9.2).
  */
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from './client';
-import { claims, entities, observations, surfaceQueue, symbols } from './schema';
+import { claims, entities, observations, packages, surfaceQueue, symbols } from './schema';
 import type { SurfaceQueueRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
 import { canonicalKey, type EntityRef } from '../graph/types';
@@ -156,6 +156,51 @@ export function specKey(pkg: string, version: string | null): string {
  * Record a query miss (§6.1). Instant, deduped, and never blocking — the query
  * path returns UNKNOWN and the worker does the work.
  */
+/**
+ * Packages whose LATEST version has no surface in the graph store.
+ *
+ * Deliberately distinct from `getPackagesMissingSurface` in `db/apiSurfaces`,
+ * and the difference is the whole reason this exists. There are two surface
+ * stores serving two different questions:
+ *
+ *   api_surfaces  — a flat export list per version, backing `usage`. Filled by
+ *                   the worker's proactive pass, ~26.9k packages covered.
+ *   entities +    — structured symbols (kind, arity, origin, deprecation),
+ *   symbols         backing `resolve_surface` and `diff_surface`. Only a diff
+ *                   can be computed from these, and only ~2.9k are covered.
+ *
+ * The proactive pass selected its targets with the api_surfaces query and wrote
+ * to api_surfaces, so nothing ever proactively filled the graph store — it grew
+ * only from demand-driven queue misses at ten per cycle. A package already in
+ * api_surfaces was invisible to every backfill even though the diffable store
+ * had never seen it, which is why coverage of the differentiated tools sat an
+ * order of magnitude below coverage of the cheap one.
+ *
+ * Sampled at random rather than ordered, for the same reason the sibling query
+ * is: a package that repeatedly fails extraction would otherwise sit at the head
+ * of every batch forever and starve the rest of the index.
+ */
+export async function getPackagesMissingGraphSurface(
+  db: Database,
+  limit: number,
+): Promise<{ name: string; version: string }[]> {
+  const rows = await db
+    .select({ name: packages.name, version: packages.latestVersion })
+    .from(packages)
+    .leftJoin(
+      entities,
+      and(
+        eq(entities.kind, 'package_surface'),
+        eq(entities.name, packages.name),
+        eq(entities.version, packages.latestVersion),
+      ),
+    )
+    .where(and(isNotNull(packages.latestVersion), isNull(entities.id)))
+    .orderBy(sql`random()`)
+    .limit(limit);
+  return rows.filter((r): r is { name: string; version: string } => r.version !== null);
+}
+
 export async function enqueueSurface(
   db: Database,
   pkg: string,
