@@ -27,10 +27,20 @@ describe('Railway service configs (sync / api / discover)', () => {
   const discover = loadRailway('railway.discover.json');
 
   it('lurq-sync (railway.json): daily operator sync + repo scan cron', () => {
-    // `;` not `&&`: a failed package sync must not skip the repo scan. The two
-    // read different sources and neither depends on the other succeeding.
+    // `;` not `&&`: a failed package sync must not skip the repo scan, and
+    // neither must skip the rescore. The three read different sources and none
+    // depends on another succeeding.
+    //
+    // `rescore` lives here rather than in the hourly worker on purpose. The only
+    // score input that drifts without new data is maintenance recency, ramping
+    // 100 -> 0 over 700 days, so a package needs ~10 days for time decay to move
+    // its integer health score at all. Hourly asked ~240x more often than the
+    // data could answer differently, and dragged ~10MB of score rows off-platform
+    // each time to conclude "0 changed".
     expect(sync.deploy.startCommand).toBe(
-      'node dist-operator/bin/operator.js sync; node dist-operator/bin/operator.js repos-scan',
+      'node dist-operator/bin/operator.js sync; ' +
+        'node dist-operator/bin/operator.js repos-scan; ' +
+        'node dist-operator/bin/operator.js rescore',
     );
     expect(sync.deploy.cronSchedule).toBe('0 6 * * *'); // 06:00 UTC = 2am EDT
     expect(sync.deploy.restartPolicyType).toBe('NEVER');
