@@ -2,7 +2,7 @@
  * Autonomous discovery worker (§4G). One bounded loop that grows the frontier so
  * packages + edges + surfaces compound without human curation:
  *
- *   drain queue → ingest → mine → extract → surface → rescore → sleep → repeat
+ *   drain queue → ingest → mine → extract → surface → sleep → repeat
  *
  * Discovery and asset-building are the *same crawl* (§4G) — no separate matrix
  * job. Ingest mines observed edges (§4B) as a side effect; this loop adds the
@@ -17,7 +17,6 @@ import { pMap } from '../core/concurrency';
 import { runDiscovery } from './discovery';
 import { drainCompatVerifyQueue } from './compat';
 import { drainSurfaceQueue } from './surface';
-import { runRescore } from './rescore';
 
 export interface WorkerOptions {
   /** Seconds between cycles (default 900 = 15 min). */
@@ -116,8 +115,21 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: surface drain failed: ${String(err)}`));
-    // Freshness of scores is a cheap rescore (§4G) — no re-fetch.
-    await runRescore().catch((err) => logger.warn(`worker: rescore failed: ${String(err)}`));
+    // Rescore is NOT run here. It was, every cycle, and it reported "0 changed"
+    // every time — which is arithmetic, not luck.
+    //
+    // The only score input that moves without new data is maintenance recency,
+    // and it ramps 100 -> 0 across (staleDays 730 - freshDays 30) = 700 days.
+    // That is 0.143 points a day before maintenance's 0.35 share of health, so a
+    // package needs on the order of ten days for time decay alone to shift its
+    // integer health score by one. Running it hourly asked a question ~240 times
+    // more often than the data can answer differently, and each pass dragged
+    // ~10MB of score rows across the wire from an off-platform database.
+    //
+    // Scores still have to be refreshed — they just belong on the daily sync
+    // cron, which is where the rest of the time-relative work already lives.
+    // Anything event-driven (a re-sync, new field evidence) already rescores the
+    // package it touched at ingest time.
 
     if (opts.once || stopped) break;
     await interruptibleSleep(intervalSec, () => stopped);
