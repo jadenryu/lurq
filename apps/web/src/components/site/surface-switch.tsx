@@ -312,7 +312,7 @@ export function SurfaceSwitch() {
           {SURFACES_HEAD}
         </h2>
 
-        <div className="mt-12 grid gap-10 min-[900px]:grid-cols-[0.58fr_1.42fr] min-[900px]:gap-14">
+        <div className="mt-12 grid gap-10 min-[900px]:grid-cols-[0.5fr_1.5fr] min-[900px]:gap-10">
           {/* The rail: a table of contents that happens to draw where you are.
               Anchors rather than buttons, so it deep-links, takes focus in
               order, and still navigates with no script running. */}

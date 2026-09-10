@@ -635,7 +635,22 @@ li:hover > .room-ide-label {
    the endpoint themselves. */
 .room-surface-rail {
   position: relative;
-  padding-left: 1.75rem;
+  display: flex;
+  padding-left: 2.75rem;
+  /* Tall on purpose. The bar is the section's scroll position drawn at scale,
+     and a 160px spine beside 3,000px of blocks draws it at 5%: the head barely
+     moves while the reader scrolls a screenful, which reads as broken rather
+     than as progress. Held to the viewport so the whole track is always on
+     screen while it is sticky. */
+  min-height: min(62vh, 520px);
+}
+
+/* The stops spread over the whole spine rather than stacking at the top, so the
+   distance between two rows is the distance the head actually travels between
+   them. */
+.room-surface-rail > ol {
+  flex: 1;
+  justify-content: space-between;
 }
 
 /* The track. Flat rather than the gradient it used to be: once a fill runs down
@@ -645,12 +660,12 @@ li:hover > .room-ide-label {
 .room-surface-rail::before {
   content: "";
   position: absolute;
-  left: 4.25px;
+  left: 0;
   top: 1.05rem;
   bottom: 1.05rem;
   /* Same width as the fill, so the track and the filled part are one bar rather
      than a hairline with something thicker drawn over it. */
-  width: 2.5px;
+  width: 9px;
   border-radius: 999px;
   background: var(--edge);
 }
@@ -669,9 +684,9 @@ li:hover > .room-ide-label {
    the bar must not count. */
 .room-surface-fill {
   position: absolute;
-  left: 4.25px;
+  left: 0;
   top: 1.05rem;
-  width: 2.5px;
+  width: 9px;
   border-radius: 999px;
   height: calc(var(--fill, 0) * (100% - 2.1rem));
   background: var(--rail);
@@ -684,15 +699,15 @@ li:hover > .room-ide-label {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: -3.5px;
-  width: 7px;
-  height: 7px;
-  margin-left: -3.5px;
+  bottom: -8px;
+  width: 17px;
+  height: 17px;
+  margin-left: -8.5px;
   border-radius: 999px;
   background: var(--rail);
   box-shadow:
-    0 0 0 3px color-mix(in oklab, var(--rail) 22%, transparent),
-    0 0 12px color-mix(in oklab, var(--rail) 55%, transparent);
+    0 0 0 5px color-mix(in oklab, var(--rail) 20%, transparent),
+    0 0 22px color-mix(in oklab, var(--rail) 60%, transparent);
 }
 
 /* One checkpoint in the rail. */
@@ -762,6 +777,17 @@ li:hover > .room-ide-label {
   align-self: start;
 }
 
+/* Out past the content column, into the page margin. The bar is chrome for the
+   whole section rather than a column of it, and the further left it sits the
+   less it competes with the terminal beside it. Only once the gutter is wide
+   enough to give the margin away: negative offsets at 1000px would push it off
+   screen. */
+@media (min-width: 1180px) {
+  .room-surface-nav {
+    margin-left: clamp(-7rem, -5vw, -2rem);
+  }
+}
+
 .room-surface-blocks {
   display: flex;
   flex-direction: column;
@@ -791,6 +817,17 @@ li:hover > .room-ide-label {
      working, it is just horizontal-adjacent rather than alongside. */
   .room-surface-nav {
     position: static;
+    margin-left: 0;
+  }
+
+  /* No sticky column, so there is no scroll for the bar to be to scale with:
+     the spine collapses back to the height of its own list. */
+  .room-surface-rail {
+    min-height: 0;
+  }
+
+  .room-surface-rail > ol {
+    justify-content: flex-start;
   }
 
   .room-surface-blocks {
