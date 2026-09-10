@@ -30,8 +30,22 @@ export default async function ReposPage({
     loadImpact(IMPACT_DAYS),
     loadAlerts(),
   ]);
-  const connect = (await searchParams).connect;
+  const params = await searchParams;
+  const connect = params.connect;
   const message = typeof connect === "string" ? CONNECT_MESSAGES[connect] : undefined;
+
+  /**
+   * The repo they scanned on the landing page, carried through sign-up.
+   *
+   * Without it, someone who scanned `their/repo`, liked the answer, and signed
+   * in lands on a page that has forgotten what they came for and asks them to
+   * start again with an app install. Naming it back is the cheapest possible
+   * continuity, and it is the difference between finishing the flow they were
+   * already in and starting a new one.
+   */
+  const scanned = typeof params.scan === "string" ? params.scan.slice(0, 120) : null;
+  const alreadyTracked =
+    scanned !== null && data.repos.some((r) => r.fullName.toLowerCase() === scanned.toLowerCase());
 
   const url = userId ? installUrl(userId) : null;
 
@@ -73,6 +87,14 @@ export default async function ReposPage({
 
       <PageBody>
         {message && <InlineError>{message}</InlineError>}
+
+        {scanned && !alreadyTracked && url && (
+          <InlineError>
+            You scanned <span className="font-mono">{scanned}</span> from the landing page. That
+            read the root manifest only. Connect it here and lurq reads every manifest in the
+            repository, keeps watching, and tells you when an upgrade would break something.
+          </InlineError>
+        )}
 
         {!data.configured ? (
           <EmptyState title="GitHub integration isn&rsquo;t set up on this deployment">

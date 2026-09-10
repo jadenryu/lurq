@@ -1,4 +1,5 @@
 import { CopyCommandButton } from "@/components/site/copy-command-button";
+import { RepoScan } from "@/components/site/repo-scan";
 import { GradientBlob } from "@/components/site/gradient-blob";
 import {
   CTA_DOCS,
@@ -172,6 +173,18 @@ export function Hero() {
             </a>
           </div>
 
+          {/* The other door. The command above asks for a terminal and a
+              decision; this asks for a repo name and gives something back, so
+              the visitor who is not installing anything today still has a next
+              move. Last in the reveal, and it is the only thing in the hero
+              that answers rather than asserts. */}
+          <div
+            data-reveal
+            style={{ ["--reveal-at" as string]: "860ms" }}
+            className="w-full"
+          >
+            <RepoScan />
+          </div>
         </div>
       </div>
     </section>

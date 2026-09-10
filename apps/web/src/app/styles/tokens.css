@@ -2676,3 +2676,93 @@ li:hover > .room-ide-label {
   outline: 2px solid var(--mark);
   outline-offset: -2px;
 }
+
+/* ── The scan field, in the hero ─────────────────────────────────────────────
+   One row: a glyph, an input, a button. Built as a single bordered surface with
+   the input's own chrome removed rather than as three adjacent controls, so it
+   reads as one thing to fill in. The focus ring is on the row, not the input,
+   for the same reason: the row is the control.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-scan-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 52px;
+  padding: 0 0.5rem 0 0.9rem;
+  border: 1px solid var(--edge);
+  border-top-color: var(--edge-lit);
+  border-radius: 12px;
+  background: var(--surface);
+  transition:
+    border-color var(--dur-hover) var(--ease-ui),
+    box-shadow var(--dur-hover) var(--ease-ui);
+}
+
+.room-scan-field:hover {
+  border-color: var(--edge-lit);
+}
+
+.room-scan-field:focus-within {
+  border-color: color-mix(in oklab, var(--mark) 55%, var(--edge));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--mark) 16%, transparent);
+}
+
+.room-scan-glyph {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--ink-3);
+}
+
+.room-scan-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.room-scan-input::placeholder {
+  color: var(--ink-3);
+}
+
+.room-scan-go {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 1.05rem;
+  border-radius: 8px;
+  background: var(--mark);
+  color: var(--ground);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition:
+    opacity var(--dur-hover) var(--ease-ui),
+    filter var(--dur-hover) var(--ease-ui);
+}
+
+.room-scan-go:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.room-scan-go:disabled {
+  opacity: 0.45;
+}
+
+.room-scan-go:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+}
+
+@media (max-width: 519.98px) {
+  /* The button keeps its width and the field keeps its height; what gives is
+     the placeholder, which would otherwise be clipped mid-word. */
+  .room-scan-input {
+    font-size: 12.5px;
+  }
+
+  .room-scan-field {
+    padding-left: 0.7rem;
+  }
+}
