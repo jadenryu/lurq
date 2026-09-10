@@ -183,7 +183,17 @@ export function specKey(pkg: string, version: string | null): string {
 export async function getPackagesMissingGraphSurface(
   db: Database,
   limit: number,
+  opts: { byDownloads?: boolean } = {},
 ): Promise<{ name: string; version: string }[]> {
+  // Random is the right default for eventual full coverage — it stops a
+  // repeatedly-failing package from sitting at the head of every batch and
+  // starving the tail. `byDownloads` is for closing the gap that matters to a
+  // user: a real package.json is made of popular packages, so covering the head
+  // of the distribution first is what turns `check-upgrade` from a demo into a
+  // tool that answers on the dependencies someone actually has.
+  const order = opts.byDownloads
+    ? sql`${packages.weeklyDownloads} desc nulls last`
+    : sql`random()`;
   const rows = await db
     .select({ name: packages.name, version: packages.latestVersion })
     .from(packages)
@@ -196,7 +206,7 @@ export async function getPackagesMissingGraphSurface(
       ),
     )
     .where(and(isNotNull(packages.latestVersion), isNull(entities.id)))
-    .orderBy(sql`random()`)
+    .orderBy(order)
     .limit(limit);
   return rows.filter((r): r is { name: string; version: string } => r.version !== null);
 }

@@ -329,14 +329,15 @@ export function registerOperatorCommands(program: Command): void {
     .command('surface-backfill')
     .description('give the existing catalog version depth, so surface diffs have something to compare')
     .option('--limit <n>', 'packages to sample per gap this run (default 500)', (v) => parseInt(v, 10))
-    .action(async (opts: { limit?: number }) => {
+    .option('--by-downloads', 'queue the most-installed packages first instead of sampling at random')
+    .action(async (opts: { limit?: number; byDownloads?: boolean }) => {
       const { requireConfig } = await import('../core/config');
       requireConfig(['DATABASE_URL']);
       const { createDb } = await import('../db/client');
       const { backfillSurfaces } = await import('../pipeline/surface');
       const { db, close } = createDb();
       try {
-        const s = await backfillSurfaces(db, { limit: opts.limit });
+        const s = await backfillSurfaces(db, { limit: opts.limit, byDownloads: opts.byDownloads });
         console.log(
           `scanned ${s.scanned} · queued ${s.queuedLatest} latest · queued ${s.queuedPrevious} predecessor(s)`,
         );

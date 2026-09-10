@@ -172,7 +172,7 @@ export interface BackfillSummary {
  */
 export async function backfillSurfaces(
   db: Database,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; byDownloads?: boolean } = {},
 ): Promise<BackfillSummary> {
   const limit = opts.limit ?? 500;
   const s: BackfillSummary = { scanned: 0, queuedLatest: 0, queuedPrevious: 0 };
@@ -185,7 +185,7 @@ export async function backfillSurfaces(
   // diffable store had never seen it — which is exactly how graph coverage ended
   // up an order of magnitude below api_surfaces coverage while every pass
   // reported itself healthy.
-  const missing = await getPackagesMissingGraphSurface(db, limit);
+  const missing = await getPackagesMissingGraphSurface(db, limit, { byDownloads: opts.byDownloads });
   for (const row of missing) {
     s.scanned++;
     await enqueueSurface(db, row.name, row.version).then(
