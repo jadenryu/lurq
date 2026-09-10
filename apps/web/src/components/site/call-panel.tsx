@@ -119,24 +119,25 @@ export function CallPanel({
 }) {
   return (
     <div className="room-call">
+      {/* The way back, and it is a labelled button rather than the bare chevron
+          it started as. A 13px glyph in the corner of a panel is not an exit:
+          people turned a card over and could not find the way back, which on a
+          card that only holds one thing is the whole interaction broken. It
+          leads the bar, it says the word, and Escape does it too. */}
       <div className="room-call-bar">
-        <span className="font-mono text-[11px] text-ink-3">lurq · {call.tool}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Back to the question"
-          className="room-call-close ml-auto"
-        >
-          <svg aria-hidden viewBox="0 0 16 16" width="13" height="13" fill="none">
+        <button type="button" onClick={onClose} className="room-call-back">
+          <svg aria-hidden viewBox="0 0 16 16" width="12" height="12" fill="none">
             <path
               d="M9.5 4 5.5 8l4 4"
               stroke="currentColor"
-              strokeWidth="1.5"
+              strokeWidth="1.6"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
           </svg>
+          Back
         </button>
+        <span className="ml-auto font-mono text-[11px] text-ink-3">lurq · {call.tool}</span>
       </div>
 
       {/* The call. `pre` rather than a highlighter: this is twelve tokens of

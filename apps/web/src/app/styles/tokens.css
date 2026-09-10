@@ -2929,28 +2929,36 @@ li:hover > .room-ide-label {
   padding: 0.7rem 0.75rem 0.7rem 1.15rem;
 }
 
-.room-call-close {
+/* The way back. A labelled pill, not a glyph: see the note in call-panel.tsx.
+   It is the first thing in the bar and the first thing in the tab order, which
+   is the order somebody wants it in. */
+.room-call-back {
   display: inline-flex;
   height: 26px;
-  width: 26px;
   flex-shrink: 0;
   align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  color: var(--ink-3);
+  gap: 0.3rem;
+  padding: 0 0.7rem 0 0.55rem;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-2);
   transition:
     color var(--dur-hover) var(--ease-ui),
+    border-color var(--dur-hover) var(--ease-ui),
     background-color var(--dur-hover) var(--ease-ui);
 }
 
-.room-call-close:hover {
+.room-call-back:hover {
+  border-color: var(--edge-lit);
   background: var(--surface-2);
   color: var(--ink);
 }
 
-.room-call-close:focus-visible {
+.room-call-back:focus-visible {
   outline: 2px solid var(--mark);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 /* Scrolls rather than clips. The longest body here is four lines and every card

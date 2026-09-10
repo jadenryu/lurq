@@ -38,10 +38,16 @@ export type Capability = {
  * terminal, because this panel has a copy button: a wrong argument name is not a
  * typo on a page, it is a call somebody pastes into their editor that fails.
  *
- * Written per card rather than borrowed from content/tools.ts. Two of these
- * cards ask different questions of the same tool — "will these install
- * together" and "does it run on your Node" are both `compat` — and one shared
- * example would have answered only one of them.
+ * FOUR CARDS, FOUR DIFFERENT TOOLS, and that is a constraint rather than a
+ * coincidence. Two of these cards pointed at `compat`, which made the section
+ * argue that lurq does two things twice. The Node question moved to `usage`,
+ * which returns the version's declared engines and is the honest answer to it,
+ * and that pushed the API question onto `diff_surface`, which is the tool that
+ * actually produces the delta the card's own body promises. Everything reads
+ * better and nothing had to be invented.
+ *
+ * Written per card rather than borrowed from content/tools.ts: a tool's own
+ * example answers the tool's headline question, not the one a card is asking.
  *
  * `note` is what the panel says under the call. One line, present tense, and it
  * describes what comes back rather than restating the question.
@@ -94,12 +100,12 @@ export const CAPABILITIES: Capability[] = [
     backedBy: "compat · usage",
     figure: "engines",
     call: {
-      tool: "compat",
+      tool: "usage",
       body: `{
-  "packages": ["next", "typescript", "vitest"],
-  "node": "20.11.0"
+  "package": "sharp",
+  "version": "0.34.4"
 }`,
-      note: "Same check, pinned to the runtime you deploy on rather than to the latest.",
+      note: "Returns the version's declared engines, so its Node floor is read rather than assumed.",
     },
   },
   {
@@ -108,13 +114,13 @@ export const CAPABILITIES: Capability[] = [
     backedBy: "usage · resolve_surface · diff_surface",
     figure: "surface",
     call: {
-      tool: "usage",
+      tool: "diff_surface",
       body: `{
   "package": "zod",
-  "version": "4.1.12",
-  "knownVersion": "3.23.8"
+  "fromVersion": "3.23.8",
+  "toVersion": "4.1.12"
 }`,
-      note: "The delta from the version the model knows to the one you are installing.",
+      note: "Symbols removed, added and changed between the two, read from shipped JavaScript.",
     },
   },
 ];

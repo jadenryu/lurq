@@ -59,6 +59,19 @@ function CapabilityCard({ feature, index }: { feature: Capability; index: number
   const Figure = FIGURES[feature.figure];
   const [flipped, setFlipped] = useState(false);
 
+  // Escape turns the card back over. Bound only while this card is facing its
+  // back: both faces of all four cards are mounted at all times, so a listener
+  // inside the panel would be four listeners, three of them with nothing to
+  // close.
+  useEffect(() => {
+    if (!flipped) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFlipped(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [flipped]);
+
   return (
     <article
       data-card
