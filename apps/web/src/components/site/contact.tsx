@@ -38,13 +38,15 @@ type Status = "idle" | "sending" | "sent" | "error";
  * weight as the FAQ's row rules and the channel list below, so it reads as this
  * page rather than a card borrowed from the dashboard. Focus lights all four sides.
  *
- * 4px on the fields, well under the submit button's `rounded-md`, so the filled
- * control stays the roundest thing here and the outlined ones sit just inside it.
+ * 4px on the fields, against a submit button that is now a full pill, so the
+ * filled control is by a long way the roundest thing here and the outlined ones
+ * sit flat beside it. That contrast is the point: a form of pill-shaped inputs
+ * with a pill-shaped button is one shape repeated, and nothing in it leads.
  *
  * A literal `rounded-[4px]` and not `rounded-sm`, because globals.css remaps the
- * whole scale off `--radius: 0.75rem`: `rounded-sm` is 7.2px here and `rounded-md`
- * is 9.6px, not Tailwind's stock 4px and 6px. Set explicitly either way, since
- * Safari picks its own radius for inputs and textareas.
+ * whole scale off `--radius: 0.75rem`: `rounded-sm` is 7.2px here, not Tailwind's
+ * stock 4px. Set explicitly either way, since Safari picks its own radius for
+ * inputs and textareas.
  */
 const field =
   "w-full rounded-[4px] border border-edge bg-transparent px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-3 transition-[border-color] focus:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark";
@@ -247,7 +249,7 @@ function Form({ siteKey }: { siteKey: string }) {
           <button
             type="submit"
             disabled={status === "sending"}
-            className="inline-flex h-11 shrink-0 items-center rounded-md bg-ink px-5 text-[14px] font-medium text-ground transition-[background-color,opacity] hover:bg-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+            className="inline-flex h-11 shrink-0 items-center rounded-full bg-ink px-6 text-[14px] font-medium text-ground transition-[background-color,opacity] hover:bg-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
             style={{ transitionDuration: "var(--dur-hover)" }}
           >
             {status === "sending" ? "Sending…" : CONTACT_SUBMIT}

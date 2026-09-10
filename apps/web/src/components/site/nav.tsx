@@ -150,7 +150,7 @@ function Sheet({ signedIn }: { signedIn: boolean | undefined }) {
             <Link
               href={signedIn ? "/dashboard" : "/sign-up"}
               onClick={close}
-              className="inline-flex h-11 items-center justify-center rounded-md bg-ink text-[14px] font-medium text-ground"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-ink text-[14px] font-medium text-ground"
             >
               {signedIn ? NAV_DASHBOARD : NAV_CTA}
             </Link>
@@ -158,7 +158,7 @@ function Sheet({ signedIn }: { signedIn: boolean | undefined }) {
               <Link
                 href="/sign-in"
                 onClick={close}
-                className="inline-flex h-11 items-center justify-center rounded-md border border-edge text-[14px] text-ink-2"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-edge text-[14px] text-ink-2"
               >
                 {NAV_SIGN_IN}
               </Link>
@@ -266,7 +266,7 @@ export function SiteNav() {
               someone who already started is a dead end. */}
           <Link
             href={isSignedIn ? "/dashboard" : "/sign-up"}
-            className="inline-flex h-9 shrink-0 items-center rounded-md bg-ink px-4 text-[14px] font-medium text-ground transition-[background-color] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+            className="inline-flex h-9 shrink-0 items-center rounded-full bg-ink px-4.5 text-[14px] font-medium text-ground transition-[background-color] hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
             style={hover}
           >
             {isSignedIn ? NAV_DASHBOARD : NAV_CTA}

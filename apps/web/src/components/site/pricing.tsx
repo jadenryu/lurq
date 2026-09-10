@@ -50,7 +50,7 @@ function allowanceLabel(plan: Plan): string {
 }
 
 const BTN =
-  'inline-flex w-full items-center justify-center rounded-md px-4 py-2.5 text-[13px] font-medium transition-[background-color,border-color,color,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium transition-[background-color,border-color,color,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark disabled:cursor-not-allowed disabled:opacity-60';
 const BTN_FILLED = `${BTN} bg-ink text-ground hover:bg-white`;
 const BTN_OUTLINE = `${BTN} border border-edge text-ink hover:border-ink`;
 

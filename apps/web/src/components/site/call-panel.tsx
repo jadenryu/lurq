@@ -120,13 +120,12 @@ export function CallPanel({
   return (
     <div className="room-call">
       <div className="room-call-bar">
-        <span aria-hidden className="room-surface-dots" />
-        <span className="ml-auto font-mono text-[11px] text-ink-3">lurq · {call.tool}</span>
+        <span className="font-mono text-[11px] text-ink-3">lurq · {call.tool}</span>
         <button
           type="button"
           onClick={onClose}
           aria-label="Back to the question"
-          className="room-call-close"
+          className="room-call-close ml-auto"
         >
           <svg aria-hidden viewBox="0 0 16 16" width="13" height="13" fill="none">
             <path

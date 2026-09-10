@@ -51,7 +51,32 @@ export async function POST(req: Request) {
       // ever take, short enough that a hung origin does not hold the box open.
       signal: AbortSignal.timeout(20_000),
     });
-    const data = await res.json().catch(() => ({ error: "Could not read that repository." }));
+
+    /**
+     * A NON-JSON BODY IS A SERVICE PROBLEM, NEVER A REPO PROBLEM.
+     *
+     * This used to fall back to "Could not read that repository." on any parse
+     * failure, and it cost an afternoon. An older build of the API does not
+     * have /scan/public at all, so Express answers with its own HTML 404 page;
+     * the parse failed, the fallback fired, and the landing page told everyone
+     * who tried it that their perfectly good repository could not be read. The
+     * one message the user could act on was the one thing that was not wrong.
+     *
+     * Anything that is not JSON means the request never reached the scanner,
+     * and it has to say so.
+     */
+    const body = await res.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      console.error(`scan: ${res.status} from ${base} with a non-JSON body`);
+      return NextResponse.json(
+        { error: "Scanning is not available on this deployment yet." },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json(data, { status: res.status });
   } catch {
     return NextResponse.json({ error: "Could not reach the index." }, { status: 502 });

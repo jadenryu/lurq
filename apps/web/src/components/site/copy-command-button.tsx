@@ -84,7 +84,7 @@ export function CopyCommandButton({
         type="button"
         onClick={copy}
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-md font-mono transition-[color,background-color,border-color] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark",
+          "inline-flex shrink-0 items-center justify-center rounded-full font-mono transition-[color,background-color,border-color] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark",
           variant === "solid"
             ? "h-11 bg-ink px-5 text-[14px] text-ground hover:bg-white"
             : variant === "outline"

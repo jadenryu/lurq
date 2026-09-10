@@ -901,15 +901,10 @@ li:hover > .room-ide-label {
   }
 }
 
-/* Three dots, drawn rather than typed: a window control that is really the
-   glyph "●●●" gets read out as three bullets and copied with the transcript. */
-.room-surface-dots {
-  width: 34px;
-  height: 8px;
-  background-image: radial-gradient(circle 4px at 4px 4px, var(--edge-lit) 100%, transparent 0);
-  background-size: 13px 8px;
-  background-repeat: repeat-x;
-}
+/* The three traffic lights are gone. They were borrowed macOS chrome on panels
+   that are not windows and cannot be closed, minimised or zoomed: furniture
+   that implies affordances none of these panels have. The title bar keeps the
+   hairline and the label, which is the part that was doing work. */
 
 /* Output waits for the command to finish typing. Paused rather than unmounted,
    so the panel's height is settled from the first frame and nothing below the
@@ -2730,7 +2725,7 @@ li:hover > .room-ide-label {
   padding: 0 0.5rem 0 0.9rem;
   border: 1px solid var(--edge);
   border-top-color: var(--edge-lit);
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--surface);
   transition:
     border-color var(--dur-hover) var(--ease-ui),
@@ -2770,8 +2765,9 @@ li:hover > .room-ide-label {
 .room-scan-go {
   flex-shrink: 0;
   height: 38px;
-  padding: 0 1.05rem;
-  border-radius: 8px;
+  padding: 0 1.15rem;
+  /* Oblong. See the note on --radius-pill in the button section below. */
+  border-radius: 999px;
   background: var(--mark);
   color: var(--ground);
   font-size: 13.5px;
@@ -3002,7 +2998,7 @@ li:hover > .room-ide-label {
   flex: 1;
   min-width: 7.5rem;
   border: 1px solid var(--edge);
-  border-radius: 7px;
+  border-radius: 999px;
   background: var(--surface);
   font-size: 12px;
   font-weight: 500;

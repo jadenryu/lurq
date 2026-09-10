@@ -182,12 +182,12 @@ function Block({
         style={{ boxShadow: "0 24px 48px rgba(0,0,0,.35)" }}
         className="mt-5 overflow-hidden rounded-xl border border-edge border-t-edge-lit bg-surface"
       >
-        {/* Title bar, same vocabulary as the session and drift panels. */}
+        {/* Title bar, same vocabulary as the session and drift panels. The
+            label sits left now: it was pushed right to clear the three window
+            dots, and with those gone `ml-auto` left it floating at the far end
+            of an otherwise empty bar. */}
         <div className="flex items-center gap-2.5 border-b border-edge bg-surface-2 px-4 py-3 min-[720px]:px-5">
-          <span aria-hidden className="room-surface-dots" />
-          <span className="ml-auto font-mono text-[11px] text-ink-3">
-            {surface.chrome}
-          </span>
+          <span className="font-mono text-[11px] text-ink-3">{surface.chrome}</span>
         </div>
         <Terminal surface={surface} live={live} />
       </div>

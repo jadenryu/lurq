@@ -166,7 +166,7 @@ export function Hero() {
             />
             <a
               href={DOCS_URL}
-              className="inline-flex h-11 shrink-0 items-center rounded-md border border-edge px-5 text-[14px] text-ink-2 transition-[color,border-color] hover:border-edge-lit hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
+              className="inline-flex h-11 shrink-0 items-center rounded-full border border-edge px-6 text-[14px] text-ink-2 transition-[color,border-color] hover:border-edge-lit hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
               style={{ transitionDuration: "var(--dur-hover)" }}
             >
               {CTA_DOCS}
