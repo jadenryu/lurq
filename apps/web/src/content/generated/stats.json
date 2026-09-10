@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-09T12:27:22.412Z",
+  "generatedAt": "2026-09-10T12:20:57.335Z",
   "source": "live",
-  "dataAsOf": "2026-09-09T12:05:36.652Z",
-  "packages": 46068,
-  "packagesScored": 46068,
+  "dataAsOf": "2026-09-10T12:04:36.179Z",
+  "packages": 46312,
+  "packagesScored": 46312,
   "categories": 23,
-  "versionsTracked": 4152561,
-  "apiSurfaces": 31081,
+  "versionsTracked": 4162163,
+  "apiSurfaces": 32204,
   "coOccurrencePairs": 27121288,
   "dataSources": 10,
   "npm": {
@@ -18,11 +18,11 @@
     "weeksLive": 11
   },
   "lastSync": {
-    "startedAt": "2026-09-09T06:01:44.812Z",
-    "finishedAt": "2026-09-09T07:00:20.306Z",
+    "startedAt": "2026-09-10T06:04:12.999Z",
+    "finishedAt": "2026-09-10T07:01:07.948Z",
     "packagesSeen": 2362,
     "packagesUpdated": 2362,
     "status": "partial"
   },
-  "syncDays": 55
+  "syncDays": 56
 }
