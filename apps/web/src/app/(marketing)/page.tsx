@@ -3,7 +3,6 @@ import { Hero } from "@/components/site/hero";
 import { IdeMarquee } from "@/components/site/ide-marquee";
 import { AgentSession } from "@/components/site/agent-session";
 import { CapabilityGrid } from "@/components/site/capability-grid";
-import { ProductShowcase } from "@/components/site/product-showcase";
 import { ProvenanceOrbit } from "@/components/site/provenance-orbit";
 import { DriftBoard } from "@/components/site/drift-board";
 import { SurfaceSwitch } from "@/components/site/surface-switch";
@@ -49,14 +48,13 @@ import { Contact } from "@/components/site/contact";
  *   has not been lost: the agent session above demonstrates the same thing by
  *   showing a call land before an install.
  *
- *   ProductShowcase, seventh, immediately after the grid. The grid names five
- *   questions; this names all ten tools and prints the request body for each.
- *   That is the escalation a developer wants: it was possible to read every word
- *   here without ever seeing what an agent actually sends. It goes BEFORE the
- *   orbit rather than after, because the orbit's job is to answer "from what",
- *   and it answers it better after ten claims than after five.
+ *   ProductShowcase is gone. It was a ten-tab rack of every tool with its
+ *   request body, sitting immediately after a grid that asks five questions, and
+ *   it answered them a second time at ten times the length. The call an agent
+ *   actually sends now lives on the back of the card that raises the question,
+ *   which is where a reader wants it and is one section instead of two.
  *
- *   SolutionsStrip is gone, along with the /solutions, /product, /proof and
+ *   SolutionsStrip is gone too, along with the /solutions, /product, /proof and
  *   /changelog pages it and the nav pointed at. It was four doors and nothing
  *   else, so it could not outlive the rooms behind them. This page is the site
  *   again: one scroll, and the tool detail lives in the docs.
@@ -109,10 +107,6 @@ export default function Home() {
         {/* One call was shown, one failure mode was measured. This is the whole
             surface: everything else it can be asked. */}
         <CapabilityGrid />
-        {/* The same surface again, one level down: the ten tools by name, with
-            the request body each one takes. The grid is the questions, this is
-            the calls. */}
-        <ProductShowcase />
         {/* Ten claims have just been made. "From what" is the next question, and
             the answer is also the asset: ten hosts, and the index built on top
             of them. */}

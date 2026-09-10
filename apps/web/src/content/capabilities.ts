@@ -25,6 +25,33 @@ export type Capability = {
    * why a padlock and a chip were the wrong furniture for this page.
    */
   figure: FigureName;
+  /** The call on the back of the card. See {@link Call}. */
+  call: Call;
+};
+
+/**
+ * The back of a card: the call an agent actually makes to answer that question.
+ *
+ * EVERY `tool` HERE IS REGISTERED IN src/mcp/server.ts TODAY, and every `body`
+ * validates against that tool's zod schema. This is the same rule content/
+ * surfaces.ts holds itself to, and it matters more here than on a decorative
+ * terminal, because this panel has a copy button: a wrong argument name is not a
+ * typo on a page, it is a call somebody pastes into their editor that fails.
+ *
+ * Written per card rather than borrowed from content/tools.ts. Two of these
+ * cards ask different questions of the same tool — "will these install
+ * together" and "does it run on your Node" are both `compat` — and one shared
+ * example would have answered only one of them.
+ *
+ * `note` is what the panel says under the call. One line, present tense, and it
+ * describes what comes back rather than restating the question.
+ */
+export type Call = {
+  /** Registered MCP tool name. Rendered as the terminal's own prompt. */
+  tool: string;
+  /** Request body, pretty-printed, exactly as an agent would send it. */
+  body: string;
+  note: string;
 };
 
 /**
@@ -39,30 +66,69 @@ export const CAPABILITIES: Capability[] = [
     body: "Downloads, release cadence, open advisories, deprecation flags. We catch the package that does not exist: a name the model produced fluently, spelled the way a real one would be spelled.",
     backedBy: "verify · evaluate",
     figure: "health",
+    call: {
+      tool: "verify",
+      body: `{
+  "package": "reqeusts"
+}`,
+      note: "Comes back with exists: false, and the real name it is one edit away from.",
+    },
   },
   {
     title: "Will these install together?",
     body: "Every pair in the set, graded against declared peer ranges and co-installs already in the compatibility matrix.",
     backedBy: "compat",
     figure: "pairs",
+    call: {
+      tool: "compat",
+      body: `{
+  "packages": ["next", "react", "react-dom"],
+  "versions": { "react": "19.2.0" }
+}`,
+      note: "Every pair graded against declared peer ranges and co-installs already seen.",
+    },
   },
   {
     title: "Does it run on your Node?",
     body: "We check against the runtime you deploy on. Declared engines can range, so stacks can resolve perfectly and still die in production because one node doesn't support the Node you ship.",
     backedBy: "compat · usage",
     figure: "engines",
+    call: {
+      tool: "compat",
+      body: `{
+  "packages": ["next", "typescript", "vitest"],
+  "node": "20.11.0"
+}`,
+      note: "Same check, pinned to the runtime you deploy on rather than to the latest.",
+    },
   },
   {
     title: "What is the API, exactly?",
     body: "Exported symbols and signatures, read out of the version's own shipped .d.ts. We hand the delta to your model: what moved, what went, what is new.",
     backedBy: "usage · resolve_surface · diff_surface",
     figure: "surface",
+    call: {
+      tool: "usage",
+      body: `{
+  "package": "zod",
+  "version": "4.1.12",
+  "knownVersion": "3.23.8"
+}`,
+      note: "The delta from the version the model knows to the one you are installing.",
+    },
   },
   {
     title: "What should the whole stack be?",
     body: "Describe the project and lurq fills every gap. It's quick because compatible sets are already stored.",
     backedBy: "recommend · plan",
     figure: "stack",
+    call: {
+      tool: "diagram",
+      body: `{
+  "stack": ["next", "drizzle-orm", "postgres", "clerk"]
+}`,
+      note: "A reference architecture keyed by layer, and the gaps the stack has not filled.",
+    },
   },
 ];
 

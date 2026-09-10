@@ -2769,3 +2769,226 @@ li:hover > .room-ide-label {
     padding-left: 0.7rem;
   }
 }
+
+/* ── The capability cards turn over ──────────────────────────────────────────
+   Front asks the question, back is the call. See components/site/capability-
+   grid.tsx for why the call lives here rather than in a section of its own.
+
+   NO `transform-style: preserve-3d`. The usual two-face flip puts it on the
+   wrapper, and a wrapper inside `overflow: hidden` — which this card needs, for
+   its rounded corners over a full-bleed figure — is flattened by WebKit, so the
+   back face shows through the front and both are legible at once. Perspective
+   on the parent with each face carrying its own rotateY needs no preserve-3d at
+   all, and `backface-visibility` does the hiding either way.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-cap-flip {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  perspective: 1200px;
+}
+
+.room-cap-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: transform 620ms var(--ease);
+}
+
+/* In flow, so the card's height is the front's height. The back is absolute
+   over it, which is what keeps the grid from reflowing as cards are turned. */
+.room-cap-front {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  text-align: left;
+}
+
+/* The target: a transparent button laid over the whole front face. See the note
+   in capability-grid.tsx for why it is over the face rather than around it. */
+.room-cap-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  cursor: pointer;
+  border-radius: inherit;
+}
+
+.room-cap-hit:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: -2px;
+}
+
+.room-cap-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+.room-cap-flip[data-flipped] .room-cap-front {
+  transform: rotateY(-180deg);
+}
+
+.room-cap-flip[data-flipped] .room-cap-back {
+  transform: rotateY(0deg);
+}
+
+/* The affordance. Held back until the card is pointed at or focused, because
+   five cards each shouting "See the call" is a row of buttons rather than a
+   set of instruments. */
+.room-cap-turn {
+  margin-top: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mark);
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+/* `:has`, not a sibling combinator: the hit button comes AFTER the plate in
+   source order, so `~` cannot reach back to the line it needs to reveal. */
+.room-cap-card:hover .room-cap-turn,
+.room-cap-front:has(.room-cap-hit:focus-visible) .room-cap-turn {
+  opacity: 1;
+  transform: none;
+}
+
+/* Touch has no hover to reveal it with, and a card that looks inert is a card
+   nobody taps. */
+@media (hover: none) {
+  .room-cap-turn {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The turn is the whole gesture, so there is nothing to soften: it snaps, and
+   the card is on its other side. */
+@media (prefers-reduced-motion: reduce) {
+  .room-cap-face,
+  .room-cap-turn {
+    transition: none;
+  }
+}
+
+/* ── The call, on the back of the card ───────────────────────────────────────
+   Black terminal on a page of near-black panels: it is a step DOWN from
+   --surface rather than up, so turning a card reads as opening something rather
+   than as lighting it. Same title bar and the same dots as the session and
+   surface panels, because it is the same object.
+   ─────────────────────────────────────────────────────────────────────────── */
+.room-call {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: var(--ground);
+}
+
+.room-call-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-bottom: 1px solid var(--edge);
+  background: color-mix(in oklab, var(--surface) 60%, var(--ground));
+  padding: 0.7rem 0.75rem 0.7rem 1.15rem;
+}
+
+.room-call-close {
+  display: inline-flex;
+  height: 26px;
+  width: 26px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--ink-3);
+  transition:
+    color var(--dur-hover) var(--ease-ui),
+    background-color var(--dur-hover) var(--ease-ui);
+}
+
+.room-call-close:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.room-call-close:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 1px;
+}
+
+/* Scrolls rather than clips. The longest body here is four lines and every card
+   has room for it, but a card in a narrow column at 320px does not, and a call
+   with its closing brace cut off is a call somebody copies wrong. */
+.room-call-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.95rem 1.15rem 0.5rem;
+}
+
+.room-call-prompt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.room-call-code {
+  margin-top: 0.5rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--ink-2);
+  white-space: pre;
+}
+
+.room-call-note {
+  padding: 0 1.15rem;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.room-call-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.85rem 1.15rem 1.05rem;
+}
+
+.room-call-btn {
+  height: 32px;
+  flex: 1;
+  min-width: 7.5rem;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  transition:
+    color var(--dur-hover) var(--ease-ui),
+    border-color var(--dur-hover) var(--ease-ui),
+    background-color var(--dur-hover) var(--ease-ui);
+}
+
+.room-call-btn:hover {
+  border-color: var(--edge-lit);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.room-call-btn:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+}
+
+.room-call-btn[data-primary] {
+  border-color: color-mix(in oklab, var(--mark) 40%, var(--edge));
+  color: var(--ink);
+}

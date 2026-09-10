@@ -1,5 +1,12 @@
 /**
- * The ten tools an agent can call, as pages.
+ * The ten tools an agent can call.
+ *
+ * NO LONGER PAGES. /product and its ten tool routes were removed, and so was the
+ * showcase section that racked them up on the landing page. The one reader left
+ * is app/llms.txt, which lists `slug` and `whenToCall` so a model can say what
+ * lurq covers and which call answers it. The rest of each entry is kept rather
+ * than trimmed to those two fields: it is transcribed from src/mcp/server.ts,
+ * it is correct, and re-deriving it costs more than carrying it.
  *
  * THE RULE THIS FILE INHERITS. content/surfaces.ts already states it: these
  * panels show *structure*, never an answer. Every `args` entry below is the real
@@ -21,7 +28,6 @@
  * House rules from content/copy.ts: sentence case, no em dashes, and the word
  * the hero spends is not spent again here.
  */
-import type { DiagramName } from "@/components/site/diagrams";
 
 export interface ToolArg {
   name: string;
@@ -59,7 +65,6 @@ export interface Tool {
   call: string;
   /** Response skeleton. Types and enums, never values. */
   shape: string;
-  figure: DiagramName;
   /** Other slugs. Two, so the row never wraps. */
   related: [string, string];
 }
@@ -99,7 +104,6 @@ export const TOOLS: Tool[] = [
     "installScript": boolean
   }
 }`,
-    figure: "verify",
     related: ["evaluate", "compat"],
   },
   {
@@ -133,7 +137,6 @@ export const TOOLS: Tool[] = [
   "summary":    string,
   "usage":      { "install": string, "import": string }
 }`,
-    figure: "evaluate",
     related: ["compare", "verify"],
   },
   {
@@ -165,7 +168,6 @@ export const TOOLS: Tool[] = [
   "axes":   { [axis: string]: { [pkg: string]: number } },
   "divergence": string[]
 }`,
-    figure: "compare",
     related: ["evaluate", "compat"],
   },
   {
@@ -224,7 +226,6 @@ export const TOOLS: Tool[] = [
   }],
   "engines": [{ "package": string, "node": string, "satisfied": boolean }]
 }`,
-    figure: "compat",
     related: ["usage", "diff_surface"],
   },
   {
@@ -269,7 +270,6 @@ export const TOOLS: Tool[] = [
   },
   "engines": { "node": string }
 }`,
-    figure: "usage",
     related: ["resolve_surface", "diff_surface"],
   },
   {
@@ -306,7 +306,6 @@ export const TOOLS: Tool[] = [
   "layers":  { [layer: string]: string[] },
   "gaps":    string[]
 }`,
-    figure: "diagram",
     related: ["compat", "compare"],
   },
   {
@@ -340,7 +339,6 @@ export const TOOLS: Tool[] = [
   "symbols": [{ "name": string, "kind": "function" | "class" | "const" }],
   "queued":  boolean
 }`,
-    figure: "resolve",
     related: ["usage", "diff_surface"],
   },
   {
@@ -378,7 +376,6 @@ export const TOOLS: Tool[] = [
   "added":        string[],
   "arity": [{ "name": string, "from": number, "to": number }]
 }`,
-    figure: "diff",
     related: ["usage", "resolve_surface"],
   },
   {
@@ -416,7 +413,6 @@ export const TOOLS: Tool[] = [
     "call":  string
   }]
 }`,
-    figure: "capabilities",
     related: ["diff_surface", "verify"],
   },
   {
@@ -457,26 +453,7 @@ export const TOOLS: Tool[] = [
     shape: `{
   "recorded": boolean
 }`,
-    figure: "outcome",
     related: ["evaluate", "capabilities"],
   },
 ];
 
-export const TOOL_BY_SLUG = new Map(TOOLS.map((t) => [t.slug, t]));
-
-/** Preserves the order in TOOLS: the groups read Check, Fit, Surface, Feedback. */
-export const TOOL_GROUPS = Array.from(
-  TOOLS.reduce((acc, tool) => {
-    const list = acc.get(tool.group) ?? [];
-    list.push(tool);
-    return acc.set(tool.group, list);
-  }, new Map<Tool["group"], Tool[]>()),
-);
-
-// ── section copy ─────────────────────────────────────────────────────────────
-
-export const PRODUCT_HEAD = "Ten calls, and none of them are a guess.";
-export const PRODUCT_LEAD =
-  "Every tool below is registered on the MCP server today. The panels show the schema each one accepts and the shape of what comes back, never a stored answer: a verdict printed on a marketing page is a claim about a day that has already passed.";
-
-export const SHOWCASE_HEAD = "The whole surface, one call at a time.";
