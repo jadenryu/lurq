@@ -160,10 +160,32 @@ async function resolveSurfaceUncached(
   input: ResolveSurfaceInput,
 ): Promise<SurfaceResponse> {
   const version = input.version ?? null;
-  const stored = await loadStored(db, input.package, version);
+  let stored = await loadStored(db, input.package, version);
+
+  // §8 said never extract inside a query. That rule is relaxed here
+  // deliberately, not by accident.
+  //
+  // What it protected against was unbounded work on a request path. What it
+  // cost was that the only store able to answer "what changed between these two
+  // versions" grew solely at the rate of a queue drain, while `usage` — which
+  // does extract inside a query, within a budget — filled itself to nearly ten
+  // times the coverage using the same extractor at half a second a package.
+  //
+  // The original concern is addressed rather than ignored: the wait is bounded
+  // by a wall-clock budget, concurrent misses for one version share a single
+  // fetch, in-flight extractions are capped, and every failure path falls
+  // through to exactly the enqueue-and-answer-honestly behaviour below. A
+  // caller waits at most the budget; it never waits on unbounded work.
+  if (!stored || (stored.verdict === 'unknown' && stored.rows.length === 0)) {
+    const { firstTouchSurface } = await import('../pipeline/firstTouch');
+    if (await firstTouchSurface(db, input.package, version)) {
+      stored = await loadStored(db, input.package, version);
+    }
+  }
 
   if (!stored || (stored.verdict === 'unknown' && stored.rows.length === 0)) {
-    // §8: never extract inside a query. Enqueue and answer honestly.
+    // Nothing within the budget. Queue it so a retry is a cache hit, and answer
+    // honestly — the extraction may still be running and will warm the cache.
     await enqueueSurface(db, input.package, version).catch(() => {});
     return { package: input.package, version, ...MISS };
   }
@@ -225,10 +247,23 @@ export async function handleDiffSurface(db: Database, input: DiffSurfaceInput) {
 }
 
 async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
-  const [a, b] = await Promise.all([
+  let [a, b] = await Promise.all([
     loadStored(db, input.package, input.fromVersion),
     loadStored(db, input.package, input.toVersion),
   ]);
+
+  // Both halves are raced under ONE shared budget (see firstTouch.ts): a diff
+  // needs both, so extracting sequentially would let a slow `from` eat the
+  // budget and leave `to` unstarted.
+  if (!a || !b || a.rows.length === 0 || b.rows.length === 0) {
+    const { firstTouchPair } = await import('../pipeline/firstTouch');
+    if (await firstTouchPair(db, input.package, input.fromVersion, input.toVersion)) {
+      [a, b] = await Promise.all([
+        loadStored(db, input.package, input.fromVersion),
+        loadStored(db, input.package, input.toVersion),
+      ]);
+    }
+  }
 
   const missing: string[] = [];
   if (!a || a.rows.length === 0) missing.push(input.fromVersion);
