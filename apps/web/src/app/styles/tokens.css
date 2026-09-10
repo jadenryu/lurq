@@ -779,12 +779,15 @@ li:hover > .room-ide-label {
 
 /* Out past the content column, into the page margin. The bar is chrome for the
    whole section rather than a column of it, and the further left it sits the
-   less it competes with the terminal beside it. Only once the gutter is wide
-   enough to give the margin away: negative offsets at 1000px would push it off
-   screen. */
-@media (min-width: 1180px) {
+   less it competes with the terminal beside it.
+
+   1400px, not 1180: the container is max-w-[1180px] inside px-6, so a 1180px
+   viewport has 24px of gutter and nothing to give away — a -56px pull there
+   puts the bar off the left edge of the screen. 1400 is the first width where
+   the gutter (110px) comfortably exceeds the pull. */
+@media (min-width: 1400px) {
   .room-surface-nav {
-    margin-left: clamp(-7rem, -5vw, -2rem);
+    margin-left: clamp(-6rem, -4vw, -2rem);
   }
 }
 
