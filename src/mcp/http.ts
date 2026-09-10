@@ -72,6 +72,7 @@ import {
   MAX_RUNS_PER_POST,
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
+import { parseTarget, publicScan, type PublicScan } from '../github/publicScan';
 import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
 import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
@@ -249,6 +250,59 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const q = typeof req.query.q === 'string' ? req.query.q : '';
     const limit = Math.min(Number(req.query.limit) || 6, CAPABILITIES.length);
     res.json({ capabilities: q ? searchCapabilities(q, limit) : CAPABILITIES });
+  });
+
+  /**
+   * Scan a public repo or profile for anyone, signed in or not.
+   *
+   * The only unauthenticated route that touches the database, and it exists
+   * because the funnel was the wrong way round: the fastest way to explain what
+   * lurq does is to show someone their own dependencies, and that was gated
+   * behind a signup and a GitHub App install. This is the top of the funnel.
+   *
+   * Three things keep it from being a free scan API. It is behind the same IP
+   * limiter as everything else unauthenticated; the result is capped to a
+   * handful of dependency rows, so the full report is still a reason to sign
+   * up; and identical targets are served from memory for fifteen minutes, so a
+   * refresh loop costs one scan rather than one per press.
+   */
+  const scanCache = new Map<string, { at: number; value: PublicScan | null }>();
+  const SCAN_TTL_MS = 15 * 60_000;
+  /** Bounded so a spray of one-off targets cannot grow the map without limit. */
+  const SCAN_CACHE_MAX = 500;
+
+  app.post('/scan/public', ipLimiter, async (req: Request, res: Response) => {
+    const raw = (req.body ?? {}) as { target?: unknown };
+    const target = typeof raw.target === 'string' ? parseTarget(raw.target) : null;
+    if (!target) {
+      res.status(400).json({ error: 'Give a GitHub repo (owner/name) or a profile.' });
+      return;
+    }
+
+    const key = target.kind === 'repo' ? `${target.owner}/${target.name}` : `@${target.login}`;
+    const hit = scanCache.get(key);
+    if (hit && Date.now() - hit.at < SCAN_TTL_MS) {
+      if (!hit.value) {
+        res.status(404).json({ error: 'No public package.json found for that.' });
+        return;
+      }
+      res.json(hit.value);
+      return;
+    }
+
+    try {
+      const scan = await publicScan(db, target);
+      if (scanCache.size >= SCAN_CACHE_MAX) scanCache.clear();
+      scanCache.set(key, { at: Date.now(), value: scan });
+      if (!scan) {
+        res.status(404).json({ error: 'No public package.json found for that.' });
+        return;
+      }
+      res.json(scan);
+    } catch (err) {
+      logger.error('public scan failed:', formatError(err));
+      res.status(502).json({ error: 'Could not read that repository.' });
+    }
   });
 
   // Bearer API-key auth: resolve and attach the key, or 401.
