@@ -17,6 +17,7 @@ import { pMap } from '../core/concurrency';
 import { runDiscovery } from './discovery';
 import { drainCompatVerifyQueue } from './compat';
 import { drainSurfaceQueue } from './surface';
+import { drainMcpQueue, MCP_PER_CYCLE } from './mcp';
 
 export interface WorkerOptions {
   /** Seconds between cycles (default 900 = 15 min). */
@@ -29,6 +30,8 @@ export interface WorkerOptions {
   compatVerifyPerCycle?: number;
   /** Demand-driven surface extractions drained per cycle (v1 §6.1). */
   surfacePerCycle?: number;
+  /** MCP servers probed per cycle. Small: each one spawns a sandbox. */
+  mcpPerCycle?: number;
   /** Run exactly one cycle and return (for tests / cron). */
   once?: boolean;
 }
@@ -68,6 +71,7 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
   const extractPerCycle = opts.extractPerCycle ?? 25;
   const compatVerifyPerCycle = opts.compatVerifyPerCycle ?? 10;
   const surfacePerCycle = opts.surfacePerCycle ?? 10;
+  const mcpPerCycle = opts.mcpPerCycle ?? MCP_PER_CYCLE;
 
   let stopped = false;
   const stop = (sig: string) => {
@@ -115,6 +119,23 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: surface drain failed: ${String(err)}`));
+    // Service MCP probe misses. Budgeted an order of magnitude lower than the
+    // npm drain above because each item installs a package and handshakes with
+    // someone else's program — seconds each, not milliseconds, and one hung
+    // server must not be able to stall the cycle.
+    await (async () => {
+      const handle = createDb({ max: 4 });
+      try {
+        const s = await drainMcpQueue(handle.db, { limit: mcpPerCycle });
+        if (s.drained) {
+          logger.info(
+            `worker: mcp drain, ${s.stored} stored, ${s.cached} cached, ${s.undeclared} undeclared, ${s.unreachable} unreachable, ${s.truncated} truncated, ${s.backfilled} predecessor(s) queued, ${s.failed} failed`,
+          );
+        }
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: mcp drain failed: ${String(err)}`));
     // Rescore is NOT run here. It was, every cycle, and it reported "0 changed"
     // every time — which is arithmetic, not luck.
     //
