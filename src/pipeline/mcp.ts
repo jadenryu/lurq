@@ -31,6 +31,7 @@ import {
   mcpSurfaceRef,
   storeSurface,
 } from '../db/surface';
+import { recordObservation, upsertClaim, upsertEntity } from '../db/graph';
 import { probeMcpServer, mcpServerOracle } from '../graph/oracles/mcpServer';
 import { getSandbox } from '../sandbox/index';
 import type { Sandbox } from '../sandbox/types';
@@ -92,17 +93,19 @@ export async function extractAndStoreMcp(
   const sandbox = opts.sandbox ?? (await getSandbox());
   const { probe, stderr } = await probeMcpServer(sandbox, server, version);
 
-  if (!probe) {
-    return { outcome: 'unreachable', tools: [], reason: `no probe output: ${stderr.slice(0, 200)}` };
-  }
-  if (!probe.ok) {
-    return {
-      outcome: 'unreachable',
-      tools: [],
-      reason: `stage=${probe.stage} ${probe.error ?? ''}`.slice(0, 300),
-    };
+  const ref = mcpSurfaceRef(server, version);
+
+  if (!probe || !probe.ok) {
+    const reason = probe
+      ? `stage=${probe.stage} ${probe.error ?? ''}`.slice(0, 300)
+      : `no probe output: ${stderr.slice(0, 200)}`;
+    await recordUnreachable(db, ref, reason);
+    return { outcome: 'unreachable', tools: [], reason };
   }
   if (probe.truncated) {
+    // OUR ceiling, not the server's fault — no verdict is recorded, so a later
+    // probe with more headroom starts from a clean slate rather than from a
+    // stored claim that this server does not work.
     return {
       outcome: 'truncated',
       tools: probe.tools ?? [],
@@ -111,7 +114,6 @@ export async function extractAndStoreMcp(
   }
 
   const tools = probe.tools ?? [];
-  const ref = mcpSurfaceRef(server, version);
   const hash = surfaceHash(tools);
 
   if (await isExtractionCached(db, ref, hash, EXTRACTOR_VERSION, MCP_TIER)) {
@@ -130,6 +132,41 @@ export async function extractAndStoreMcp(
     tools,
     reason: res.verdict === 'undeclared' ? 'server listed no tools' : null,
   };
+}
+
+/**
+ * Record that a server refused to start, as a claim about the server.
+ *
+ * Without this the read path had no way to tell "not probed yet" from "probed,
+ * and it would not run": both looked like an empty surface, so every query
+ * answered UNKNOWN and re-queued a 45-second probe of a server already known to
+ * be broken, forever. A settled negative is evidence and belongs in the graph.
+ *
+ * NOT written for a sandbox failure — that throws before reaching here — and
+ * not for a truncated list, which is our measurement gap rather than the
+ * server's defect.
+ */
+async function recordUnreachable(
+  db: Database,
+  ref: ReturnType<typeof mcpSurfaceRef>,
+  reason: string,
+) {
+  const entity = await upsertEntity(db, ref, 0);
+  const claim = await upsertClaim(db, {
+    subjectId: entity.id,
+    relation: 'initializes',
+    environmentId: null,
+    tenantId: 0,
+  });
+  await recordObservation(db, {
+    claimId: claim.id,
+    verdict: 'verified_false',
+    class: 'executed',
+    tier: MCP_TIER,
+    evidence: reason,
+    oracleId: mcpServerOracle.id,
+    oracleVer: EXTRACTOR_VERSION,
+  });
 }
 
 export interface McpDrainSummary {
