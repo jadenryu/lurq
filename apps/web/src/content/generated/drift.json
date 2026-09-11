@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-10T12:20:56.317Z",
+  "generatedAt": "2026-09-11T12:19:41.183Z",
   "source": "lurq index: package_versions joined to packages",
   "reproduce": "npx tsx scripts/gen-drift.ts",
   "cutoffs": [
@@ -13,8 +13,8 @@
   "buckets": {
     "2026-05-01": {
       "totals": {
-        "drifted": 2657,
-        "tracked": 38306
+        "drifted": 2694,
+        "tracked": 38605
       },
       "rows": [
         {
@@ -36,26 +36,6 @@
           "bumped_at": "2026-07-26",
           "majors_since": 1,
           "weekly_downloads": 501448901
-        },
-        {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.3",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 451090873
-        },
-        {
-          "name": "chalk",
-          "major_then": 5,
-          "version_then": "5.6.2",
-          "major_now": 6,
-          "version_now": "6.0.0",
-          "bumped_at": "2026-07-26",
-          "majors_since": 1,
-          "weekly_downloads": 439795694
         },
         {
           "name": "@types/node",
@@ -88,6 +68,16 @@
           "weekly_downloads": 298229346
         },
         {
+          "name": "commander",
+          "major_then": 14,
+          "version_then": "14.0.3",
+          "major_now": 15,
+          "version_now": "15.0.0",
+          "bumped_at": "2026-05-29",
+          "majors_since": 1,
+          "weekly_downloads": 271850119
+        },
+        {
           "name": "argparse",
           "major_then": 2,
           "version_then": "2.0.1",
@@ -96,13 +86,23 @@
           "bumped_at": "2026-07-14",
           "majors_since": 1,
           "weekly_downloads": 265500643
+        },
+        {
+          "name": "chalk",
+          "major_then": 5,
+          "version_then": "5.6.2",
+          "major_now": 6,
+          "version_now": "6.0.0",
+          "bumped_at": "2026-07-26",
+          "majors_since": 1,
+          "weekly_downloads": 260764415
         }
       ]
     },
     "2026-02-16": {
       "totals": {
-        "drifted": 3399,
-        "tracked": 35810
+        "drifted": 3435,
+        "tracked": 36087
       },
       "rows": [
         {
@@ -124,26 +124,6 @@
           "bumped_at": "2026-07-26",
           "majors_since": 1,
           "weekly_downloads": 501448901
-        },
-        {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.3",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 451090873
-        },
-        {
-          "name": "chalk",
-          "major_then": 5,
-          "version_then": "5.6.2",
-          "major_now": 6,
-          "version_now": "6.0.0",
-          "bumped_at": "2026-07-26",
-          "majors_since": 1,
-          "weekly_downloads": 439795694
         },
         {
           "name": "wrap-ansi",
@@ -184,13 +164,33 @@
           "bumped_at": "2026-04-02",
           "majors_since": 1,
           "weekly_downloads": 316067028
+        },
+        {
+          "name": "js-yaml",
+          "major_then": 4,
+          "version_then": "4.1.1",
+          "major_now": 5,
+          "version_now": "5.4.1",
+          "bumped_at": "2026-06-20",
+          "majors_since": 1,
+          "weekly_downloads": 298229346
+        },
+        {
+          "name": "entities",
+          "major_then": 7,
+          "version_then": "7.0.1",
+          "major_now": 8,
+          "version_now": "8.0.0",
+          "bumped_at": "2026-03-17",
+          "majors_since": 1,
+          "weekly_downloads": 293277295
         }
       ]
     },
     "2026-01-01": {
       "totals": {
-        "drifted": 3724,
-        "tracked": 34538
+        "drifted": 3756,
+        "tracked": 34806
       },
       "rows": [
         {
@@ -222,26 +222,6 @@
           "bumped_at": "2026-07-26",
           "majors_since": 1,
           "weekly_downloads": 501448901
-        },
-        {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.2",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 451090873
-        },
-        {
-          "name": "chalk",
-          "major_then": 5,
-          "version_then": "5.6.2",
-          "major_now": 6,
-          "version_now": "6.0.0",
-          "bumped_at": "2026-07-26",
-          "majors_since": 1,
-          "weekly_downloads": 439795694
         },
         {
           "name": "wrap-ansi",
@@ -272,13 +252,33 @@
           "bumped_at": "2026-02-09",
           "majors_since": 1,
           "weekly_downloads": 392030374
+        },
+        {
+          "name": "which",
+          "major_then": 6,
+          "version_then": "6.0.0",
+          "major_now": 7,
+          "version_now": "7.0.0",
+          "bumped_at": "2026-05-08",
+          "majors_since": 1,
+          "weekly_downloads": 333868117
+        },
+        {
+          "name": "p-locate",
+          "major_then": 6,
+          "version_then": "6.0.0",
+          "major_now": 7,
+          "version_now": "7.0.0",
+          "bumped_at": "2026-02-03",
+          "majors_since": 1,
+          "weekly_downloads": 317001424
         }
       ]
     },
     "2025-12-01": {
       "totals": {
-        "drifted": 3841,
-        "tracked": 33775
+        "drifted": 3876,
+        "tracked": 34039
       },
       "rows": [
         {
@@ -312,26 +312,6 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.2",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 451090873
-        },
-        {
-          "name": "chalk",
-          "major_then": 5,
-          "version_then": "5.6.2",
-          "major_now": 6,
-          "version_now": "6.0.0",
-          "bumped_at": "2026-07-26",
-          "majors_since": 1,
-          "weekly_downloads": 439795694
-        },
-        {
           "name": "wrap-ansi",
           "major_then": 9,
           "version_then": "9.0.2",
@@ -360,13 +340,33 @@
           "bumped_at": "2026-02-09",
           "majors_since": 1,
           "weekly_downloads": 392030374
+        },
+        {
+          "name": "which",
+          "major_then": 6,
+          "version_then": "6.0.0",
+          "major_now": 7,
+          "version_now": "7.0.0",
+          "bumped_at": "2026-05-08",
+          "majors_since": 1,
+          "weekly_downloads": 333868117
+        },
+        {
+          "name": "p-locate",
+          "major_then": 6,
+          "version_then": "6.0.0",
+          "major_now": 7,
+          "version_now": "7.0.0",
+          "bumped_at": "2026-02-03",
+          "majors_since": 1,
+          "weekly_downloads": 317001424
         }
       ]
     },
     "2025-08-01": {
       "totals": {
-        "drifted": 4304,
-        "tracked": 31578
+        "drifted": 4345,
+        "tracked": 31828
       },
       "rows": [
         {
@@ -410,26 +410,6 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.0",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 451090873
-        },
-        {
-          "name": "chalk",
-          "major_then": 5,
-          "version_then": "5.4.1",
-          "major_now": 6,
-          "version_now": "6.0.0",
-          "bumped_at": "2026-07-26",
-          "majors_since": 1,
-          "weekly_downloads": 439795694
-        },
-        {
           "name": "wrap-ansi",
           "major_then": 9,
           "version_then": "9.0.0",
@@ -448,13 +428,33 @@
           "bumped_at": "2026-06-19",
           "majors_since": 2,
           "weekly_downloads": 429845905
+        },
+        {
+          "name": "eslint-visitor-keys",
+          "major_then": 4,
+          "version_then": "4.2.1",
+          "major_now": 5,
+          "version_now": "5.0.1",
+          "bumped_at": "2025-11-10",
+          "majors_since": 1,
+          "weekly_downloads": 392218984
+        },
+        {
+          "name": "balanced-match",
+          "major_then": 3,
+          "version_then": "3.0.1",
+          "major_now": 4,
+          "version_now": "4.0.4",
+          "bumped_at": "2026-02-09",
+          "majors_since": 1,
+          "weekly_downloads": 392030374
         }
       ]
     },
     "2025-01-01": {
       "totals": {
-        "drifted": 4999,
-        "tracked": 29276
+        "drifted": 5037,
+        "tracked": 29512
       },
       "rows": [
         {
@@ -498,26 +498,6 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "commander",
-          "major_then": 13,
-          "version_then": "13.0.0",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 2,
-          "weekly_downloads": 451090873
-        },
-        {
-          "name": "chalk",
-          "major_then": 5,
-          "version_then": "5.4.1",
-          "major_now": 6,
-          "version_now": "6.0.0",
-          "bumped_at": "2026-07-26",
-          "majors_since": 1,
-          "weekly_downloads": 439795694
-        },
-        {
           "name": "wrap-ansi",
           "major_then": 9,
           "version_then": "9.0.0",
@@ -536,6 +516,26 @@
           "bumped_at": "2026-06-19",
           "majors_since": 3,
           "weekly_downloads": 429845905
+        },
+        {
+          "name": "eslint-visitor-keys",
+          "major_then": 4,
+          "version_then": "4.2.0",
+          "major_now": 5,
+          "version_now": "5.0.1",
+          "bumped_at": "2025-11-10",
+          "majors_since": 1,
+          "weekly_downloads": 392218984
+        },
+        {
+          "name": "balanced-match",
+          "major_then": 3,
+          "version_then": "3.0.1",
+          "major_now": 4,
+          "version_now": "4.0.4",
+          "bumped_at": "2026-02-09",
+          "majors_since": 1,
+          "weekly_downloads": 392030374
         }
       ]
     }
