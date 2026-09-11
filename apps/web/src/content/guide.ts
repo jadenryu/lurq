@@ -110,6 +110,22 @@ export const TOOLS: GuideTool[] = [
     input: "package · fromVersion · toVersion",
   },
   {
+    name: "mcp_surface",
+    group: "check",
+    purpose:
+      "Every tool an MCP server actually lists, with its required and optional parameters and its behaviour annotations \u2014 read from a live tools/list handshake in a sandbox, not from a README. The annotations are the part to read before granting access: they say whether a tool writes, destroys, or reaches outside the machine.",
+    prompt: "what tools does this MCP server expose, and what do they take?",
+    input: "server \u00b7 optional version",
+  },
+  {
+    name: "mcp_drift",
+    group: "upkeep",
+    purpose:
+      "What an MCP server changed between two versions. Two findings have no package equivalent: silent drift, where a schema moved while its description stayed byte-identical and no changelog could have told you; and privilege widening, where a tool stopped being read-only or started being destructive \u2014 nothing breaks, which is what makes it worse than a break.",
+    prompt: "did this MCP server change its tool contract?",
+    input: "server \u00b7 fromVersion \u00b7 toVersion",
+  },
+  {
     name: "diagram",
     group: "extra",
     purpose:

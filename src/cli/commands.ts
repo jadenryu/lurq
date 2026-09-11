@@ -762,3 +762,116 @@ export async function runCompat(
     }
   }
 }
+
+/**
+ * `lurq mcp-surface <server>` — what an MCP server exposes.
+ *
+ * The annotation column is the one worth reading and the reason this is not
+ * just a tool list: `write`/`destroys`/`external` is what an agent is actually
+ * being granted when it is pointed at a server, and it is nowhere in the README.
+ */
+export async function runMcpSurface(
+  server: string,
+  opts: { version?: string; json?: boolean },
+): Promise<void> {
+  const args = { server, version: opts.version ?? null };
+  const res = await fromIndex('mcp_surface', args, (db) =>
+    import('../mcp/mcpHandlers').then((m) => m.handleMcpSurface(db, args)),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+  console.log(`${bold(server)}${res.version ? dim(`@${res.version}`) : ''}`);
+  if (res.verdict !== 'verified_true' || res.tools.length === 0) {
+    console.log(yellow(`${res.verdict}: ${res.coverageNote}`));
+    return;
+  }
+
+  console.log(
+    table(
+      ['Tool', 'Required', 'Optional', 'Behaviour'],
+      res.tools.map((t) => {
+        const optional = t.params.filter((p) => !t.required.includes(p));
+        const a = t.annotations;
+        // Only the powers that are ON are worth ink; an absent flag is the
+        // benign default and printing it would bury the two that matter.
+        const behaviour = [
+          a.readOnlyHint ? green('read-only') : red('writes'),
+          a.destructiveHint ? red('destroys') : null,
+          a.openWorldHint ? yellow('external') : null,
+          t.deprecated ? yellow('deprecated') : null,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        return [t.name, t.required.join(', ') || '—', optional.join(', ') || '—', behaviour];
+      }),
+    ),
+  );
+  console.log(dim(res.coverageNote));
+}
+
+/**
+ * `lurq mcp-drift <server> --from <a> --to <b>` — what the upgrade changes.
+ *
+ * Privilege widening prints above the breaking changes on purpose. A tool that
+ * gained a required parameter fails loudly on the next call; a tool that quietly
+ * stopped being read-only succeeds, and writes.
+ */
+export async function runMcpDrift(
+  server: string,
+  opts: { from: string; to: string; json?: boolean },
+): Promise<void> {
+  const args = { server, fromVersion: opts.from, toVersion: opts.to };
+  const res = await fromIndex('mcp_drift', args, (db) =>
+    import('../mcp/mcpHandlers').then((m) => m.handleMcpDrift(db, args)),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+  console.log(`${bold(server)} ${dim(`${opts.from} → ${opts.to}`)}`);
+  if (res.inconclusive) {
+    console.log(yellow(res.inconclusive));
+    return;
+  }
+
+  const widened = res.annotationFlips.filter((f) => f.widensPrivilege);
+  for (const f of widened) {
+    console.log(red(`⚠ privilege  ${f.tool}.${f.hint}: ${f.from} → ${f.to}`));
+  }
+  for (const t of res.silentDrift) {
+    console.log(yellow(`⚠ silent     ${t}: schema changed, description did not`));
+  }
+  for (const t of res.removedTools) console.log(red(`✗ removed    ${t}`));
+  for (const c of res.requiredAdded) {
+    console.log(red(`✗ required   ${c.tool}: ${c.params.join(', ')} now mandatory`));
+  }
+  for (const c of res.paramsRemoved) {
+    console.log(red(`✗ dropped    ${c.tool}: ${c.params.join(', ')}`));
+  }
+  for (const c of res.typeChanged.filter((x) => !x.widened)) {
+    console.log(red(`✗ narrowed   ${c.tool}.${c.param}`));
+  }
+  for (const t of res.addedTools) console.log(green(`+ added      ${t}`));
+  for (const c of res.requiredRelaxed) {
+    console.log(green(`+ optional   ${c.tool}: ${c.params.join(', ')}`));
+  }
+  for (const c of res.paramsAdded) {
+    console.log(green(`+ params     ${c.tool}: ${c.params.join(', ')}`));
+  }
+  // Compatible movement is printed too. The summary counts it, so leaving it
+  // out of the body left the reader told that five parameters were relaxed and
+  // unable to see which five.
+  for (const c of res.typeChanged.filter((x) => x.widened)) {
+    console.log(green(`+ relaxed    ${c.tool}.${c.param}`));
+  }
+  for (const t of res.outputChanged) console.log(dim(`· output     ${t}`));
+  for (const f of res.annotationFlips.filter((x) => !x.widensPrivilege)) {
+    console.log(dim(`· safer      ${f.tool}.${f.hint}: ${f.from} → ${f.to}`));
+  }
+  for (const t of res.deprecated) console.log(yellow(`· deprecated ${t}`));
+  for (const t of res.prosePolished) console.log(dim(`· docs only  ${t}`));
+
+  console.log(
+    res.breaking ? red(`\n${res.summary}`) : green(`\n${res.summary || 'no contract change'}`),
+  );
+}

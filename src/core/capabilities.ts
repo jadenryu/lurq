@@ -102,6 +102,26 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['breaking', 'removed', 'changed', 'migration', 'major'],
   },
   {
+    id: 'mcp-surface',
+    title: 'Read an MCP server\'s tools',
+    question: 'What tools does this MCP server actually expose, and what do they take?',
+    answer:
+      "Every tool from a live `tools/list` handshake in a sandbox: required and optional parameters, and the behaviour annotations that say whether a tool writes, destroys, or reaches outside. Declared contract only — that a tool is listed is not evidence that calling it succeeds.",
+    mcp: 'mcp_surface',
+    cli: 'lurq mcp-surface <server>',
+    aliases: ['mcp', 'tools', 'tool schema', 'inputSchema', 'agent tools', 'server'],
+  },
+  {
+    id: 'mcp-drift',
+    title: 'See what an MCP upgrade changes',
+    question: 'Did this MCP server change its tool contract?',
+    answer:
+      'The contract diff between two versions of an MCP server: tools removed, parameters that became required, types narrowed, and annotation flips. Reports silent drift (schema moved, description unchanged) and privilege widening (a tool that stopped being read-only) separately, because neither shows up in a changelog.',
+    mcp: 'mcp_drift',
+    cli: 'lurq mcp-drift <server> --from <old> --to <new>',
+    aliases: ['mcp', 'schema drift', 'tool drift', 'readOnlyHint', 'breaking', 'agent'],
+  },
+  {
     id: 'diagram',
     title: 'Draw the stack',
     question: 'Can I see this as a diagram?',
