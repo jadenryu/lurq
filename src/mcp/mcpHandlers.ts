@@ -117,6 +117,22 @@ async function mcpSurfaceUncached(
   const version = input.version ?? null;
   const stored = await loadStored(db, input.server, version, 0, 'mcp_server');
 
+  // Probed, and it would not run. A settled negative, so it is reported as one
+  // rather than re-queueing a 45-second probe of a server already known broken.
+  if (stored?.verdict === 'verified_false') {
+    return {
+      server: input.server,
+      version,
+      verdict: 'verified_false',
+      class: stored.class,
+      tier: stored.tier,
+      tools: [],
+      coverageNote:
+        'server was probed and did not complete the MCP handshake, so it exposes no callable tools in a clean install. This is a verdict about the server, not a gap in our coverage.',
+      observedAt: stored.observedAt,
+    };
+  }
+
   if (!stored || stored.rows.length === 0) {
     // Probing is a sandbox spawn — queue it, never run it here.
     await enqueueSurface(db, input.server, version, 'mcp_server').catch(() => {});
@@ -253,8 +269,24 @@ async function mcpDriftUncached(db: Database, input: McpDriftInput): Promise<Mcp
       await enqueueSurface(db, input.server, v, 'mcp_server').catch(() => {});
     }
     const blank = diffMcpSurfaces(
-      { package: input.server, version: input.fromVersion, tier: MCP_TIER, entry: null, symbols: [], filesWalked: 0, externalReExports: [] },
-      { package: input.server, version: input.toVersion, tier: MCP_TIER, entry: null, symbols: [], filesWalked: 0, externalReExports: [] },
+      {
+        package: input.server,
+        version: input.fromVersion,
+        tier: MCP_TIER,
+        entry: null,
+        symbols: [],
+        filesWalked: 0,
+        externalReExports: [],
+      },
+      {
+        package: input.server,
+        version: input.toVersion,
+        tier: MCP_TIER,
+        entry: null,
+        symbols: [],
+        filesWalked: 0,
+        externalReExports: [],
+      },
     );
     return {
       ...blank,

@@ -217,7 +217,11 @@ describe('diffMcpSurfaces — classification', () => {
   it('separates a narrowed type from a widened one', () => {
     const narrow = drift(
       [tool('t')],
-      [tool('t', { inputSchema: { type: 'object', properties: { a: { type: 'number' } }, required: ['a'] } })],
+      [
+        tool('t', {
+          inputSchema: { type: 'object', properties: { a: { type: 'number' } }, required: ['a'] },
+        }),
+      ],
     );
     expect(narrow.typeChanged[0]?.widened).toBe(false);
     expect(narrow.breaking).toBe(true);
@@ -434,5 +438,21 @@ describe('drift summary', () => {
 
   it('says nothing changed only when nothing did', () => {
     expect(summarize(base)).toBe('no contract change');
+  });
+});
+
+/**
+ * A server that refuses to start must be tellable from a server nobody has
+ * looked at yet. Conflating them made every query answer "not probed" and
+ * re-queue a 45-second probe of a server already known to be broken.
+ */
+describe('unreachable is a verdict, not a gap', () => {
+  it('keeps the two negatives on separate verdicts', () => {
+    // The pipeline records `verified_false` for a failed handshake and stores
+    // nothing at all when it has not looked — `undeclared` is reserved for a
+    // server that started, answered, and listed zero tools.
+    const nothingListed = mcpSurface('srv', '1.0.0', []);
+    expect(nothingListed.undeclaredReason).toBe('server listed no tools');
+    expect(nothingListed.symbols).toEqual([]);
   });
 });
