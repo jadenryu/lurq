@@ -12,6 +12,7 @@ import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
+import { handleMcpDrift, handleMcpSurface } from './mcpHandlers';
 import {
   handleCompare,
   handleCompat,
@@ -223,6 +224,35 @@ export function buildMcpServer(
       },
     },
     async (args) => json(await run('diff_surface', () => handleDiffSurface(db, args))),
+  );
+
+  server.registerTool(
+    'mcp_surface',
+    {
+      title: 'An MCP server\'s tool contract',
+      description:
+        "What an MCP server ACTUALLY exposes: every tool, its required and optional parameters, and its behaviour annotations, read from a live `tools/list` handshake in a sandbox rather than from a README or the model's memory. Call before wiring an agent to a server, or when a tool call is failing for reasons the error does not explain. A miss returns UNKNOWN and queues a probe; UNKNOWN never means the server has no tools.",
+      inputSchema: {
+        server: npmName.describe('npm package name of the MCP server'),
+        version: z.string().optional().describe('Exact version; omit for the latest probed'),
+      },
+    },
+    async (args) => json(await run('mcp_surface', () => handleMcpSurface(db, args))),
+  );
+
+  server.registerTool(
+    'mcp_drift',
+    {
+      title: 'MCP tool-contract drift between two versions',
+      description:
+        "What moved in an MCP server's tool contract between two versions: tools removed, parameters that became required, types narrowed, and annotation flips. Two findings here have no npm equivalent and are why this exists. SILENT DRIFT is a schema that changed while its description stayed byte-identical, invisible to anyone reading a changelog. PRIVILEGE WIDENING is a tool that stopped being read-only or started being destructive, which does not break anything and is worse than a break. Use before upgrading a server an agent depends on.",
+      inputSchema: {
+        server: npmName.describe('npm package name of the MCP server'),
+        fromVersion: z.string().describe('Version you are on'),
+        toVersion: z.string().describe('Version you are moving to'),
+      },
+    },
+    async (args) => json(await run('mcp_drift', () => handleMcpDrift(db, args))),
   );
 
   // Self-description, and the only tool that reads nothing. An agent holding
