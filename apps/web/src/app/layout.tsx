@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -39,6 +39,26 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * The browser's own chrome, told what this site is.
+ *
+ * Without `colorScheme: "dark"` the UA paints form controls, scrollbars and the
+ * overscroll gutter from the light palette on a page that is forced dark, which
+ * shows as a white band when you rubber-band the top of the page on iOS. The
+ * marketing route's paper surface re-declares `color-scheme: light` for itself
+ * in globals.css, so the light page keeps its light controls.
+ *
+ * `themeColor` matches --ground so the address bar is the page rather than a
+ * seam above it. Two entries because the OS bar should follow the OS.
+ */
+export const viewport: Viewport = {
+  colorScheme: "dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8f8f6" },
+    { media: "(prefers-color-scheme: dark)", color: "#08080a" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -68,6 +88,15 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <body className="flex min-h-full flex-col bg-background text-foreground">
+          {/* First focusable thing on every page. Keyboard and screen-reader
+              users otherwise tab through the whole nav — a mega-nav on the
+              marketing route, a sidebar on the dashboard — before reaching the
+              content, on every navigation. Hidden until focused; `.skip-link`
+              is in globals.css because the visible state needs a real
+              position, not a utility stack. */}
+          <a href="#content" className="skip-link">
+            Skip to content
+          </a>
           <TooltipProvider>{children}</TooltipProvider>
           <Analytics />
           <SpeedInsights />

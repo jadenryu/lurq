@@ -57,6 +57,7 @@ const COLUMNS = [
   {
     heading: "Legal",
     links: [
+      { label: "Security", href: "/security" },
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
       { label: "License", href: "/license" },
