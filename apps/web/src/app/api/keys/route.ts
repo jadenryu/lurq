@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { demoIssuedKey, demoKeys, isDemoUser } from "@/lib/demo-data";
 import { fetchKeys, issueKey, LurqIssuerError } from "@/lib/lurq-issuer";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 /**
  * Self-serve API-key issuance/listing. Clerk authenticates the user here;
@@ -61,10 +61,11 @@ export async function POST(req: Request) {
 
   // Per-user, not per-IP: the identity is already authenticated here, so keying
   // on it throttles the actual actor rather than everyone behind one NAT.
-  if (!rateLimit(`keys:${userId}`, 10, 60_000)) {
+  const limit = checkRateLimit(`keys:${userId}`, 10, 60_000);
+  if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many keys created. Wait a minute and try again." },
-      { status: 429 },
+      { status: 429, headers: rateLimitHeaders(limit) },
     );
   }
 

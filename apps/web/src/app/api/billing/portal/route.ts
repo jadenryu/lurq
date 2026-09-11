@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { LurqIssuerError, openBillingPortal } from "@/lib/lurq-issuer";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 /**
  * Open Stripe's own subscription-management UI for the signed-in user.
@@ -18,8 +18,12 @@ export async function POST() {
     return NextResponse.json({ error: "Sign in to manage billing." }, { status: 401 });
   }
 
-  if (!rateLimit(`billing:portal:${userId}`, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
+  const limit = checkRateLimit(`billing:portal:${userId}`, 10, 60_000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: rateLimitHeaders(limit) },
+    );
   }
 
   try {

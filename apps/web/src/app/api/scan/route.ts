@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 /**
  * The landing page's scan box, forwarded to the backend's public scan.
@@ -29,10 +29,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Scanning isn't available right now." }, { status: 503 });
   }
 
-  if (!rateLimit(`scan:${clientIp(req)}`, PER_MINUTE)) {
+  const limit = checkRateLimit(`scan:${clientIp(req)}`, PER_MINUTE);
+  if (!limit.ok) {
     return NextResponse.json(
       { error: "That's a lot of scans. Give it a minute." },
-      { status: 429 },
+      { status: 429, headers: rateLimitHeaders(limit) },
     );
   }
 
