@@ -208,12 +208,22 @@ export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promis
         `maint ${b.maintenance ?? '—'} · adopt ${b.adoption ?? '—'} · rel ${b.reliability ?? '—'} · eff ${b.efficiency ?? '—'} · qual ${b.quality ?? '—'}`,
       ],
       ['version', res.latestVersion ?? '—'],
-      ['weekly dl', `${formatNumber(res.weeklyDownloads)}  (${formatPercent(res.downloadGrowth90d)} 90d)`],
+      [
+        'weekly dl',
+        `${formatNumber(res.weeklyDownloads)}  (${formatPercent(res.downloadGrowth90d)} 90d)`,
+      ],
       ['scorecard', res.scorecard != null ? String(res.scorecard) : '—'],
       ['bundle', res.bundleMinGzipKb != null ? `${res.bundleMinGzipKb} KB gzip` : '—'],
       ['released', formatDate(res.lastReleaseAt)],
-      ['flags', [res.deprecated && 'deprecated', res.archived && 'archived'].filter(Boolean).join(', ') || 'none'],
-      ['advisories', advisories.length ? advisories.map((a) => `${a.severity}`).join(', ') : 'none'],
+      [
+        'flags',
+        [res.deprecated && 'deprecated', res.archived && 'archived'].filter(Boolean).join(', ') ||
+          'none',
+      ],
+      [
+        'advisories',
+        advisories.length ? advisories.map((a) => `${a.severity}`).join(', ') : 'none',
+      ],
       ['repo', res.repoUrl ?? '—'],
     ]),
   );
@@ -319,9 +329,15 @@ export function runWeights(opts: { json?: boolean } = {}): void {
   console.log(bold('Health (proven-ness) — weighted sum of 4 components:'));
   console.log(
     detail([
-      ['maintenance', `${pct(w.health.maintenance)}  ${dim('— ' + WEIGHT_EXPLANATIONS.maintenance!)}`],
+      [
+        'maintenance',
+        `${pct(w.health.maintenance)}  ${dim('— ' + WEIGHT_EXPLANATIONS.maintenance!)}`,
+      ],
       ['adoption', `${pct(w.health.adoption)}  ${dim('— ' + WEIGHT_EXPLANATIONS.adoption!)}`],
-      ['reliability', `${pct(w.health.reliability)}  ${dim('— ' + WEIGHT_EXPLANATIONS.reliability!)}`],
+      [
+        'reliability',
+        `${pct(w.health.reliability)}  ${dim('— ' + WEIGHT_EXPLANATIONS.reliability!)}`,
+      ],
       ['efficiency', `${pct(w.health.efficiency)}  ${dim('— ' + WEIGHT_EXPLANATIONS.efficiency!)}`],
     ]),
   );
@@ -330,12 +346,22 @@ export function runWeights(opts: { json?: boolean } = {}): void {
   console.log('\n' + bold('Confidence thresholds:'));
   console.log(
     detail([
-      ['proven', `≥ ${formatNumber(CONFIDENCE.proven.minWeeklyDownloads)} weekly dl, ≥ ${CONFIDENCE.proven.minAgeMonths}mo old`],
-      ['emerging', `≥ ${formatNumber(CONFIDENCE.emerging.minWeeklyDownloads)} weekly dl OR ≥ ${CONFIDENCE.emerging.strongGrowth * 100}% 90d growth`],
+      [
+        'proven',
+        `≥ ${formatNumber(CONFIDENCE.proven.minWeeklyDownloads)} weekly dl, ≥ ${CONFIDENCE.proven.minAgeMonths}mo old`,
+      ],
+      [
+        'emerging',
+        `≥ ${formatNumber(CONFIDENCE.emerging.minWeeklyDownloads)} weekly dl OR ≥ ${CONFIDENCE.emerging.strongGrowth * 100}% 90d growth`,
+      ],
       ['promising', `≥ ${CONFIDENCE.promising.minQuality} quality score (adoption-independent)`],
     ]),
   );
-  console.log(dim(`\nSource: ${active ? `${active.source} (${active.path})` : 'defaults (no user overrides)'}`));
+  console.log(
+    dim(
+      `\nSource: ${active ? `${active.source} (${active.path})` : 'defaults (no user overrides)'}`,
+    ),
+  );
 }
 
 export interface EditWeightsOpts {
@@ -353,7 +379,11 @@ export async function runEditWeights(opts: EditWeightsOpts): Promise<void> {
   const { invalidateCache } = await import('../core/cache');
   if (opts.reset) {
     const removed = resetWeights();
-    console.log(removed.length ? `Removed overrides:\n  ${removed.join('\n  ')}` : 'No overrides to remove; already on defaults.');
+    console.log(
+      removed.length
+        ? `Removed overrides:\n  ${removed.join('\n  ')}`
+        : 'No overrides to remove; already on defaults.',
+    );
     if (removed.length) await invalidateCache();
     return;
   }
@@ -362,7 +392,9 @@ export async function runEditWeights(opts: EditWeightsOpts): Promise<void> {
     const key = opts.explain;
     const text = WEIGHT_EXPLANATIONS[key];
     if (!text) {
-      throw new Error(`No explanation for "${key}". Known: ${Object.keys(WEIGHT_EXPLANATIONS).join(', ')}.`);
+      throw new Error(
+        `No explanation for "${key}". Known: ${Object.keys(WEIGHT_EXPLANATIONS).join(', ')}.`,
+      );
     }
     console.log(`${bold(key)} — ${text}`);
     return;
@@ -437,16 +469,15 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
       (res.slots ?? []).map((s) => [
         s.need.length > 32 ? s.need.slice(0, 31) + '…' : s.need,
         s.layer,
-        s.recommended
-          ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}`
-          : dim('—'),
+        s.recommended ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}` : dim('—'),
         s.recommended ? String(s.recommended.healthScore) : '—',
         s.recommended ? confidenceLabel(s.recommended.confidence) : '—',
         (s.alternatives ?? []).map((a) => a.name).join(', ') || '—',
       ]),
     ),
   );
-  if ((res.unmatched ?? []).length) console.log(yellow(`\nNo match for: ${(res.unmatched ?? []).join(', ')}`));
+  if ((res.unmatched ?? []).length)
+    console.log(yellow(`\nNo match for: ${(res.unmatched ?? []).join(', ')}`));
 
   if (res.compatibility) {
     const c = res.compatibility;
@@ -454,10 +485,13 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
     console.log('\n' + bold('Compatibility: ') + col(c.overall));
     for (const s of res.slots ?? []) {
       if (s.swappedFrom && s.recommended) {
-        console.log(green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`));
+        console.log(
+          green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`),
+        );
       }
     }
-    for (const cf of c.conflicts ?? []) console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
+    for (const cf of c.conflicts ?? [])
+      console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
     if (c.unverified?.length) console.log(dim(`  unverified: ${c.unverified.join(', ')}`));
   }
 
@@ -568,7 +602,9 @@ export async function runSandbox(
     const ok = result.installed && result.imported !== false;
     const label = version ? `${pkg}@${version}` : pkg;
     const verdict = ok ? green('✓ installs and loads') : red('✗ failed');
-    console.log(`${bold(label)}  ${verdict}  ${dim(`(${result.durationMs}ms · ${result.driver})`)}`);
+    console.log(
+      `${bold(label)}  ${verdict}  ${dim(`(${result.durationMs}ms · ${result.driver})`)}`,
+    );
     console.log(
       detail([
         ['installed', result.installed ? 'yes' : 'no'],
@@ -596,7 +632,9 @@ export async function runUsage(
 
   console.log(`${bold(res.package)}${res.version ? `@${res.version}` : ''}`);
   if (res.engines) {
-    const reqs = Object.entries(res.engines).map(([k, v]) => `${k} ${v}`).join(', ');
+    const reqs = Object.entries(res.engines)
+      .map(([k, v]) => `${k} ${v}`)
+      .join(', ');
     if (reqs) console.log(dim(`requires: ${reqs}`));
   }
   // A version npm never published is an error in the request, not a gap in our
@@ -621,7 +659,8 @@ export async function runUsage(
     for (const s of removed) console.log(red(`  - ${s.name}`));
     for (const s of added) console.log(green(`  + ${s.name}`));
     for (const r of renamed) console.log(yellow(`  ~ ${r.from.name} → ${r.to.name}`));
-    for (const c of changed) console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
+    for (const c of changed)
+      console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
     if (!removed.length && !added.length && !renamed.length && !changed.length) {
       console.log(dim('  no API changes'));
     }
@@ -648,7 +687,9 @@ export async function runCompatBackfill(opts: {
       return;
     }
     console.error(
-      yellow('co-installing top packages in the sandbox (loads package code locally without isolation unless E2B_API_KEY is set)'),
+      yellow(
+        'co-installing top packages in the sandbox (loads package code locally without isolation unless E2B_API_KEY is set)',
+      ),
     );
     const res = await compat.backfillVerify(db, opts);
     console.log(
@@ -737,9 +778,7 @@ export async function runCompat(
   // but printing a bare "observed, 1 witness" row directly under a red
   // `conflict` reads as the tool contradicting itself. Say which one lost.
   const conflicted = new Set(
-    conflicts.flatMap((c) =>
-      c.packages.length >= 2 ? [[...c.packages].sort().join('\0')] : [],
-    ),
+    conflicts.flatMap((c) => (c.packages.length >= 2 ? [[...c.packages].sort().join('\0')] : [])),
   );
   const isOverruled = (e: { packages: [string, string] }) =>
     conflicted.has([...e.packages].sort().join('\0'));
@@ -782,6 +821,26 @@ export async function runMcpSurface(
   if (opts.json) return console.log(JSON.stringify(res, null, 2));
 
   console.log(`${bold(server)}${res.version ? dim(`@${res.version}`) : ''}`);
+
+  // Printed before the verdict, and for a successful probe too. A server that
+  // works and wants a token is the case where saying nothing costs most: the
+  // agent wires it up, and the first real call fails in front of a user.
+  const requires = res.requires ?? [];
+  if (requires.length) {
+    console.log(
+      table(
+        ['Needs', 'Required', 'Secret', 'What for'],
+        requires.map((r) => [
+          r.name,
+          r.required ? red('yes') : dim('no'),
+          r.secret ? yellow('yes') : dim('no'),
+          r.description ?? '—',
+        ]),
+      ),
+    );
+  }
+  if (res.configRequest) console.log(yellow(`\n${res.configRequest}\n`));
+
   if (res.verdict !== 'verified_true' || res.tools.length === 0) {
     console.log(yellow(`${res.verdict}: ${res.coverageNote}`));
     return;

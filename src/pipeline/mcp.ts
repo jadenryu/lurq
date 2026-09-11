@@ -36,6 +36,12 @@ import { probeMcpServer, mcpServerOracle } from '../graph/oracles/mcpServer';
 import { getSandbox } from '../sandbox/index';
 import type { Sandbox } from '../sandbox/types';
 import { MCP_TIER, mcpSurface, surfaceHash, type McpTool } from '../surface/mcp';
+import {
+  configRequestLine,
+  fetchServerManifest,
+  missingConfig,
+  type RequiredConfig,
+} from '../surface/mcpRegistry';
 
 /** See `./surface.ts` — the timeline is newest-first and releases arrive in bursts. */
 const VERSION_LOOKBACK = 50;
@@ -65,6 +71,13 @@ export type McpOutcome =
   | 'undeclared'
   /** Server would not start or refused the handshake. Evidence about the server. */
   | 'unreachable'
+  /**
+   * Server declares configuration it did not get. NOT a defect, and never
+   * `verified_false` — we could not check, which is a different claim.
+   */
+  | 'needs_config'
+  /** Published only as a remote endpoint; there is no package to install. */
+  | 'not_stdio'
   /** The list was still paginating at the ceiling; NOT a surface. */
   | 'truncated';
 
@@ -73,32 +86,91 @@ export interface McpExtractResult {
   tools: McpTool[];
   /** Why the probe produced no usable surface. Null on success. */
   reason: string | null;
+  /** Declared settings the server needs and did not have. */
+  missing?: RequiredConfig[];
+}
+
+/**
+ * A handshake failure that reads like a missing setting rather than a defect.
+ *
+ * Only consulted when the registry has nothing to say, and deliberately narrow:
+ * it must see a SHOUTY_ENV_NAME next to a word about being required. A server
+ * whose real crash merely mentions an environment variable should not be
+ * excused as unconfigured, because excusing a genuine failure hides it.
+ *
+ * ponytail: heuristic on someone else's error text. The registry manifest is
+ * the real answer; delete this when enough servers publish one.
+ */
+const ENV_COMPLAINT =
+  /\b([A-Z][A-Z0-9]{2,}(?:_[A-Z0-9]+)+)\b[^.\n]{0,60}?\b(required|must be set|not set|missing|is not defined)\b|\b(required|must be set|missing)\b[^.\n]{0,60}?\b([A-Z][A-Z0-9]{2,}(?:_[A-Z0-9]+)+)\b/;
+
+export function sniffMissingEnv(text: string): string | null {
+  const m = ENV_COMPLAINT.exec(text);
+  return m ? (m[1] ?? m[4] ?? null) : null;
 }
 
 /**
  * Probe one MCP server and persist its tool surface.
  *
- * `unreachable` and `truncated` both return WITHOUT storing anything. Writing an
- * empty surface for a server that failed to boot would make the next successful
- * probe diff against nothing and report every tool as newly added — and, worse,
- * would let a later reader mistake "we could not start it" for "it exposes no
- * tools". The two are not the same claim and this pipeline never conflates them.
+ * Every non-success path returns WITHOUT storing a surface. Writing an empty
+ * one for a server that failed to boot would make the next successful probe
+ * report every tool as newly added — and would let a reader mistake "we could
+ * not start it" for "it exposes no tools". Those are not the same claim, and
+ * neither is "it wanted an API key we did not have".
  */
 export async function extractAndStoreMcp(
   db: Database,
   server: string,
   version: string | null,
-  opts: { sandbox?: Sandbox } = {},
+  opts: { sandbox?: Sandbox; env?: NodeJS.ProcessEnv } = {},
 ): Promise<McpExtractResult> {
+  const ref = mcpSurfaceRef(server, version);
+
+  // Ask what the server says it needs before spending a sandbox on it. A probe
+  // that was always going to fail costs ~45s and yields a misleading answer;
+  // the manifest costs one cached HTTP call and yields a request an agent can
+  // put in front of its user.
+  const manifest = await fetchServerManifest(server);
+  if (manifest?.remoteOnly) {
+    return {
+      outcome: 'not_stdio',
+      tools: [],
+      reason: `published only as a remote ${manifest.transport ?? 'endpoint'}; there is no package to install and probe`,
+    };
+  }
+  const missing = missingConfig(manifest, opts.env);
+  if (missing.length > 0) {
+    return {
+      outcome: 'needs_config',
+      tools: [],
+      reason: configRequestLine(server, missing),
+      missing,
+    };
+  }
+
   const sandbox = opts.sandbox ?? (await getSandbox());
   const { probe, stderr } = await probeMcpServer(sandbox, server, version);
-
-  const ref = mcpSurfaceRef(server, version);
 
   if (!probe || !probe.ok) {
     const reason = probe
       ? `stage=${probe.stage} ${probe.error ?? ''}`.slice(0, 300)
       : `no probe output: ${stderr.slice(0, 200)}`;
+
+    // The registry knew nothing, but the server's own error may still be a
+    // request for configuration rather than a fault.
+    const sniffed = sniffMissingEnv(`${probe?.error ?? ''} ${stderr}`);
+    if (sniffed) {
+      const inferred: RequiredConfig[] = [
+        { name: sniffed, description: null, required: true, secret: true, format: null },
+      ];
+      return {
+        outcome: 'needs_config',
+        tools: [],
+        reason: `server did not start and its output names ${sniffed} as required (inferred from the server's own error, not a published manifest)`,
+        missing: inferred,
+      };
+    }
+
     await recordUnreachable(db, ref, reason);
     return { outcome: 'unreachable', tools: [], reason };
   }
@@ -175,6 +247,8 @@ export interface McpDrainSummary {
   cached: number;
   undeclared: number;
   unreachable: number;
+  needs_config: number;
+  not_stdio: number;
   truncated: number;
   failed: number;
   /** Predecessor versions queued so this one becomes diffable. */
@@ -192,6 +266,8 @@ export async function drainMcpQueue(
     cached: 0,
     undeclared: 0,
     unreachable: 0,
+    needs_config: 0,
+    not_stdio: 0,
     truncated: 0,
     failed: 0,
     backfilled: 0,
