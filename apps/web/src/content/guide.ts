@@ -113,7 +113,7 @@ export const TOOLS: GuideTool[] = [
     name: "mcp_surface",
     group: "check",
     purpose:
-      "Every tool an MCP server actually lists, with its required and optional parameters and its behaviour annotations \u2014 read from a live tools/list handshake in a sandbox, not from a README. The annotations are the part to read before granting access: they say whether a tool writes, destroys, or reaches outside the machine.",
+      "Every tool an MCP server actually lists, with its required and optional parameters and its behaviour annotations \u2014 read from a live tools/list handshake in a sandbox, not from a README. The annotations are the part to read before granting access: they say whether a tool writes, destroys, or reaches outside the machine. Also returns the credentials the server declares it needs, so a server waiting on an API key reads as unverified rather than as broken.",
     prompt: "what tools does this MCP server expose, and what do they take?",
     input: "server \u00b7 optional version",
   },

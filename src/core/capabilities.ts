@@ -106,7 +106,7 @@ export const CAPABILITIES: Capability[] = [
     title: 'Read an MCP server\'s tools',
     question: 'What tools does this MCP server actually expose, and what do they take?',
     answer:
-      "Every tool from a live `tools/list` handshake in a sandbox: required and optional parameters, and the behaviour annotations that say whether a tool writes, destroys, or reaches outside. Declared contract only — that a tool is listed is not evidence that calling it succeeds.",
+      "Every tool from a live `tools/list` handshake in a sandbox: required and optional parameters, and the behaviour annotations that say whether a tool writes, destroys, or reaches outside. Also returns the API keys and settings the server declares it needs, with a request you can put in front of the user. Declared contract only — that a tool is listed is not evidence that calling it succeeds.",
     mcp: 'mcp_surface',
     cli: 'lurq mcp-surface <server>',
     aliases: ['mcp', 'tools', 'tool schema', 'inputSchema', 'agent tools', 'server'],

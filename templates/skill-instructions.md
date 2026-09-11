@@ -49,7 +49,12 @@ whatever was popular then; lurq is re-synced daily and its claims are checkable.
   server actually lists, its required and optional parameters, and its behaviour
   annotations, read from a live `tools/list` handshake in a sandbox rather than from a
   README. The annotations are the part worth reading before you grant access: they say
-  whether a tool writes, destroys, or reaches outside your machine.
+  whether a tool writes, destroys, or reaches outside your machine. It also returns
+  `requires` — the API keys and settings the server declares it needs — and
+  `configRequest`, a ready-made line to put in front of your user when one is missing.
+  A server that wants a token comes back UNVERIFIABLE, never `verified_false`: "we could
+  not check" and "we checked and it is broken" are different claims, and only the second
+  is a reason not to use it. Ask the user for the values rather than guessing them.
 - **Upgrade an MCP server an agent depends on** → `mcp_drift` with the server and the two
   versions. Two of its findings have no package equivalent. **Silent drift** is a tool
   whose schema moved while its description stayed byte-identical — no changelog reader

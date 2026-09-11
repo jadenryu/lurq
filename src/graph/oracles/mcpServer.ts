@@ -25,8 +25,20 @@ import type { Sandbox } from '../../sandbox/types';
 import type { McpTool } from '../../surface/mcp';
 import type { Environment, EntityRef, Oracle, OracleObservation, OracleResult } from '../types';
 
-/** Protocol version we advertise. Servers may negotiate down; that is not a failure. */
-const PROTOCOL_VERSION = '2025-11-25';
+/**
+ * Protocol version we advertise.
+ *
+ * The CURRENT revision, not the oldest one that works. The spec requires a
+ * server to answer with a version it does support rather than erroring, so
+ * advertising forward costs nothing and is how newer response fields
+ * (`ttlMs`, `cacheScope`, richer tool metadata) reach us as servers adopt them.
+ * Verified against three published servers: all three negotiated down to
+ * 2025-11-25 and returned identical tool lists.
+ *
+ * The version that actually gets negotiated is recorded in the observation
+ * evidence, so a surface always says which dialect it was read in.
+ */
+const PROTOCOL_VERSION = '2026-07-28';
 const HANDSHAKE_TIMEOUT_MS = 45_000;
 const EVIDENCE_MAX = 800;
 

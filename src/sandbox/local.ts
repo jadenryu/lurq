@@ -163,10 +163,16 @@ export class LocalSandbox implements Sandbox {
         JSON.stringify({ name: 'lurq-sandbox', version: '0.0.0', private: true }),
       );
       if (opts.install?.length) {
+        // `timeoutMs` budgets the COMMAND, never the install that precedes it.
+        // Applying it to both meant a caller asking for a 45s handshake also
+        // cut its own install budget from 120s to 45s, so a server with a large
+        // dependency tree timed out during `npm install` and was reported as a
+        // server that would not start. The E2B driver always kept these
+        // separate; this is the local driver catching up to it.
         await execFileAsync(
           'npm',
           npmInstallArgs(opts.install.map(toSpec), { allowScripts: opts.allowScripts ?? false }),
-          { cwd: dir, timeout: opts.timeoutMs ?? INSTALL_TIMEOUT_MS, signal: opts.signal },
+          { cwd: dir, timeout: INSTALL_TIMEOUT_MS, signal: opts.signal },
         );
       }
       const { stdout, stderr } = await execFileAsync('sh', ['-c', command], {

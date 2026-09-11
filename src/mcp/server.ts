@@ -231,7 +231,7 @@ export function buildMcpServer(
     {
       title: 'An MCP server\'s tool contract',
       description:
-        "What an MCP server ACTUALLY exposes: every tool, its required and optional parameters, and its behaviour annotations, read from a live `tools/list` handshake in a sandbox rather than from a README or the model's memory. Call before wiring an agent to a server, or when a tool call is failing for reasons the error does not explain. A miss returns UNKNOWN and queues a probe; UNKNOWN never means the server has no tools.",
+        "What an MCP server ACTUALLY exposes: every tool, its required and optional parameters, and its behaviour annotations, read from a live `tools/list` handshake in a sandbox rather than from a README or the model's memory. Call before wiring an agent to a server, or when a tool call is failing for reasons the error does not explain. Also returns `requires` — the API keys and settings the server declares it needs — and `configRequest`, a ready-made line to put in front of your user when something is missing, so 'it needs a token' never presents as 'it is broken'. A miss returns UNKNOWN and queues a probe; UNKNOWN never means the server has no tools.",
       inputSchema: {
         server: npmName.describe('npm package name of the MCP server'),
         version: z.string().optional().describe('Exact version; omit for the latest probed'),
