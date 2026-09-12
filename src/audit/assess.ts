@@ -189,7 +189,11 @@ function privilegeSummary(tools: { annotations: Record<string, boolean> }[]): {
   };
 }
 
-async function assessMcpServer(db: Database, s: InventoryMcpServer): Promise<AuditItem> {
+async function assessMcpServer(
+  db: Database,
+  s: InventoryMcpServer,
+  idx: IndexRow | undefined,
+): Promise<AuditItem> {
   const name = s.packageName ?? s.endpoint ?? s.alias;
   const item: AuditItem = {
     name,
@@ -226,6 +230,43 @@ async function assessMcpServer(db: Database, s: InventoryMcpServer): Promise<Aud
       severity: 'moderate',
       detail: `needs ${missing.map((m) => m.name).join(', ')} before it will start${missing.some((m) => m.secret) ? ' (at least one is a credential — ask the user, never guess)' : ''}`,
     });
+  }
+
+  // Every npm signal applies to a server, because a server is an npm package.
+  // Without this read the audit could report nine tools and their privilege
+  // posture while saying nothing about the release being five versions old —
+  // which is the question the user actually asked.
+  item.latest = idx?.latestVersion ?? null;
+  if (idx?.deprecated) {
+    item.findings.push({
+      kind: 'deprecated',
+      severity: 'moderate',
+      detail: 'the publisher has marked this server deprecated',
+    });
+  }
+  if ((idx?.advisories?.length ?? 0) > 0) {
+    item.findings.push({
+      kind: 'vulnerable',
+      severity: 'high',
+      detail: `${idx!.advisories!.length} advisory(ies) recorded against this server`,
+    });
+  }
+  if (s.version && idx?.latestVersion) {
+    const d = drift(s.version, idx.latestVersion);
+    // Behind on a server is worse than behind on a library: the tool contract
+    // your agent is holding was built against a release that has since moved,
+    // and `mcp_drift` can name exactly what changed.
+    if (d) {
+      item.findings.push({
+        ...d,
+        detail:
+          `${s.version} → ${idx.latestVersion}; run ` +
+          `\`lurq mcp-drift ${s.packageName} --from ${s.version} --to ${idx.latestVersion}\` ` +
+          `for the contract delta`,
+      });
+    }
+  } else if (!idx) {
+    item.skipReason ??= 'not-in-index';
   }
 
   const stored = await loadStored(db, s.packageName, s.version, 0, 'mcp_server');
@@ -289,7 +330,13 @@ export async function assessInventory(
   opts: AssessOptions = {},
 ): Promise<AuditReport> {
   const lookup = opts.vulnLookup ?? queryVulnerableInstalls;
-  const names = inv.packages.map((p) => p.name);
+  // One indexed read covering BOTH halves. Server package names go into the
+  // same query rather than a lookup each: eight servers should cost one round
+  // trip, not eight.
+  const names = [
+    ...inv.packages.map((p) => p.name),
+    ...inv.mcpServers.map((s) => s.packageName).filter((n): n is string => Boolean(n)),
+  ];
   const indexed = await loadIndexed(db, names);
 
   // One OSV round trip for the WHOLE tree — directs and transitives together.
@@ -355,7 +402,9 @@ export async function assessInventory(
   }
 
   for (const s of inv.mcpServers) {
-    items.push(await assessMcpServer(db, s));
+    items.push(
+      await assessMcpServer(db, s, s.packageName ? indexed.get(s.packageName) : undefined),
+    );
   }
 
   // `discovered` counts what the user declared, not what the tree contains: the
@@ -412,7 +461,7 @@ export async function queueUnknown(
   ownerId: string | null = null,
 ): Promise<number> {
   const names = report.items
-    .filter((i) => i.unit === 'npm' && i.skipReason === 'not-in-index')
+    .filter((i) => i.unit !== 'transitive' && i.skipReason === 'not-in-index')
     .map((i) => i.name);
   if (names.length === 0) return 0;
   try {
