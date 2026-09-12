@@ -78,6 +78,19 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
+  // Links to the old public scan report are already out there. The report moved
+  // into the dashboard as the builder report, so a pasted link lands on the
+  // repo owner's profile with that repo first. Not permanent: browsers cache a
+  // 308 indefinitely, and this is a product decision that may still move.
+  async redirects() {
+    return [
+      {
+        source: "/scan/:owner/:repo",
+        destination: "/dashboard/report?target=:owner/:repo",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
