@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import posthog from "posthog-js";
+import { FREE_DEPS } from "@/lib/scan-limits";
 
 /**
  * Type a repo, see your own dependencies, before anything asks who you are.
@@ -17,10 +19,14 @@ import Link from "next/link";
  * who is not ready to install now has something to do other than leave.
  *
  * NOTHING HERE IS GATED. The counts are real, the dependency rows are real, and
- * the sign-in link under them is a link rather than a wall. A teaser that
- * blurred its own numbers would be the same page as before with an extra step:
- * the reason to sign up is the rest of the repo, the other manifests, the
- * conflicts written out, and the watch that tells you when it changes.
+ * the link under them is a link rather than a wall. A teaser that blurred its
+ * own numbers would be the same page as before with an extra step: the reason
+ * to sign up is the rest of the repo, the other manifests, the conflicts
+ * written out, and the watch that tells you when it changes.
+ *
+ * The link goes to /scan/[owner]/[repo], which is the same answer at a URL
+ * somebody can paste, and it is where the ask lives — past these rows, never
+ * over them (see components/site/scan-report.tsx).
  *
  * See src/github/publicScan.ts for what the scan reads (the root package.json,
  * over unauthenticated HTTP) and app/api/scan for the hop.
@@ -131,7 +137,12 @@ function Result({ scan }: { scan: Scan }) {
           </div>
 
           <ul className="border-t border-edge">
-            {scan.deps.map((dep) => {
+            {/* The payload carries up to 60 rows because /scan/[owner]/[repo]
+                prints them. The hero is a teaser inside a hero: past a handful
+                it stops being an answer and starts being a table nobody asked
+                for on a landing page. FREE_DEPS is shared with the report page
+                so this can never exceed what following the link shows. */}
+            {scan.deps.slice(0, FREE_DEPS).map((dep) => {
               const v = verdict(dep);
               return (
                 <li
@@ -158,10 +169,10 @@ function Result({ scan }: { scan: Scan }) {
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge bg-surface-2 px-5 py-3.5">
         <p className="text-[12.5px] leading-[1.5] text-ink-2">
-          Every manifest, the conflicts written out, and a note when one changes.
+          Every dependency in this manifest, and the conflicts written out.
         </p>
         <Link
-          href={`/dashboard/repos?scan=${encodeURIComponent(scan.repo)}`}
+          href={`/scan/${scan.repo}`}
           className="ml-auto shrink-0 text-[12.5px] font-medium text-mark underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
         >
           Open the full report
@@ -203,6 +214,16 @@ export function RepoScan() {
         setState({ kind: "failed", message: message ?? "Could not read that." });
         return;
       }
+      // The top of the funnel. Everything downstream (the report view, the
+      // gate, the sign-up) is autocaptured or has its own event; this is the
+      // only step that knows what was typed and what came back.
+      posthog.capture("scan_run", {
+        repo: data.repo,
+        deps_tracked: data.depsTracked,
+        major_drift: data.majorDrift,
+        advisories: data.advisories,
+        conflicts: data.conflicts,
+      });
       setState({ kind: "done", scan: data });
     } catch {
       if (id === run.current) {

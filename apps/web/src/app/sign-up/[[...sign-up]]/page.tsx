@@ -10,8 +10,12 @@ export default function SignUpPage() {
       title="Create your lurq account"
       subtitle="Sign up to generate your API key and connect your coding agent."
     >
+      {/* Fallback, not force — see the note in /sign-in. A `redirect_url` on
+          the way in has to survive, or the scan report's ask converts and then
+          strands them. */}
       <SignUp
-        forceRedirectUrl="/dashboard"
+        fallbackRedirectUrl="/dashboard"
+        signInFallbackRedirectUrl="/dashboard"
         signInUrl="/sign-in"
         appearance={borderlessAppearance}
       />
