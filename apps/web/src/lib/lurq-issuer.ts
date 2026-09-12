@@ -603,3 +603,38 @@ export async function recordAskSpend(ownerId: string, usdMicros: number): Promis
   if (!res.ok) throw new LurqIssuerError("Could not record Ask spend.", res.status);
   return (await res.json()) as AskBudget;
 }
+
+/** A package tool as the backend's MCP server declares it: JSON Schema input. */
+export interface AskTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export async function fetchAskTools(): Promise<AskTool[]> {
+  const res = await issuerFetch("/ask-tools");
+  if (!res.ok) throw new LurqIssuerError("Could not list Ask tools.", res.status);
+  return ((await res.json()) as { tools: AskTool[] }).tools;
+}
+
+/** Run one package tool as the signed-in owner. `text` is the tool's JSON result. */
+export async function callAskTool(
+  ownerId: string,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<{ isError: boolean; text: string }> {
+  const res = await issuerFetch("/ask-tools/call", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, name, arguments: args }),
+  });
+  // Out of allowance is an answer the model should relay, not a crash.
+  if (res.status === 402) {
+    return {
+      isError: true,
+      text: "This account has used this month's lurq calls. It resets when the month turns; upgrading lifts it.",
+    };
+  }
+  if (!res.ok) throw new LurqIssuerError("Could not run that lookup.", res.status);
+  return (await res.json()) as { isError: boolean; text: string };
+}
