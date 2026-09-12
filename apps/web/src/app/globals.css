@@ -628,9 +628,16 @@ body:has([data-surface="paper"]) {
   outline-offset: 2px;
 }
 
-:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 2px solid var(--mark);
-  outline-offset: 2px;
+/* In `base`, not unlayered. Unlayered CSS beats every layered rule regardless
+   of specificity, so out here the :where() did nothing: it overrode each
+   component's own `outline-none` and drew a second, offset white ring on top of
+   its `focus-visible:ring`, clipped wherever a parent had overflow-hidden (the
+   ⌘K field showed it on three sides). In the layer, utilities win as intended. */
+@layer base {
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--mark);
+    outline-offset: 2px;
+  }
 }
 
 /* The skip link's target. Focusing a <main> needs tabindex="-1"; the ring that

@@ -303,7 +303,9 @@ export function CommandPaletteTrigger({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 rounded-[var(--radius-control)] border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-signal/45 hover:text-foreground",
+        // Same 1px ring as the account menu at the foot of this rail, so focus
+        // reads as one even line on all four sides rather than a detached halo.
+        "flex items-center gap-2 rounded-[var(--radius-control)] border border-border px-3 py-2 text-xs text-muted-foreground outline-none transition-colors hover:border-signal/45 hover:text-foreground focus-visible:ring-1 focus-visible:ring-signal/40",
         className,
       )}
     >
