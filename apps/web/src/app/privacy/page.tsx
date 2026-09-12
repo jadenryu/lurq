@@ -11,7 +11,7 @@ export default function PrivacyPage() {
   return (
     <PageShell eyebrow="Legal" title="Privacy Policy">
       <p className="mb-8 text-sm text-muted-foreground/70">
-        Last updated: July 16, 2026
+        Last updated: September 12, 2026
       </p>
 
       <div className="mb-10 rounded-lg border border-dashed border-border bg-card/40 p-4 text-sm text-muted-foreground">
@@ -65,9 +65,13 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Product analytics.</strong> Our website uses PostHog to
-            capture aggregate usage such as page views and navigation, so we can
-            understand how the site is used and improve it. We do not use this to
-            build advertising profiles.
+            capture usage such as page views and navigation, so we can understand
+            how the site is used and improve it. When you are signed in, those
+            events are linked to your account. Our hosted service also records
+            account-level product events in PostHog, such as creating an API key
+            and which lurq tool was called and whether it succeeded, but never
+            the contents of your queries. We do not use this to build advertising
+            profiles.
           </li>
           <li>
             <strong>Query data.</strong> When you request a recommendation
