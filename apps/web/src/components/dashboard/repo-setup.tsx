@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCopy } from "@/lib/use-copy";
 import { Chip, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
 
@@ -25,13 +26,7 @@ export function RepoSetup({
   armed: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await navigator.clipboard.writeText(workflow);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
+  const { copied, copy } = useCopy();
 
   return (
     <Panel>
@@ -63,7 +58,7 @@ export function RepoSetup({
         <a href={setupUrl} target="_blank" rel="noreferrer">
           <Button>Create on GitHub</Button>
         </a>
-        <Button variant="outline" onClick={() => void copy()}>
+        <Button variant="outline" onClick={() => void copy(workflow)}>
           {copied ? "copied" : "copy file"}
         </Button>
         <Button variant="ghost" onClick={() => setOpen((v) => !v)}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCopy } from "@/lib/use-copy";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/dashboard/panel";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,7 @@ export function CreateKeyDialog() {
   const [error, setError] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [isDemoKey, setIsDemoKey] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
 
   async function generate() {
     setLoading(true);
@@ -57,13 +58,6 @@ export function CreateKeyDialog() {
     }
   }
 
-  async function copy() {
-    if (!newKey) return;
-    await navigator.clipboard.writeText(newKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
   function reset() {
     setOpen(false);
     // Let the close animation finish before clearing state under it.
@@ -73,7 +67,8 @@ export function CreateKeyDialog() {
       setError(null);
       setNewKey(null);
       setIsDemoKey(false);
-      setCopied(false);
+      // The copy-confirm clears itself on its own timer inside useCopy, and it
+      // is shorter than this one — nothing to reset here.
     }, 200);
   }
 
@@ -98,7 +93,7 @@ export function CreateKeyDialog() {
               <code className="flex-1 overflow-x-auto rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
                 {newKey}
               </code>
-              <Button variant="outline" onClick={copy}>
+              <Button variant="outline" onClick={() => void copy(newKey)}>
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>

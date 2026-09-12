@@ -1,43 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { COPIED_LABEL, COPY_GLYPH, COPY_HINT } from "@/content/copy";
+import { useCopy } from "@/lib/use-copy";
 import { cn } from "@/lib/utils";
 
 /**
  * The install command as a button, in the nav and again in the hero.
  *
- * `navigator.clipboard` is unavailable on insecure origins and blocked inside
- * some embedded browsers, so a failure falls back to a detached textarea and
- * `document.execCommand`. Deprecated, still the only thing that works there,
- * and a copy button that silently does nothing is worse than a deprecation.
+ * The clipboard mechanics — the insecure-origin fallback, the cleared timer,
+ * the refusal to claim a copy that did not happen — live in `useCopy`, shared
+ * with the dashboard's buttons. This file is the marketing surface's styling of
+ * them and nothing else.
  *
- * On success the label swaps to `copied` for 1600ms. That is the copy-confirm
+ * On success the label swaps to `copied`. That is the copy-confirm
  * state, which is why it lands on --held rather than on --mark: it is reporting
  * that something held, not that something is interactive.
  */
-
-/** Returns whether the fallback actually put the text on the clipboard. */
-function legacyCopy(text: string): boolean {
-  const area = document.createElement("textarea");
-  area.value = text;
-  area.setAttribute("readonly", "");
-  // Off-screen rather than hidden: display:none and visibility:hidden are both
-  // unselectable, and execCommand copies the selection.
-  area.style.position = "fixed";
-  area.style.top = "-9999px";
-  area.style.opacity = "0";
-  document.body.appendChild(area);
-
-  try {
-    area.select();
-    return document.execCommand("copy");
-  } catch {
-    return false;
-  } finally {
-    document.body.removeChild(area);
-  }
-}
 
 export function CopyCommandButton({
   command,
@@ -52,37 +30,13 @@ export function CopyCommandButton({
   variant: "solid" | "outline" | "bare";
   className?: string;
 }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  const copy = useCallback(async () => {
-    let ok = false;
-    try {
-      await navigator.clipboard.writeText(command);
-      ok = true;
-    } catch {
-      ok = legacyCopy(command);
-    }
-    // Nothing was copied, so nothing claims it was.
-    if (!ok) return;
-
-    setCopied(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 1600);
-  }, [command]);
+  const { copied, copy } = useCopy();
 
   return (
     <>
       <button
         type="button"
-        onClick={copy}
+        onClick={() => void copy(command)}
         className={cn(
           "inline-flex shrink-0 items-center justify-center rounded-full font-mono transition-[color,background-color,border-color] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark",
           variant === "solid"
