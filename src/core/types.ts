@@ -455,6 +455,8 @@ export interface EvaluateOutput {
   bundleMinGzipKb: number | null;
   deprecated: boolean;
   archived: boolean;
+  /** The shared safety call — identical to what `verify` and `audit` return. */
+  verdict: SecurityVerdict;
   advisories: Advisory[];
   summary: string | null;
   usageGuide: UsageGuide | null;
@@ -469,6 +471,8 @@ export interface EvaluateOutput {
 /** Supply-chain risk gate: high = review before installing (see security/risk). */
 export type RiskLevel = 'low' | 'medium' | 'high';
 
+import type { SecurityVerdict } from '../security/verdict';
+
 export interface VerifyOutput {
   exists: boolean;
   tracked: boolean;
@@ -482,5 +486,8 @@ export interface VerifyOutput {
   /** Suspected typosquat target — a popular package this name closely mimics. */
   typosquatOf: string | null;
   confidence: Confidence | null;
-  advisoryCount: number;
+  /** Null when this package has never been analysed — NOT the same as zero. */
+  advisoryCount: number | null;
+  /** The shared safety call. Read `verdict.reassuring` before showing a tick. */
+  verdict: SecurityVerdict;
 }

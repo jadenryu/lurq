@@ -19,8 +19,10 @@ import { inArray } from 'drizzle-orm';
 import semver from 'semver';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
+import type { Advisory } from '../core/types';
 import { packages } from '../db/schema';
 import { queryVulnerableInstalls } from '../ingestion/sources/osv';
+import { assessVerdict } from '../security/verdict';
 import { contractOf, MCP_TIER } from '../surface/mcp';
 import { fetchServerManifest, missingConfig } from '../surface/mcpRegistry';
 import { loadStored, rowsToSurface } from '../mcp/surfaceHandlers';
@@ -42,7 +44,7 @@ interface IndexRow {
   name: string;
   latestVersion: string | null;
   deprecated: boolean;
-  advisories: { id: string; severity: string; summary: string }[] | null;
+  advisories: Advisory[] | null;
 }
 
 /** One indexed read for every discovered package name. */
@@ -97,6 +99,7 @@ function assessPackage(
   pkg: InventoryPackage,
   idx: IndexRow | undefined,
   vulns: string[] | undefined,
+  vulnLookupComplete: boolean,
 ): AuditItem {
   const item: AuditItem = {
     name: pkg.name,
@@ -107,12 +110,27 @@ function assessPackage(
     findings: [],
   };
 
-  // Vulnerabilities FIRST, and independently of whether lurq has ever indexed
-  // this package. OSV is keyed on name and version alone and needs nothing from
-  // our catalogue, so gating it on an index hit suppressed the most dangerous
-  // finding we produce behind an unrelated coverage gap — a fresh install of a
-  // known-vulnerable package came back "nothing flagged" purely because we had
-  // not ingested it yet.
+  // The SAME verdict `verify` and `evaluate` return, so the three surfaces
+  // cannot disagree about one package. Vulnerabilities are evaluated here
+  // independently of whether lurq has ever indexed it: OSV is keyed on name and
+  // version alone, and gating it on an index hit suppressed the most dangerous
+  // finding we produce behind an unrelated coverage gap.
+  const verdict = assessVerdict({
+    exists: true,
+    // Null, not `[]`: an unindexed package has not been analysed, and saying
+    // "no advisories" about it would be inventing an all-clear.
+    advisories: idx ? (idx.advisories ?? null) : null,
+    deprecated: idx?.deprecated ?? false,
+    versionVulns: vulns ?? null,
+    vulnLookupComplete,
+    // The audit is always about what is INSTALLED, never about latest. Saying
+    // so is what keeps it from reading as a contradiction of `verify`, which
+    // answers about the newest release.
+    subjectVersion: pkg.installed,
+    subjectInstalled: true,
+  });
+  item.verdict = verdict;
+
   if (vulns?.length) {
     item.findings.push({
       kind: 'vulnerable',
@@ -302,6 +320,7 @@ export async function assessInventory(
       p,
       indexed.get(p.name),
       p.installed ? affected.get(`${p.name}@${p.installed}`) : undefined,
+      vulnComplete,
     );
     items.push(item);
   }
