@@ -37,12 +37,13 @@ import {
   finishSyncRun,
   getSeedTargets,
   getStaleRefreshTargets,
-  latestVersionsFor,
+  reusableFieldsFor,
   startSyncRun,
   upsertPackage,
   upsertPackageVersions,
 } from '../db/packages';
 import { emitPublishAlerts } from '../github/alerts';
+import { canReuse } from './reuse';
 import { isFrontendCategory } from '../core/types';
 import type { NewPackageRow, SyncError } from '../db/schema';
 
@@ -78,6 +79,10 @@ interface Computed {
   confidence: ReturnType<typeof computeConfidence>;
   summary: string | null;
   usageGuide: NewPackageRow['usageGuide'];
+  /** The stored vector, when this package was at its latest version already and
+   *  the summary above was carried over rather than regenerated. Null means it
+   *  still needs embedding in the batch pass below. */
+  reusedEmbedding: number[] | null;
 }
 
 export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
@@ -102,6 +107,20 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
     const targets = await resolveTargets(handle.db, opts, config.LURQ_SYNC_REFRESH_CAP);
     logger.info(`Syncing ${targets.length} package(s) with concurrency ${config.LURQ_SYNC_CONCURRENCY}…`);
 
+    // One read that serves two purposes. It carries the stored summary and
+    // vector, so a package still sitting at its latest version costs no LLM call
+    // and no embedding call this pass (see pipeline/reuse.ts); and it is the
+    // "before" snapshot of latest_version that emitPublishAlerts needs to tell a
+    // re-sync of a known version from a major that just landed. It must be read
+    // here, before the upsert loop overwrites those versions.
+    const embProvider = createEmbeddingProvider();
+    logger.info(`Embedding provider: ${embProvider.kind}`);
+    const stored = await reusableFieldsFor(handle.db, targets.map((t) => t.name));
+    // `--full` is the escape hatch: it already bypasses the HTTP cache, so it
+    // has to bypass this gate too or it would no longer mean "regenerate".
+    const forceRegen = opts.full === true;
+    let reused = 0;
+
     // Bulk-fetch weekly downloads up front (one call per 128 packages) to avoid
     // the downloads API rate limit that per-package bursts trigger.
     logger.info('Fetching weekly downloads in bulk…');
@@ -119,8 +138,23 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
           });
           for (const e of signals.errors) allErrors.push({ package: target.name, ...e });
 
-          const summaryInput = await buildSummaryInput(signals, target.category);
-          const { summary, usageGuide, inferredCategory } = await provider.generate(summaryInput);
+          const prior = stored.get(target.name);
+          const reusable =
+            !forceRegen && canReuse(prior, signals.registry?.latestVersion ?? null, embProvider.id);
+
+          let summary: string | null;
+          let usageGuide: NewPackageRow['usageGuide'];
+          let inferredCategory: Category | null = null;
+          if (reusable) {
+            summary = prior!.summary;
+            usageGuide = prior!.usageGuide;
+            reused++;
+          } else {
+            // buildSummaryInput fetches the README; its only consumer is the
+            // generate() below, so it belongs inside the branch.
+            const summaryInput = await buildSummaryInput(signals, target.category);
+            ({ summary, usageGuide, inferredCategory } = await provider.generate(summaryInput));
+          }
 
           // Categorize-on-ingest (§2A): curated category wins; otherwise infer
           // from the package's own text, then fall back to the LLM classifier.
@@ -147,6 +181,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
             confidence: computeConfidence(input, now, quality),
             summary,
             usageGuide,
+            reusedEmbedding: reusable ? prior!.embedding : null,
           };
         } catch (err) {
           allErrors.push({
@@ -166,27 +201,36 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
     const medians = computeCategoryMedians(ok);
 
     // ── Embeddings (§11): embed the normalized text blob for each package ─────
-    const embProvider = createEmbeddingProvider();
-    logger.info(`Embedding provider: ${embProvider.kind}`);
-    const embeddings = await embProvider.embed(
-      ok.map((c) =>
-        buildEmbeddingText({
-          name: c.target.name,
-          category: c.category,
-          summary: c.summary,
-          description: c.signals.registry?.description ?? null,
-        }),
-      ),
+    //
+    // Only the packages whose latest version actually moved. The embedding text
+    // is name + category + summary, and `reusedEmbedding` is non-null exactly
+    // when all three were carried over, so re-embedding those would spend a
+    // request to arrive back at the vector already in hand. Steady state on the
+    // seed list is a handful of packages a day rather than every one of them.
+    const needEmbedding = ok.filter((c) => c.reusedEmbedding === null);
+    const minted = needEmbedding.length
+      ? await embProvider.embed(
+          needEmbedding.map((c) =>
+            buildEmbeddingText({
+              name: c.target.name,
+              category: c.category,
+              summary: c.summary,
+              description: c.signals.registry?.description ?? null,
+            }),
+          ),
+        )
+      : [];
+    const mintedByName = new Map(needEmbedding.map((c, i) => [c.target.name, minted[i] ?? null]));
+    // Re-indexed against `ok`, because the upsert loop below reads embeddings[i].
+    const embeddings = ok.map(
+      (c) => c.reusedEmbedding ?? mintedByName.get(c.target.name) ?? null,
+    );
+    logger.info(
+      `Summaries: ${reused} reused, ${ok.length - reused} generated. Embeddings: ${needEmbedding.length} minted.`,
     );
 
     // ── Pass 2: efficiency + composite + upsert ──────────────────────────────
     //
-    // Snapshot what the index currently calls `latest` before the upsert below
-    // overwrites it. That "before" is the only way to tell a re-sync of a known
-    // version from a package that has just shipped a new major, which is what
-    // `emitPublishAlerts` notifies connected repos about. One query for the whole
-    // pass, and it must be read *before* the loop, not inside it.
-    const priorLatest = await latestVersionsFor(handle.db, ok.map((c) => c.target.name));
     let updated = 0;
     for (let i = 0; i < ok.length; i++) {
       const c = ok[i]!;
@@ -253,7 +297,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
       await emitPublishAlerts(
         handle.db,
         c.target.name,
-        { latestVersion: priorLatest.get(c.target.name) ?? null },
+        { latestVersion: stored.get(c.target.name)?.latestVersion ?? null },
         { latestVersion: c.signals.registry?.latestVersion ?? null },
       );
       updated++;

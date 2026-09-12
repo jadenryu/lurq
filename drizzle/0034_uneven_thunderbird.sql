@@ -1,0 +1,1 @@
+ALTER TABLE "discovery_queue" ADD COLUMN "attempts" integer DEFAULT 0 NOT NULL;

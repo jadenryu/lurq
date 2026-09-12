@@ -32,9 +32,10 @@ import {
   upsertPackage,
   upsertPackageVersions,
 } from '../db/packages';
-import { packages, seedPackages, type PackageRow } from '../db/schema';
+import { packages, seedPackages, type NewPackageRow, type PackageRow } from '../db/schema';
 import { emitPublishAlerts } from '../github/alerts';
 import { assemblePackageRow } from './sync';
+import { canReuse } from './reuse';
 // Safe module cycle: ingestQueue imports syncOnePackage from here, but both
 // bindings are used only at call time, never at module-eval, so ESM resolves it.
 import { enqueueIngest, runIngest } from './ingestQueue';
@@ -86,9 +87,27 @@ export async function syncOnePackage(
     prefetchedWeekly,
   });
 
-  const summaryInput = await buildSummaryInput(signals, initialCategory);
-  const { summary, usageGuide, inferredCategory } =
-    await createSummaryProvider().generate(summaryInput);
+  // The two paid calls in this function — the LLM summary and the embedding —
+  // both describe the latest published version and nothing else, so a stored row
+  // already at that version has no new answer to buy. This is the gate that
+  // stops the hourly discovery worker from re-paying for every candidate it
+  // retries. See pipeline/reuse.ts for why the 30d HTTP cache does not cover it.
+  const embProvider = createEmbeddingProvider();
+  const reusable = canReuse(existing, signals.registry?.latestVersion ?? null, embProvider.id);
+
+  let summary: string | null;
+  let usageGuide: NewPackageRow['usageGuide'];
+  let inferredCategory: Category | null = null;
+  if (reusable) {
+    summary = existing!.summary;
+    usageGuide = existing!.usageGuide;
+  } else {
+    // Kept inside the branch: buildSummaryInput fetches the README, which is a
+    // network round-trip whose only consumer is the generate() below it.
+    const summaryInput = await buildSummaryInput(signals, initialCategory);
+    ({ summary, usageGuide, inferredCategory } =
+      await createSummaryProvider().generate(summaryInput));
+  }
 
   let category: Category | null;
   let categorySource: CategorySource | null;
@@ -119,10 +138,20 @@ export async function syncOnePackage(
   const healthScore = computeHealthScore(breakdown);
   const confidence = computeConfidence(input, now, quality);
 
-  const embProvider = createEmbeddingProvider();
-  const [embedding] = await embProvider.embed([
-    buildEmbeddingText({ name, category, summary, description: signals.registry?.description ?? null }),
-  ]);
+  // Same gate. The embedding text is built from name + category + summary, all
+  // three of which are unchanged whenever `reusable` holds.
+  const embedding = reusable
+    ? existing!.embedding
+    : ((
+        await embProvider.embed([
+          buildEmbeddingText({
+            name,
+            category,
+            summary,
+            description: signals.registry?.description ?? null,
+          }),
+        ])
+      )[0] ?? null);
 
   await upsertPackage(
     db,
