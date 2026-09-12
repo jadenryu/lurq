@@ -44,7 +44,8 @@ import { recommend, type RecommendOptions } from '../search/recommend';
 import { applyPolicy, hasRules, check as checkPolicy } from '../policy/enforce';
 import { getSelectionPolicy, loadPolicyFacts } from '../db/selectionPolicy';
 import type { PolicyVerdict } from '../policy/types';
-import { assessRisk } from '../security/risk';
+import { assessVerdict } from '../security/verdict';
+import type { RiskLevel } from '../core/types';
 import { detectTyposquat, typosquatCorpus } from '../security/typosquat';
 
 const SEVERITY_RANK: Record<AdvisorySeverity, number> = {
@@ -108,6 +109,18 @@ export function rowToEvaluate(row: PackageRow, learned?: LearnedSuccessors): Eva
     deprecated: row.deprecated,
     archived: row.archived,
     advisories: topAdvisories(row.advisories),
+    // The SAME call `verify` and `audit` make. A health score is a quality
+    // measure and must never be read as a safety clearance, so the verdict
+    // travels beside it — and because all three surfaces derive it here, they
+    // can no longer disagree about the same package.
+    verdict: assessVerdict({
+      exists: true,
+      advisories: row.advisories ?? null,
+      deprecated: row.deprecated,
+      archived: row.archived,
+      lowTrust: (row.weeklyDownloads ?? 0) < 1000,
+      subjectVersion: row.latestVersion,
+    }),
     summary: row.summary ? truncateSentences(row.summary, 3) : null,
     usageGuide: row.usageGuide ?? null,
     repoUrl: row.repoUrl,
@@ -173,7 +186,10 @@ export async function handleRecommend(
   const policy = await getSelectionPolicy(db, ownerId);
   if (!hasRules(policy)) return base;
 
-  const facts = await loadPolicyFacts(db, base.candidates.map((c) => c.name));
+  const facts = await loadPolicyFacts(
+    db,
+    base.candidates.map((c) => c.name),
+  );
   const { allowed, excluded } = applyPolicy(policy, base.candidates, facts);
 
   // `excluded` is always present once a policy is in force, even when empty —
@@ -188,10 +204,7 @@ export async function handleEvaluate(
   db: Database,
   input: { package: string },
   ownerId: string | null = null,
-): Promise<
-  | (EvaluateOutput & { policy?: PolicyVerdict })
-  | { tracked: false; suggestion: string }
-> {
+): Promise<(EvaluateOutput & { policy?: PolicyVerdict }) | { tracked: false; suggestion: string }> {
   const out = await cached(
     'eval',
     cacheKey([input.package]),
@@ -213,8 +226,7 @@ export async function handleEvaluate(
       // Only a dead package can carry a successor, so the map is worth loading
       // only for one. It is memoised, but skipping the call entirely keeps the
       // common path — evaluating a healthy package — free.
-      const learned =
-        row.deprecated || row.archived ? await loadLearnedSuccessors(db) : undefined;
+      const learned = row.deprecated || row.archived ? await loadLearnedSuccessors(db) : undefined;
       const evaluated = rowToEvaluate(row, learned);
       const verification = await getLatestVerificationByName(db, row.name);
       return verification
@@ -368,7 +380,10 @@ export async function handleVerify(
   if (!exists) {
     // A name that doesn't exist but closely mimics a popular one is a squat the
     // agent was about to fall for — surface the suspected target.
-    const typo = detectTyposquat(name, typosquatCorpus(await getTopPackageNames(db).catch(() => [])));
+    const typo = detectTyposquat(
+      name,
+      typosquatCorpus(await getTopPackageNames(db).catch(() => [])),
+    );
     return {
       exists: false,
       tracked: false,
@@ -380,9 +395,17 @@ export async function handleVerify(
         ? ['not-found-on-registry', `possible-typosquat-of:${typo.target}`]
         : ['not-found-on-registry'],
       risk: 'high',
+      // `invalid`, not `high`: this is a statement about the INPUT. Calling it
+      // a risk level invites the reader to weigh it against a benefit, and
+      // there is no package here to weigh.
+      verdict: assessVerdict({
+        exists: false,
+        advisories: null,
+        typosquatOf: typo?.target ?? null,
+      }),
       typosquatOf: typo?.target ?? null,
       confidence: null,
-      advisoryCount: 0,
+      advisoryCount: null,
     };
   }
 
@@ -398,9 +421,13 @@ export async function handleVerify(
   // Fetch weekly downloads live (one cheap call) rather than let the risk flags
   // falsely trip 'zero-downloads' on a popular package the index hasn't caught up
   // to. Only pays the extra call on the untracked path.
-  const weeklyDownloads = row?.weeklyDownloads ?? (await fetchWeeklyDownloads(name).catch(() => null));
-  const advisories = row?.advisories ?? [];
-  const advisoryCount = advisories.length;
+  const weeklyDownloads =
+    row?.weeklyDownloads ?? (await fetchWeeklyDownloads(name).catch(() => null));
+  // NOT `?? []`. Null means this package has never been analysed, and
+  // collapsing it to an empty array reported "0 advisories" — a clean bill —
+  // for a package nobody had looked at yet.
+  const advisories = row?.advisories ?? null;
+  const advisoryCount = advisories?.length ?? null;
   const deprecated = Boolean(row?.deprecated || registry?.deprecated);
   const archived = Boolean(row?.archived);
   const brandNew = withinDays(registry?.firstPublishedAt ?? null, 7);
@@ -415,18 +442,24 @@ export async function handleVerify(
   if (brandNew) riskFlags.push('published-within-7-days');
   if (registry?.maintainersCount === 1) riskFlags.push('single-maintainer');
   if (installScripts) riskFlags.push('runs-install-scripts');
-  if (advisoryCount > 0) riskFlags.push('has-known-advisory');
+  if (advisoryCount === null) riskFlags.push('advisories-not-yet-checked');
+  else if (advisoryCount > 0) riskFlags.push('has-known-advisory');
   if (deprecated) riskFlags.push('deprecated');
   if (archived) riskFlags.push('archived');
 
-  const risk = assessRisk({
-    flags: riskFlags,
-    hasCriticalOrHighAdvisory: hasCriticalOrHighAdvisory(advisories),
-    typosquat: Boolean(typo),
+  // One authority for the safety call, shared with evaluate and audit so the
+  // three cannot disagree about the same package.
+  const verdict = assessVerdict({
+    exists: true,
+    advisories,
+    typosquatOf: typo?.target ?? null,
     installScripts,
     brandNew,
     lowTrust,
-    deprecatedOrArchived: deprecated || archived,
+    deprecated,
+    archived,
+    singleMaintainer: registry?.maintainersCount === 1,
+    subjectVersion: registry?.latestVersion ?? row?.latestVersion ?? null,
   });
 
   return {
@@ -437,7 +470,9 @@ export async function handleVerify(
     latestVersion: registry?.latestVersion ?? row?.latestVersion ?? null,
     weeklyDownloads,
     riskFlags,
-    risk,
+    // `invalid` cannot occur here (exists is true), so the cast is total.
+    risk: verdict.level as RiskLevel,
+    verdict,
     typosquatOf: typo?.target ?? null,
     confidence: (row?.confidence as Confidence) ?? null,
     advisoryCount,

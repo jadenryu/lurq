@@ -507,23 +507,44 @@ export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<
   );
 
   if (opts.json) return console.log(JSON.stringify(res, null, 2));
-  const riskColor = res.risk === 'high' ? red : res.risk === 'medium' ? yellow : green;
-  const verdict = !res.exists
-    ? red('✗ NOT FOUND on npm')
-    : res.risk === 'high'
-      ? red('✗ high supply-chain risk')
-      : res.risk === 'medium'
-        ? yellow('⚠ exists, but risky')
-        : green('✓ looks safe');
-  console.log(`${bold(pkg)}  ${verdict}`);
+
+  const v = res.verdict;
+  // The tick is gated on `reassuring`, never on the level alone. A low level
+  // over unchecked evidence is not a clean bill, and printing one was how an
+  // unanalysed package came back "✓ looks safe".
+  const headline =
+    v.level === 'invalid'
+      ? red('✗ NOT A REAL PACKAGE')
+      : v.level === 'high'
+        ? red(`✗ do not install ${v.scope} without review`)
+        : v.level === 'medium'
+          ? yellow('⚠ usable, but read the findings')
+          : v.reassuring
+            ? green(`✓ no supply-chain problems found in ${v.scope}`)
+            : yellow(`? ${v.scope} is not fully checked yet`);
+  console.log(`${bold(pkg)}  ${headline}`);
+
+  // Reasons before stats. Someone scanning this output stops at the first line
+  // that tells them something, and a severity buried under a download count is
+  // a severity that gets skipped.
+  for (const r of v.reasons) console.log(`  ${red('•')} ${r}`);
+  for (const u of v.unknowns) console.log(`  ${yellow('?')} ${u}`);
+
+  if (v.level === 'invalid') return;
+
+  const riskColor = v.level === 'high' ? red : v.level === 'medium' ? yellow : green;
   const riskFlags = res.riskFlags ?? [];
   console.log(
     detail([
       ['version', res.latestVersion ?? '—'],
       ['weekly dl', formatNumber(res.weeklyDownloads)],
       ['confidence', res.confidence ? confidenceLabel(res.confidence) : '—'],
-      ['advisories', String(res.advisoryCount ?? 0)],
-      ['risk', riskColor(res.risk)],
+      // Never "0" for something nobody has looked at.
+      [
+        'advisories',
+        res.advisoryCount === null ? yellow('not checked yet') : String(res.advisoryCount),
+      ],
+      ['risk', riskColor(v.level)],
       ['risk flags', riskFlags.length ? yellow(riskFlags.join(', ')) : 'none'],
     ]),
   );
@@ -1070,7 +1091,10 @@ export async function runAudit(
       const sev = worstSeverity(item.findings)!;
       const tag = item.unit === 'mcp' ? dim(' [mcp]') : '';
       const tag2 = item.unit === 'transitive' ? dim(' [transitive]') : tag;
-      console.log(`${colour(sev)(sev.padEnd(8))} ${bold(item.name)}${tag2}`);
+      // The installed version is named on the line, so an audit finding cannot
+      // be read as contradicting `verify`, which answers about the latest.
+      const ver = item.installed ? dim(`@${item.installed}`) : '';
+      console.log(`${colour(sev)(sev.padEnd(8))} ${bold(item.name)}${ver}${tag2}`);
       for (const f of item.findings) console.log(`         ${f.detail}`);
     }
   }
