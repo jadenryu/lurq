@@ -122,6 +122,29 @@ export function buildProgram(): Command {
       },
     );
 
+  policy
+    .command('history')
+    .description('who changed the policy, from where, and what changed')
+    .option('--json', 'output the changes as JSON')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(async (opts: { json?: boolean; url?: string; apiKey?: string }) => {
+      const { runPolicyHistory } = await import('./policy');
+      await runPolicyHistory(opts);
+    });
+
+  policy
+    .command('log')
+    .description('packages the policy refused, or warned about, grouped by rule')
+    .option('--days <n>', 'look back this many days, 1 to 365 (default 30)')
+    .option('--json', 'output the log as JSON')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(async (opts: { days?: string; json?: boolean; url?: string; apiKey?: string }) => {
+      const { runPolicyLog } = await import('./policy');
+      await runPolicyLog(opts);
+    });
+
   // Answers "can lurq do X" without making anyone read `--help` twice. Local
   // and instant: the catalog ships in the binary, so this works before setup and
   // offline.

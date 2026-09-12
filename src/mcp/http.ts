@@ -42,7 +42,12 @@ import {
   setRepoPolicy,
   upsertRepos,
 } from '../db/repos';
-import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
+import {
+  getSelectionPolicy,
+  listPolicyChanges,
+  setSelectionPolicy,
+  summarizeDecisions,
+} from '../db/selectionPolicy';
 import { validateSelectionPolicy } from '../policy/parse';
 import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
@@ -1351,7 +1356,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const previous = await setSelectionPolicy(db, ownerId, parsed.policy);
+      const previous = await setSelectionPolicy(db, ownerId, parsed.policy, 'dashboard');
       res.status(200).json({ policy: parsed.policy, previous });
     } catch (err) {
       logger.error(
@@ -1444,6 +1449,49 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // agent's MCP config must not be able to loosen the policy that agent obeys.
   // Not behind `quota`: governing the agent should never compete with using it.
 
+  // History and the decision log, shared by the key routes below and the
+  // dashboard routes beside them: same reads, two ways of proving the owner.
+  const sendPolicyHistory = async (ownerId: string, res: Response): Promise<void> => {
+    try {
+      res.status(200).json({ changes: await listPolicyChanges(db, ownerId) });
+    } catch (err) {
+      logger.error('policy history read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read policy history.' });
+    }
+  };
+
+  const sendPolicyDecisions = async (ownerId: string, rawDays: unknown, res: Response) => {
+    const days = rawDays === undefined ? 30 : Number(rawDays);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      res.status(400).json({ error: 'days must be a whole number from 1 to 365.' });
+      return;
+    }
+    try {
+      res.status(200).json({ days, decisions: await summarizeDecisions(db, ownerId, days) });
+    } catch (err) {
+      logger.error('policy decisions read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read policy decisions.' });
+    }
+  };
+
+  app.get('/selection-policy/history', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    await sendPolicyHistory(ownerId, res);
+  });
+
+  app.get('/selection-policy/decisions', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    await sendPolicyDecisions(ownerId, req.query.days, res);
+  });
+
   const keyOwner = (req: Request, res: Response): string | null => {
     const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
     if (!ownerId) res.status(403).json({ error: 'This key has no account attached.' });
@@ -1478,13 +1526,23 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     try {
       // `previous` is what lets `lurq policy push` print the change it made,
       // diffed against what was actually replaced rather than a stale pull.
-      const previous = await setSelectionPolicy(db, ownerId, parsed.policy);
-      logger.info(`selection policy replaced by key ${(req as AuthedRequest).lurqKey!.prefix}`);
+      const actor = `key ${(req as AuthedRequest).lurqKey!.prefix}`;
+      const previous = await setSelectionPolicy(db, ownerId, parsed.policy, actor);
       res.status(200).json({ policy: parsed.policy, previous });
     } catch (err) {
       logger.error('policy write failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not save policy.' });
     }
+  });
+
+  app.get('/policy/history', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (ownerId) await sendPolicyHistory(ownerId, res);
+  });
+
+  app.get('/policy/decisions', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (ownerId) await sendPolicyDecisions(ownerId, req.query.days, res);
   });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────

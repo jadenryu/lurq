@@ -306,3 +306,31 @@ export function putPolicy(
 ): Promise<{ policy: SelectionPolicy; previous?: SelectionPolicy }> {
   return request('PUT', '/policy', { policy }, opts);
 }
+
+export interface RemotePolicyChange {
+  actor: string;
+  /** ISO timestamp. */
+  at: string;
+  changes: string[];
+}
+
+export interface RemoteDecision {
+  packageName: string;
+  rule: string;
+  action: 'blocked' | 'warned';
+  count: number;
+  lastDay: string;
+}
+
+export async function getPolicyHistory(opts: RemoteOptions = {}): Promise<RemotePolicyChange[]> {
+  return (await request<{ changes: RemotePolicyChange[] }>('GET', '/policy/history', undefined, opts))
+    .changes;
+}
+
+export async function getPolicyDecisions(
+  days: number,
+  opts: RemoteOptions = {},
+): Promise<RemoteDecision[]> {
+  const path = `/policy/decisions?days=${encodeURIComponent(days)}`;
+  return (await request<{ decisions: RemoteDecision[] }>('GET', path, undefined, opts)).decisions;
+}

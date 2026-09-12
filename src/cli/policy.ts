@@ -11,7 +11,7 @@ import { resolveApiKey } from '../core/userConfig';
 import { describeRules, diffPolicies } from '../policy/enforce';
 import { validateSelectionPolicy } from '../policy/parse';
 import type { SelectionPolicy } from '../policy/types';
-import { getPolicy, putPolicy, type RemoteOptions } from './remote';
+import { getPolicy, getPolicyDecisions, getPolicyHistory, putPolicy, type RemoteOptions } from './remote';
 
 export async function runPolicyPull(file: string | undefined, opts: RemoteOptions): Promise<void> {
   const text = `${JSON.stringify(await getPolicy(opts), null, 2)}\n`;
@@ -76,4 +76,43 @@ export async function runPolicyPush(
       ? indent(diffPolicies(previous, policy), 'no rule changes.')
       : indent(describeRules(policy), 'no rules enforced.'),
   );
+}
+
+/** Who changed the policy, from where, and what changed, newest first. */
+export async function runPolicyHistory(opts: RemoteOptions & { json?: boolean }): Promise<void> {
+  const changes = await getPolicyHistory(opts);
+  if (opts.json) {
+    console.log(JSON.stringify(changes, null, 2));
+    return;
+  }
+  if (!changes.length) {
+    console.log('no policy changes recorded yet.');
+    return;
+  }
+  for (const change of changes) {
+    console.log(`${change.at.slice(0, 16).replace('T', ' ')} UTC  ${change.actor}`);
+    console.log(indent(change.changes, 'saved with no rule changes.'));
+  }
+}
+
+/** What the policy refused, or would have in warn mode, grouped by package and rule. */
+export async function runPolicyLog(
+  opts: RemoteOptions & { days?: string; json?: boolean },
+): Promise<void> {
+  const days = opts.days === undefined ? 30 : Number(opts.days);
+  const decisions = await getPolicyDecisions(days, opts);
+  if (opts.json) {
+    console.log(JSON.stringify(decisions, null, 2));
+    return;
+  }
+  if (!decisions.length) {
+    console.log(`nothing refused or warned about in the last ${days} days.`);
+    return;
+  }
+  const width = Math.max(...decisions.map((d) => d.packageName.length));
+  for (const d of decisions) {
+    console.log(
+      `${d.packageName.padEnd(width)}  ${d.action.padEnd(7)}  ${d.rule.padEnd(10)}  ${String(d.count).padStart(4)}x  last ${d.lastDay}`,
+    );
+  }
 }

@@ -6,14 +6,15 @@
  * there is deliberately no unscoped read. A policy leak is worse than a repo
  * leak — it discloses what a company has decided to ban and why.
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { Database } from './client';
-import { packages, selectionPolicies } from './schema';
+import { packages, policyDecisions, selectionPolicies, selectionPolicyChanges } from './schema';
 import { DEFAULT_ECOSYSTEM, type Ecosystem } from '../core/types';
-import { withoutExpired } from '../policy/enforce';
+import { diffPolicies, withoutExpired } from '../policy/enforce';
 import {
   DEFAULT_SELECTION_POLICY,
   type AllowRule,
+  type Exclusion,
   type PolicyFacts,
   type SelectionPolicy,
 } from '../policy/types';
@@ -63,21 +64,130 @@ export async function getEnforcedPolicy(
   return withoutExpired(await getSelectionPolicy(db, ownerId), new Date());
 }
 
-/** Create or replace the owner's policy. Returns the policy it replaced. */
+/**
+ * Create or replace the owner's policy, and record the change. Returns the
+ * policy it replaced.
+ *
+ * `actor` is `dashboard` or the pushing key's display prefix. The write and its
+ * history row commit together: a policy change with no record of who made it is
+ * exactly the gap an audit trail exists to close.
+ * ponytail: `previous` is read outside the transaction, so two saves racing for
+ * one owner can record a stale `before`; lock the row if concurrent writers show up.
+ */
 export async function setSelectionPolicy(
   db: Database,
   ownerId: string,
   policy: SelectionPolicy,
+  actor: string,
 ): Promise<SelectionPolicy> {
   const previous = await getSelectionPolicy(db, ownerId);
-  await db
-    .insert(selectionPolicies)
-    .values({ ownerId, policy, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: selectionPolicies.ownerId,
-      set: { policy, updatedAt: new Date() },
-    });
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(selectionPolicies)
+      .values({ ownerId, policy, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: selectionPolicies.ownerId,
+        set: { policy, updatedAt: new Date() },
+      });
+    await tx.insert(selectionPolicyChanges).values({ ownerId, actor, before: previous, after: policy });
+  });
   return previous;
+}
+
+export interface PolicyChange {
+  actor: string;
+  at: Date;
+  /** `-`/`+` rule sentences, see diffPolicies. */
+  changes: string[];
+  before: SelectionPolicy;
+  after: SelectionPolicy;
+}
+
+/** The owner's policy changes, newest first. */
+export async function listPolicyChanges(
+  db: Database,
+  ownerId: string,
+  limit = 20,
+): Promise<PolicyChange[]> {
+  const rows = await db
+    .select()
+    .from(selectionPolicyChanges)
+    .where(eq(selectionPolicyChanges.ownerId, ownerId))
+    .orderBy(desc(selectionPolicyChanges.createdAt), desc(selectionPolicyChanges.id))
+    .limit(limit);
+  return rows.map((row) => ({
+    actor: row.actor,
+    at: row.createdAt,
+    changes: diffPolicies(row.before, row.after),
+    before: row.before,
+    after: row.after,
+  }));
+}
+
+/**
+ * Log what a rule refused (or, in warn mode, would have).
+ *
+ * Fire-and-forget, the same idiom as recordUsage: a log write must never fail
+ * the tool call an agent is waiting on.
+ */
+export async function recordDecisions(
+  db: Database,
+  ownerId: string | null,
+  tool: string,
+  exclusions: Exclusion[],
+  action: 'blocked' | 'warned',
+): Promise<void> {
+  if (!ownerId || exclusions.length === 0) return;
+  try {
+    await db.insert(policyDecisions).values(
+      exclusions.map((e) => ({ ownerId, packageName: e.name, rule: e.rule, action, tool })),
+    );
+  } catch {
+    // Display-only log: never let it break the request.
+  }
+}
+
+export interface DecisionSummary {
+  packageName: string;
+  rule: Exclusion['rule'];
+  action: 'blocked' | 'warned';
+  count: number;
+  /** UTC day of the most recent hit, YYYY-MM-DD. */
+  lastDay: string;
+}
+
+/**
+ * Refusals grouped by package, rule and action over a trailing window, busiest
+ * first. Grouped rather than raw: an agent retrying the same blocked package
+ * twenty times is one finding, and the question being answered is "what is this
+ * policy catching", not "replay every call".
+ */
+export async function summarizeDecisions(
+  db: Database,
+  ownerId: string,
+  days: number,
+): Promise<DecisionSummary[]> {
+  const count = sql<number>`count(*)::int`;
+  return db
+    .select({
+      packageName: policyDecisions.packageName,
+      rule: policyDecisions.rule,
+      action: policyDecisions.action,
+      count,
+      lastDay: sql<string>`to_char(max(${policyDecisions.createdAt}) at time zone 'UTC', 'YYYY-MM-DD')`,
+    })
+    .from(policyDecisions)
+    .where(
+      and(
+        eq(policyDecisions.ownerId, ownerId),
+        // `::int` for the same reason usage.ts's windowStart casts: an uncast JS
+        // number leaves Postgres to guess the operand type.
+        gte(policyDecisions.createdAt, sql`now() - make_interval(days => ${days}::int)`),
+      ),
+    )
+    .groupBy(policyDecisions.packageName, policyDecisions.rule, policyDecisions.action)
+    .orderBy(desc(count))
+    .limit(100);
 }
 
 /** Whole days from `date` to now; null when the date is unknown. */

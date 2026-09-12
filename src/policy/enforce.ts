@@ -87,8 +87,9 @@ export function describeRules(policy: SelectionPolicy): string[] {
     out.push('Warn only: packages that break these rules are reported, not refused.');
   }
   for (const a of policy.allow) {
-    const until = a.expires ? ` until ${a.expires}` : '';
-    out.push(`Always allowed${until}: ${a.name}${a.reason ? ` (${a.reason})` : ''}.`);
+    // "expires", not "until": the date is the first day it no longer applies.
+    const expires = a.expires ? `, expires ${a.expires}` : '';
+    out.push(`Always allowed: ${a.name}${a.reason ? ` (${a.reason})` : ''}${expires}.`);
   }
   for (const d of policy.deny) out.push(`Never use ${d.name}${d.reason ? `: ${d.reason}` : '.'}`);
   if (policy.maxAdvisorySeverity) {

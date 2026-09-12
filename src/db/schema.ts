@@ -25,7 +25,7 @@ import {
   vector,
 } from 'drizzle-orm/pg-core';
 import { EMBEDDING_DIM } from '../core/constants';
-import type { SelectionPolicy } from '../policy/types';
+import type { ExclusionRule, SelectionPolicy } from '../policy/types';
 import type { RuntimeTarget } from '../core/runtimeTarget';
 
 /** Postgres full-text `tsvector` type for hybrid lexical search (§3). */
@@ -875,6 +875,55 @@ export const selectionPolicies = pgTable('selection_policies', {
   policy: jsonb('policy').$type<SelectionPolicy>().notNull(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 });
+
+/**
+ * Every replacement of a selection policy: who did it, from where, both sides.
+ *
+ * Append-only. A policy decides what a whole team's agents may install, and
+ * "who allowed this, and when" is the first question after anything slips
+ * through. Both sides are stored whole rather than as a diff, so the record
+ * survives the rule sentences changing wording.
+ */
+export const selectionPolicyChanges = pgTable(
+  'selection_policy_changes',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    /** `dashboard`, or the display prefix of the API key that pushed it. */
+    actor: text('actor').notNull(),
+    before: jsonb('before').$type<SelectionPolicy>().notNull(),
+    after: jsonb('after').$type<SelectionPolicy>().notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('selection_policy_changes_owner_idx').on(table.ownerId, table.createdAt)],
+);
+
+/**
+ * Each time a rule refused a package an agent reached for, or would have in
+ * warn mode.
+ *
+ * Only refusals are written, never passes: the volume is bounded by how often
+ * a policy bites, and a log of everything allowed is a usage log we already
+ * keep. This is what makes warn mode worth switching on (what would this rule
+ * have caught?) and what shows an account the policy is doing work.
+ * ponytail: no retention job; add a created_at prune when a busy account's row
+ * count matters.
+ */
+export const policyDecisions = pgTable(
+  'policy_decisions',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    packageName: text('package_name').notNull(),
+    rule: text('rule').$type<ExclusionRule>().notNull(),
+    /** `blocked` under enforce, `warned` under warn. */
+    action: text('action').$type<'blocked' | 'warned'>().notNull(),
+    /** The tool the agent called: recommend | evaluate. */
+    tool: text('tool').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('policy_decisions_owner_idx').on(table.ownerId, table.createdAt)],
+);
 
 export type SyncRunRow = typeof syncRuns.$inferSelect;
 export type DiscoveryQueueRow = typeof discoveryQueue.$inferSelect;

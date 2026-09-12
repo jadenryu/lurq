@@ -42,7 +42,7 @@ import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
 import { applyPolicy, describeRules, hasRules, check as checkPolicy } from '../policy/enforce';
-import { getEnforcedPolicy, loadPolicyFacts } from '../db/selectionPolicy';
+import { getEnforcedPolicy, loadPolicyFacts, recordDecisions } from '../db/selectionPolicy';
 import type { PolicyVerdict } from '../policy/types';
 import { assessVerdict } from '../security/verdict';
 import type { RiskLevel } from '../core/types';
@@ -191,6 +191,9 @@ export async function handleRecommend(
     base.candidates.map((c) => c.name),
   );
   const { allowed, excluded, warned } = applyPolicy(policy, base.candidates, facts);
+  void (policy.mode === 'warn'
+    ? recordDecisions(db, ownerId, 'recommend', warned, 'warned')
+    : recordDecisions(db, ownerId, 'recommend', excluded, 'blocked'));
 
   // `excluded` is always present once a policy is in force, even when empty —
   // an agent that sees the field knows the list was filtered and that silence
@@ -280,6 +283,13 @@ export async function handleEvaluate(
     facts.get(evaluated.name),
   );
   if (!exclusion) return { ...evaluated, policy: { allowed: true } };
+  void recordDecisions(
+    db,
+    ownerId,
+    'evaluate',
+    [exclusion],
+    policy.mode === 'warn' ? 'warned' : 'blocked',
+  );
   return {
     ...evaluated,
     policy:
