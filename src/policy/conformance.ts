@@ -19,7 +19,7 @@
  * report a clean repo that simply had its violations cut off the end.
  */
 import { and, eq, inArray } from 'drizzle-orm';
-import { DEFAULT_ECOSYSTEM, type Confidence, type Ecosystem } from '../core/types';
+import { DEFAULT_ECOSYSTEM, type Advisory, type Confidence, type Ecosystem } from '../core/types';
 import type { Database } from '../db/client';
 import { packages, repos } from '../db/schema';
 import { getSelectionPolicy } from '../db/selectionPolicy';
@@ -34,10 +34,26 @@ const NAME_CHUNK = 500;
  *  truncated list can never be mistaken for the whole finding. */
 export const VIOLATION_CAP = 50;
 
+/**
+ * The facts one declared dependency is ruled against.
+ *
+ * `PolicyFacts` plus the evidence grade, which `check` takes on the package
+ * argument rather than in facts. Kept as its own type because this loader reads
+ * whole manifests (thousands of names) where the recommendation path reads at
+ * most five, so the two are allowed to diverge in what they select.
+ */
 export interface RuleFacts {
   license: string | null;
   deprecated: boolean;
   confidence: Confidence | null;
+  // Optional, exactly as on `PolicyFacts`: an absent fact abstains rather than
+  // convicting, so a caller that never learned one is expressing "not
+  // established" rather than omitting a required field.
+  archived?: boolean;
+  advisories?: Advisory[] | null;
+  weeklyDownloads?: number | null;
+  monthsSinceRelease?: number | null;
+  bundleKb?: number | null;
 }
 
 export interface RepoConformance {
@@ -74,7 +90,15 @@ export interface ConformanceReport {
   repos: RepoConformance[];
 }
 
-/** license / deprecated / confidence for the named packages, keyed by name. */
+/** Whole months from `date` to now; null when the date is unknown. */
+function monthsSince(date: Date | null): number | null {
+  if (!date) return null;
+  const ms = Date.now() - date.getTime();
+  if (ms < 0) return 0;
+  return Math.floor(ms / (1000 * 60 * 60 * 24 * 30.44));
+}
+
+/** Every fact the rules read, for the named packages, keyed by name. */
 async function loadRuleFacts(
   db: Database,
   names: string[],
@@ -88,6 +112,11 @@ async function loadRuleFacts(
         license: packages.license,
         deprecated: packages.deprecated,
         confidence: packages.confidence,
+        archived: packages.archived,
+        advisories: packages.advisories,
+        weeklyDownloads: packages.weeklyDownloads,
+        lastReleaseAt: packages.lastReleaseAt,
+        bundleMinGzipKb: packages.bundleMinGzipKb,
       })
       .from(packages)
       .where(
@@ -101,6 +130,11 @@ async function loadRuleFacts(
         license: row.license,
         deprecated: row.deprecated,
         confidence: row.confidence,
+        archived: row.archived,
+        advisories: row.advisories,
+        weeklyDownloads: row.weeklyDownloads,
+        monthsSinceRelease: monthsSince(row.lastReleaseAt),
+        bundleKb: row.bundleMinGzipKb,
       });
     }
   }
@@ -140,7 +174,15 @@ export function ruleRepo(
       // licence and deprecation rules still apply normally. The abstention is
       // counted above rather than hidden.
       { name, confidence: fact.confidence ?? 'proven' },
-      { license: fact.license, deprecated: fact.deprecated },
+      {
+        license: fact.license,
+        deprecated: fact.deprecated,
+        archived: fact.archived,
+        advisories: fact.advisories,
+        weeklyDownloads: fact.weeklyDownloads,
+        monthsSinceRelease: fact.monthsSinceRelease,
+        bundleKb: fact.bundleKb,
+      },
     );
     if (exclusion) violations.push(exclusion);
   }
