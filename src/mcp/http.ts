@@ -79,6 +79,7 @@ import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
 import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
+import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
@@ -1365,6 +1366,58 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       }
     },
   );
+
+  // ── Ask's package tools (dashboard-authenticated) ─────────────────────────
+  //
+  // The dashboard holds no API key for its user, so it cannot reach /mcp. These
+  // run the same tools for the signed-in owner the web app names, and count
+  // against that owner's plan exactly like an agent's call would: Ask looking a
+  // package up is a hosted call, not a free side door around the quota.
+
+  app.get('/ask-tools', requireIssuerSecret, async (_req: Request, res: Response) => {
+    try {
+      res.status(200).json({ tools: await listDashboardTools(db) });
+    } catch (err) {
+      logger.error('ask tools list failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not list Ask tools.' });
+    }
+  });
+
+  app.post('/ask-tools/call', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const body = (req.body ?? {}) as { name?: unknown; arguments?: unknown };
+    const name = typeof body.name === 'string' ? body.name : '';
+    if (!ownerId || !DASHBOARD_TOOLS.has(name)) {
+      res.status(400).json({ error: 'ownerId and an Ask tool name are required.' });
+      return;
+    }
+    const args =
+      body.arguments && typeof body.arguments === 'object' && !Array.isArray(body.arguments)
+        ? (body.arguments as Record<string, unknown>)
+        : {};
+    try {
+      const ent = await resolveEntitlement(ownerId);
+      if (!ent.withinQuota) {
+        res.status(402).json({
+          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.plan.monthlyCalls} calls).`,
+        });
+        return;
+      }
+    } catch (err) {
+      // Fails open, for the reason `quota` does: an entitlement hiccup must not
+      // read as "out of allowance" to every account at once.
+      logger.error(
+        'ask tool quota lookup failed, serving anyway:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    try {
+      res.status(200).json(await callDashboardTool(db, ownerId, name, args));
+    } catch (err) {
+      logger.error('ask tool call failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not run that lookup.' });
+    }
+  });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
   //
