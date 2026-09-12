@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { FREE_DEPS, type BuilderProfile, type BuilderReport } from "@/lib/builder-profile";
 
 /**
- * The landing page's scan box, forwarded to the backend's public scan.
+ * The builder report's data, forwarded from the backend's profile scan.
  *
- * Unauthenticated on purpose, and the only route here that is: it is the thing
- * a visitor does before they have an account. See src/mcp/http.ts `/scan/public`
- * for what it is allowed to return and why the result is capped.
+ * Unauthenticated on purpose: /dashboard/report calls it for a visitor the
+ * landing page's scan box sent over before they had an account. See
+ * src/mcp/http.ts `/scan/profile` for what the backend computes and caches.
  *
- * This hop exists rather than the browser calling api.lurq.run directly for two
- * reasons: the backend origin stays a server-side env var instead of a public
- * one, and there is no CORS preflight on every keystroke of a first impression.
+ * This hop exists rather than the browser calling api.lurq.run directly for
+ * three reasons: the backend origin stays a server-side env var, there is no
+ * CORS preflight on a first impression, and it is where the session is known,
+ * so it is where the signed-out cut is made.
  */
 export const dynamic = "force-dynamic";
 
@@ -20,9 +23,9 @@ export const dynamic = "force-dynamic";
  * A courtesy layer, not the ceiling. lib/rate-limit counts in memory, so on a
  * serverless host each warm instance enforces this independently and the real
  * limit is 6 × however many are up. The authoritative one is `scanLimiter` on
- * the backend's /scan/public, which is Redis-backed when REDIS_URL is set and
- * therefore correct across instances. This exists to keep an obvious refresh
- * loop from crossing the network at all.
+ * the backend, which is Redis-backed when REDIS_URL is set and therefore
+ * correct across instances. This exists to keep an obvious refresh loop from
+ * crossing the network at all.
  */
 const PER_MINUTE = 6;
 
@@ -56,6 +59,30 @@ function clientIp(req: Request): string {
   return forwarded?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
 }
 
+/**
+ * The signed-out cut, made on the server.
+ *
+ * The old public report blurred real rows with CSS and accepted that devtools
+ * defeats it, which was fine for eight dependency rows. This gate covers the
+ * trait evidence and every other repo, so it is a real slice: a signed-out
+ * browser receives exactly what it renders. What survives is the archetype
+ * (the answer they came for) and the head of the first repo; the counts of what
+ * was dropped survive too, because "5 more repos and 3 conflicts" is the ask.
+ */
+function forVisitor(profile: BuilderProfile): BuilderReport {
+  const [first, ...rest] = profile.repos;
+  return {
+    ...profile,
+    traits: null,
+    repos: first ? [{ ...first, deps: first.deps.slice(0, FREE_DEPS), conflictDetail: [] }] : [],
+    locked: {
+      repos: rest.length,
+      deps: first ? Math.max(0, first.deps.length - FREE_DEPS) : 0,
+      conflicts: first?.conflictDetail.length ?? 0,
+    },
+  };
+}
+
 export async function POST(req: Request) {
   const base = process.env.LURQ_MCP_URL;
   if (!base) {
@@ -73,36 +100,36 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { target?: unknown };
   const target = typeof body.target === "string" ? body.target.slice(0, 200) : "";
   if (!target.trim()) {
-    return NextResponse.json({ error: "Enter a repo or a GitHub username." }, { status: 400 });
+    return NextResponse.json({ error: "Enter a GitHub username or repo." }, { status: 400 });
   }
 
   try {
-    const res = await fetch(`${base.replace(/\/$/, "")}/scan/public`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target }),
-      // A scan reads GitHub and then the index. Longer than a page load should
-      // ever take, short enough that a hung origin does not hold the box open.
-      signal: AbortSignal.timeout(20_000),
-    });
+    const [res, { userId }] = await Promise.all([
+      fetch(`${base.replace(/\/$/, "")}/scan/profile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target }),
+        // Reads GitHub, several manifests, then the index. Longer than a page
+        // load should take, short enough that a hung origin does not hold the
+        // report open.
+        signal: AbortSignal.timeout(25_000),
+      }),
+      auth(),
+    ]);
 
     /**
-     * A NON-JSON BODY IS A SERVICE PROBLEM, NEVER A REPO PROBLEM.
+     * A NON-JSON BODY IS A SERVICE PROBLEM, NEVER A PROFILE PROBLEM.
      *
      * This used to fall back to "Could not read that repository." on any parse
-     * failure, and it cost an afternoon. An older build of the API does not
-     * have /scan/public at all, so Express answers with its own HTML 404 page;
-     * the parse failed, the fallback fired, and the landing page told everyone
-     * who tried it that their perfectly good repository could not be read. The
-     * one message the user could act on was the one thing that was not wrong.
-     *
-     * Anything that is not JSON means the request never reached the scanner,
-     * and it has to say so.
+     * failure, and it cost an afternoon: an older API build without the route
+     * answers with Express's HTML 404, and the page told everyone their
+     * perfectly good repository could not be read. Anything that is not JSON
+     * means the request never reached the scanner, and it has to say so.
      */
-    const body = await res.text();
+    const text = await res.text();
     let data: unknown;
     try {
-      data = JSON.parse(body);
+      data = JSON.parse(text);
     } catch {
       console.error(`scan: ${res.status} from ${base} with a non-JSON body`);
       return NextResponse.json(
@@ -111,10 +138,12 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json(data, {
-      status: res.status,
-      headers: forwardedLimitHeaders(res),
-    });
+    const headers = { ...forwardedLimitHeaders(res), "Cache-Control": "private, no-store" };
+    if (!res.ok) return NextResponse.json(data, { status: res.status, headers });
+
+    const profile = data as BuilderProfile;
+    const report: BuilderReport = userId ? { ...profile, locked: null } : forVisitor(profile);
+    return NextResponse.json(report, { headers });
   } catch {
     return NextResponse.json({ error: "Could not reach the index." }, { status: 502 });
   }

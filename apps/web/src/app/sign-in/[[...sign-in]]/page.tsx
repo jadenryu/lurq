@@ -11,8 +11,8 @@ export default function SignInPage() {
     >
       {/* FALLBACK, NOT FORCE. `forceRedirectUrl` takes precedence over
           everything including the `redirect_url` search param, which is how
-          /scan/[owner]/[repo] sends a visitor here and gets them back to the
-          report they were reading. Forcing /dashboard dropped them into an
+          a gated page sends a visitor here and gets them back to what they
+          were reading. Forcing /dashboard dropped them into an
           empty dashboard instead — they paid with an account and the thing
           they paid for was not on the other side. The fallback still sends
           everyone with no destination of their own to /dashboard. */}
