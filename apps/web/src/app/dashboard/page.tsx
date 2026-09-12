@@ -10,12 +10,23 @@ import { installUrl } from "@/lib/github-connect";
 
 const WINDOW_DAYS = 30;
 
+/**
+ * Twice the window is read, and only the recent half is charted.
+ *
+ * Every headline number on this page carries a change figure, and a change
+ * figure needs a baseline. Splitting the reported window in half would be the
+ * cheap version of this and it lies: "last 15 days vs the 15 before" is not the
+ * 30-day trend anybody thinks they are reading. One request for 60 days, sliced
+ * in the panel, makes the comparison the one it claims to be.
+ */
+const BASELINE_DAYS = WINDOW_DAYS * 2;
+
 export default async function DashboardOverviewPage() {
   // Repos are read for the setup checklist's fourth step. In parallel, and it
   // already degrades to an empty list on failure, so a repo-service outage
   // costs this page a row rather than the whole render.
   const [{ data, demo, failed }, { userId }, repos] = await Promise.all([
-    loadOverview(WINDOW_DAYS),
+    loadOverview(BASELINE_DAYS),
     auth(),
     loadRepos(),
   ]);

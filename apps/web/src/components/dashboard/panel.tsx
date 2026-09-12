@@ -20,8 +20,20 @@ import { cn } from "@/lib/utils";
 /** A label, set like the rest of the page: weight and value carry it, not caps. */
 export const eyebrow = "text-[12px] font-medium tracking-[-0.005em] text-ink-3";
 
-/** Column heads, filter labels, section meta: the one place small caps earn it. */
-export const microLabel =
+/**
+ * Metric labels, section meta, axis captions.
+ *
+ * NOT uppercase. A 10px letterspaced all-caps label is the single most
+ * template-looking thing a dashboard can put above a number — it is what every
+ * generated admin panel ships, it costs legibility at the size it is used, and
+ * a page carrying forty of them reads as chrome rather than as this product.
+ * Caps survive in exactly one place, `columnLabel`, where the row above a table
+ * has to be distinguishable from the rows below it at a glance.
+ */
+export const microLabel = "text-[12px] font-medium tracking-[-0.005em] text-ink-3";
+
+/** Table column heads — the one place small caps still earn their keep. */
+export const columnLabel =
   "text-[10.5px] font-medium uppercase tracking-[0.07em] text-ink-3";
 
 export function Panel({
@@ -88,38 +100,52 @@ export function PanelHeader({
 }
 
 /**
- * Small outline chip. `tone` carries state, using the reserved status hues from
- * the soft syntax palette: never a solid saturated badge, and never a status
- * color standing in for plain identity (that's what `neutral` is for).
+ * Status chip.
+ *
+ * The old one was a 10.5px ALL-CAPS letterspaced outline pill. Three things were
+ * wrong with it and they compound: caps at that size are read glyph by glyph, a
+ * hairline outline on a dark ground is nearly invisible until you look for it,
+ * and the same pill carried both state ("accepted") and identity ("parsing"), so
+ * the reader could not tell from the shape whether they were looking at a verdict
+ * or a label.
+ *
+ * Now: 12px, sentence-height, on the raised surface so it reads as an object
+ * rather than as a rectangle drawn around some text. State is carried by a filled
+ * dot — the badge convention every console shares — and identity by `neutral`,
+ * which gets no dot at all. Colour never carries meaning alone: the word beside
+ * the dot always says it too, which is what keeps it legible with a red-green
+ * deficiency.
  */
 export function Chip({
   children,
   tone = "neutral",
-  dot = false,
+  dot,
   className,
 }: {
   children: ReactNode;
   tone?: "neutral" | "good" | "bad" | "warn" | "accent";
+  /** Defaults to on for every tone that means something; identity gets none. */
   dot?: boolean;
   className?: string;
 }) {
+  const showDot = dot ?? tone !== "neutral";
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center whitespace-nowrap rounded-[var(--radius-chip)] border px-1.5 py-px text-[10.5px] font-medium uppercase tracking-[0.05em]",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[4px] border bg-surface-2 px-2 py-[3px] text-[12px] font-medium leading-none tracking-[-0.005em]",
         tone === "neutral" && "border-edge text-ink-2",
-        tone === "good" && "border-ok/35 text-ok",
-        tone === "bad" && "border-bad/40 text-bad",
-        tone === "warn" && "border-warn/40 text-warn",
-        tone === "accent" && "border-signal/40 text-signal",
+        tone === "good" && "border-ok/25 text-ink",
+        tone === "bad" && "border-bad/30 text-ink",
+        tone === "warn" && "border-warn/30 text-ink",
+        tone === "accent" && "border-edge-lit text-ink",
         className,
       )}
     >
-      {dot && (
+      {showDot && (
         <span
           aria-hidden
           className={cn(
-            "mr-1.5 inline-block size-1.5 rounded-full align-[1px]",
+            "inline-block size-[5px] shrink-0 rounded-full",
             tone === "good" && "bg-ok",
             tone === "bad" && "bg-bad",
             tone === "warn" && "bg-warn",
