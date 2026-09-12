@@ -23,6 +23,7 @@ import type { Advisory } from '../core/types';
 import { packages } from '../db/schema';
 import { queryVulnerableInstalls } from '../ingestion/sources/osv';
 import { assessVerdict } from '../security/verdict';
+import { checkMcpStack, isCrowded } from '../compat/mcpStack';
 import { contractOf, MCP_TIER } from '../surface/mcp';
 import { fetchServerManifest, missingConfig } from '../surface/mcpRegistry';
 import { loadStored, rowsToSurface } from '../mcp/surfaceHandlers';
@@ -411,6 +412,44 @@ export async function assessInventory(
   // answered fraction has to stay a statement about their dependencies, and a
   // thousand transitives would drown it.
   const declared = items.filter((i) => i.unit !== 'transitive');
+  // Stack-level compatibility: the servers individually may be fine and still
+  // collide when the agent flattens them into one tool namespace. Run once over
+  // the probeable set rather than per-server, because a collision is a property
+  // of the COMBINATION and no single server can see it.
+  const stackNotes: string[] = [];
+  const stdioServers = inv.mcpServers.filter((s) => s.kind === 'npm-stdio' && s.packageName);
+  if (stdioServers.length > 1) {
+    const stack = await checkMcpStack(
+      db,
+      stdioServers.map((s) => ({ server: s.packageName!, version: s.version })),
+    ).catch(() => null);
+    for (const c of stack?.collisions ?? []) {
+      // Attached to every server involved: the user has to change one of them,
+      // and which one is their call, not ours.
+      for (const server of c.servers) {
+        const item = items.find((i) => i.unit === 'mcp' && i.name === server);
+        item?.findings.push({
+          kind: 'contract-drift',
+          severity: c.writes ? 'high' : 'moderate',
+          detail:
+            `tool name "${c.tool}" is also exposed by ${c.servers.filter((x) => x !== server).join(', ')}; ` +
+            `the agent cannot say which it means` +
+            (c.writes ? ' — and at least one of them can modify something' : ''),
+        });
+      }
+    }
+    if (stack && isCrowded(stack)) {
+      stackNotes.push(
+        `${stack.totalTools} MCP tools across ${stdioServers.length} servers (~${stack.estimatedContextTokens!.toLocaleString()} tokens of schema in every request) — worth trimming`,
+      );
+    }
+    if (stack?.unread.length) {
+      stackNotes.push(
+        `tool-name collisions were only checked across the ${stdioServers.length - stack.unread.length} probed server(s); ${stack.unread.length} unprobed`,
+      );
+    }
+  }
+
   const coverage: Coverage = {
     discovered: declared.length,
     answered: declared.filter((i) => i.status === 'answered').length,
@@ -421,7 +460,7 @@ export async function assessInventory(
     vulnComplete,
   };
 
-  const notes = [...inv.notes];
+  const notes = [...inv.notes, ...stackNotes];
   if (!vulnComplete) {
     notes.push(
       'the vulnerability lookup did not complete, so vulnerability results are PARTIAL — absence of a finding here is not an all-clear',

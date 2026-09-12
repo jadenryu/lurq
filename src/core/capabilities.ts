@@ -112,6 +112,16 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['scan', 'outdated', 'vulnerable', 'audit', 'health', 'project', 'dependencies', 'cve'],
   },
   {
+    id: 'mcp-stack',
+    title: 'Check your MCP servers coexist',
+    question: 'Do the MCP servers I have wired up conflict with each other?',
+    answer:
+      'Tool-name collisions across the servers configured into one agent. They are separate processes, so nothing resolves between them — they clash in the flat tool namespace the agent assembles, where two servers exposing the same name leave it unable to say which it means. Also reports the standing context cost of the whole set.',
+    mcp: 'mcp_stack',
+    cli: 'lurq mcp-stack',
+    aliases: ['collision', 'conflict', 'namespace', 'mcp', 'tools', 'shadow', 'coexist'],
+  },
+  {
     id: 'mcp-surface',
     title: 'Read an MCP server\'s tools',
     question: 'What tools does this MCP server actually expose, and what do they take?',

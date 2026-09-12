@@ -123,7 +123,8 @@ export function buildMcpServer(
         package: npmName.describe('npm package name'),
       },
     },
-    async (args) => json(await run('evaluate', () => handleEvaluate(db, args, ctx.ownerId ?? null))),
+    async (args) =>
+      json(await run('evaluate', () => handleEvaluate(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -228,9 +229,40 @@ export function buildMcpServer(
   );
 
   server.registerTool(
+    'mcp_stack',
+    {
+      title: 'Do these MCP servers coexist?',
+      description:
+        "Check whether a set of MCP servers can be wired into one agent together. The npm question does not apply — servers are separate processes with nothing to resolve between them. They clash in the single flat TOOL NAMESPACE the agent assembles from all of them: two servers exposing the same tool name leave the agent unable to express which it means, and nothing errors, one simply shadows the other. Also reports the standing context cost, since every tool's schema rides in every request. A server that has not been probed makes the answer UNKNOWN, never clean.",
+      inputSchema: {
+        servers: z
+          .array(
+            z.object({
+              server: npmName.describe('npm package name of the MCP server'),
+              version: z.string().nullable().optional(),
+            }),
+          )
+          .min(1)
+          .max(50)
+          .describe('The servers configured into one agent'),
+      },
+    },
+    async (args) =>
+      json(
+        await run('mcp_stack', async () => {
+          const { checkMcpStack } = await import('../compat/mcpStack');
+          return checkMcpStack(
+            db,
+            args.servers.map((s) => ({ server: s.server, version: s.version ?? null })),
+          );
+        }),
+      ),
+  );
+
+  server.registerTool(
     'mcp_surface',
     {
-      title: 'An MCP server\'s tool contract',
+      title: "An MCP server's tool contract",
       description:
         "What an MCP server ACTUALLY exposes: every tool, its required and optional parameters, and its behaviour annotations, read from a live `tools/list` handshake in a sandbox rather than from a README or the model's memory. Call before wiring an agent to a server, or when a tool call is failing for reasons the error does not explain. Also returns `requires` — the API keys and settings the server declares it needs — and `configRequest`, a ready-made line to put in front of your user when something is missing, so 'it needs a token' never presents as 'it is broken'. A miss returns UNKNOWN and queues a probe; UNKNOWN never means the server has no tools.",
       inputSchema: {
@@ -272,7 +304,9 @@ export function buildMcpServer(
                 .string()
                 .nullable()
                 .optional()
-                .describe('Resolved version from the lockfile or node_modules — what actually runs'),
+                .describe(
+                  'Resolved version from the lockfile or node_modules — what actually runs',
+                ),
             }),
           )
           .max(600)
