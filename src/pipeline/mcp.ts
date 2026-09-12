@@ -199,6 +199,15 @@ export async function extractAndStoreMcp(
     oracleId: mcpServerOracle.id,
   });
 
+  // An MCP server IS an npm package, so it belongs in the npm index like any
+  // other. This one line connects the two halves: once tracked it gains a
+  // latest version, advisories, deprecation and a release timeline, `audit` can
+  // finally say whether a pinned server is behind, and the publish feed starts
+  // re-probing it on release without anyone asking. Until now the MCP path was
+  // a read-only island — it could describe what a server exposes today and say
+  // nothing about whether that was current.
+  await queueNpmIngest(db, server);
+
   return {
     outcome: res.verdict === 'undeclared' ? 'undeclared' : 'stored',
     tools,
@@ -239,6 +248,24 @@ async function recordUnreachable(
     oracleId: mcpServerOracle.id,
     oracleVer: EXTRACTOR_VERSION,
   });
+}
+
+/**
+ * Put an MCP server into the npm index.
+ *
+ * Awaited rather than fired and forgotten, for the reason `audit` learned the
+ * hard way: `void import(...)` lands the enqueue a microtask later, so a caller
+ * that queues and then drains finds an empty queue. Only the module load is
+ * awaited — `enqueueIngest` itself returns without touching the network.
+ */
+async function queueNpmIngest(db: Database, name: string): Promise<void> {
+  try {
+    const { enqueueIngest } = await import('./ingestQueue');
+    enqueueIngest(db, name, null);
+  } catch (err) {
+    // The surface was stored; indexing it only improves the next read.
+    logger.debug(`mcp: npm ingest enqueue failed for ${name}: ${formatError(err)}`);
+  }
 }
 
 export interface McpDrainSummary {
