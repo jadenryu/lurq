@@ -110,6 +110,14 @@ export const TOOLS: GuideTool[] = [
     input: "package · fromVersion · toVersion",
   },
   {
+    name: "audit",
+    group: "upkeep",
+    purpose:
+      "A whole project in one call: every dependency that is outdated, deprecated or carries an advisory against the exact version installed, plus every configured MCP server that has drifted, needs a credential, or cannot be observed at all. Always reports how much of your project it answered for \u2014 what it could not assess is shown as unassessed rather than omitted.",
+    prompt: "what's out of date or vulnerable in this project?",
+    input: "packages[] \u00b7 mcpServers[] (names and versions, read locally)",
+  },
+  {
     name: "mcp_surface",
     group: "check",
     purpose:

@@ -934,3 +934,84 @@ export async function runMcpDrift(
     res.breaking ? red(`\n${res.summary}`) : green(`\n${res.summary || 'no contract change'}`),
   );
 }
+
+/**
+ * `lurq audit [dir]` — what does this project actually depend on, and what is
+ * wrong with it?
+ *
+ * Discovery is local and reads only manifests and agent configs; the assessment
+ * takes names and versions, so running against the hosted index transmits no
+ * source. That split is also why this is one call rather than a loop: forty
+ * dependencies cost one round trip.
+ *
+ * The coverage line is not decoration. lurq's index does not cover all of npm
+ * and covers less of the MCP registry, so the report has to say how much of
+ * YOUR project it answered for — and anything it could not assess is printed as
+ * unassessed rather than quietly omitted, which would read as a clean bill.
+ */
+export async function runAudit(
+  dir: string | undefined,
+  opts: { json?: boolean; projectOnly?: boolean },
+): Promise<void> {
+  const { collectInventory } = await import('../audit/inventory');
+  const inv = collectInventory(dir ?? process.cwd(), { projectOnly: opts.projectOnly });
+
+  const payload = {
+    packages: inv.packages.map((p) => ({ name: p.name, range: p.range, installed: p.installed })),
+    mcpServers: inv.mcpServers.map((s) => ({
+      alias: s.alias,
+      kind: s.kind,
+      packageName: s.packageName,
+      version: s.version,
+      endpoint: s.endpoint,
+    })),
+    notes: inv.notes,
+  };
+  const res = await fromIndex('audit', payload, (db) =>
+    import('../mcp/auditHandler').then((m) => m.handleAudit(db, payload)),
+  );
+
+  if (opts.json) return console.log(JSON.stringify({ ...res, filesRead: inv.filesRead }, null, 2));
+
+  const { SEVERITY_RANK, worstSeverity } = await import('../audit/types');
+  const colour = (s: string) =>
+    s === 'critical' || s === 'high' ? red : s === 'moderate' ? yellow : dim;
+
+  console.log(bold(inv.root));
+  console.log(dim(`read ${inv.filesRead.length} file(s): ${inv.filesRead.join(', ') || '—'}`));
+
+  const flagged = (res.items ?? [])
+    .filter((i) => i.findings.length > 0)
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[worstSeverity(a.findings)!] - SEVERITY_RANK[worstSeverity(b.findings)!],
+    );
+
+  if (flagged.length === 0) {
+    console.log(green('\nNothing flagged.'));
+  } else {
+    console.log('');
+    for (const item of flagged) {
+      const sev = worstSeverity(item.findings)!;
+      const tag = item.unit === 'mcp' ? dim(' [mcp]') : '';
+      console.log(`${colour(sev)(sev.padEnd(8))} ${bold(item.name)}${tag}`);
+      for (const f of item.findings) console.log(`         ${f.detail}`);
+    }
+  }
+
+  // The denominator, always printed — including when it is perfect, because a
+  // coverage line that only appears when coverage is bad teaches the reader to
+  // treat its absence as good news rather than as an unasked question.
+  const c = res.coverage;
+  console.log(
+    `\n${bold('coverage')}  ${c.answered}/${c.discovered} answered` +
+      (c.queued ? `, ${yellow(`${c.queued} queued`)}` : '') +
+      (c.skipped ? `, ${dim(`${c.skipped} not assessable`)}` : ''),
+  );
+  if (!c.vulnComplete) {
+    console.log(
+      red('vulnerability lookup incomplete — absence of a finding here is NOT an all-clear'),
+    );
+  }
+  for (const n of res.notes ?? []) console.log(dim(`· ${n}`));
+}
