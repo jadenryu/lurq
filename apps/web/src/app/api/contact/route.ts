@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site";
 
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL ?? "contact@lurq.run";
@@ -139,10 +139,11 @@ export async function POST(req: Request) {
     null;
 
   // Throttle repeat submissions per IP before spending the Turnstile round-trip.
-  if (!rateLimit(`contact:${ip ?? "unknown"}`)) {
+  const limit = checkRateLimit(`contact:${ip ?? "unknown"}`);
+  if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many requests. Please try again in a minute." },
-      { status: 429 },
+      { status: 429, headers: rateLimitHeaders(limit) },
     );
   }
 

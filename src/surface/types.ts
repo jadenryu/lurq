@@ -17,7 +17,15 @@ export type ExtractionTier =
   | 'runtime_import' // B, sandboxed require/import; the cost driver
   | 'bundled_dts' // C, secondary, signatures + deprecation only
   | 'types_package' // D, DefinitelyTyped; drifts from the real package
-  | 'jsdoc_generated'; // E, rarely reached
+  | 'jsdoc_generated' // E, rarely reached
+  /**
+   * MCP `tools/list`. Not on the A–E authority ladder at all: those tiers rank
+   * ways of reading ONE artifact (a package's shipped code), and this reads a
+   * different artifact entirely. It is listed here so §6.4.3's cross-tier guard
+   * refuses to diff a tool list against a package surface — the guard is the
+   * reason this belongs in the shared enum rather than a parallel one.
+   */
+  | 'mcp_tools_list';
 
 export type SymbolKind = 'function' | 'class' | 'object' | 'primitive' | 'type_only';
 

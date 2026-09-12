@@ -21,7 +21,7 @@ export default async function DashboardLayout({
     // stat row into a horizontal scroll.
     <div className="dashboard-type flex min-h-screen flex-col md:flex-row">
       <DashboardNav />
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
+      <main id="content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
         <div className="mx-auto w-full max-w-5xl">
           <PageTransition>{children}</PageTransition>
         </div>

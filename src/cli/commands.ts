@@ -208,12 +208,22 @@ export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promis
         `maint ${b.maintenance ?? '—'} · adopt ${b.adoption ?? '—'} · rel ${b.reliability ?? '—'} · eff ${b.efficiency ?? '—'} · qual ${b.quality ?? '—'}`,
       ],
       ['version', res.latestVersion ?? '—'],
-      ['weekly dl', `${formatNumber(res.weeklyDownloads)}  (${formatPercent(res.downloadGrowth90d)} 90d)`],
+      [
+        'weekly dl',
+        `${formatNumber(res.weeklyDownloads)}  (${formatPercent(res.downloadGrowth90d)} 90d)`,
+      ],
       ['scorecard', res.scorecard != null ? String(res.scorecard) : '—'],
       ['bundle', res.bundleMinGzipKb != null ? `${res.bundleMinGzipKb} KB gzip` : '—'],
       ['released', formatDate(res.lastReleaseAt)],
-      ['flags', [res.deprecated && 'deprecated', res.archived && 'archived'].filter(Boolean).join(', ') || 'none'],
-      ['advisories', advisories.length ? advisories.map((a) => `${a.severity}`).join(', ') : 'none'],
+      [
+        'flags',
+        [res.deprecated && 'deprecated', res.archived && 'archived'].filter(Boolean).join(', ') ||
+          'none',
+      ],
+      [
+        'advisories',
+        advisories.length ? advisories.map((a) => `${a.severity}`).join(', ') : 'none',
+      ],
       ['repo', res.repoUrl ?? '—'],
     ]),
   );
@@ -319,9 +329,15 @@ export function runWeights(opts: { json?: boolean } = {}): void {
   console.log(bold('Health (proven-ness) — weighted sum of 4 components:'));
   console.log(
     detail([
-      ['maintenance', `${pct(w.health.maintenance)}  ${dim('— ' + WEIGHT_EXPLANATIONS.maintenance!)}`],
+      [
+        'maintenance',
+        `${pct(w.health.maintenance)}  ${dim('— ' + WEIGHT_EXPLANATIONS.maintenance!)}`,
+      ],
       ['adoption', `${pct(w.health.adoption)}  ${dim('— ' + WEIGHT_EXPLANATIONS.adoption!)}`],
-      ['reliability', `${pct(w.health.reliability)}  ${dim('— ' + WEIGHT_EXPLANATIONS.reliability!)}`],
+      [
+        'reliability',
+        `${pct(w.health.reliability)}  ${dim('— ' + WEIGHT_EXPLANATIONS.reliability!)}`,
+      ],
       ['efficiency', `${pct(w.health.efficiency)}  ${dim('— ' + WEIGHT_EXPLANATIONS.efficiency!)}`],
     ]),
   );
@@ -330,12 +346,22 @@ export function runWeights(opts: { json?: boolean } = {}): void {
   console.log('\n' + bold('Confidence thresholds:'));
   console.log(
     detail([
-      ['proven', `≥ ${formatNumber(CONFIDENCE.proven.minWeeklyDownloads)} weekly dl, ≥ ${CONFIDENCE.proven.minAgeMonths}mo old`],
-      ['emerging', `≥ ${formatNumber(CONFIDENCE.emerging.minWeeklyDownloads)} weekly dl OR ≥ ${CONFIDENCE.emerging.strongGrowth * 100}% 90d growth`],
+      [
+        'proven',
+        `≥ ${formatNumber(CONFIDENCE.proven.minWeeklyDownloads)} weekly dl, ≥ ${CONFIDENCE.proven.minAgeMonths}mo old`,
+      ],
+      [
+        'emerging',
+        `≥ ${formatNumber(CONFIDENCE.emerging.minWeeklyDownloads)} weekly dl OR ≥ ${CONFIDENCE.emerging.strongGrowth * 100}% 90d growth`,
+      ],
       ['promising', `≥ ${CONFIDENCE.promising.minQuality} quality score (adoption-independent)`],
     ]),
   );
-  console.log(dim(`\nSource: ${active ? `${active.source} (${active.path})` : 'defaults (no user overrides)'}`));
+  console.log(
+    dim(
+      `\nSource: ${active ? `${active.source} (${active.path})` : 'defaults (no user overrides)'}`,
+    ),
+  );
 }
 
 export interface EditWeightsOpts {
@@ -353,7 +379,11 @@ export async function runEditWeights(opts: EditWeightsOpts): Promise<void> {
   const { invalidateCache } = await import('../core/cache');
   if (opts.reset) {
     const removed = resetWeights();
-    console.log(removed.length ? `Removed overrides:\n  ${removed.join('\n  ')}` : 'No overrides to remove; already on defaults.');
+    console.log(
+      removed.length
+        ? `Removed overrides:\n  ${removed.join('\n  ')}`
+        : 'No overrides to remove; already on defaults.',
+    );
     if (removed.length) await invalidateCache();
     return;
   }
@@ -362,7 +392,9 @@ export async function runEditWeights(opts: EditWeightsOpts): Promise<void> {
     const key = opts.explain;
     const text = WEIGHT_EXPLANATIONS[key];
     if (!text) {
-      throw new Error(`No explanation for "${key}". Known: ${Object.keys(WEIGHT_EXPLANATIONS).join(', ')}.`);
+      throw new Error(
+        `No explanation for "${key}". Known: ${Object.keys(WEIGHT_EXPLANATIONS).join(', ')}.`,
+      );
     }
     console.log(`${bold(key)} — ${text}`);
     return;
@@ -437,16 +469,15 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
       (res.slots ?? []).map((s) => [
         s.need.length > 32 ? s.need.slice(0, 31) + '…' : s.need,
         s.layer,
-        s.recommended
-          ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}`
-          : dim('—'),
+        s.recommended ? `${s.recommended.name}@${s.recommended.latestVersion ?? '?'}` : dim('—'),
         s.recommended ? String(s.recommended.healthScore) : '—',
         s.recommended ? confidenceLabel(s.recommended.confidence) : '—',
         (s.alternatives ?? []).map((a) => a.name).join(', ') || '—',
       ]),
     ),
   );
-  if ((res.unmatched ?? []).length) console.log(yellow(`\nNo match for: ${(res.unmatched ?? []).join(', ')}`));
+  if ((res.unmatched ?? []).length)
+    console.log(yellow(`\nNo match for: ${(res.unmatched ?? []).join(', ')}`));
 
   if (res.compatibility) {
     const c = res.compatibility;
@@ -454,10 +485,13 @@ export async function runPlan(file: string, opts: PlanCliOpts): Promise<void> {
     console.log('\n' + bold('Compatibility: ') + col(c.overall));
     for (const s of res.slots ?? []) {
       if (s.swappedFrom && s.recommended) {
-        console.log(green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`));
+        console.log(
+          green(`  ✓ swapped ${s.swappedFrom} → ${s.recommended.name} for compatibility`),
+        );
       }
     }
-    for (const cf of c.conflicts ?? []) console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
+    for (const cf of c.conflicts ?? [])
+      console.log(red(`  ✗ ${cf.detail} (no compatible alternative)`));
     if (c.unverified?.length) console.log(dim(`  unverified: ${c.unverified.join(', ')}`));
   }
 
@@ -568,7 +602,9 @@ export async function runSandbox(
     const ok = result.installed && result.imported !== false;
     const label = version ? `${pkg}@${version}` : pkg;
     const verdict = ok ? green('✓ installs and loads') : red('✗ failed');
-    console.log(`${bold(label)}  ${verdict}  ${dim(`(${result.durationMs}ms · ${result.driver})`)}`);
+    console.log(
+      `${bold(label)}  ${verdict}  ${dim(`(${result.durationMs}ms · ${result.driver})`)}`,
+    );
     console.log(
       detail([
         ['installed', result.installed ? 'yes' : 'no'],
@@ -596,7 +632,9 @@ export async function runUsage(
 
   console.log(`${bold(res.package)}${res.version ? `@${res.version}` : ''}`);
   if (res.engines) {
-    const reqs = Object.entries(res.engines).map(([k, v]) => `${k} ${v}`).join(', ');
+    const reqs = Object.entries(res.engines)
+      .map(([k, v]) => `${k} ${v}`)
+      .join(', ');
     if (reqs) console.log(dim(`requires: ${reqs}`));
   }
   // A version npm never published is an error in the request, not a gap in our
@@ -621,7 +659,8 @@ export async function runUsage(
     for (const s of removed) console.log(red(`  - ${s.name}`));
     for (const s of added) console.log(green(`  + ${s.name}`));
     for (const r of renamed) console.log(yellow(`  ~ ${r.from.name} → ${r.to.name}`));
-    for (const c of changed) console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
+    for (const c of changed)
+      console.log(yellow(`  ! ${c.name}: ${c.before ?? '?'} → ${c.after ?? '?'}`));
     if (!removed.length && !added.length && !renamed.length && !changed.length) {
       console.log(dim('  no API changes'));
     }
@@ -648,7 +687,9 @@ export async function runCompatBackfill(opts: {
       return;
     }
     console.error(
-      yellow('co-installing top packages in the sandbox (loads package code locally without isolation unless E2B_API_KEY is set)'),
+      yellow(
+        'co-installing top packages in the sandbox (loads package code locally without isolation unless E2B_API_KEY is set)',
+      ),
     );
     const res = await compat.backfillVerify(db, opts);
     console.log(
@@ -737,9 +778,7 @@ export async function runCompat(
   // but printing a bare "observed, 1 witness" row directly under a red
   // `conflict` reads as the tool contradicting itself. Say which one lost.
   const conflicted = new Set(
-    conflicts.flatMap((c) =>
-      c.packages.length >= 2 ? [[...c.packages].sort().join('\0')] : [],
-    ),
+    conflicts.flatMap((c) => (c.packages.length >= 2 ? [[...c.packages].sort().join('\0')] : [])),
   );
   const isOverruled = (e: { packages: [string, string] }) =>
     conflicted.has([...e.packages].sort().join('\0'));
@@ -761,4 +800,218 @@ export async function runCompat(
       );
     }
   }
+}
+
+/**
+ * `lurq mcp-surface <server>` — what an MCP server exposes.
+ *
+ * The annotation column is the one worth reading and the reason this is not
+ * just a tool list: `write`/`destroys`/`external` is what an agent is actually
+ * being granted when it is pointed at a server, and it is nowhere in the README.
+ */
+export async function runMcpSurface(
+  server: string,
+  opts: { version?: string; json?: boolean },
+): Promise<void> {
+  const args = { server, version: opts.version ?? null };
+  const res = await fromIndex('mcp_surface', args, (db) =>
+    import('../mcp/mcpHandlers').then((m) => m.handleMcpSurface(db, args)),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+  console.log(`${bold(server)}${res.version ? dim(`@${res.version}`) : ''}`);
+
+  // Printed before the verdict, and for a successful probe too. A server that
+  // works and wants a token is the case where saying nothing costs most: the
+  // agent wires it up, and the first real call fails in front of a user.
+  const requires = res.requires ?? [];
+  if (requires.length) {
+    console.log(
+      table(
+        ['Needs', 'Required', 'Secret', 'What for'],
+        requires.map((r) => [
+          r.name,
+          r.required ? red('yes') : dim('no'),
+          r.secret ? yellow('yes') : dim('no'),
+          r.description ?? '—',
+        ]),
+      ),
+    );
+  }
+  if (res.configRequest) console.log(yellow(`\n${res.configRequest}\n`));
+
+  if (res.verdict !== 'verified_true' || res.tools.length === 0) {
+    console.log(yellow(`${res.verdict}: ${res.coverageNote}`));
+    return;
+  }
+
+  console.log(
+    table(
+      ['Tool', 'Required', 'Optional', 'Behaviour'],
+      res.tools.map((t) => {
+        const optional = t.params.filter((p) => !t.required.includes(p));
+        const a = t.annotations;
+        // Only the powers that are ON are worth ink; an absent flag is the
+        // benign default and printing it would bury the two that matter.
+        const behaviour = [
+          a.readOnlyHint ? green('read-only') : red('writes'),
+          a.destructiveHint ? red('destroys') : null,
+          a.openWorldHint ? yellow('external') : null,
+          t.deprecated ? yellow('deprecated') : null,
+        ]
+          .filter(Boolean)
+          .join(' ');
+        return [t.name, t.required.join(', ') || '—', optional.join(', ') || '—', behaviour];
+      }),
+    ),
+  );
+  console.log(dim(res.coverageNote));
+}
+
+/**
+ * `lurq mcp-drift <server> --from <a> --to <b>` — what the upgrade changes.
+ *
+ * Privilege widening prints above the breaking changes on purpose. A tool that
+ * gained a required parameter fails loudly on the next call; a tool that quietly
+ * stopped being read-only succeeds, and writes.
+ */
+export async function runMcpDrift(
+  server: string,
+  opts: { from: string; to: string; json?: boolean },
+): Promise<void> {
+  const args = { server, fromVersion: opts.from, toVersion: opts.to };
+  const res = await fromIndex('mcp_drift', args, (db) =>
+    import('../mcp/mcpHandlers').then((m) => m.handleMcpDrift(db, args)),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+  console.log(`${bold(server)} ${dim(`${opts.from} → ${opts.to}`)}`);
+  if (res.inconclusive) {
+    console.log(yellow(res.inconclusive));
+    return;
+  }
+
+  const widened = res.annotationFlips.filter((f) => f.widensPrivilege);
+  for (const f of widened) {
+    console.log(red(`⚠ privilege  ${f.tool}.${f.hint}: ${f.from} → ${f.to}`));
+  }
+  for (const t of res.silentDrift) {
+    console.log(yellow(`⚠ silent     ${t}: schema changed, description did not`));
+  }
+  for (const t of res.removedTools) console.log(red(`✗ removed    ${t}`));
+  for (const c of res.requiredAdded) {
+    console.log(red(`✗ required   ${c.tool}: ${c.params.join(', ')} now mandatory`));
+  }
+  for (const c of res.paramsRemoved) {
+    console.log(red(`✗ dropped    ${c.tool}: ${c.params.join(', ')}`));
+  }
+  for (const c of res.typeChanged.filter((x) => !x.widened)) {
+    console.log(red(`✗ narrowed   ${c.tool}.${c.param}`));
+  }
+  for (const t of res.addedTools) console.log(green(`+ added      ${t}`));
+  for (const c of res.requiredRelaxed) {
+    console.log(green(`+ optional   ${c.tool}: ${c.params.join(', ')}`));
+  }
+  for (const c of res.paramsAdded) {
+    console.log(green(`+ params     ${c.tool}: ${c.params.join(', ')}`));
+  }
+  // Compatible movement is printed too. The summary counts it, so leaving it
+  // out of the body left the reader told that five parameters were relaxed and
+  // unable to see which five.
+  for (const c of res.typeChanged.filter((x) => x.widened)) {
+    console.log(green(`+ relaxed    ${c.tool}.${c.param}`));
+  }
+  for (const t of res.outputChanged) console.log(dim(`· output     ${t}`));
+  for (const f of res.annotationFlips.filter((x) => !x.widensPrivilege)) {
+    console.log(dim(`· safer      ${f.tool}.${f.hint}: ${f.from} → ${f.to}`));
+  }
+  for (const t of res.deprecated) console.log(yellow(`· deprecated ${t}`));
+  for (const t of res.prosePolished) console.log(dim(`· docs only  ${t}`));
+
+  console.log(
+    res.breaking ? red(`\n${res.summary}`) : green(`\n${res.summary || 'no contract change'}`),
+  );
+}
+
+/**
+ * `lurq audit [dir]` — what does this project actually depend on, and what is
+ * wrong with it?
+ *
+ * Discovery is local and reads only manifests and agent configs; the assessment
+ * takes names and versions, so running against the hosted index transmits no
+ * source. That split is also why this is one call rather than a loop: forty
+ * dependencies cost one round trip.
+ *
+ * The coverage line is not decoration. lurq's index does not cover all of npm
+ * and covers less of the MCP registry, so the report has to say how much of
+ * YOUR project it answered for — and anything it could not assess is printed as
+ * unassessed rather than quietly omitted, which would read as a clean bill.
+ */
+export async function runAudit(
+  dir: string | undefined,
+  opts: { json?: boolean; projectOnly?: boolean },
+): Promise<void> {
+  const { collectInventory } = await import('../audit/inventory');
+  const inv = collectInventory(dir ?? process.cwd(), { projectOnly: opts.projectOnly });
+
+  const payload = {
+    packages: inv.packages.map((p) => ({ name: p.name, range: p.range, installed: p.installed })),
+    mcpServers: inv.mcpServers.map((s) => ({
+      alias: s.alias,
+      kind: s.kind,
+      packageName: s.packageName,
+      version: s.version,
+      endpoint: s.endpoint,
+    })),
+    notes: inv.notes,
+  };
+  const res = await fromIndex('audit', payload, (db) =>
+    import('../mcp/auditHandler').then((m) => m.handleAudit(db, payload)),
+  );
+
+  if (opts.json) return console.log(JSON.stringify({ ...res, filesRead: inv.filesRead }, null, 2));
+
+  const { SEVERITY_RANK, worstSeverity } = await import('../audit/types');
+  const colour = (s: string) =>
+    s === 'critical' || s === 'high' ? red : s === 'moderate' ? yellow : dim;
+
+  console.log(bold(inv.root));
+  console.log(dim(`read ${inv.filesRead.length} file(s): ${inv.filesRead.join(', ') || '—'}`));
+
+  const flagged = (res.items ?? [])
+    .filter((i) => i.findings.length > 0)
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[worstSeverity(a.findings)!] - SEVERITY_RANK[worstSeverity(b.findings)!],
+    );
+
+  if (flagged.length === 0) {
+    console.log(green('\nNothing flagged.'));
+  } else {
+    console.log('');
+    for (const item of flagged) {
+      const sev = worstSeverity(item.findings)!;
+      const tag = item.unit === 'mcp' ? dim(' [mcp]') : '';
+      console.log(`${colour(sev)(sev.padEnd(8))} ${bold(item.name)}${tag}`);
+      for (const f of item.findings) console.log(`         ${f.detail}`);
+    }
+  }
+
+  // The denominator, always printed — including when it is perfect, because a
+  // coverage line that only appears when coverage is bad teaches the reader to
+  // treat its absence as good news rather than as an unasked question.
+  const c = res.coverage;
+  console.log(
+    `\n${bold('coverage')}  ${c.answered}/${c.discovered} answered` +
+      (c.queued ? `, ${yellow(`${c.queued} queued`)}` : '') +
+      (c.skipped ? `, ${dim(`${c.skipped} not assessable`)}` : ''),
+  );
+  if (!c.vulnComplete) {
+    console.log(
+      red('vulnerability lookup incomplete — absence of a finding here is NOT an all-clear'),
+    );
+  }
+  for (const n of res.notes ?? []) console.log(dim(`· ${n}`));
 }

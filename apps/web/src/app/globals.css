@@ -574,3 +574,54 @@ body:has([data-surface="paper"]) {
    together they read as eager. What's left is 120ms colour and opacity on hover
    and focus, which is feedback.
    ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── Keyboard access ──────────────────────────────────────────────────────────
+   Two things a keyboard user needs that nothing else on this site provides.
+
+   THE SKIP LINK. First focusable element in the body (app/layout.tsx), hidden
+   until it takes focus. Without it, reaching the content on the marketing route
+   means tabbing the whole nav, and on the dashboard the whole sidebar, once per
+   navigation. Not `sr-only`/`not-sr-only` utilities: the visible state needs a
+   real fixed position and a surface of its own, which is three overrides in
+   utilities and four declarations here.
+
+   THE FOCUS BACKSTOP. Focus rings on this site are drawn per component, on
+   --mark, which is correct and also means an element nobody styled has no ring
+   at all — Tailwind's preflight removes the UA outline globally. `:where()` so
+   the specificity is zero and every component rule still wins; `:not(:focus)`
+   is not needed because :focus-visible already implies focus. This only ever
+   paints where a component author forgot.
+   ─────────────────────────────────────────────────────────────────────────── */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-control, 5px);
+  background: var(--ground, #08080a);
+  color: #fafafa;
+  font-family: var(--font-commit-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  /* Off-screen rather than display:none — a hidden element takes no focus, and
+     a link that can't be focused can't be skipped to. */
+  transform: translateY(-200%);
+  transition: transform 120ms ease;
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid #fafafa;
+  outline-offset: 2px;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+}
+
+/* The skip link's target. Focusing a <main> needs tabindex="-1"; the ring that
+   would draw on it is noise, because the whole region just moved into view and
+   the next Tab already shows where focus went. */
+main:focus {
+  outline: none;
+}

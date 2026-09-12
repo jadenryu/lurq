@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "@clerk/nextjs/server";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { recordAskSpend } from "@/lib/lurq-issuer";
 import { costOf, reserveFor } from "@lurq/core/modelPricing";
 
@@ -222,8 +222,12 @@ export async function POST(req: Request) {
   // spend, and it resets on cold start. A real per-account budget belongs with
   // the usage metering the backend already does (db/usage.ts), not here. Swap
   // for @upstash/ratelimit if this ever needs to hold across instances.
-  if (!rateLimit(`ask:${userId}`, 10, 60_000)) {
-    return new Response("Too many questions. Wait a minute and try again.", { status: 429 });
+  const limit = checkRateLimit(`ask:${userId}`, 10, 60_000);
+  if (!limit.ok) {
+    return new Response("Too many questions. Wait a minute and try again.", {
+      status: 429,
+      headers: rateLimitHeaders(limit),
+    });
   }
 
   const body = (await req.json().catch(() => null)) as { question?: unknown } | null;
@@ -290,8 +294,14 @@ export async function POST(req: Request) {
 
   if (limitMicros > 0 && afterReserve > limitMicros) {
     await settle(0); // give the reserve straight back; nothing was spent
+    // Retry-After to the actual reset (midnight UTC), not a guess: this is a
+    // daily budget rather than a burst limiter, so "try again in a minute" —
+    // what a client assumes when the header is missing — is wrong by hours.
+    const d = new Date();
+    const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
     return new Response("You have reached today's Ask limit. It resets at midnight UTC.", {
       status: 429,
+      headers: { "Retry-After": String(Math.max(1, Math.ceil((midnight - Date.now()) / 1000))) },
     });
   }
 

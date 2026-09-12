@@ -12,6 +12,8 @@ import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
+import { handleMcpDrift, handleMcpSurface } from './mcpHandlers';
+import { handleAudit } from './auditHandler';
 import {
   handleCompare,
   handleCompat,
@@ -223,6 +225,78 @@ export function buildMcpServer(
       },
     },
     async (args) => json(await run('diff_surface', () => handleDiffSurface(db, args))),
+  );
+
+  server.registerTool(
+    'mcp_surface',
+    {
+      title: 'An MCP server\'s tool contract',
+      description:
+        "What an MCP server ACTUALLY exposes: every tool, its required and optional parameters, and its behaviour annotations, read from a live `tools/list` handshake in a sandbox rather than from a README or the model's memory. Call before wiring an agent to a server, or when a tool call is failing for reasons the error does not explain. Also returns `requires` — the API keys and settings the server declares it needs — and `configRequest`, a ready-made line to put in front of your user when something is missing, so 'it needs a token' never presents as 'it is broken'. A miss returns UNKNOWN and queues a probe; UNKNOWN never means the server has no tools.",
+      inputSchema: {
+        server: npmName.describe('npm package name of the MCP server'),
+        version: z.string().optional().describe('Exact version; omit for the latest probed'),
+      },
+    },
+    async (args) => json(await run('mcp_surface', () => handleMcpSurface(db, args))),
+  );
+
+  server.registerTool(
+    'mcp_drift',
+    {
+      title: 'MCP tool-contract drift between two versions',
+      description:
+        "What moved in an MCP server's tool contract between two versions: tools removed, parameters that became required, types narrowed, and annotation flips. Two findings here have no npm equivalent and are why this exists. SILENT DRIFT is a schema that changed while its description stayed byte-identical, invisible to anyone reading a changelog. PRIVILEGE WIDENING is a tool that stopped being read-only or started being destructive, which does not break anything and is worse than a break. Use before upgrading a server an agent depends on.",
+      inputSchema: {
+        server: npmName.describe('npm package name of the MCP server'),
+        fromVersion: z.string().describe('Version you are on'),
+        toVersion: z.string().describe('Version you are moving to'),
+      },
+    },
+    async (args) => json(await run('mcp_drift', () => handleMcpDrift(db, args))),
+  );
+
+  server.registerTool(
+    'audit',
+    {
+      title: 'Audit a whole project',
+      description:
+        "Assess an entire project's dependencies in ONE call: which packages are outdated, deprecated or carry advisories for the exact installed version, and which configured MCP servers have drifted, need credentials, or cannot be observed at all. Send the inventory you read locally (names and versions only — never source). Returns a per-item verdict plus an explicit coverage count: how many were answered, how many are queued because the index has not seen them, and how many were skipped and why. An item lurq could not assess is reported as unassessed, never as clean.",
+      inputSchema: {
+        packages: z
+          .array(
+            z.object({
+              name: npmName,
+              range: z.string().optional().describe('Declared range, e.g. ^6.4.0'),
+              installed: z
+                .string()
+                .nullable()
+                .optional()
+                .describe('Resolved version from the lockfile or node_modules — what actually runs'),
+            }),
+          )
+          .max(600)
+          .optional()
+          .describe('npm dependencies read from package.json + lockfile'),
+        mcpServers: z
+          .array(
+            z.object({
+              alias: z.string().max(200).optional(),
+              kind: z
+                .enum(['npm-stdio', 'remote', 'local', 'other-registry'])
+                .optional()
+                .describe('How it launches; decides whether lurq can read its contract'),
+              packageName: z.string().max(300).nullable().optional(),
+              version: z.string().max(100).nullable().optional(),
+              endpoint: z.string().max(300).nullable().optional(),
+            }),
+          )
+          .max(200)
+          .optional()
+          .describe('MCP servers read from .mcp.json / agent configs'),
+      },
+    },
+    async (args) => json(await run('audit', () => handleAudit(db, args))),
   );
 
   // Self-description, and the only tool that reads nothing. An agent holding

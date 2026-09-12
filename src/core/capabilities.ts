@@ -102,6 +102,36 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['breaking', 'removed', 'changed', 'migration', 'major'],
   },
   {
+    id: 'audit',
+    title: 'Audit this whole project',
+    question: 'What in this project is outdated, vulnerable, or drifting?',
+    answer:
+      'Reads your manifests and agent configs locally, then assesses every dependency and MCP server in one call: outdated versions, deprecations, advisories against the exact installed version, and servers that need credentials or cannot be observed. Always prints how many items it actually answered for — anything it could not assess is reported as unassessed, never as clean.',
+    mcp: 'audit',
+    cli: 'lurq audit',
+    aliases: ['scan', 'outdated', 'vulnerable', 'audit', 'health', 'project', 'dependencies', 'cve'],
+  },
+  {
+    id: 'mcp-surface',
+    title: 'Read an MCP server\'s tools',
+    question: 'What tools does this MCP server actually expose, and what do they take?',
+    answer:
+      "Every tool from a live `tools/list` handshake in a sandbox: required and optional parameters, and the behaviour annotations that say whether a tool writes, destroys, or reaches outside. Also returns the API keys and settings the server declares it needs, with a request you can put in front of the user. Declared contract only — that a tool is listed is not evidence that calling it succeeds.",
+    mcp: 'mcp_surface',
+    cli: 'lurq mcp-surface <server>',
+    aliases: ['mcp', 'tools', 'tool schema', 'inputSchema', 'agent tools', 'server'],
+  },
+  {
+    id: 'mcp-drift',
+    title: 'See what an MCP upgrade changes',
+    question: 'Did this MCP server change its tool contract?',
+    answer:
+      'The contract diff between two versions of an MCP server: tools removed, parameters that became required, types narrowed, and annotation flips. Reports silent drift (schema moved, description unchanged) and privilege widening (a tool that stopped being read-only) separately, because neither shows up in a changelog.',
+    mcp: 'mcp_drift',
+    cli: 'lurq mcp-drift <server> --from <old> --to <new>',
+    aliases: ['mcp', 'schema drift', 'tool drift', 'readOnlyHint', 'breaking', 'agent'],
+  },
+  {
     id: 'diagram',
     title: 'Draw the stack',
     question: 'Can I see this as a diagram?',

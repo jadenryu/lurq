@@ -88,7 +88,12 @@ export function ExpandableRow({
       {open && (
         <TableRow className="border-border bg-surface-2/40 hover:bg-surface-2/40">
           <TableCell id={panelId} colSpan={colSpan} className="px-3 py-0 md:px-4">
-            <div className="py-3">{detail}</div>
+            {/* The row itself cannot be animated: a <tr> mounts at full height
+                and table layout will not interpolate one. The panel inside it
+                can, and that is the part anybody is looking at. */}
+            <div data-reveal="open" className="py-3">
+              {detail}
+            </div>
           </TableCell>
         </TableRow>
       )}

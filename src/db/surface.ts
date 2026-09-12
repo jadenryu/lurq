@@ -14,12 +14,26 @@ import type { Database } from './client';
 import { claims, entities, observations, packages, surfaceQueue, symbols } from './schema';
 import type { SurfaceQueueRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
-import { canonicalKey, type EntityRef } from '../graph/types';
+import { canonicalKey, type EntityKind, type EntityRef } from '../graph/types';
 import type { ExtractedSurface, ExtractionTier } from '../surface/types';
 
 /** The entity ref for a package version's surface. */
 export function surfaceRef(pkg: string, version: string | null): EntityRef {
   return { kind: 'package_surface', namespace: 'npm', name: pkg, version };
+}
+
+/**
+ * The entity ref for an MCP server's tool surface.
+ *
+ * A DIFFERENT node kind, not a different namespace: `express` the npm package
+ * and `express` an MCP server published under the same name are different
+ * things with different contracts, and `canonicalKey` puts `kind` first
+ * precisely so the two can coexist without one answering for the other. The
+ * namespace stays `npm` because that is still where the artifact is fetched
+ * from — it is the registry, not the unit type.
+ */
+export function mcpSurfaceRef(server: string, version: string | null): EntityRef {
+  return { kind: 'mcp_server', namespace: 'npm', name: server, version };
 }
 
 /**
@@ -83,12 +97,20 @@ export async function isExtractionCached(
 export async function storeSurface(
   db: Database,
   surface: ExtractedSurface,
-  opts: { artifactHash?: string | null; extractorVersion: string; tenantId?: number } = {
+  opts: {
+    artifactHash?: string | null;
+    extractorVersion: string;
+    tenantId?: number;
+    /** Defaults to the npm package-surface ref. Non-npm units pass their own. */
+    ref?: EntityRef;
+    /** Which oracle established this. Defaults to the tier-A extractor. */
+    oracleId?: string;
+  } = {
     extractorVersion: '1',
   },
 ): Promise<{ entityId: number; symbolsWritten: number; verdict: string }> {
   const tenantId = opts.tenantId ?? 0;
-  const ref = surfaceRef(surface.package, surface.version);
+  const ref = opts.ref ?? surfaceRef(surface.package, surface.version);
   const entity = await upsertEntity(db, ref, tenantId);
 
   if (opts.artifactHash) {
@@ -116,7 +138,7 @@ export async function storeSurface(
     evidence: undeclared
       ? (surface.undeclaredReason ?? 'no symbols extracted')
       : `${surface.symbols.length} symbols from ${surface.filesWalked} file(s), entry ${surface.entry}`,
-    oracleId: 'surface.tier_a',
+    oracleId: opts.oracleId ?? 'surface.tier_a',
     oracleVer: opts.extractorVersion,
   });
 
@@ -147,9 +169,22 @@ export async function storeSurface(
   return { entityId: entity.id, symbolsWritten: rows.length, verdict: 'verified_true' };
 }
 
-/** Dedup key for the extraction queue. */
-export function specKey(pkg: string, version: string | null): string {
-  return `${pkg}@${version ?? 'latest'}`;
+/**
+ * Dedup key for the extraction queue.
+ *
+ * The npm form is left exactly as it was and the kind is prefixed only for
+ * everything else — the same defaulted-parameter trick `ecosystem` uses. Keying
+ * every row would have been tidier and would also have orphaned every spec
+ * already sitting in the queue, re-enqueueing the whole backlog under new keys
+ * for no gain.
+ */
+export function specKey(
+  pkg: string,
+  version: string | null,
+  kind: EntityKind = 'package_surface',
+): string {
+  const base = `${pkg}@${version ?? 'latest'}`;
+  return kind === 'package_surface' ? base : `${kind}:${base}`;
 }
 
 /**
@@ -215,16 +250,33 @@ export async function enqueueSurface(
   db: Database,
   pkg: string,
   version: string | null,
+  kind: EntityKind = 'package_surface',
 ): Promise<void> {
   await db
     .insert(surfaceQueue)
-    .values({ packageName: pkg, version, specKey: specKey(pkg, version) })
+    .values({ packageName: pkg, version, kind, specKey: specKey(pkg, version, kind) })
     .onConflictDoNothing();
 }
 
-/** Oldest pending specs, for the worker drain. */
-export async function getPendingSurfaces(db: Database, limit = 10): Promise<SurfaceQueueRow[]> {
-  return db.select().from(surfaceQueue).orderBy(surfaceQueue.requestedAt).limit(limit);
+/**
+ * Oldest pending specs for ONE extractor, for the worker drain.
+ *
+ * Filtered by kind rather than returning everything: the two drains do
+ * completely different work (static tarball read vs. sandboxed stdio handshake)
+ * and handing an MCP spec to the npm drain produces a confident wrong answer
+ * rather than an error.
+ */
+export async function getPendingSurfaces(
+  db: Database,
+  limit = 10,
+  kind: EntityKind = 'package_surface',
+): Promise<SurfaceQueueRow[]> {
+  return db
+    .select()
+    .from(surfaceQueue)
+    .where(eq(surfaceQueue.kind, kind))
+    .orderBy(surfaceQueue.requestedAt)
+    .limit(limit);
 }
 
 export async function dropSurfaceQueue(db: Database, id: number): Promise<void> {
@@ -252,8 +304,11 @@ export async function hasStoredSurface(
   version: string,
   tier: ExtractionTier = 'shipped_js_ast',
   tenantId = 0,
+  kind: EntityKind = 'package_surface',
 ): Promise<boolean> {
-  const key = canonicalKey(surfaceRef(pkg, version));
+  const key = canonicalKey(
+    kind === 'mcp_server' ? mcpSurfaceRef(pkg, version) : surfaceRef(pkg, version),
+  );
   const [row] = await db
     .select({ id: entities.id })
     .from(entities)
@@ -287,11 +342,13 @@ export async function enqueuePreviousSurface(
   pkg: string,
   version: string,
   history: { version: string }[],
+  kind: EntityKind = 'package_surface',
 ): Promise<boolean> {
   const previous = previousVersion(history, version);
   if (previous === null) return false;
-  if (await hasStoredSurface(db, pkg, previous)) return false;
-  await enqueueSurface(db, pkg, previous);
+  const tier: ExtractionTier = kind === 'mcp_server' ? 'mcp_tools_list' : 'shipped_js_ast';
+  if (await hasStoredSurface(db, pkg, previous, tier, 0, kind)) return false;
+  await enqueueSurface(db, pkg, previous, kind);
   return true;
 }
 

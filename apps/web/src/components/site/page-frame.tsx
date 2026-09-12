@@ -42,7 +42,7 @@ export function PageFrame({
   return (
     <>
       <SiteNav />
-      <main className="flex-1">
+      <main id="content" tabIndex={-1} className="flex-1">
         {/* overflow-hidden because the blob is deliberately wider than the
             viewport and would otherwise scroll the page sideways. Same reason
             the footer carries it. */}

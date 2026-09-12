@@ -1,0 +1,14 @@
+# RFC 9116. Served from /.well-known/security.txt, which is where scanners and
+# researchers look first. Keep `Expires` inside a year of the last edit — an
+# expired file reads as an abandoned process, which is worse than no file.
+
+# contact@ is the address that already routes (it is the one the site's own
+# contact form sends to). security@ is listed second as an alias to create once
+# volume justifies it; a researcher will use the first line that works.
+Contact: mailto:contact@lurq.run
+Contact: mailto:security@lurq.run
+Expires: 2027-09-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://www.lurq.run/.well-known/security.txt
+Policy: https://www.lurq.run/security
+Acknowledgments: https://www.lurq.run/security#acknowledgments

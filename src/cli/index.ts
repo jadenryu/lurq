@@ -287,6 +287,40 @@ export function buildProgram(): Command {
 
   // ── Scoring model ─────────────────────────────────────────────────────────
   program
+    .command('audit')
+    .argument('[dir]', 'project directory (defaults to the current one)')
+    .description('what this project depends on, and what is outdated, vulnerable or drifting')
+    .option('--project-only', 'ignore user-level agent configs; read only files in the project')
+    .option('--json', 'output JSON instead of a table')
+    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean }) => {
+      const { runAudit } = await import('./commands');
+      await runAudit(dir, opts);
+    });
+
+  program
+    .command('mcp-surface')
+    .argument('<server>', 'npm package name of the MCP server')
+    .description("an MCP server's real tool contract: params and behaviour annotations")
+    .option('--version <v>', 'exact version (defaults to the latest probed)')
+    .option('--json', 'output JSON instead of a table')
+    .action(async (server: string, opts: { version?: string; json?: boolean }) => {
+      const { runMcpSurface } = await import('./commands');
+      await runMcpSurface(server, opts);
+    });
+
+  program
+    .command('mcp-drift')
+    .argument('<server>', 'npm package name of the MCP server')
+    .description('what an MCP server changed between two versions (incl. silent + privilege drift)')
+    .requiredOption('--from <v>', 'version you are on')
+    .requiredOption('--to <v>', 'version you are moving to')
+    .option('--json', 'output JSON instead of a table')
+    .action(async (server: string, opts: { from: string; to: string; json?: boolean }) => {
+      const { runMcpDrift } = await import('./commands');
+      await runMcpDrift(server, opts);
+    });
+
+  program
     .command('weights')
     .description('show and explain the scoring weight model (health, quality, composite λ)')
     .option('--json', 'output the weight model as JSON')

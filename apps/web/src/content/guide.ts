@@ -110,6 +110,30 @@ export const TOOLS: GuideTool[] = [
     input: "package · fromVersion · toVersion",
   },
   {
+    name: "audit",
+    group: "upkeep",
+    purpose:
+      "A whole project in one call: every dependency that is outdated, deprecated or carries an advisory against the exact version installed, plus every configured MCP server that has drifted, needs a credential, or cannot be observed at all. Always reports how much of your project it answered for \u2014 what it could not assess is shown as unassessed rather than omitted.",
+    prompt: "what's out of date or vulnerable in this project?",
+    input: "packages[] \u00b7 mcpServers[] (names and versions, read locally)",
+  },
+  {
+    name: "mcp_surface",
+    group: "check",
+    purpose:
+      "Every tool an MCP server actually lists, with its required and optional parameters and its behaviour annotations \u2014 read from a live tools/list handshake in a sandbox, not from a README. The annotations are the part to read before granting access: they say whether a tool writes, destroys, or reaches outside the machine. Also returns the credentials the server declares it needs, so a server waiting on an API key reads as unverified rather than as broken.",
+    prompt: "what tools does this MCP server expose, and what do they take?",
+    input: "server \u00b7 optional version",
+  },
+  {
+    name: "mcp_drift",
+    group: "upkeep",
+    purpose:
+      "What an MCP server changed between two versions. Two findings have no package equivalent: silent drift, where a schema moved while its description stayed byte-identical and no changelog could have told you; and privilege widening, where a tool stopped being read-only or started being destructive \u2014 nothing breaks, which is what makes it worse than a break.",
+    prompt: "did this MCP server change its tool contract?",
+    input: "server \u00b7 fromVersion \u00b7 toVersion",
+  },
+  {
     name: "diagram",
     group: "extra",
     purpose:

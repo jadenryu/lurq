@@ -17,8 +17,8 @@ import { cached } from '../core/cache';
 import type { Database } from '../db/client';
 import { claims, entities, observations, symbols } from '../db/schema';
 import type { SymbolRow } from '../db/schema';
-import { enqueueSurface, surfaceRef } from '../db/surface';
-import { canonicalKey, type Verdict } from '../graph/types';
+import { enqueueSurface, mcpSurfaceRef, surfaceRef } from '../db/surface';
+import { canonicalKey, type EntityKind, type Verdict } from '../graph/types';
 import { diffSurfaces } from '../surface/diff';
 import type { ExtractedSurface, ExtractionTier, SurfaceSymbol } from '../surface/types';
 
@@ -40,7 +40,7 @@ export interface SurfaceResponse {
 }
 
 /** Stored rows → the extractor's IR, so the diff logic has exactly one implementation. */
-function rowsToSurface(
+export function rowsToSurface(
   pkg: string,
   version: string | null,
   rows: SymbolRow[],
@@ -53,6 +53,12 @@ function rowsToSurface(
     origin: r.origin as SurfaceSymbol['origin'],
     deprecated: r.deprecated,
     tier: r.tier,
+    // The signature was dropped on the way back out of the database, so every
+    // diff computed from STORED rows saw `signature: undefined` on both sides
+    // and reported no signature drift — for tier C, where signatures are the
+    // only thing that tier can report, and for the MCP tier, where the entire
+    // tool contract is serialized into this field.
+    ...(r.signature !== null ? { signature: r.signature } : {}),
     ...(r.sourceFile ? { sourceRef: { file: r.sourceFile, line: r.sourceLine ?? 0 } } : {}),
   }));
   return {
@@ -66,7 +72,7 @@ function rowsToSurface(
   };
 }
 
-interface StoredSurface {
+export interface StoredSurface {
   entityId: number;
   rows: SymbolRow[];
   verdict: Verdict;
@@ -75,12 +81,21 @@ interface StoredSurface {
   observedAt: string | null;
 }
 
-/** Look up a stored surface plus the observation that established it. */
-async function loadStored(
+/**
+ * Look up a stored surface plus the observation that established it.
+ *
+ * `kind` selects the unit type: an npm package's extracted exports, or an MCP
+ * server's tool list. They live in the same two tables and are told apart by the
+ * node kind, which is the first segment of `canonicalKey` for exactly this
+ * reason — a package and a server published under the same name are different
+ * subjects with different contracts.
+ */
+export async function loadStored(
   db: Database,
   pkg: string,
   version: string | null,
   tenantId = 0,
+  kind: EntityKind = 'package_surface',
 ): Promise<StoredSurface | null> {
   // Surfaces are always STORED under a concrete resolved version, so a query
   // with no version can never match by canonical key. An agent asking "what does
@@ -93,12 +108,14 @@ async function loadStored(
       .from(entities)
       .innerJoin(claims, eq(claims.subjectId, entities.id))
       .innerJoin(observations, eq(observations.claimId, claims.id))
-      .where(and(eq(entities.kind, 'package_surface'), eq(entities.name, pkg)))
+      .where(and(eq(entities.kind, kind), eq(entities.name, pkg)))
       .orderBy(desc(observations.observedAt))
       .limit(1);
     entity = rows.find((r) => r.e.tenantId === tenantId)?.e;
   } else {
-    const key = canonicalKey(surfaceRef(pkg, version));
+    const key = canonicalKey(
+      kind === 'mcp_server' ? mcpSurfaceRef(pkg, version) : surfaceRef(pkg, version),
+    );
     const ents = await db.select().from(entities).where(eq(entities.canonicalKey, key)).limit(2);
     entity = ents.find((e) => e.tenantId === tenantId);
   }

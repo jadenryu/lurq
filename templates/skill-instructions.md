@@ -44,6 +44,30 @@ whatever was popular then; lurq is re-synced daily and its claims are checkable.
   versions. Returns what was removed, added, and what changed arity between them, with
   type-only removals listed separately because those break the build rather than the
   program. Static comparison of both published versions — no install, no test run.
+- **Take stock of a whole project** → `audit` with the inventory you read from its
+  `package.json` + lockfile and its MCP configs (names and versions only — never source).
+  One call returns every outdated, deprecated and vulnerable dependency plus every MCP
+  server that has drifted or needs credentials. Read the `coverage` field before you act
+  on it: it says how many items lurq actually answered for, and anything `queued` or
+  `skipped` was NOT checked. An item lurq could not assess is never a clean item, and
+  `vulnComplete: false` means the vulnerability results are partial.
+- **Wire an agent to an MCP server, or debug a tool call that fails for no visible
+  reason** → `mcp_surface` with the server's npm package name. Returns every tool the
+  server actually lists, its required and optional parameters, and its behaviour
+  annotations, read from a live `tools/list` handshake in a sandbox rather than from a
+  README. The annotations are the part worth reading before you grant access: they say
+  whether a tool writes, destroys, or reaches outside your machine. It also returns
+  `requires` — the API keys and settings the server declares it needs — and
+  `configRequest`, a ready-made line to put in front of your user when one is missing.
+  A server that wants a token comes back UNVERIFIABLE, never `verified_false`: "we could
+  not check" and "we checked and it is broken" are different claims, and only the second
+  is a reason not to use it. Ask the user for the values rather than guessing them.
+- **Upgrade an MCP server an agent depends on** → `mcp_drift` with the server and the two
+  versions. Two of its findings have no package equivalent. **Silent drift** is a tool
+  whose schema moved while its description stayed byte-identical — no changelog reader
+  can catch it, and the symptom is a malformed call that looks like a model mistake.
+  **Privilege widening** is a tool that stopped being read-only or started being
+  destructive; nothing breaks, which is what makes it worse than a break.
 - **Build a whole project from a spec** → `plan` with the program description. Returns a
   scored package per component plus a Mermaid roadmap. It recommends building blocks
   slot-by-slot from the index; it does not invent an architecture from a bare prompt.

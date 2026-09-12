@@ -669,13 +669,24 @@ export const surfaceQueue = pgTable(
     packageName: text('package_name').notNull(),
     /** Null means "whatever latest resolves to at extraction time". */
     version: text('version'),
-    /** Dedup key: `name@version`. */
+    /**
+     * Which extractor services this row.
+     *
+     * One queue, two drains: `package_surface` rows are fetched as tarballs and
+     * read statically, `mcp_server` rows are installed and probed over stdio.
+     * The discriminator is not optional bookkeeping — without it the npm drain
+     * picks up MCP rows and tries to extract exports from a server it should
+     * have handshaked with, and the failure is silent because "no exports
+     * found" is a legitimate answer for a package that has none.
+     */
+    kind: text('kind').$type<EntityKind>().notNull().default('package_surface'),
+    /** Dedup key: `kind:name@version`. */
     specKey: text('spec_key').notNull().unique(),
     /** Failed drains bump this; the worker drops a spec that keeps failing. */
     attempts: integer('attempts').notNull().default(0),
     requestedAt: ts('requested_at').notNull().defaultNow(),
   },
-  (table) => [index('surface_queue_requested_idx').on(table.requestedAt)],
+  (table) => [index('surface_queue_requested_idx').on(table.kind, table.requestedAt)],
 );
 
 /** A node in the graph. Anything an agent depends on that an oracle can check. */

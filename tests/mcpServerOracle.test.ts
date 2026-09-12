@@ -41,8 +41,14 @@ const okProbe = JSON.stringify({
   stage: 'done',
   serverInfo: { name: 'some-mcp', version: '1.2.0' },
   protocolVersion: '2025-11-25',
+  pages: 1,
+  truncated: false,
   tools: [
-    { name: 'search', description: 'search things' },
+    {
+      name: 'search',
+      description: 'search things',
+      inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
+    },
     { name: 'fetch', description: 'fetch a thing' },
   ],
 });
@@ -64,13 +70,57 @@ describe('parseProbeOutput', () => {
 });
 
 describe('probeScript', () => {
-  it('embeds the launch command and speaks the handshake in order', () => {
-    const s = probeScript('npx', ['--no-install', 'some-mcp']);
+  it('embeds the package name and speaks the handshake in order', () => {
+    const s = probeScript('some-mcp');
     expect(s).toContain("method: 'initialize'");
     expect(s).toContain('notifications/initialized');
     expect(s).toContain('tools/list');
-    // args must be JSON-embedded, never string-concatenated into a shell line
-    expect(s).toContain('["--no-install","some-mcp"]');
+    // the name must be JSON-embedded, never concatenated into a shell line
+    expect(s).toContain('"some-mcp"');
+  });
+
+  // A published server's bin name is routinely not its package name
+  // (@modelcontextprotocol/server-filesystem ships `mcp-server-filesystem`), and
+  // guessing wrong looks exactly like a server that fails to start.
+  it('resolves the entry point from the installed manifest', () => {
+    const s = probeScript('some-mcp');
+    expect(s).toContain('package.json');
+    expect(s).toContain('manifest.bin');
+  });
+
+  // `tools/list` is paginated. Reading only the first page and diffing it
+  // against a full read reports every tool on the undrained pages as removed.
+  it('drains every page of tools/list', () => {
+    const s = probeScript('some-mcp');
+    expect(s).toContain('nextCursor');
+    expect(s).toContain('cursor: cursor');
+  });
+
+  /**
+   * The truncation bug, pinned.
+   *
+   * `process.exit()` abandons whatever has not drained from a pipe-backed
+   * stdout, so a payload larger than the 8 KiB pipe buffer was cut mid-JSON and
+   * the caller recorded a perfectly healthy server as unreachable. Only the
+   * write callback makes the exit safe, and the generated script must carry an
+   * ESCAPED newline — an unescaped one terminates the string literal and the
+   * whole probe fails to parse.
+   */
+  it('flushes stdout before exiting', () => {
+    const s = probeScript('some-mcp');
+    expect(s).toContain('process.stdout.write');
+    // The newline must survive as an ESCAPE, not as a real line break: a raw
+    // newline here terminates the string literal and the whole probe stops
+    // parsing (which is exactly how the flush fix first shipped).
+    expect(s).toContain("process.stdout.write(JSON.stringify(o) + '\\n'");
+    expect(s).not.toContain('console.log(JSON.stringify(o))');
+  });
+
+  it('generates a syntactically valid script', () => {
+    // new Function parses without executing: a broken escape in the template
+    // (the exact way the flush fix first shipped) fails here rather than
+    // silently producing an empty probe at runtime.
+    expect(() => new Function(probeScript('some-mcp'))).not.toThrow();
   });
 });
 
@@ -93,6 +143,27 @@ describe('mcpServerOracle.run', () => {
     expect(provides.every((o) => o.verdict === 'verified_true')).toBe(true);
     expect(res.discovered?.map((d) => d.name)).toEqual(['some-mcp#search', 'some-mcp#fetch']);
     expect(res.discovered?.every((d) => d.kind === 'mcp_tool')).toBe(true);
+  });
+
+  /**
+   * A partially-drained tool list is a MEASUREMENT failure, not a finding.
+   * Recording it as a successful read lets the next full read diff against it
+   * and report every tool on the pages we never asked for as removed.
+   */
+  it('records a truncated tool list as unverifiable, never as a surface', async () => {
+    const truncated = JSON.stringify({
+      ok: true,
+      stage: 'done',
+      tools: [{ name: 'a' }],
+      pages: 50,
+      truncated: true,
+    });
+    const sb = fakeSandbox(async () => ({ exitCode: 0, stdout: truncated, stderr: '' }));
+    const res = await mcpServerOracle.run(TARGET, ENV, sb);
+
+    expect(res.observations[0]!.verdict).toBe('unverifiable');
+    expect(res.observations[0]!.evidence).toMatch(/incomplete/);
+    expect(res.discovered ?? []).toEqual([]);
   });
 
   it('installs the target package before probing it', async () => {
