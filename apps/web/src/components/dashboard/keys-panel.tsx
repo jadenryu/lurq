@@ -165,7 +165,12 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
                       {key.prefix}…
                     </TableCell>
                     <TableCell>
-                      <Chip>{key.tier}</Chip>
+                      <span className="inline-flex gap-1.5">
+                        <Chip>{key.tier}</Chip>
+                        {key.scopes?.includes("policy:write") && (
+                          <Chip tone="warn">policy write</Chip>
+                        )}
+                      </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {formatDate(key.createdAt)}

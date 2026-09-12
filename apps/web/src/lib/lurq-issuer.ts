@@ -10,6 +10,8 @@ export interface DashboardKey {
   prefix: string;
   label: string | null;
   tier: string;
+  /** Absent from a backend older than scoped keys. */
+  scopes?: string[];
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -67,6 +69,7 @@ export async function fetchKeys(ownerId: string): Promise<DashboardKey[]> {
 export async function issueKey(args: {
   ownerId: string;
   label?: string;
+  scopes?: string[];
 }): Promise<{ key: string; prefix: string }> {
   const res = await issuerFetch("/keys", {
     method: "POST",
