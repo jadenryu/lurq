@@ -36,9 +36,22 @@ export default function DashboardProfilePage() {
 
       {/* Clerk sizes its own card and centres it. Left-aligned here so it sits
           on the same rail as every other panel in the dashboard rather than
-          drifting to the middle of a page whose header is hard left. */}
-      <PageBody className="[&_.cl-rootBox]:w-full [&_.cl-cardBox]:w-full [&_.cl-cardBox]:max-w-none">
-        <UserProfile routing="hash" />
+          drifting to the middle of a page whose header is hard left.
+
+          Through `appearance.elements` rather than `[&_.cl-cardBox]` selectors
+          on the wrapper. Those reached into Clerk's rendered DOM from outside
+          it, which Clerk warns about at runtime (structural_css_pin_clerk_ui)
+          because the structure they depend on changes when Clerk ships a
+          component update — and it would change under us silently, leaving a
+          centred card and no error. The elements map is the supported surface:
+          the key is the stable class with its `cl-` prefix dropped. */}
+      <PageBody>
+        <UserProfile
+          routing="hash"
+          appearance={{
+            elements: { rootBox: "w-full", cardBox: "w-full max-w-none" },
+          }}
+        />
       </PageBody>
     </div>
   );

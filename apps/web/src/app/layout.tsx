@@ -85,9 +85,23 @@ export default function RootLayout({
       <html
         lang="en"
         className={`${geist.variable} ${commitMono.variable} dark h-full antialiased`}
+        // globals.css sets `scroll-behavior: smooth` for in-page anchor links.
+        // Next has to be told that is deliberate: without this attribute it
+        // warns on every navigation, and it also cannot suppress the smooth
+        // scroll during a route transition, where the animation is not a
+        // feature but a page that appears to slide into place.
+        data-scroll-behavior="smooth"
         suppressHydrationWarning
       >
-        <body className="flex min-h-full flex-col bg-background text-foreground">
+        {/* Also on <body>, not just <html>. Browser extensions — Grammarly is
+            the common one — inject their own attributes onto the body before
+            React hydrates, and every one of them is reported as a server/client
+            mismatch. The noise is harmless and permanent, which is the problem:
+            it trains you to scroll past the hydration error that is real. */}
+        <body
+          suppressHydrationWarning
+          className="flex min-h-full flex-col bg-background text-foreground"
+        >
           {/* First focusable thing on every page. Keyboard and screen-reader
               users otherwise tab through the whole nav — a mega-nav on the
               marketing route, a sidebar on the dashboard — before reaching the

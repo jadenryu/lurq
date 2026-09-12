@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { ChartValues, ColumnChart, BarList } from "@/components/dashboard/charts";
 import { Chip, EmptyState, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { Stagger, StaggerItem } from "@/components/dashboard/motion";
-import { HeroFigure, StatRow, StatTile } from "@/components/dashboard/stat-tile";
+import { HeroFigure, StatTile } from "@/components/dashboard/stat-tile";
 import type { OverviewData } from "@/lib/dashboard-data";
 import { fmtDay, relativeTime } from "@/lib/format";
 

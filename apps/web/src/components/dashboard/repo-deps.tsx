@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Chip, EmptyState, Panel } from "@/components/dashboard/panel";
 import { TableToolbar } from "@/components/dashboard/table-toolbar";
@@ -66,12 +66,24 @@ export function RepoDeps({ deps, scanning = false }: { deps: DashboardDep[]; sca
    *
    * Typing stays local. Writing a history entry per keystroke would make the
    * back button a slow rewind of the user's own typing, so the URL is an inbound
-   * channel only — `useEffect` picks up a new `q` when a link changes it, and
-   * nothing pushes back.
+   * channel only: a new `q` from a link replaces what is in the box, and
+   * nothing in the box is ever pushed back.
+   *
+   * Adjusted during render rather than in an effect. The effect version ran
+   * AFTER the browser had already painted the stale query, so an inbound link
+   * showed the previous search for a frame and then re-rendered — and it is the
+   * pattern React's own lint rule rejects for exactly that reason. Comparing
+   * against the previous value in render is the documented way to reset state
+   * when an input changes: React restarts the render immediately, before
+   * anything reaches the screen.
    */
   const urlQuery = params.get("q") ?? "";
   const [query, setQuery] = useState(urlQuery);
-  useEffect(() => setQuery(urlQuery), [urlQuery]);
+  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
+  if (urlQuery !== seenUrlQuery) {
+    setSeenUrlQuery(urlQuery);
+    setQuery(urlQuery);
+  }
 
   const setFilter = (next: string) => {
     const q = new URLSearchParams(params.toString());
