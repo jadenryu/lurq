@@ -71,11 +71,34 @@ export interface InventoryMcpServer {
   sources: ItemSource[];
 }
 
+/** An exact install somewhere in the resolved tree, direct or not. */
+export interface TransitiveInstall {
+  name: string;
+  version: string;
+  /**
+   * Direct dependencies that lead here.
+   *
+   * The actionable half. "lodash 4.17.11 is vulnerable" is not something a user
+   * can act on when they never installed lodash; "via eslint" is. Empty when
+   * the lockfile recorded no edge reaching it.
+   */
+  via: string[];
+}
+
 export interface Inventory {
   /** Absolute path that was audited. */
   root: string;
   packages: InventoryPackage[];
   mcpServers: InventoryMcpServer[];
+  /**
+   * Every other exact install in the resolved tree.
+   *
+   * Checked for vulnerabilities ONLY. A transitive cannot be upgraded directly,
+   * so reporting it as "2 majors behind" is noise a reader cannot act on —
+   * whereas a CVE in it is the single most common way a project is actually
+   * exposed, and it is invisible from `package.json`.
+   */
+  transitives: TransitiveInstall[];
   /** Manifests and configs actually read, for the report's provenance line. */
   filesRead: string[];
   /** Discovery problems — a malformed config is reported, never swallowed. */
@@ -102,12 +125,14 @@ export interface Finding {
 
 export interface AuditItem {
   name: string;
-  /** `npm` or `mcp` — which half of the report this belongs to. */
-  unit: 'npm' | 'mcp';
+  /** `npm` direct, `transitive` inherited, `mcp` server. */
+  unit: 'npm' | 'transitive' | 'mcp';
   installed: string | null;
   latest: string | null;
   status: 'answered' | 'queued' | 'skipped';
   skipReason?: SkipReason;
+  /** Direct dependencies that pull in a transitive — what the user can act on. */
+  via?: string[];
   findings: Finding[];
 }
 
@@ -124,6 +149,17 @@ export interface Coverage {
   answered: number;
   queued: number;
   skipped: number;
+  /**
+   * Exact installs from the resolved tree checked for vulnerabilities.
+   *
+   * Counted apart from `discovered` on purpose: a thousand transitives would
+   * otherwise swamp the forty direct dependencies and make the answered
+   * fraction meaningless. They are a different question — "is anything in my
+   * tree vulnerable" rather than "is this dependency current".
+   */
+  transitivesChecked: number;
+  /** No lockfile, so the tree below the manifest was never seen. */
+  treeRead: boolean;
   /** Every OSV batch came back. False means vulnerability results are partial. */
   vulnComplete: boolean;
 }

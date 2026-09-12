@@ -949,15 +949,89 @@ export async function runMcpDrift(
  * YOUR project it answered for — and anything it could not assess is printed as
  * unassessed rather than quietly omitted, which would read as a clean bill.
  */
+/**
+ * Probe the MCP servers this project uses, before assessing them.
+ *
+ * Without this, an MCP server reports `queued` on the first run and stays that
+ * way until a worker reaches it — three per cycle on the hosted service, and
+ * never at all for someone running their own index with no worker. A user who
+ * just asked about six servers is already waiting; spending a bounded amount of
+ * that wait on the servers THEY named beats deferring to a queue whose priority
+ * is not theirs.
+ *
+ * Bounded twice over: a wall-clock budget for the whole pass, and a hard skip
+ * for anything already stored. Whatever does not fit stays queued and is
+ * reported as queued, which is the same honest fallback as before.
+ */
+async function probeProjectServers(
+  servers: { kind: string; packageName: string | null; version: string | null }[],
+  budgetMs: number,
+): Promise<{ probed: number; skipped: number }> {
+  const { createDb } = await import('../db/client');
+  const { extractAndStoreMcp } = await import('../pipeline/mcp');
+  const { hasStoredSurface } = await import('../db/surface');
+  const { LocalSandbox } = await import('../sandbox/local');
+
+  const targets = servers.filter((s) => s.kind === 'npm-stdio' && s.packageName);
+  if (targets.length === 0) return { probed: 0, skipped: 0 };
+
+  const handle = createDb({ max: 2 });
+  const sandbox = new LocalSandbox();
+  const deadline = Date.now() + budgetMs;
+  let probed = 0;
+  let skipped = 0;
+  try {
+    for (const s of targets) {
+      if (Date.now() > deadline) {
+        skipped++;
+        continue;
+      }
+      const name = s.packageName!;
+      if (
+        s.version &&
+        (await hasStoredSurface(handle.db, name, s.version, 'mcp_tools_list', 0, 'mcp_server'))
+      ) {
+        continue;
+      }
+      try {
+        const r = await extractAndStoreMcp(handle.db, name, s.version, { sandbox });
+        if (r.outcome === 'stored' || r.outcome === 'cached') probed++;
+      } catch {
+        // A probe failure is about that server, and the audit still reports.
+        skipped++;
+      }
+    }
+  } finally {
+    await handle.close();
+  }
+  return { probed, skipped };
+}
+
 export async function runAudit(
   dir: string | undefined,
-  opts: { json?: boolean; projectOnly?: boolean },
+  opts: { json?: boolean; projectOnly?: boolean; probe?: boolean; probeBudget?: string },
 ): Promise<void> {
   const { collectInventory } = await import('../audit/inventory');
   const inv = collectInventory(dir ?? process.cwd(), { projectOnly: opts.projectOnly });
 
+  let probeNote: string | null = null;
+  if (opts.probe) {
+    if (indexSource() !== 'local') {
+      // Probing writes surfaces into an index, and a client must never be able
+      // to write into the shared one — a poisoned tool list would be served to
+      // everybody. Hosted callers get the worker's queue instead.
+      probeNote =
+        '--probe needs your own index (DATABASE_URL); on the hosted service the worker probes queued servers for you';
+    } else {
+      const budget = Math.max(5_000, Number(opts.probeBudget ?? 90) * 1000);
+      const { probed, skipped } = await probeProjectServers(inv.mcpServers, budget);
+      probeNote = `probed ${probed} MCP server(s)${skipped ? `, ${skipped} left queued (budget)` : ''}`;
+    }
+  }
+
   const payload = {
     packages: inv.packages.map((p) => ({ name: p.name, range: p.range, installed: p.installed })),
+    transitives: inv.transitives.map((t) => ({ name: t.name, version: t.version, via: t.via })),
     mcpServers: inv.mcpServers.map((s) => ({
       alias: s.alias,
       kind: s.kind,
@@ -979,6 +1053,7 @@ export async function runAudit(
 
   console.log(bold(inv.root));
   console.log(dim(`read ${inv.filesRead.length} file(s): ${inv.filesRead.join(', ') || '—'}`));
+  if (probeNote) console.log(dim(probeNote));
 
   const flagged = (res.items ?? [])
     .filter((i) => i.findings.length > 0)
@@ -994,7 +1069,8 @@ export async function runAudit(
     for (const item of flagged) {
       const sev = worstSeverity(item.findings)!;
       const tag = item.unit === 'mcp' ? dim(' [mcp]') : '';
-      console.log(`${colour(sev)(sev.padEnd(8))} ${bold(item.name)}${tag}`);
+      const tag2 = item.unit === 'transitive' ? dim(' [transitive]') : tag;
+      console.log(`${colour(sev)(sev.padEnd(8))} ${bold(item.name)}${tag2}`);
       for (const f of item.findings) console.log(`         ${f.detail}`);
     }
   }
@@ -1004,14 +1080,37 @@ export async function runAudit(
   // treat its absence as good news rather than as an unasked question.
   const c = res.coverage;
   console.log(
-    `\n${bold('coverage')}  ${c.answered}/${c.discovered} answered` +
+    `\n${bold('coverage')}  ${c.answered}/${c.discovered} declared dependencies answered` +
       (c.queued ? `, ${yellow(`${c.queued} queued`)}` : '') +
       (c.skipped ? `, ${dim(`${c.skipped} not assessable`)}` : ''),
+  );
+  // Printed even when it is zero. A tree line that appears only when something
+  // was checked would let its absence read as "nothing to check" rather than
+  // "we never looked", which is the distinction this whole report exists on.
+  console.log(
+    c.treeRead
+      ? dim(`          ${c.transitivesChecked} transitive install(s) checked for vulnerabilities`)
+      : red('          no lockfile — the dependency tree was NOT checked for vulnerabilities'),
   );
   if (!c.vulnComplete) {
     console.log(
       red('vulnerability lookup incomplete — absence of a finding here is NOT an all-clear'),
     );
   }
+  // The boundary of the whole report, stated once.
+  //
+  // Someone who asks "is anything in my project out of date" and sees a clean
+  // result will read it as covering everything. It does not cover a REST API
+  // version pinned in source (`apiVersion: '2023-10-16'`) or an endpoint called
+  // by hand, because that is reading source code rather than reading artifacts
+  // — a different engine, and one this deliberately does not have. Saying so is
+  // cheaper than being quietly wrong about it, and for most projects the
+  // question is answered anyway: an outdated SDK package above is what pins you
+  // to an old API version.
+  console.log(
+    dim(
+      '          scope: installed packages and configured MCP servers. API versions pinned in your own source are not read.',
+    ),
+  );
   for (const n of res.notes ?? []) console.log(dim(`· ${n}`));
 }

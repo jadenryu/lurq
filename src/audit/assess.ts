@@ -107,9 +107,24 @@ function assessPackage(
     findings: [],
   };
 
+  // Vulnerabilities FIRST, and independently of whether lurq has ever indexed
+  // this package. OSV is keyed on name and version alone and needs nothing from
+  // our catalogue, so gating it on an index hit suppressed the most dangerous
+  // finding we produce behind an unrelated coverage gap — a fresh install of a
+  // known-vulnerable package came back "nothing flagged" purely because we had
+  // not ingested it yet.
+  if (vulns?.length) {
+    item.findings.push({
+      kind: 'vulnerable',
+      severity: OSV_SEVERITY,
+      detail: `${pkg.installed} is affected by ${vulns.length} advisory(ies): ${vulns.slice(0, 4).join(', ')}${vulns.length > 4 ? ', …' : ''}`,
+    });
+  }
+
   if (!idx) {
-    // Not in the index. Queued by the caller; reported as unassessed, never as
-    // "nothing wrong with it".
+    // The DRIFT question is unanswerable without the index — but "queued" now
+    // means "we could not tell you how current it is", not "we did not look at
+    // it", and any vulnerability above is already reported.
     item.status = 'queued';
     item.skipReason = 'not-in-index';
     return item;
@@ -123,16 +138,10 @@ function assessPackage(
     });
   }
 
-  // Exact-version vulnerabilities from OSV, which is the claim that actually
-  // applies to what is installed. The index's `advisories` column is a
-  // package-level count and is used only when there is no install to check.
-  if (vulns?.length) {
-    item.findings.push({
-      kind: 'vulnerable',
-      severity: OSV_SEVERITY,
-      detail: `${pkg.installed} is affected by ${vulns.length} advisory(ies): ${vulns.slice(0, 4).join(', ')}${vulns.length > 4 ? ', …' : ''}`,
-    });
-  } else if (!pkg.installed && (idx.advisories?.length ?? 0) > 0) {
+  // The index's `advisories` column is a package-level count, true of the
+  // package rather than of any one version. It only speaks when there is no
+  // install to run the exact-version check against.
+  if (!pkg.installed && (idx.advisories?.length ?? 0) > 0) {
     item.findings.push({
       kind: 'vulnerable',
       severity: 'moderate',
@@ -265,10 +274,15 @@ export async function assessInventory(
   const names = inv.packages.map((p) => p.name);
   const indexed = await loadIndexed(db, names);
 
-  // One OSV round trip for every installed version at once.
-  const installs = inv.packages
-    .filter((p): p is InventoryPackage & { installed: string } => p.installed !== null)
-    .map((p) => ({ name: p.name, version: p.installed }));
+  // One OSV round trip for the WHOLE tree — directs and transitives together.
+  // Transitives are where most real exposure lives and are invisible from a
+  // manifest, so leaving them out would make a clean report mean very little.
+  const installs = [
+    ...inv.packages
+      .filter((p): p is InventoryPackage & { installed: string } => p.installed !== null)
+      .map((p) => ({ name: p.name, version: p.installed })),
+    ...inv.transitives.map((t) => ({ name: t.name, version: t.version })),
+  ];
   let affected = new Map<string, string[]>();
   let vulnComplete = true;
   try {
@@ -292,15 +306,50 @@ export async function assessInventory(
     items.push(item);
   }
 
+  // Transitives surface ONLY when something is wrong. A thousand healthy
+  // inherited packages are not a finding, and listing them would bury the forty
+  // direct dependencies the user can actually act on.
+  for (const t of inv.transitives) {
+    const vulns = affected.get(`${t.name}@${t.version}`);
+    if (!vulns?.length) continue;
+    items.push({
+      name: t.name,
+      unit: 'transitive',
+      installed: t.version,
+      latest: null,
+      status: 'answered',
+      via: t.via,
+      findings: [
+        {
+          kind: 'vulnerable',
+          severity: OSV_SEVERITY,
+          detail:
+            `${t.version} is affected by ${vulns.length} advisory(ies): ${vulns.slice(0, 4).join(', ')}${vulns.length > 4 ? ', …' : ''}` +
+            // Without this the finding is unactionable: nobody installed the
+            // transitive on purpose, so the fix is always at a direct dep.
+            (t.via.length
+              ? ` — pulled in via ${t.via.slice(0, 3).join(', ')}${t.via.length > 3 ? ` and ${t.via.length - 3} more` : ''}`
+              : ' — no path recorded in the lockfile'),
+        },
+      ],
+    });
+  }
+
   for (const s of inv.mcpServers) {
     items.push(await assessMcpServer(db, s));
   }
 
+  // `discovered` counts what the user declared, not what the tree contains: the
+  // answered fraction has to stay a statement about their dependencies, and a
+  // thousand transitives would drown it.
+  const declared = items.filter((i) => i.unit !== 'transitive');
   const coverage: Coverage = {
-    discovered: items.length,
-    answered: items.filter((i) => i.status === 'answered').length,
-    queued: items.filter((i) => i.status === 'queued').length,
-    skipped: items.filter((i) => i.status === 'skipped').length,
+    discovered: declared.length,
+    answered: declared.filter((i) => i.status === 'answered').length,
+    queued: declared.filter((i) => i.status === 'queued').length,
+    skipped: declared.filter((i) => i.status === 'skipped').length,
+    transitivesChecked: inv.transitives.length,
+    treeRead: inv.transitives.length > 0,
     vulnComplete,
   };
 
