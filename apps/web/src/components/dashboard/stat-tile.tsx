@@ -1,84 +1,192 @@
-import { Children, type ReactNode } from "react";
+"use client";
+
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useId,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { microLabel } from "@/components/dashboard/panel";
 import { cn } from "@/lib/utils";
 
 /**
- * The metric strip: **one** bordered band split by hairlines, not N floating
- * cards with N shadows and N gutters between them.
+ * The metric strip: one bordered band split by hairlines, and — where the caller
+ * supplies it — a drawer that opens underneath with the evidence behind whichever
+ * number you clicked.
  *
  * Four separate cards say "four unrelated objects". One divided strip says "four
- * readings off the same instrument", which is what they are, and it is what every
- * console worth copying does with its headline numbers. It also buys back the
- * gutters as data width at no cost.
+ * readings off the same instrument", which is what they are.
  *
- * Mobile is two up, split by both rules; an odd last tile spans the row rather
- * than orphaning next to a hole.
+ * The drill-down is the part that makes it an instrument rather than a poster.
+ * A dashboard that answers "is everything okay?" and then has nothing to say when
+ * the answer is no has stopped halfway: every console worth copying leads with a
+ * calm number and keeps the detail one click behind it — progressive disclosure,
+ * not a second page. The drawer opens *inside the strip*, full width, so the
+ * other three numbers stay on screen while you read one of them. That is the
+ * whole reason it isn't a modal: the question a metric raises is almost always
+ * comparative.
  */
+
+interface TileProps {
+  label: string;
+  value: string | number;
+  hint?: string;
+  /** Period-over-period change, already computed. See `Delta`. */
+  delta?: ReactNode;
+  trend?: ReactNode;
+  href?: string;
+  /** What this number is made of. Its presence is what makes the tile openable. */
+  detail?: ReactNode;
+  /** Injected by StatRow. Not part of the public shape. */
+  _index?: number;
+  _open?: boolean;
+  _panelId?: string;
+  _onToggle?: () => void;
+}
+
 export function StatRow({ children }: { children: ReactNode }) {
-  const count = Children.count(children);
+  const tiles = Children.toArray(children).filter(isValidElement) as ReactElement<TileProps>[];
+  const [open, setOpen] = useState<number | null>(null);
+  const panelId = useId();
+  const count = tiles.length;
+  const active = open === null ? null : tiles[open];
+  const detail = active?.props.detail;
+
   return (
-    <div
-      className={cn(
-        "grid grid-cols-2 overflow-hidden rounded-[var(--radius-panel)] border border-edge bg-surface",
-        "divide-x divide-y divide-edge md:divide-y-0",
-        count === 3 && "md:grid-cols-3",
-        count === 4 && "md:grid-cols-4",
-        count >= 5 && "md:grid-cols-5",
-        count % 2 === 1 && "[&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1",
+    <div className="overflow-hidden rounded-[var(--radius-panel)] border border-edge bg-surface">
+      <div
+        className={cn(
+          "grid grid-cols-2 divide-x divide-y divide-edge md:divide-y-0",
+          count === 3 && "md:grid-cols-3",
+          count === 4 && "md:grid-cols-4",
+          count >= 5 && "md:grid-cols-5",
+          // Odd count → the last tile fills the row on mobile, never orphans.
+          count % 2 === 1 && "[&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1",
+        )}
+      >
+        {tiles.map((tile, i) =>
+          cloneElement(tile, {
+            key: i,
+            _index: i,
+            _open: open === i,
+            _panelId: panelId,
+            _onToggle: () => setOpen((current) => (current === i ? null : i)),
+          }),
+        )}
+      </div>
+
+      {detail && (
+        <div
+          id={panelId}
+          // Escape closes, because a drawer that can only be shut by finding the
+          // same tile again is a drawer people leave open.
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(null);
+          }}
+          className="border-t border-edge bg-surface-2/40"
+        >
+          <div data-reveal="open" className="p-4 md:p-5">
+            {detail}
+          </div>
+        </div>
       )}
-    >
-      {children}
     </div>
   );
 }
 
 /**
- * One cell of the strip. Numbers are tabular here — unlike the hero figure, these
- * sit in a row of siblings and a jittering column of digits across four cells is
- * exactly the "hard to parse" complaint.
+ * One cell of the strip.
+ *
+ * Numbers are tabular here — unlike the hero figure, these sit in a row of
+ * siblings, and a jittering column of digits across four cells is exactly the
+ * "hard to parse" complaint.
  */
 export function StatTile({
   label,
   value,
   hint,
+  delta,
   trend,
   href,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  trend?: ReactNode;
-  /**
-   * Where this number came from. A stat is a claim, and the first thing anyone
-   * wants from a claim is the rows behind it. Tiles without a destination stay
-   * inert on purpose.
-   */
-  href?: string;
-}) {
+  detail,
+  _open,
+  _panelId,
+  _onToggle,
+}: TileProps) {
+  const openable = Boolean(detail && _onToggle);
+
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
         <p className={microLabel}>{label}</p>
-        {href && (
-          <ArrowUpRight
+        {openable ? (
+          <ChevronDown
             aria-hidden
-            className="size-3.5 shrink-0 text-ink-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+            className={cn(
+              "size-3.5 shrink-0 text-ink-3 transition-transform duration-150 motion-reduce:transition-none",
+              _open && "rotate-180 text-ink",
+            )}
           />
+        ) : (
+          href && (
+            <ArrowUpRight
+              aria-hidden
+              className="size-3.5 shrink-0 text-ink-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+            />
+          )
         )}
       </div>
-      <p className="mt-2 font-sans text-[1.6rem] font-medium leading-none tracking-[-0.025em] text-ink tabular-nums">
-        {typeof value === "number" ? value.toLocaleString() : value}
-      </p>
+
+      <div className="mt-2 flex items-baseline gap-2">
+        <p className="font-sans text-[1.6rem] font-medium leading-none tracking-[-0.025em] text-ink tabular-nums">
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </p>
+        {delta}
+      </div>
+
       {hint && <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">{hint}</p>}
       {trend && <div className="mt-2.5">{trend}</div>}
     </>
   );
 
-  const cell = "flex flex-col justify-start px-4 py-3.5";
+  const cell = "relative flex flex-col justify-start px-4 py-3.5 text-left";
+  // The open tile is marked at its own bottom edge, so the drawer below reads as
+  // belonging to this cell rather than to the strip as a whole.
+  const marker = (
+    <span
+      aria-hidden
+      className={cn(
+        "absolute inset-x-0 bottom-0 h-[2px] transition-opacity duration-150",
+        _open ? "bg-signal opacity-100" : "opacity-0",
+      )}
+    />
+  );
 
-  if (!href) return <div className={cell}>{body}</div>;
+  if (openable) {
+    return (
+      <button
+        type="button"
+        onClick={_onToggle}
+        aria-expanded={_open}
+        aria-controls={_panelId}
+        className={cn(
+          cell,
+          "group outline-none transition-colors hover:bg-surface-2/70 focus-visible:bg-surface-2",
+          _open && "bg-surface-2/70",
+        )}
+      >
+        {body}
+        {marker}
+      </button>
+    );
+  }
+
+  if (!href) return <div className={cn(cell, "cursor-default")}>{body}</div>;
 
   return (
     <Link
@@ -90,6 +198,46 @@ export function StatTile({
     >
       {body}
     </Link>
+  );
+}
+
+/**
+ * Period-over-period change, next to the number it qualifies.
+ *
+ * A metric without a comparison is trivia: 1,240 calls is only meaningful
+ * against what last month did. This is the single most common thing missing from
+ * a homegrown dashboard and the first thing present in every professional one.
+ *
+ * Deliberately NOT colour-coded by direction. Up is good for calls and bad for
+ * failures, and a green arrow that means "worse" on two of five tiles is worse
+ * than no colour at all. Direction is carried by the glyph and the sign; callers
+ * that genuinely have a polarity pass `tone`.
+ */
+export function Delta({
+  pct,
+  tone = "neutral",
+}: {
+  /** Percent change. Null renders nothing — no baseline, no claim. */
+  pct: number | null;
+  tone?: "neutral" | "good" | "bad";
+}) {
+  if (pct === null || !Number.isFinite(pct)) return null;
+  const rounded = Math.round(pct);
+  if (rounded === 0) {
+    return <span className="text-[11.5px] tabular-nums text-ink-3">flat</span>;
+  }
+  return (
+    <span
+      className={cn(
+        "text-[11.5px] font-medium tabular-nums",
+        tone === "neutral" && "text-ink-2",
+        tone === "good" && "text-ok",
+        tone === "bad" && "text-bad",
+      )}
+    >
+      {rounded > 0 ? "↑" : "↓"}
+      {Math.abs(rounded)}%
+    </span>
   );
 }
 

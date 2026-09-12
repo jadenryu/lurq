@@ -93,5 +93,4 @@ export function TableToolbar({
 }
 
 /** Shared header-cell styling so every dashboard table matches. */
-export const thClass =
-  "text-[10.5px] font-medium uppercase tracking-[0.07em] text-ink-3";
+export { columnLabel as thClass } from "@/components/dashboard/panel";
