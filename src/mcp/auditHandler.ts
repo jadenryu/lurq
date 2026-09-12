@@ -16,6 +16,7 @@ import type { AuditReport, Inventory } from '../audit/types';
 
 export interface AuditInput {
   packages?: { name: string; range?: string; installed?: string | null }[];
+  transitives?: { name: string; version: string; via?: string[] }[];
   mcpServers?: {
     alias?: string;
     kind?: string;
@@ -61,6 +62,11 @@ export async function handleAudit(db: Database, input: AuditInput): Promise<Audi
       version: s.version ?? null,
       endpoint: s.endpoint ?? null,
       sources: [],
+    })),
+    transitives: (input.transitives ?? []).slice(0, 4000).map((t) => ({
+      name: t.name,
+      version: t.version,
+      via: t.via ?? [],
     })),
     filesRead: [],
     notes,

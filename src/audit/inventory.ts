@@ -12,10 +12,18 @@
  * repository at all — `~/.claude.json`, `~/.cursor/mcp.json`, a project
  * `.mcp.json` — which is why a repo scan alone can never see them.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import type { Inventory, InventoryMcpServer, InventoryPackage, ItemSource, McpKind } from './types';
+import { parse as parseYaml } from 'yaml';
+import type {
+  Inventory,
+  InventoryMcpServer,
+  InventoryPackage,
+  ItemSource,
+  McpKind,
+  TransitiveInstall,
+} from './types';
 
 /** Dependency sections worth auditing. `peerDependencies` is the host's problem. */
 const DEP_SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies'] as const;
@@ -28,6 +36,15 @@ const DEP_SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies']
  * `truncated` rather than dropped — see the coverage rule in `./types`.
  */
 export const MAX_ITEMS = 600;
+
+/**
+ * Separate, much larger ceiling for the resolved tree.
+ *
+ * Transitives are never rendered unless something is wrong with them, so their
+ * cost is one OSV batch per hundred rather than a line of output each — a
+ * budget that buys far more safety per unit than the display cap does.
+ */
+export const MAX_TRANSITIVES = 4000;
 
 function readJson(path: string): unknown | null {
   try {
@@ -161,50 +178,202 @@ function installedFrom(root: string, name: string, lock: Map<string, string>): s
   return lock.get(name) ?? null;
 }
 
-/** `name -> version` from an npm v2/v3 lockfile. Empty map when there is none. */
-export function readLockfile(root: string): Map<string, string> {
-  const out = new Map<string, string>();
+interface LockEntry {
+  version?: unknown;
+  dependencies?: Record<string, unknown>;
+  optionalDependencies?: Record<string, unknown>;
+}
+
+/**
+ * The whole resolved tree: every exact install, plus who requires whom.
+ *
+ * Both halves come from one parse because both are needed together. The
+ * installs answer "is anything in my tree vulnerable" — the question a
+ * `package.json` cannot answer and the way most projects are actually exposed.
+ * The edges answer "and what do I upgrade to fix it", which is the only half a
+ * user can act on: nobody installed the vulnerable transitive on purpose.
+ */
+export function readLockTree(root: string): {
+  installs: Map<string, string>;
+  edges: Map<string, Set<string>>;
+  present: boolean;
+} {
+  const installs = new Map<string, string>();
+  const edges = new Map<string, Set<string>>();
   const lock = readJson(join(root, 'package-lock.json')) as {
-    packages?: Record<string, { version?: unknown }>;
-    dependencies?: Record<string, { version?: unknown }>;
+    packages?: Record<string, LockEntry>;
+    dependencies?: Record<string, LockEntry>;
   } | null;
-  if (!lock) return out;
+  if (!lock) return { installs, edges, present: false };
+
+  const addEdge = (parent: string, child: string) => {
+    if (!parent || !child || parent === child) return;
+    const set = edges.get(parent);
+    if (set) set.add(child);
+    else edges.set(parent, new Set([child]));
+  };
+
   for (const [path, entry] of Object.entries(lock.packages ?? {})) {
-    // Keys look like `node_modules/foo` or `node_modules/a/node_modules/b`;
-    // the last segment after the final `node_modules/` is the package name.
+    // Keys look like `node_modules/foo`, `node_modules/a/node_modules/b`, or a
+    // workspace path like `apps/web/node_modules/c`; the segment after the last
+    // `node_modules/` is the package name.
     const idx = path.lastIndexOf('node_modules/');
     if (idx < 0) continue;
     const name = path.slice(idx + 'node_modules/'.length);
-    if (name && typeof entry?.version === 'string' && !out.has(name)) out.set(name, entry.version);
+    if (!name) continue;
+    // First wins: a hoisted root install is the one most things resolve to, and
+    // it is listed before its nested duplicates.
+    if (typeof entry?.version === 'string' && !installs.has(name))
+      installs.set(name, entry.version);
+    for (const dep of Object.keys(entry?.dependencies ?? {})) addEdge(name, dep);
+    for (const dep of Object.keys(entry?.optionalDependencies ?? {})) addEdge(name, dep);
   }
+
+  // Lockfile v1/v2 `dependencies` block, for older projects.
   for (const [name, entry] of Object.entries(lock.dependencies ?? {})) {
-    if (typeof entry?.version === 'string' && !out.has(name)) out.set(name, entry.version);
+    if (typeof entry?.version === 'string' && !installs.has(name))
+      installs.set(name, entry.version);
+    for (const dep of Object.keys(entry?.dependencies ?? {})) addEdge(name, dep);
   }
-  return out;
+
+  return { installs, edges, present: true };
 }
 
-/** Workspace package.json paths, one level deep under each declared glob root. */
-function workspaceManifests(root: string, patterns: string[]): string[] {
-  const out: string[] = [];
-  for (const pattern of patterns) {
-    // Only the common `dir/*` and `dir` shapes. A full glob engine is not worth
-    // a dependency for a path that already degrades gracefully: an unmatched
-    // workspace is simply not audited, and the file list says what was read.
-    const base = pattern.replace(/\/\*+$/, '');
-    const dir = resolve(root, base);
-    if (!existsSync(dir)) continue;
-    const entries = pattern.endsWith('*') ? readdirSync(dir).map((d) => join(dir, d)) : [dir];
-    for (const e of entries) {
-      try {
-        if (!statSync(e).isDirectory()) continue;
-      } catch {
-        continue;
+/** `name -> version` from an npm v2/v3 lockfile. Empty map when there is none. */
+export function readLockfile(root: string): Map<string, string> {
+  return readLockTree(root).installs;
+}
+
+/**
+ * Which direct dependencies lead to each package in the tree.
+ *
+ * One breadth-first pass per direct dependency rather than a walk per flagged
+ * package: a tree with thousands of nodes and a handful of vulnerable ones would
+ * otherwise re-traverse the same subgraphs repeatedly. `seen` is per-root so a
+ * package reachable from three directs is credited to all three.
+ */
+export function attributeTree(
+  directs: string[],
+  edges: Map<string, Set<string>>,
+  maxDepth = 12,
+): Map<string, string[]> {
+  const via = new Map<string, string[]>();
+  for (const root of directs) {
+    const seen = new Set<string>([root]);
+    let frontier = [root];
+    for (let depth = 0; depth < maxDepth && frontier.length; depth++) {
+      const next: string[] = [];
+      for (const node of frontier) {
+        for (const child of edges.get(node) ?? []) {
+          if (seen.has(child)) continue;
+          seen.add(child);
+          next.push(child);
+          const list = via.get(child);
+          if (list) {
+            if (!list.includes(root)) list.push(root);
+          } else via.set(child, [root]);
+        }
       }
-      const m = join(e, 'package.json');
-      if (existsSync(m)) out.push(m);
+      frontier = next;
     }
   }
-  return out;
+  return via;
+}
+
+/** How deep a `**` pattern is walked. Deep enough for real monorepos, bounded
+ *  so a pathological tree cannot turn discovery into a filesystem crawl. */
+const MAX_WORKSPACE_DEPTH = 5;
+
+/** Directories never worth descending into when expanding a workspace glob. */
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.git', '.next']);
+
+/**
+ * Workspace patterns, from whichever manager this project uses.
+ *
+ * pnpm keeps them in `pnpm-workspace.yaml` rather than `package.json`, so a
+ * pnpm monorepo declared zero workspaces to the npm-shaped reader and every
+ * package under it went unaudited — silently, because a workspace that matches
+ * nothing looks exactly like a project that has none.
+ */
+export function workspacePatterns(root: string): string[] {
+  const m = readJson(join(root, 'package.json')) as { workspaces?: unknown } | null;
+  const fromNpm = Array.isArray(m?.workspaces)
+    ? m.workspaces
+    : Array.isArray((m?.workspaces as { packages?: unknown } | undefined)?.packages)
+      ? ((m!.workspaces as { packages: unknown[] }).packages as unknown[])
+      : [];
+
+  const pnpmPath = join(root, 'pnpm-workspace.yaml');
+  let fromPnpm: unknown[] = [];
+  if (existsSync(pnpmPath)) {
+    try {
+      // `yaml` is already a direct dependency; hand-rolling a reader for a field
+      // that may be a flow sequence, a block sequence or quoted is not worth it.
+      const doc = parseYaml(readFileSync(pnpmPath, 'utf8')) as { packages?: unknown } | null;
+      if (Array.isArray(doc?.packages)) fromPnpm = doc.packages;
+    } catch {
+      /* a malformed workspace file is not fatal; nothing under it is audited */
+    }
+  }
+
+  return [...fromNpm, ...fromPnpm].filter((p): p is string => typeof p === 'string');
+}
+
+/** Directories one level under `dir`, skipping build output and dot-dirs. */
+function childDirs(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.'))
+      .map((e) => join(dir, e.name));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Expand workspace patterns to the manifests they match.
+ *
+ * Handles the three shapes that actually appear — an exact path, `dir/*` and
+ * `dir/**` — plus `!` exclusions, which monorepos use to keep examples and
+ * fixtures out of the workspace. A full glob engine would mean depending on
+ * something that is only a transitive here; this is the subset real manifests
+ * use, and anything it cannot match is simply not audited, which the report's
+ * file list makes visible rather than hiding.
+ */
+export function expandWorkspaces(root: string, patterns: string[]): string[] {
+  const includes = patterns.filter((p) => !p.startsWith('!'));
+  const excludes = patterns
+    .filter((p) => p.startsWith('!'))
+    .map((p) => resolve(root, p.slice(1).replace(/\/\*+$/, '')));
+
+  const dirs = new Set<string>();
+  for (const pattern of includes) {
+    const deep = /\/\*\*$/.test(pattern);
+    const shallow = !deep && /\/\*$/.test(pattern);
+    const base = resolve(root, pattern.replace(/\/\*+$/, ''));
+    if (!existsSync(base)) continue;
+
+    if (!deep && !shallow) {
+      dirs.add(base);
+      continue;
+    }
+    let frontier = childDirs(base);
+    for (const d of frontier) dirs.add(d);
+    if (!deep) continue;
+    for (let depth = 1; depth < MAX_WORKSPACE_DEPTH && frontier.length; depth++) {
+      const next = frontier.flatMap(childDirs);
+      for (const d of next) dirs.add(d);
+      frontier = next;
+    }
+  }
+
+  const out: string[] = [];
+  for (const dir of dirs) {
+    if (excludes.some((x) => dir === x || dir.startsWith(`${x}/`))) continue;
+    const manifest = join(dir, 'package.json');
+    if (existsSync(manifest)) out.push(manifest);
+  }
+  return out.sort();
 }
 
 export interface InventoryOptions {
@@ -235,23 +404,13 @@ export function collectInventory(root: string, opts: InventoryOptions = {}): Inv
   const manifests: string[] = [];
   if (existsSync(rootManifest)) {
     manifests.push(rootManifest);
-    const m = readJson(rootManifest) as { workspaces?: unknown } | null;
-    const ws = Array.isArray(m?.workspaces)
-      ? m.workspaces
-      : Array.isArray((m?.workspaces as { packages?: unknown } | undefined)?.packages)
-        ? ((m!.workspaces as { packages: unknown[] }).packages as unknown[])
-        : [];
-    manifests.push(
-      ...workspaceManifests(
-        abs,
-        ws.filter((p): p is string => typeof p === 'string'),
-      ),
-    );
+    manifests.push(...expandWorkspaces(abs, workspacePatterns(abs)));
   } else {
     notes.push(`no package.json at ${abs}; npm half of the audit is empty`);
   }
 
-  const lock = readLockfile(abs);
+  const tree = readLockTree(abs);
+  const lock = tree.installs;
   for (const path of manifests) {
     const m = readJson(path) as Record<string, unknown> | null;
     if (!m) {
@@ -309,6 +468,30 @@ export function collectInventory(root: string, opts: InventoryOptions = {}): Inv
 
   const packages = [...byName.values()];
   const mcpServers = [...byAlias.values()];
+
+  // Everything in the resolved tree that is not a direct dependency. Bounded
+  // separately and much higher than the display cap: these are not rendered
+  // unless something is wrong with them, so the cost is one OSV batch per
+  // hundred rather than a line of output per package.
+  const directNames = new Set(byName.keys());
+  const via = attributeTree([...directNames], tree.edges);
+  const transitives: TransitiveInstall[] = [];
+  for (const [name, version] of tree.installs) {
+    if (directNames.has(name)) continue;
+    if (transitives.length >= MAX_TRANSITIVES) {
+      notes.push(
+        `resolved tree exceeds ${MAX_TRANSITIVES} installs; the remainder were not checked for vulnerabilities`,
+      );
+      break;
+    }
+    transitives.push({ name, version, via: via.get(name) ?? [] });
+  }
+  if (!tree.present && packages.length > 0) {
+    notes.push(
+      'no package-lock.json, so the dependency tree below your manifest was never read — transitive vulnerabilities are NOT covered by this run',
+    );
+  }
+
   const total = packages.length + mcpServers.length;
   if (total > max) {
     notes.push(
@@ -320,6 +503,7 @@ export function collectInventory(root: string, opts: InventoryOptions = {}): Inv
     root: abs,
     packages: packages.slice(0, max),
     mcpServers: mcpServers.slice(0, Math.max(0, max - packages.length)),
+    transitives,
     filesRead,
     notes,
   };
