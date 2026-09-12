@@ -30,6 +30,7 @@ import {
   demoRepoBrief,
   demoRepoDetail,
   demoRepos,
+  demoSelectionPolicy,
   demoUsage,
   isDemoUser,
 } from "@/lib/demo-data";
@@ -220,7 +221,10 @@ export interface ReposData {
 export async function loadSelectionPolicy(): Promise<Loaded<SelectionPolicy>> {
   const { userId, demo } = await context();
   if (!userId) return { data: EMPTY_SELECTION_POLICY, demo: false, failed: false };
-  if (demo) return { data: EMPTY_SELECTION_POLICY, demo: true, failed: false };
+  // A fixture, not the empty policy: demo mode renders the conformance panel
+  // right below this one reporting violations, and an empty policy next to a
+  // list of broken rules is a contradiction the reader can see.
+  if (demo) return { data: demoSelectionPolicy(), demo: true, failed: false };
   try {
     return { data: await fetchSelectionPolicy(userId), demo: false, failed: false };
   } catch (err) {

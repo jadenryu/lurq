@@ -442,12 +442,22 @@ export async function fetchContributions(
 }
 
 /** Rules governing what an agent may *add*, as opposed to what it may upgrade. */
+export type AdvisorySeverity = "info" | "low" | "moderate" | "high" | "critical";
+
 export interface SelectionPolicy {
   allow: string[];
   deny: { name: string; reason?: string }[];
   minConfidence: "unproven" | "promising" | "emerging" | "proven" | null;
   licenses: string[] | null;
   blockDeprecated: boolean;
+  /** Source repository archived upstream. */
+  blockArchived: boolean;
+  /** Worst advisory severity tolerated; anything above it is refused. */
+  maxAdvisorySeverity: AdvisorySeverity | null;
+  minWeeklyDownloads: number | null;
+  maxStaleMonths: number | null;
+  /** Minified + gzipped, KB. */
+  maxBundleKb: number | null;
 }
 
 export const EMPTY_SELECTION_POLICY: SelectionPolicy = {
@@ -456,6 +466,11 @@ export const EMPTY_SELECTION_POLICY: SelectionPolicy = {
   minConfidence: null,
   licenses: null,
   blockDeprecated: false,
+  blockArchived: false,
+  maxAdvisorySeverity: null,
+  minWeeklyDownloads: null,
+  maxStaleMonths: null,
+  maxBundleKb: null,
 };
 
 export async function fetchSelectionPolicy(ownerId: string): Promise<SelectionPolicy> {

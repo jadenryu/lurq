@@ -23,6 +23,7 @@ import type {
   RepoAlert,
   RepoBrief,
   RepoDetailPayload,
+  SelectionPolicy,
   StackConflict,
   TransitiveRisk,
   UpgradeImpact,
@@ -292,6 +293,32 @@ export function demoAlerts(): RepoAlert[] {
  * A fixture where every repo fails the same way would let a rendering bug that
  * ignores `rule` or `unchecked` look correct.
  */
+/**
+ * The policy the demo conformance report is the answer to.
+ *
+ * Demo mode used to serve the *empty* policy next to a conformance panel
+ * reporting five violations, which is a contradiction a reader can see: no rules
+ * set, yet rules being broken. The fixture now states the rules those violations
+ * come from, so the two panels tell one story.
+ */
+export function demoSelectionPolicy(): SelectionPolicy {
+  return {
+    allow: ["lodash", "moment-timezone"],
+    deny: [
+      { name: "axios", reason: "Use the internal http client (@acme/http)." },
+      { name: "request", reason: "Unmaintained; use undici." },
+    ],
+    minConfidence: "emerging",
+    licenses: ["MIT", "Apache-2.0", "ISC", "BSD-3-Clause"],
+    blockDeprecated: true,
+    blockArchived: true,
+    maxAdvisorySeverity: "moderate",
+    minWeeklyDownloads: 10000,
+    maxStaleMonths: 24,
+    maxBundleKb: null,
+  };
+}
+
 export function demoConformance(): ConformanceReport {
   return {
     enforcing: true,
@@ -320,6 +347,37 @@ export function demoConformance(): ConformanceReport {
             name: "cypress-plugin-snapshots",
             rule: "license",
             reason: "License GPL-3.0 is not in the allowed set (MIT, Apache-2.0, ISC, BSD-3-Clause).",
+          },
+        ],
+      },
+      {
+        repoId: 5,
+        fullName: "acme/data-pipeline",
+        checked: 96,
+        unchecked: 21,
+        unscored: 6,
+        total: 4,
+        violations: [
+          {
+            name: "tar-fs",
+            rule: "advisory",
+            reason:
+              "Known high advisory (GHSA-pq67-2wwv-3xjx): path traversal on extract. Your policy allows moderate and below.",
+          },
+          {
+            name: "har-validator",
+            rule: "archived",
+            reason: "Its source repository is archived, so nothing will be fixed upstream.",
+          },
+          {
+            name: "fast-csv-stream",
+            rule: "adoption",
+            reason: "412 weekly downloads is below your floor of 10,000.",
+          },
+          {
+            name: "node-uuid",
+            rule: "stale",
+            reason: "Last release was 61 months ago; your policy allows 24.",
           },
         ],
       },

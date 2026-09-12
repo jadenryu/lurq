@@ -9,8 +9,16 @@ import {
 } from "@/lib/lurq-issuer";
 
 const CONFIDENCES = ["unproven", "promising", "emerging", "proven"] as const;
+const SEVERITIES = ["info", "low", "moderate", "high", "critical"] as const;
 const MAX_ENTRIES = 500;
 const MAX_LEN = 214;
+
+/** Same ceilings the backend parser enforces; see src/policy/parse.ts. */
+const LIMITS = {
+  minWeeklyDownloads: { min: 0, max: 100_000_000 },
+  maxStaleMonths: { min: 1, max: 240 },
+  maxBundleKb: { min: 1, max: 100_000 },
+} as const;
 
 /**
  * Validated here as well as in the backend, for the same reason `/api/repos/[id]`
@@ -72,7 +80,46 @@ function parsePolicy(input: unknown): SelectionPolicy | null {
     if (!licenses) return null;
   }
 
-  return { allow, deny, minConfidence, licenses, blockDeprecated: raw.blockDeprecated };
+  // Bounded, finite, or null for "no rule". Rejected rather than clamped: a
+  // clamp saves a rule other than the one the form sent.
+  const bounded = (
+    value: unknown,
+    limit: { min: number; max: number },
+  ): number | null | false => {
+    if (value == null) return null;
+    if (typeof value !== "number" || !Number.isFinite(value)) return false;
+    if (value < limit.min || value > limit.max) return false;
+    return value;
+  };
+
+  if (raw.blockArchived !== undefined && typeof raw.blockArchived !== "boolean") return null;
+
+  let maxAdvisorySeverity: SelectionPolicy["maxAdvisorySeverity"] = null;
+  if (raw.maxAdvisorySeverity != null) {
+    if (typeof raw.maxAdvisorySeverity !== "string") return null;
+    if (!SEVERITIES.includes(raw.maxAdvisorySeverity as (typeof SEVERITIES)[number])) return null;
+    maxAdvisorySeverity = raw.maxAdvisorySeverity as SelectionPolicy["maxAdvisorySeverity"];
+  }
+
+  const minWeeklyDownloads = bounded(raw.minWeeklyDownloads, LIMITS.minWeeklyDownloads);
+  if (minWeeklyDownloads === false) return null;
+  const maxStaleMonths = bounded(raw.maxStaleMonths, LIMITS.maxStaleMonths);
+  if (maxStaleMonths === false) return null;
+  const maxBundleKb = bounded(raw.maxBundleKb, LIMITS.maxBundleKb);
+  if (maxBundleKb === false) return null;
+
+  return {
+    allow,
+    deny,
+    minConfidence,
+    licenses,
+    blockDeprecated: raw.blockDeprecated,
+    blockArchived: raw.blockArchived === true,
+    maxAdvisorySeverity,
+    minWeeklyDownloads,
+    maxStaleMonths,
+    maxBundleKb,
+  };
 }
 
 function failure(err: unknown): NextResponse {
