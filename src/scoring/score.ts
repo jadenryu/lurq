@@ -380,7 +380,18 @@ export function computeConfidence(
     (growth >= CONFIDENCE.emerging.strongGrowth &&
       dl >= CONFIDENCE.emerging.minDownloadsForGrowth);
 
-  if (emergingAdoptionOk && emergingReleaseOk && !input.deprecated && !input.archived) {
+  // `emerging` did not consider advisories at all, so a package with a critical
+  // CVE could be labelled emerging and recommended on adoption alone. Every
+  // other tier already excluded severe advisories; this one was the hole, and
+  // it was the tier most likely to be applied to a fast-growing package nobody
+  // has audited yet.
+  if (
+    emergingAdoptionOk &&
+    emergingReleaseOk &&
+    !hasCriticalOrHighAdvisory(input.advisories) &&
+    !input.deprecated &&
+    !input.archived
+  ) {
     return 'emerging';
   }
 

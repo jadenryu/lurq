@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { editDistance, detectTyposquat, typosquatCorpus } from '../src/security/typosquat';
-import { assessRisk, type RiskInput } from '../src/security/risk';
 
 describe('editDistance', () => {
   it('is zero for identical strings', () => {
@@ -50,33 +49,12 @@ describe('detectTyposquat', () => {
   });
 });
 
-describe('assessRisk', () => {
-  const base: RiskInput = {
-    flags: [],
-    hasCriticalOrHighAdvisory: false,
-    typosquat: false,
-    installScripts: false,
-    brandNew: false,
-    lowTrust: false,
-    deprecatedOrArchived: false,
-  };
+/**
+ * `assessRisk` is gone; `src/security/verdict.ts` replaced it and
+ * tests/securityVerdict.test.ts covers the rules. It was deleted rather than
+ * left in place because it had a defect worth not leaving callable: any
+ * advisory below critical/high returned `low`, so a package with a known
+ * moderate CVE came back as "no supply-chain red flags". Anything still
+ * importing it would quietly get that answer back.
+ */
 
-  it('escalates typosquats and critical advisories to high', () => {
-    expect(assessRisk({ ...base, typosquat: true })).toBe('high');
-    expect(assessRisk({ ...base, hasCriticalOrHighAdvisory: true })).toBe('high');
-  });
-  it('escalates the brand-new + install-scripts + low-trust fingerprint to high', () => {
-    expect(
-      assessRisk({ ...base, installScripts: true, brandNew: true, lowTrust: true }),
-    ).toBe('high');
-  });
-  it('treats install scripts on a trusted package as low', () => {
-    expect(assessRisk({ ...base, installScripts: true })).toBe('low');
-  });
-  it('flags deprecated/archived as medium', () => {
-    expect(assessRisk({ ...base, deprecatedOrArchived: true })).toBe('medium');
-  });
-  it('clears a healthy popular package', () => {
-    expect(assessRisk(base)).toBe('low');
-  });
-});

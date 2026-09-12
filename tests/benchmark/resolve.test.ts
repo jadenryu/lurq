@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveProposal } from '../../src/benchmark/resolve';
+import { assessVerdict } from '../../src/security/verdict';
 import type { Database } from '../../src/db/client';
 import type { ExecOptions, ExecResult, Sandbox, SandboxResult, SandboxSetResult, SandboxVerifyOptions } from '../../src/sandbox/types';
 import type { NormalizedProposal, NormalizedSelection } from '../../src/benchmark/types';
@@ -87,6 +88,7 @@ describe('benchmark resolution pipeline', () => {
         typosquatOf: null,
         confidence: null,
         advisoryCount: 0,
+        verdict: assessVerdict({ exists: true, advisories: [] }),
       }),
       compatCheck: async (_db, _input) => ({
         packages: ['react'],

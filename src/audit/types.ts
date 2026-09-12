@@ -133,6 +133,12 @@ export interface AuditItem {
   skipReason?: SkipReason;
   /** Direct dependencies that pull in a transitive — what the user can act on. */
   via?: string[];
+  /**
+   * The shared safety call, identical to what `verify` and `evaluate` return
+   * for the same package. Present so the audit cannot drift into its own
+   * opinion about whether something is safe.
+   */
+  verdict?: import('../security/verdict').SecurityVerdict;
   findings: Finding[];
 }
 
