@@ -33,6 +33,7 @@ import {
   VERIFY_DESCRIPTION,
 } from './toolDescriptions';
 import { recordUsage } from '../db/usage';
+import { capture } from '../core/analytics';
 
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
@@ -104,12 +105,18 @@ export function buildMcpServer(
   // usage counter for the dashboard (§ dashboard v1 phase 2). The counter is
   // recorded in a finally so an errored call still counts; recordUsage no-ops
   // when ctx.ownerId is null (stdio/local or operator keys with no account).
+  // The PostHog event carries the tool name and outcome only, never arguments,
+  // and no-ops under the same null-owner rule (src/core/analytics.ts).
   const run = <T>(tool: string, fn: () => Promise<T>): Promise<T> =>
     (async () => {
+      let ok = false;
       try {
-        return await timed(tool, fn);
+        const result = await timed(tool, fn);
+        ok = true;
+        return result;
       } finally {
         void recordUsage(db, ctx.ownerId ?? null, tool);
+        capture(ctx.ownerId, 'tool_called', { tool, ok });
       }
     })();
 

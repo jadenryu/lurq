@@ -16,6 +16,7 @@ import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
+import { capture, flush as flushAnalytics } from '../core/analytics';
 import { formatError } from '../core/errors';
 import { CAPABILITIES, searchCapabilities } from '../core/capabilities';
 import {
@@ -756,6 +757,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
     try {
       const { key, row } = await createKey(db, { ownerId, label, tier: 'free' });
+      capture(ownerId, 'api_key_created', { tier: row.tier });
       res.status(201).json({ key, prefix: row.prefix });
     } catch (err) {
       logger.error('key issuance failed:', err instanceof Error ? err.message : String(err));
@@ -1607,7 +1609,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }, FORCE_EXIT_MS);
     force.unref();
     server.close(() => {
-      void closeDb().then(
+      // Queued PostHog events go before the pool; flush never throws.
+      void flushAnalytics().then(closeDb).then(
         () => process.exit(0),
         () => process.exit(0),
       );

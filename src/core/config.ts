@@ -100,6 +100,11 @@ const EnvSchema = z.object({
    *  authenticated web app presents it to mint a key for a signed-in user. Unset
    *  → the endpoint is disabled (404). Keep it server-side, never in the client. */
   LURQ_ISSUER_SECRET: z.string().min(1).optional(),
+  /** PostHog project token (the public `phc_…` one, same as the web app's).
+   *  Set → the hosted service sends account-keyed product events (key issued,
+   *  tool called) that join the web app's identified visitors. Unset → nothing
+   *  is sent, which is every local and stdio install. */
+  LURQ_POSTHOG_KEY: z.string().min(1).optional(),
 
   // Billing (Stripe). Every secret here lives on this service and nowhere else:
   // the web app holds no Stripe credential and reaches checkout through the
