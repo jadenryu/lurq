@@ -21,6 +21,7 @@ import {
   enqueueCandidates,
   getKnownNames,
   getPendingCandidates,
+  recordIngestFailure,
   setDiscoveryStatus,
   type DiscoveryCandidate,
 } from '../db/discovery';
@@ -278,7 +279,19 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
           await setDiscoveryStatus(handle.db, cand.name, { status: 'ingested' });
           ingested++;
         } catch (err) {
-          logger.warn(`Discovery: failed to ingest ${cand.name}: ${(err as Error).message}`);
+          // Bounded, not swallowed. syncOnePackage pays for an LLM summary
+          // before it reaches any of the writes that could throw, so a candidate
+          // that fails there and stays `pending` is re-bought every cycle, for
+          // as long as the crawler runs. Three strikes and it stops being asked.
+          const attempts = await recordIngestFailure(
+            handle.db,
+            cand.name,
+            DISCOVERY.maxIngestAttempts,
+          );
+          const retired = attempts >= DISCOVERY.maxIngestAttempts;
+          logger.warn(
+            `Discovery: failed to ingest ${cand.name} (attempt ${attempts}/${DISCOVERY.maxIngestAttempts}${retired ? ', retiring' : ''}): ${(err as Error).message}`,
+          );
         }
       }
     }
