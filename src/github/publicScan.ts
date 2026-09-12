@@ -24,6 +24,7 @@ import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { computeDrift } from './drift';
 import { parseManifest } from './manifests';
+import type { CompatConflict } from '../core/types';
 import { REPO_DRIFT_DETAIL_CAP, type DepDrift } from './types';
 
 /** What a visitor typed, resolved to something fetchable. */
@@ -159,13 +160,54 @@ export interface PublicScan {
   /** Peer/engine conflicts if the repo took every available upgrade. */
   conflicts: number;
   /** Worst-first, capped. The evidence under the counts. */
-  deps: DepDrift[];
+  deps: ScanDep[];
+  /**
+   * The conflicts themselves, not just how many. Capped like `deps`.
+   *
+   * computeDrift already returns these and this route used to keep only the
+   * count, which made "3 conflicts at latest" a number a visitor had no way to
+   * check. The report page prints them.
+   */
+  conflictDetail: ScanConflict[];
   /** Always true today: the root manifest is not the whole repo. */
   partial: boolean;
 }
 
-/** How many dependency rows the teaser returns. Enough to be evidence, not a report. */
-const TEASER_DEPS = 8;
+/**
+ * One dependency on the wire.
+ *
+ * `DepDrift` minus `declaredIn`, which on this path is always the one root
+ * manifest and would repeat `package.json` once per row across two hops.
+ */
+export type ScanDep = Omit<DepDrift, 'declaredIn'>;
+
+/** One conflict on the wire, trimmed to what a report can print. */
+export interface ScanConflict {
+  source: CompatConflict['source'];
+  packages: string[];
+  detail: string;
+}
+
+/**
+ * How many dependency rows leave the server.
+ *
+ * The hero box shows the worst few; the report page shows these and gates the
+ * tail behind sign-in. The cap is on the payload, not the gate: two hops and a
+ * cold serverless render carry this, and a 400-dependency monorepo would spend
+ * the visitor's first second of lurq on JSON they will not read.
+ *
+ * ponytail: one cap for both surfaces. Split it if the report ever wants
+ * pagination, which it will not at these sizes.
+ */
+const SCAN_DEPS = 60;
+
+/** Conflicts printed. Past a handful the list stops being read and starts being scrolled. */
+const SCAN_CONFLICTS = 12;
+
+/** `declaredIn` is the same root manifest on every row here. Drop it at the boundary. */
+function wireDep({ declaredIn: _declaredIn, ...dep }: DepDrift): ScanDep {
+  return dep;
+}
 
 /**
  * Public, unauthenticated scan of one repo or profile.
@@ -205,6 +247,7 @@ export async function publicScan(db: Database, target: ScanTarget): Promise<Publ
       advisories: 0,
       conflicts: 0,
       deps: [],
+      conflictDetail: [],
       partial: true,
     };
   }
@@ -222,7 +265,10 @@ export async function publicScan(db: Database, target: ScanTarget): Promise<Publ
     deprecated: drift.deprecated,
     advisories: drift.advisories,
     conflicts: drift.conflictsAtLatest?.length ?? 0,
-    deps: drift.deps.slice(0, Math.min(TEASER_DEPS, REPO_DRIFT_DETAIL_CAP)),
+    deps: drift.deps.slice(0, Math.min(SCAN_DEPS, REPO_DRIFT_DETAIL_CAP)).map(wireDep),
+    conflictDetail: (drift.conflictsAtLatest ?? [])
+      .slice(0, SCAN_CONFLICTS)
+      .map(({ source, packages, detail }) => ({ source, packages, detail })),
     partial: true,
   };
 }

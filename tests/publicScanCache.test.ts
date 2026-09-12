@@ -24,6 +24,7 @@ function scan(depsDeclared: number, depsTracked: number): PublicScan {
     advisories: 0,
     conflicts: 0,
     deps: [],
+    conflictDetail: [],
     partial: true,
   };
 }
