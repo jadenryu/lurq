@@ -86,6 +86,14 @@ export const TOOLS: GuideTool[] = [
     input: "package",
   },
   {
+    name: "policy",
+    group: "check",
+    purpose:
+      "The rules your team's policy enforces on what the agent may add, as plain sentences, so it picks an allowed package first. Read-only: agents can never change the rules they run under.",
+    prompt: "which packages are we allowed to use here?",
+    input: "none",
+  },
+  {
     name: "usage",
     group: "detail",
     purpose:

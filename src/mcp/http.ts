@@ -22,8 +22,10 @@ import { CAPABILITIES, searchCapabilities } from '../core/capabilities';
 import {
   createKey,
   findKeyForOwner,
+  hasScope,
   listKeysForOwner,
   lookupActiveKey,
+  parseScopes,
   revokeKey,
   rotateKey,
 } from '../auth/apiKeys';
@@ -541,6 +543,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     prefix: row.prefix,
     label: row.label,
     tier: row.tier,
+    scopes: row.scopes,
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
     revokedAt: row.revokedAt,
@@ -748,17 +751,24 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   app.post('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { ownerId?: unknown; label?: unknown };
+    const body = (req.body ?? {}) as { ownerId?: unknown; label?: unknown; scopes?: unknown };
     const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
     if (!ownerId) {
       res.status(400).json({ error: 'ownerId is required.' });
       return;
     }
+    // Rejected, not filtered: silently dropping an unknown scope would hand back
+    // a key that fails later, far from the request that asked for it.
+    const scopes = parseScopes(body.scopes);
+    if (!scopes) {
+      res.status(400).json({ error: 'scopes must be a list of known scopes.' });
+      return;
+    }
     const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
     try {
-      const { key, row } = await createKey(db, { ownerId, label, tier: 'free' });
+      const { key, row } = await createKey(db, { ownerId, label, tier: 'free', scopes });
       capture(ownerId, 'api_key_created', { tier: row.tier });
-      res.status(201).json({ key, prefix: row.prefix });
+      res.status(201).json({ key, prefix: row.prefix, scopes: row.scopes });
     } catch (err) {
       logger.error('key issuance failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not issue key.' });
@@ -1418,6 +1428,56 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('ask tool call failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not run that lookup.' });
+    }
+  });
+
+  // ── Selection policy as code (API-key authenticated) ───────────────────────
+  //
+  // The same rules the dashboard edits, for `lurq policy pull/push` — so a team
+  // can keep policy in a reviewed file and apply it from CI. Owner comes from the
+  // key, never the body. Reads are open to any account key; writes need the
+  // `policy:write` scope, which `lurq setup` never requests: the key sitting in an
+  // agent's MCP config must not be able to loosen the policy that agent obeys.
+  // Not behind `quota`: governing the agent should never compete with using it.
+
+  const keyOwner = (req: Request, res: Response): string | null => {
+    const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
+    if (!ownerId) res.status(403).json({ error: 'This key has no account attached.' });
+    return ownerId;
+  };
+
+  app.get('/policy', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (!ownerId) return;
+    try {
+      res.status(200).json({ policy: await getSelectionPolicy(db, ownerId) });
+    } catch (err) {
+      logger.error('policy read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read policy.' });
+    }
+  });
+
+  app.put('/policy', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (!ownerId) return;
+    if (!hasScope((req as AuthedRequest).lurqKey!, 'policy:write')) {
+      res.status(403).json({
+        error: 'This key cannot change policy. Create a key with the policy:write scope in the dashboard.',
+      });
+      return;
+    }
+    const policy = parseSelectionPolicy((req.body ?? {}).policy);
+    if (!policy) {
+      res.status(400).json({ error: 'policy is missing or invalid.' });
+      return;
+    }
+    try {
+      await setSelectionPolicy(db, ownerId, policy);
+      logger.info(`selection policy replaced by key ${(req as AuthedRequest).lurqKey!.prefix}`);
+      res.status(200).json({ policy });
+    } catch (err) {
+      logger.error('policy write failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not save policy.' });
     }
   });
 

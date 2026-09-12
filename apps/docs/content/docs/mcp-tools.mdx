@@ -47,6 +47,20 @@ A full evidence read for a single package.
 
 Use this when the agent has a candidate and wants the detail before committing.
 
+### `policy`
+
+The rules your account's selection policy enforces, read-only.
+
+- **Input:** none.
+- **Output:** `enforced`, and one sentence per active rule: denied packages with
+  their reason, the license allowlist, and the advisory, confidence, adoption,
+  staleness and bundle-size floors.
+
+`recommend` and `evaluate` already enforce the policy; this lets the agent pick an
+allowed package first. There is deliberately no tool that changes policy. Edit it
+in the dashboard, or keep it in a file with `lurq policy pull` / `lurq policy push`
+(see the CLI reference).
+
 ### `compare`
 
 Rank 2–5 packages head-to-head by health.

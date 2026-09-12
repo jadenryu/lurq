@@ -274,6 +274,12 @@ export const apiKeys = pgTable(
     /** Reserved for self-serve issuance: maps to a Clerk user id. */
     ownerId: text('owner_id'),
     tier: text('tier').notNull().default('free'),
+    /**
+     * Permissions beyond the default read-and-call access (see KEY_SCOPES).
+     * Empty by default: `lurq setup` writes a key into agent config files, and
+     * a key an agent holds must never be able to loosen the rules it runs under.
+     */
+    scopes: text('scopes').array().notNull().default(sql`'{}'::text[]`),
     createdAt: ts('created_at').notNull().defaultNow(),
     lastUsedAt: ts('last_used_at'),
     revokedAt: ts('revoked_at'),

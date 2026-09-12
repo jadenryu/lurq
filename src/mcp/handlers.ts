@@ -41,7 +41,7 @@ import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
-import { applyPolicy, hasRules, check as checkPolicy } from '../policy/enforce';
+import { applyPolicy, describeRules, hasRules, check as checkPolicy } from '../policy/enforce';
 import { getSelectionPolicy, loadPolicyFacts } from '../db/selectionPolicy';
 import type { PolicyVerdict } from '../policy/types';
 import { assessVerdict } from '../security/verdict';
@@ -196,6 +196,27 @@ export async function handleRecommend(
   // an agent that sees the field knows the list was filtered and that silence
   // means nothing was refused, rather than that nothing was checked.
   return { ...base, candidates: allowed, excluded };
+}
+
+// ── policy ──────────────────────────────────────────────────────────────────
+
+/**
+ * The owner's selection policy, as the sentences an agent acts on.
+ *
+ * Not the raw object: `compact` strips `[]` and `null`, and for `licenses` those
+ * mean opposite things (allow nothing vs no rule). One line per active rule
+ * survives compaction intact and costs fewer tokens than the JSON would.
+ */
+export async function handlePolicy(db: Database, ownerId: string | null) {
+  if (!ownerId) {
+    return {
+      enforced: false,
+      rules: [],
+      note: 'No lurq account on this connection, so no policy applies. Connect with `lurq setup`.',
+    };
+  }
+  const rules = describeRules(await getSelectionPolicy(db, ownerId));
+  return { enforced: rules.length > 0, rules };
 }
 
 // ── evaluate ────────────────────────────────────────────────────────────────

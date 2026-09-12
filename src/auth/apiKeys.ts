@@ -35,10 +35,38 @@ export function generateApiKey(): GeneratedKey {
   return { key, hash: hashKey(key), prefix: API_KEY_PREFIX + body.slice(0, DISPLAY_BODY) };
 }
 
+/**
+ * Permissions a key can carry on top of the default (call tools, read its
+ * owner's data). Opt-in per key, never inherited from the account.
+ *
+ * `policy:write` exists because keys live in agent MCP configs: a key that can
+ * rewrite selection policy is a key the governed agent could use to allow the
+ * package it was just refused. Only a key minted for a person or CI gets it.
+ */
+export const KEY_SCOPES = ['policy:write'] as const;
+export type KeyScope = (typeof KEY_SCOPES)[number];
+
+/** Untrusted input → known scopes, deduped; null on anything unrecognised. */
+export function parseScopes(input: unknown): KeyScope[] | null {
+  if (input === undefined || input === null) return [];
+  if (!Array.isArray(input)) return null;
+  const out = new Set<KeyScope>();
+  for (const item of input) {
+    if (!KEY_SCOPES.includes(item as KeyScope)) return null;
+    out.add(item as KeyScope);
+  }
+  return [...out];
+}
+
+export function hasScope(row: Pick<ApiKeyRow, 'scopes'>, scope: KeyScope): boolean {
+  return row.scopes.includes(scope);
+}
+
 export interface CreateKeyInput {
   label?: string;
   tier?: string;
   ownerId?: string;
+  scopes?: KeyScope[];
 }
 
 /** Create and persist a key. Returns the plaintext ONCE plus the stored row. */
@@ -55,6 +83,7 @@ export async function createKey(
       label: input.label,
       tier: input.tier ?? 'free',
       ownerId: input.ownerId,
+      scopes: input.scopes ?? [],
     })
     .returning();
   return { key, row: row! };
@@ -228,6 +257,8 @@ export async function rotateKey(
     label: previous.label ?? undefined,
     tier: previous.tier,
     ownerId: previous.ownerId ?? undefined,
+    // Dropping these would silently break a CI job's `policy push` on rotation.
+    scopes: parseScopes(previous.scopes) ?? [],
   });
   await db.update(apiKeys).set({ revokedAt: new Date() }).where(eq(apiKeys.id, previous.id));
   return { key, row, previous };

@@ -18,6 +18,7 @@ import {
   handleCompare,
   handleCompat,
   handleEvaluate,
+  handlePolicy,
   handleReportOutcome,
   handleUsage,
   handleVerify,
@@ -132,6 +133,20 @@ export function buildMcpServer(
     },
     async (args) =>
       json(await run('evaluate', () => handleEvaluate(db, args, ctx.ownerId ?? null))),
+  );
+
+  // Read-only on purpose. There is no tool that writes policy: the agent being
+  // governed must not be able to edit its own rules. People change policy in the
+  // dashboard or with `lurq policy push` and a scoped key.
+  server.registerTool(
+    'policy',
+    {
+      title: 'Read the dependency policy',
+      description:
+        "The rules this account's selection policy enforces on which packages you may add: denied packages (with the reason), license allowlist, confidence, advisory, adoption, staleness and bundle-size floors. Read it once before choosing dependencies so you pick an allowed package first; recommend and evaluate already enforce it. Read-only.",
+      inputSchema: {},
+    },
+    async () => json(await run('policy', () => handlePolicy(db, ctx.ownerId ?? null))),
   );
 
   server.registerTool(

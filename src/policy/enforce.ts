@@ -59,6 +59,39 @@ export function hasRules(policy: SelectionPolicy): boolean {
   );
 }
 
+/**
+ * One sentence per active rule, most severe first — what an agent reads before
+ * it picks. Empty when nothing is enforced: an allowlist on its own exempts
+ * packages from rules that do not exist, so it is not worth a line.
+ */
+export function describeRules(policy: SelectionPolicy): string[] {
+  if (!hasRules(policy)) return [];
+  const out: string[] = [];
+  if (policy.allow.length) out.push(`Always allowed, whatever else applies: ${policy.allow.join(', ')}.`);
+  for (const d of policy.deny) out.push(`Never use ${d.name}${d.reason ? `: ${d.reason}` : '.'}`);
+  if (policy.maxAdvisorySeverity) {
+    out.push(`No packages with a known advisory above ${policy.maxAdvisorySeverity}.`);
+  }
+  if (policy.licenses) {
+    out.push(
+      policy.licenses.length
+        ? `Licenses allowed: ${policy.licenses.join(', ')}.`
+        : 'No license is allowed, so every package with a known license is refused.',
+    );
+  }
+  if (policy.blockDeprecated) out.push('No deprecated packages.');
+  if (policy.blockArchived) out.push('No packages whose repository is archived.');
+  if (policy.minConfidence) out.push(`lurq confidence must be ${policy.minConfidence} or better.`);
+  if (policy.minWeeklyDownloads !== null) {
+    out.push(`At least ${policy.minWeeklyDownloads.toLocaleString('en-US')} weekly downloads.`);
+  }
+  if (policy.maxStaleMonths !== null) {
+    out.push(`A release within the last ${policy.maxStaleMonths} months.`);
+  }
+  if (policy.maxBundleKb !== null) out.push(`Bundle size at most ${policy.maxBundleKb} KB min+gzip.`);
+  return out;
+}
+
 export interface PolicyResult {
   allowed: Candidate[];
   excluded: Exclusion[];
