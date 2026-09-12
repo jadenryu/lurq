@@ -1,49 +1,31 @@
 import { Children, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
-import { Panel, eyebrow } from "@/components/dashboard/panel";
+import { ArrowUpRight } from "lucide-react";
+import { microLabel } from "@/components/dashboard/panel";
 import { cn } from "@/lib/utils";
 
 /**
- * Stat tiles and the hero figure: the right form when the answer is one number
- * rather than a distribution (a one-bar bar chart is never the answer).
+ * The metric strip: **one** bordered band split by hairlines, not N floating
+ * cards with N shadows and N gutters between them.
  *
- * Both use the brand heading face at **proportional** figures. `tabular-nums`
- * gives every digit the width of a zero, which makes a large standalone number
- * like `121` look loose; it's reserved here for columns that must align
- * vertically (table rows, axis ticks).
- */
-
-/**
- * The row a page's stat tiles live in.
+ * Four separate cards say "four unrelated objects". One divided strip says "four
+ * readings off the same instrument", which is what they are, and it is what every
+ * console worth copying does with its headline numbers. It also buys back the
+ * gutters as data width at no cost.
  *
- * This existed three times, spelled differently each time: `md:grid-cols-4` on
- * the repo list, `md:grid-cols-5` on repo detail, and `lg:grid-cols-4` on the
- * overview. That last one is the bug you can actually see — between 768px and
- * 1024px the overview dropped to two columns while every other page still showed
- * four, so moving between tabs resized the tiles for no reason a reader could
- * attribute to anything. Owning the grid here is what makes "uneven between
- * views" impossible rather than merely fixed once.
- *
- * The column count still follows the number of tiles (four stats want four
- * columns, five want five) — a row of equal-height tiles reads as deliberate at
- * either count. What must not vary is the breakpoint, the gutter, and the
- * mobile behaviour, and none of them can now.
- *
- * On mobile it is always two up, and an odd last tile spans the full width
- * rather than sitting next to a hole — an orphan half-tile is the single
- * strongest "unfinished" tell on a phone.
+ * Mobile is two up, split by both rules; an odd last tile spans the row rather
+ * than orphaning next to a hole.
  */
 export function StatRow({ children }: { children: ReactNode }) {
   const count = Children.count(children);
   return (
     <div
       className={cn(
-        "grid grid-cols-2 gap-3",
+        "grid grid-cols-2 overflow-hidden rounded-[var(--radius-panel)] border border-edge bg-surface",
+        "divide-x divide-y divide-edge md:divide-y-0",
         count === 3 && "md:grid-cols-3",
         count === 4 && "md:grid-cols-4",
         count >= 5 && "md:grid-cols-5",
-        // Odd count → the last tile fills the row on mobile, never orphans.
         count % 2 === 1 && "[&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1",
       )}
     >
@@ -52,6 +34,11 @@ export function StatRow({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * One cell of the strip. Numbers are tabular here — unlike the hero figure, these
+ * sit in a row of siblings and a jittering column of digits across four cells is
+ * exactly the "hard to parse" complaint.
+ */
 export function StatTile({
   label,
   value,
@@ -64,66 +51,52 @@ export function StatTile({
   hint?: string;
   trend?: ReactNode;
   /**
-   * Where this number came from.
-   *
-   * A stat is a claim, and the first thing anyone wants from a claim is the
-   * rows behind it — "36 behind" is only useful if it takes you to the 36. When
-   * a tile has a destination it becomes a real link: pointer, hover lift, focus
-   * ring, and a caret that appears on hover so the affordance is visible before
-   * the click rather than discovered by accident.
-   *
-   * Tiles without a destination stay inert on purpose. A cursor that changes
-   * over something that does nothing is worse than one that never changes.
+   * Where this number came from. A stat is a claim, and the first thing anyone
+   * wants from a claim is the rows behind it. Tiles without a destination stay
+   * inert on purpose.
    */
   href?: string;
 }) {
   const body = (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <p className={eyebrow}>{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className={microLabel}>{label}</p>
         {href && (
-          <ChevronRight
+          <ArrowUpRight
             aria-hidden
-            className="size-3.5 shrink-0 -translate-x-1 text-ink-3 opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+            className="size-3.5 shrink-0 text-ink-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
           />
         )}
       </div>
-      <div className="mt-3">
-        <p className="font-sans text-2xl font-medium tracking-[-0.02em] text-ink md:text-3xl">
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </p>
-        {hint && <p className="mt-1 font-mono text-[0.65rem] text-ink-3">{hint}</p>}
-      </div>
-      {trend && <div className="mt-3">{trend}</div>}
+      <p className="mt-2 font-sans text-[1.6rem] font-medium leading-none tracking-[-0.025em] text-ink tabular-nums">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </p>
+      {hint && <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">{hint}</p>}
+      {trend && <div className="mt-2.5">{trend}</div>}
     </>
   );
 
-  if (!href) {
-    return (
-      <Panel padding="tight" className="flex flex-col justify-between">
-        {body}
-      </Panel>
-    );
-  }
+  const cell = "flex flex-col justify-start px-4 py-3.5";
+
+  if (!href) return <div className={cell}>{body}</div>;
 
   return (
     <Link
       href={href}
-      className="group rounded-[var(--radius-panel)] outline-none transition-transform duration-150 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg motion-reduce:hover:translate-y-0 motion-reduce:transition-none"
+      className={cn(
+        cell,
+        "group outline-none transition-colors hover:bg-surface-2/70 focus-visible:bg-surface-2",
+      )}
     >
-      <Panel
-        padding="tight"
-        className="h-full flex-col justify-between transition-colors duration-150 group-hover:border-edge-lit flex"
-      >
-        {body}
-      </Panel>
+      {body}
     </Link>
   );
 }
 
 /**
  * The single number a view leads with. Exactly one per page, a second one just
- * makes both smaller.
+ * makes both smaller. Proportional figures: a standalone number set in tabular
+ * digits reads loose at this size.
  */
 export function HeroFigure({
   label,
@@ -138,16 +111,16 @@ export function HeroFigure({
 }) {
   return (
     <div className={className}>
-      <p className={eyebrow}>{label}</p>
+      <p className={microLabel}>{label}</p>
       <p
         className={cn(
-          "mt-2 font-sans font-medium tracking-[-0.025em] text-ink",
-          "text-[2.75rem] leading-none md:text-[3.25rem]",
+          "mt-1.5 font-sans font-medium tracking-[-0.03em] text-ink",
+          "text-[2.25rem] leading-none md:text-[2.5rem]",
         )}
       >
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
-      {hint && <p className="mt-2 text-sm text-ink-2">{hint}</p>}
+      {hint && <p className="mt-2 text-[12.5px] text-ink-2">{hint}</p>}
     </div>
   );
 }
@@ -164,8 +137,8 @@ export function RailStat({
 }) {
   return (
     <div>
-      <p className={eyebrow}>{label}</p>
-      <p className="mt-1.5 font-sans text-xl font-medium tracking-[-0.02em] text-ink">
+      <p className={microLabel}>{label}</p>
+      <p className="mt-1 font-sans text-lg font-medium tracking-[-0.02em] text-ink tabular-nums">
         {typeof value === "number" ? value.toLocaleString() : value}
       </p>
       {children && <div className="mt-2">{children}</div>}

@@ -21,8 +21,13 @@ export default async function DashboardLayout({
     // stat row into a horizontal scroll.
     <div className="dashboard-type flex min-h-screen flex-col md:flex-row">
       <DashboardNav />
-      <main id="content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
-        <div className="mx-auto w-full max-w-5xl">
+      <main id="content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 sm:px-6 md:px-8 md:py-7">
+        {/* Was max-w-5xl. A 1024px column of cards centred in a 2560px window is
+            the loudest "this is a website with a login" tell there is: every
+            console you'd want to be mistaken for runs the full width and spends
+            it on data. 1440 is the stop where a 4-up strip and a 30-day column
+            chart still have sane proportions. */}
+        <div className="mx-auto w-full max-w-[1440px]">
           <PageTransition>{children}</PageTransition>
         </div>
       </main>

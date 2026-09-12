@@ -82,10 +82,10 @@ function isActive(pathname: string, href: string): boolean {
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const reduce = useReducedMotion();
   const className = cn(
-    "relative flex items-center rounded-[var(--radius-control)] py-2 pl-4 pr-3 text-sm lowercase tracking-[-0.005em] transition-colors",
+    "relative flex h-[30px] items-center rounded-[var(--radius-control)] pl-3.5 pr-3 text-[13px] lowercase tracking-[-0.005em] transition-colors",
     active
-      ? "bg-secondary text-foreground"
-      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+      ? "bg-surface-2 text-ink"
+      : "text-ink-2 hover:bg-surface-2/60 hover:text-ink",
   );
   const inner = (
     <>
@@ -102,7 +102,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
         <motion.span
           layoutId="dashboard-nav-indicator"
           aria-hidden
-          className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-signal"
+          className="absolute inset-y-1 left-0 w-[2px] rounded-full bg-signal"
           transition={
             reduce ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42, mass: 0.7 }
           }
@@ -129,10 +129,10 @@ function NavGroup({
 }) {
   return (
     <div>
-      <p className="px-4 pb-2 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
+      <p className="px-3.5 pb-1.5 text-[10.5px] font-medium tracking-[0.07em] uppercase text-ink-3">
         {label}
       </p>
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-px">
         {items.map((item) => (
           <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
         ))}
@@ -216,8 +216,8 @@ export function DashboardNav() {
       </div>
 
       {/* Desktop: full-height sticky sidebar. */}
-      <aside className="hidden w-60 shrink-0 border-r border-border md:sticky md:top-0 md:flex md:h-screen md:flex-col">
-        <div className="px-5 pb-4 pt-6">
+      <aside className="hidden w-[216px] shrink-0 border-r border-edge bg-surface/40 md:sticky md:top-0 md:flex md:h-screen md:flex-col">
+        <div className="flex h-12 items-center border-b border-edge px-4">
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
           </Link>
@@ -226,18 +226,18 @@ export function DashboardNav() {
         {/* Above the rail, not inside it: it searches what lurq can *do*, which
             is mostly not a page, so listing it as an eighth nav row would file it
             under the one thing it isn't. */}
-        <div className="px-3 pb-4">
+        <div className="px-2.5 py-3">
           <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} className="w-full" />
         </div>
 
         <LayoutGroup id="dashboard-nav-desktop">
-          <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-2">
+          <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-2 pb-4">
             <NavGroup label="workspace" items={WORKSPACE} pathname={pathname} />
             <NavGroup label="account" items={ACCOUNT} pathname={pathname} />
           </nav>
         </LayoutGroup>
 
-        <div className="border-t border-border p-2">
+        <div className="border-t border-edge p-2">
           <AccountMenu />
         </div>
       </aside>

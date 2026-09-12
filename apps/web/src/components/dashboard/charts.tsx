@@ -53,68 +53,123 @@ export function ColumnChart({
   const max = Math.max(...data.map((p) => p.count), 1);
   const n = data.length;
   const active = hover === null ? null : data[hover];
+  // Round the ceiling to something a reader can do arithmetic against, then hang
+  // three gridlines off it. Bare bars on an empty field tell you the shape of the
+  // week; a scale tells you the size of it, and the missing scale is most of why
+  // this chart read as decoration.
+  const ceil = niceCeil(max);
 
   return (
     <div>
-      <div className="relative">
-        {/* Tooltip: enhances, never gates, the same numbers live in the table twin
-            below. Clamped away from the edges so it can't overflow the card. */}
-        {active && hover !== null && (
-          <div
-            // bg-popover, not bg-background: this floats over a panel, and
-            // --background is the page ground (darker than the panel it would
-            // be sitting on). --popover is the room's raised inset step.
-            className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[var(--radius-control)] border border-border bg-popover px-2.5 py-1.5 shadow-lg"
-            style={{ left: `${Math.min(Math.max(((hover + 0.5) / n) * 100, 9), 91)}%` }}
-          >
-            <p className="font-mono text-[0.7rem] tabular-nums text-foreground">
-              {active.count.toLocaleString()} {unit}
-              {active.count === 1 ? "" : "s"}
-            </p>
-            <p className={cn(axisText, "mt-0.5")}>{fmtDay(active.date)}</p>
-          </div>
-        )}
-
+      <div className="relative flex gap-2">
+        {/* Axis ticks, top-down, so the labels sit level with their rules. */}
         <div
-          className="flex items-end gap-[2px]"
+          className="relative w-8 shrink-0"
           style={{ height }}
-          onMouseLeave={() => setHover(null)}
+          aria-hidden
         >
-          {data.map((p, i) => {
-            const pct = (p.count / max) * 100;
-            const dim = hover !== null && hover !== i;
-            return (
-              // Full-height hit area: the pointer never has to land on a 3px bar.
+          {[1, 0.5, 0].map((f) => (
+            <span
+              key={f}
+              className={cn(axisText, "absolute right-0 -translate-y-1/2 leading-none")}
+              style={{ top: `${(1 - f) * 100}%` }}
+            >
+              {compactTick(ceil * f)}
+            </span>
+          ))}
+        </div>
+
+        <div className="relative min-w-0 flex-1">
+          {/* Gridlines behind the marks, at 6% white: present when you look for
+              them, invisible when you're reading the bars. */}
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            {[0, 0.5, 1].map((f) => (
               <div
-                key={p.date}
-                className="flex h-full flex-1 items-end justify-center"
-                onMouseEnter={() => setHover(i)}
-              >
-                {p.count === 0 ? (
-                  <div className="h-px w-full max-w-[24px] bg-signal/25" />
-                ) : (
-                  <div
-                    className="w-full max-w-[24px] rounded-t-[4px] bg-signal transition-opacity duration-100"
-                    style={{ height: `${Math.max(pct, 1.5)}%`, opacity: dim ? 0.3 : 1 }}
-                  />
-                )}
-              </div>
-            );
-          })}
+                key={f}
+                className="absolute inset-x-0 h-px bg-edge/70"
+                style={{ top: `${f * 100}%` }}
+              />
+            ))}
+          </div>
+
+          {active && hover !== null && (
+            <div
+              className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[var(--radius-control)] border border-edge bg-popover px-2.5 py-1.5 shadow-lg"
+              style={{ left: `${Math.min(Math.max(((hover + 0.5) / n) * 100, 9), 91)}%` }}
+            >
+              <p className="font-mono text-[0.7rem] tabular-nums text-foreground">
+                {active.count.toLocaleString()} {unit}
+                {active.count === 1 ? "" : "s"}
+              </p>
+              <p className={cn(axisText, "mt-0.5")}>{fmtDay(active.date)}</p>
+            </div>
+          )}
+
+          <div
+            className="relative flex items-end gap-px"
+            style={{ height }}
+            onMouseLeave={() => setHover(null)}
+          >
+            {data.map((p, i) => {
+              const pct = (p.count / ceil) * 100;
+              const on = hover === i;
+              return (
+                // Full-height hit area: the pointer never has to land on a 3px bar,
+                // and the whole column lights up so you can see which day you are
+                // reading without chasing the tooltip.
+                <div
+                  key={p.date}
+                  className={cn(
+                    "flex h-full flex-1 items-end justify-center transition-colors duration-100",
+                    on && "bg-surface-2/60",
+                  )}
+                  onMouseEnter={() => setHover(i)}
+                >
+                  {p.count === 0 ? (
+                    <div className="h-px w-full max-w-[22px] bg-signal/25" />
+                  ) : (
+                    <div
+                      className="w-full max-w-[22px] rounded-t-[2px] bg-signal transition-opacity duration-100"
+                      style={{
+                        height: `${Math.max(pct, 1.5)}%`,
+                        opacity: hover !== null && !on ? 0.35 : 0.92,
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Solid hairline baseline, never dashed. */}
+          <div className="h-px w-full bg-edge" />
+
+          {n > 1 && (
+            <div className="mt-1.5 flex justify-between">
+              <span className={axisText}>{fmtDay(data[0]!.date)}</span>
+              <span className={axisText}>{fmtDay(data[n - 1]!.date)}</span>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Solid hairline baseline, never dashed. */}
-      <div className="h-px w-full bg-border" />
-
-      {n > 1 && (
-        <div className="mt-2 flex justify-between">
-          <span className={axisText}>{fmtDay(data[0]!.date)}</span>
-          <span className={axisText}>{fmtDay(data[n - 1]!.date)}</span>
-        </div>
-      )}
     </div>
   );
+}
+
+/** Next 1/2/5×10ⁿ at or above `v`, so gridlines land on numbers people think in. */
+function niceCeil(v: number): number {
+  if (v <= 5) return Math.max(v, 1);
+  const mag = 10 ** Math.floor(Math.log10(v));
+  for (const step of [1, 2, 2.5, 5, 10]) {
+    if (v <= step * mag) return step * mag;
+  }
+  return 10 * mag;
+}
+
+function compactTick(v: number): string {
+  if (v === 0) return "0";
+  if (v >= 1000) return `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`;
+  return String(Math.round(v));
 }
 
 // ── sparkline (trend, secondary) ────────────────────────────────────────────
