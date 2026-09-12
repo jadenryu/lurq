@@ -24,6 +24,11 @@ import Link from "next/link";
  *
  * See src/github/publicScan.ts for what the scan reads (the root package.json,
  * over unauthenticated HTTP) and app/api/scan for the hop.
+ *
+ * The result panel arrives on `data-reveal="open"`, the same variant the
+ * dashboard's expanding rows use, because this is the same event: content that
+ * exists because somebody pressed something. It used to appear between two
+ * frames, which after a second of waiting read as a jump rather than an answer.
  */
 
 interface Dep {
@@ -90,7 +95,10 @@ function Result({ scan }: { scan: Scan }) {
   const untracked = scan.depsDeclared - scan.depsTracked;
 
   return (
-    <div className="mt-6 overflow-hidden rounded-xl border border-edge border-t-edge-lit bg-surface text-left">
+    <div
+      data-reveal="open"
+      className="mt-6 overflow-hidden rounded-xl border border-edge border-t-edge-lit bg-surface text-left"
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge bg-surface-2 px-5 py-3">
         <a
           href={scan.url}
