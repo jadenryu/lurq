@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Chip, EmptyState, Panel } from "@/components/dashboard/panel";
 import { TableToolbar } from "@/components/dashboard/table-toolbar";
@@ -71,7 +71,17 @@ export function RepoDeps({ deps, scanning = false }: { deps: DashboardDep[]; sca
    */
   const urlQuery = params.get("q") ?? "";
   const [query, setQuery] = useState(urlQuery);
-  useEffect(() => setQuery(urlQuery), [urlQuery]);
+  // Adjusted during render rather than in an effect. An effect that calls
+  // setState synchronously renders the component once with the stale value,
+  // commits it, then renders again — a visible flash of the previous search on
+  // every inbound link, and the one lint error left in this app. React's
+  // documented form for "reset state when a prop changes" is exactly this:
+  // compare against the last value seen, and adjust before paint.
+  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
+  if (urlQuery !== seenUrlQuery) {
+    setSeenUrlQuery(urlQuery);
+    setQuery(urlQuery);
+  }
 
   const setFilter = (next: string) => {
     const q = new URLSearchParams(params.toString());

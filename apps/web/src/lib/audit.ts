@@ -35,7 +35,20 @@ export interface AuditEvent {
   tone: "neutral" | "warn" | "bad";
 }
 
-export async function loadAuditLog(): Promise<{ events: AuditEvent[]; demo: boolean }> {
+/**
+ * `readAt` is the clock, resolved here rather than in a component.
+ *
+ * The relative-time filters need a "now", and reading it during render is impure
+ * — React's compiler rejects it outright, and it would hand the first paint and
+ * every re-render slightly different cutoffs. This function is already an impure
+ * server read, so it is the honest place for it: the timestamp the log was read
+ * at, travelling with the log it describes.
+ */
+export async function loadAuditLog(): Promise<{
+  events: AuditEvent[];
+  demo: boolean;
+  readAt: number;
+}> {
   const [keys, repos, alerts] = await Promise.all([loadKeys(), loadRepos(), loadAlerts()]);
   const events: AuditEvent[] = [];
 
@@ -92,5 +105,9 @@ export async function loadAuditLog(): Promise<{ events: AuditEvent[]; demo: bool
   }
 
   events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  return { events, demo: keys.demo || repos.demo || alerts.demo };
+  return {
+    events,
+    demo: keys.demo || repos.demo || alerts.demo,
+    readAt: Date.now(),
+  };
 }

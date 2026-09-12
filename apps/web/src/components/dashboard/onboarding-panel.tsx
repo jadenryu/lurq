@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+
+import { useCopy } from "@/lib/use-copy";
 import { Button } from "@/components/ui/button";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 
@@ -14,13 +15,7 @@ const INSTALL_COMMAND = "npx lurqrun";
  * subject, so it gets the visual weight.
  */
 export function OnboardingPanel() {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await navigator.clipboard.writeText(INSTALL_COMMAND);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
+  const { copied, copy } = useCopy();
 
   return (
     <Panel padding="tight">
@@ -33,7 +28,7 @@ export function OnboardingPanel() {
           <span className="mr-2 select-none text-signal">$</span>
           {INSTALL_COMMAND}
         </code>
-        <Button variant="outline" onClick={copy}>
+        <Button variant="outline" onClick={() => void copy(INSTALL_COMMAND)}>
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>

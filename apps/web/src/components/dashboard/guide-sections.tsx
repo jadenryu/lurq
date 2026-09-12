@@ -1,11 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
 import { ArrowUpRight, Check, Copy } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Chip, Panel, eyebrow } from "@/components/dashboard/panel";
 import { DOCS_URL } from "@/lib/site-links";
+import { useCopy } from "@/lib/use-copy";
 import { cn } from "@/lib/utils";
 import {
   ASSISTANTS,
@@ -53,19 +53,14 @@ export function GuideSection({
 }
 
 function CopyableCommand({ command }: { command: string }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    await navigator.clipboard.writeText(command);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
+  const { copied, copy } = useCopy();
   return (
     <div className="flex max-w-xl items-center gap-2">
       <code className="flex-1 overflow-x-auto rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
         <span className="mr-2 select-none text-signal">$</span>
         {command}
       </code>
-      <Button variant="outline" size="sm" onClick={copy} aria-label="Copy command">
+      <Button variant="outline" size="sm" onClick={() => void copy(command)} aria-label="Copy command">
         {copied ? <Check /> : <Copy />}
       </Button>
     </div>

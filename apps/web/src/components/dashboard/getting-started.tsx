@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+
 import Link from "next/link";
 import { Check, Copy } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
+import { useCopy } from "@/lib/use-copy";
 import { cn } from "@/lib/utils";
 
 const INSTALL_COMMAND = "npx lurqrun";
@@ -89,19 +90,13 @@ export function GettingStarted({
   installUrl,
   repoCount = 0,
 }: Props) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   // The repo step is the one optional row: a deployment with no GitHub App has
   // nothing to connect, and counting a step nobody can complete would park the
   // checklist at 3/4 forever.
   const showRepos = Boolean(installUrl);
   const steps = [hasKey, connected, false, ...(showRepos ? [repoCount > 0] : [])];
   const done = steps.filter(Boolean).length;
-
-  async function copy() {
-    await navigator.clipboard.writeText(INSTALL_COMMAND);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
 
   return (
     <div className="max-w-3xl">
@@ -134,7 +129,7 @@ export function GettingStarted({
             </code>
             <button
               type="button"
-              onClick={copy}
+              onClick={() => void copy(INSTALL_COMMAND)}
               aria-label="Copy install command"
               className="shrink-0 rounded-[var(--radius-control)] border border-border p-2 text-muted-foreground transition-colors hover:text-foreground"
             >

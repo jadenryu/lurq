@@ -1,6 +1,7 @@
 "use client";
 
 import { Search, X } from "lucide-react";
+import { Segmented } from "@/components/dashboard/segmented";
 import { cn } from "@/lib/utils";
 
 /**
@@ -56,29 +57,12 @@ export function TableToolbar({
       </div>
 
       {filters && onFilterChange && (
-        // One segmented track, matching RangeTabs. These options are mutually
-        // exclusive, and a row of separately outlined pills claims they aren't.
-        <div className="inline-flex h-8 items-center gap-0.5 rounded-[var(--radius-control)] border border-edge bg-surface-2 p-0.5">
-          {filters.map((f) => {
-            const active = activeFilter === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => onFilterChange(f.id)}
-                aria-pressed={active}
-                className={cn(
-                  "rounded-[3px] px-2.5 text-[12px] font-medium leading-7 lowercase transition-colors",
-                  active
-                    ? "bg-surface text-ink shadow-[0_1px_0_0_var(--edge-lit)]"
-                    : "text-ink-3 hover:text-ink",
-                )}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
+        <Segmented
+          label="Filter"
+          value={activeFilter ?? filters[0]!.id}
+          onChange={onFilterChange}
+          options={filters.map((f) => ({ value: f.id, label: f.label }))}
+        />
       )}
 
       <p
