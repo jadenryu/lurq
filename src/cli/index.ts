@@ -287,6 +287,17 @@ export function buildProgram(): Command {
 
   // ── Scoring model ─────────────────────────────────────────────────────────
   program
+    .command('audit')
+    .argument('[dir]', 'project directory (defaults to the current one)')
+    .description('what this project depends on, and what is outdated, vulnerable or drifting')
+    .option('--project-only', 'ignore user-level agent configs; read only files in the project')
+    .option('--json', 'output JSON instead of a table')
+    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean }) => {
+      const { runAudit } = await import('./commands');
+      await runAudit(dir, opts);
+    });
+
+  program
     .command('mcp-surface')
     .argument('<server>', 'npm package name of the MCP server')
     .description("an MCP server's real tool contract: params and behaviour annotations")

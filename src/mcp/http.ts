@@ -96,6 +96,58 @@ function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
 }
 
+/** One cached public scan: the answer, when it was taken, and how long it holds. */
+export interface ScanCacheEntry {
+  at: number;
+  ttl: number;
+  value: PublicScan | null;
+}
+
+/** A settled answer: every declared dependency was already in the index. */
+const SCAN_TTL_MS = 15 * 60_000;
+/**
+ * A PROVISIONAL answer, and the reason this is two constants rather than one.
+ *
+ * A scan of an unindexed repo queues its dependencies for ingestion, which
+ * finishes in seconds, and then tells the visitor to try again in a few
+ * minutes — while the fifteen-minute cache served them the same empty result
+ * for the rest of the quarter hour. The advice was correct and the cache made
+ * it a lie. Anything that queued work, and any target we could not read at all,
+ * is held only long enough to blunt a refresh loop.
+ */
+const SCAN_PROVISIONAL_TTL_MS = 45_000;
+/** Bounded so a spray of one-off targets cannot grow the map without limit. */
+const SCAN_CACHE_MAX = 500;
+
+/**
+ * How long this particular answer stays true.
+ *
+ * A miss is provisional because the repo may be about to exist, be made public,
+ * or gain a package.json. A partial read is provisional because the ingest
+ * queue is, at that moment, making it less partial.
+ */
+export function scanTtl(scan: PublicScan | null): number {
+  if (!scan) return SCAN_PROVISIONAL_TTL_MS;
+  return scan.depsTracked < scan.depsDeclared ? SCAN_PROVISIONAL_TTL_MS : SCAN_TTL_MS;
+}
+
+/**
+ * Make room without wiping the cache.
+ *
+ * `clear()` at the cap meant one unlucky request cost every other cached repo
+ * its entry, so a busy minute re-scanned everything it had already answered.
+ * Drop what has expired first, and only then the oldest entries — a Map
+ * iterates in insertion order, so that is the front of it.
+ */
+export function evictScans(cache: Map<string, ScanCacheEntry>, max = SCAN_CACHE_MAX): void {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.at >= v.ttl) cache.delete(k);
+  for (const k of cache.keys()) {
+    if (cache.size < max) break;
+    cache.delete(k);
+  }
+}
+
 /** What body-parser and friends attach to the errors they throw. */
 type RequestError = Error & { status?: number; type?: string };
 
@@ -163,6 +215,19 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       'REDIS_URL not set, response caching is OFF; every request recomputes on the ' +
         'database. Set REDIS_URL before serving real traffic (and it also backs the ' +
         'rate limiter across instances).',
+    );
+  }
+
+  // The public scan resolves a bare profile through api.github.com, whose
+  // unauthenticated budget is 60 requests an hour FOR THE WHOLE SERVER. One
+  // visitor typing usernames exhausts it for everybody, and the failure looks
+  // like "no public package.json found for that" rather than like a quota. A
+  // token lifts the same calls to 5,000/hour.
+  if (!config.GITHUB_TOKEN) {
+    logger.warn(
+      'GITHUB_TOKEN not set; /scan/public resolves profiles on the anonymous ' +
+        'GitHub budget (60/hour, server-wide) and will start reporting readable ' +
+        'repositories as unreadable once it runs out.',
     );
   }
 
@@ -260,18 +325,38 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * lurq does is to show someone their own dependencies, and that was gated
    * behind a signup and a GitHub App install. This is the top of the funnel.
    *
-   * Three things keep it from being a free scan API. It is behind the same IP
-   * limiter as everything else unauthenticated; the result is capped to a
-   * handful of dependency rows, so the full report is still a reason to sign
-   * up; and identical targets are served from memory for fifteen minutes, so a
-   * refresh loop costs one scan rather than one per press.
+   * Three things keep it from being a free scan API. It has a limiter of its
+   * own, far tighter than the coarse IP limit the other unauthenticated routes
+   * share; the result is capped to a handful of dependency rows, so the full
+   * report is still a reason to sign up; and identical targets are served from
+   * memory, so a refresh loop costs one scan rather than one per press.
    */
-  const scanCache = new Map<string, { at: number; value: PublicScan | null }>();
-  const SCAN_TTL_MS = 15 * 60_000;
-  /** Bounded so a spray of one-off targets cannot grow the map without limit. */
-  const SCAN_CACHE_MAX = 500;
+  const scanCache = new Map<string, ScanCacheEntry>();
 
-  app.post('/scan/public', ipLimiter, async (req: Request, res: Response) => {
+  /**
+   * The scan route's own limiter, ahead of the coarse one.
+   *
+   * One scan reads GitHub over a budget shared by every visitor, runs a
+   * handful of indexed queries, and queues an ingest per unknown dependency.
+   * At the coarse limit that is 240 of those a minute from a single IP, and
+   * the web app's 6-a-minute hop does not apply to anyone calling this
+   * endpoint directly. Redis-backed when REDIS_URL is set, so the ceiling is
+   * the real one rather than per-instance.
+   *
+   * The body is `{ error }` rather than a JSON-RPC envelope: this route speaks
+   * plain JSON to a browser, and the landing page renders `error` directly.
+   */
+  const scanLimiter = rateLimit({
+    windowMs: config.LURQ_RATE_LIMIT_WINDOW_MS,
+    limit: config.LURQ_SCAN_RATE_LIMIT_MAX,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? '0.0.0.0'),
+    ...(makeStore ? { store: makeStore('rl:scan:') } : {}),
+    message: { error: "That's a lot of scans. Give it a minute." },
+  });
+
+  app.post('/scan/public', ipLimiter, scanLimiter, async (req: Request, res: Response) => {
     const raw = (req.body ?? {}) as { target?: unknown };
     const target = typeof raw.target === 'string' ? parseTarget(raw.target) : null;
     if (!target) {
@@ -281,7 +366,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
     const key = target.kind === 'repo' ? `${target.owner}/${target.name}` : `@${target.login}`;
     const hit = scanCache.get(key);
-    if (hit && Date.now() - hit.at < SCAN_TTL_MS) {
+    if (hit && Date.now() - hit.at < hit.ttl) {
       if (!hit.value) {
         res.status(404).json({ error: 'No public package.json found for that.' });
         return;
@@ -292,8 +377,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
     try {
       const scan = await publicScan(db, target);
-      if (scanCache.size >= SCAN_CACHE_MAX) scanCache.clear();
-      scanCache.set(key, { at: Date.now(), value: scan });
+      if (scanCache.size >= SCAN_CACHE_MAX) evictScans(scanCache);
+      scanCache.set(key, { at: Date.now(), ttl: scanTtl(scan), value: scan });
       if (!scan) {
         res.status(404).json({ error: 'No public package.json found for that.' });
         return;

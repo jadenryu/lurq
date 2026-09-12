@@ -102,6 +102,16 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['breaking', 'removed', 'changed', 'migration', 'major'],
   },
   {
+    id: 'audit',
+    title: 'Audit this whole project',
+    question: 'What in this project is outdated, vulnerable, or drifting?',
+    answer:
+      'Reads your manifests and agent configs locally, then assesses every dependency and MCP server in one call: outdated versions, deprecations, advisories against the exact installed version, and servers that need credentials or cannot be observed. Always prints how many items it actually answered for — anything it could not assess is reported as unassessed, never as clean.',
+    mcp: 'audit',
+    cli: 'lurq audit',
+    aliases: ['scan', 'outdated', 'vulnerable', 'audit', 'health', 'project', 'dependencies', 'cve'],
+  },
+  {
     id: 'mcp-surface',
     title: 'Read an MCP server\'s tools',
     question: 'What tools does this MCP server actually expose, and what do they take?',

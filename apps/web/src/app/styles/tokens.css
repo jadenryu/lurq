@@ -7,6 +7,12 @@
    from blurring through them. Nothing on this route filters what is behind it.
    ───────────────────────────────────────────────────────────────────────────── */
 :root {
+  /* Makes `auto` an interpolable length, which is what lets a panel transition
+     from 0 to its own content height with no script and no measurement. Read by
+     .room-faq::details-content; harmless everywhere else, since nothing else
+     transitions to a keyword. */
+  interpolate-size: allow-keywords;
+
   /* ground */
   --ground: #08080a; /* page base, behind the graph layer */
   --surface: #101013; /* panels */
@@ -391,31 +397,59 @@ body:has([data-surface="room"]) {
   color: var(--ink);
 }
 
-/* The answer resolves out of blur as it opens.
-   Deliberately one animation on the whole paragraph rather than a per-character
-   stagger. Splitting an answer into ~250 spans costs find-in-page across word
-   boundaries, breaks selection, and is the reason <details> was chosen in the
-   first place. A 260ms blur-in reads as the same gesture for none of that. */
+/* THE HEIGHT IS WHAT WAS JARRING. The answer already faded in, and it faded in
+   over a box that had already snapped to full height, so the fade was decoration
+   on top of a layout jump. `::details-content` is the open panel as a box you
+   can style, so the box itself can grow.
+
+   `interpolate-size: allow-keywords` on :root is what makes `auto` a value you
+   can animate to; `transition-behavior: allow-discrete` is what carries
+   content-visibility across the same window instead of flipping it at one end.
+   Both are recent, and where they are missing this degrades to exactly the
+   behaviour it had before: an instant open. Nothing is broken by the fallback,
+   which is the reason to do it natively rather than measure heights in script.
+
+   This also buys the close, which the old version never had: a keyframe on
+   [open] can only ever animate the way in. */
+.room-faq::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition:
+    block-size var(--dur) var(--ease-ui),
+    content-visibility var(--dur) var(--ease-ui);
+  transition-behavior: allow-discrete;
+}
+
+.room-faq[open]::details-content {
+  block-size: auto;
+}
+
+/* The fade stays, the blur and the slide go. Both were standing in for movement
+   the box was not doing; now that it grows, a 6px blur on top of it reads as two
+   effects fighting rather than one gesture. One animation on the whole paragraph
+   either way: splitting an answer into ~250 spans costs find-in-page across word
+   boundaries, breaks selection, and is the reason <details> was chosen at all. */
 @keyframes room-faq-answer {
   from {
     opacity: 0;
-    filter: blur(6px);
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    filter: blur(0);
-    transform: none;
   }
 }
 
 .room-faq[open] .room-faq-answer {
-  animation: room-faq-answer 260ms var(--ease) both;
+  animation: room-faq-answer var(--dur) var(--ease-ui) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .room-faq[open] .room-faq-answer {
     animation: none;
+  }
+
+  .room-faq::details-content,
+  .room-faq[open]::details-content {
+    transition: none;
   }
 }
 
@@ -2322,6 +2356,21 @@ li:hover > .room-ide-label {
   }
 }
 
+/* Content that appeared because somebody pressed something, as opposed to
+   because they scrolled to it. Shorter travel and a UI curve: a scroll reveal
+   rises 16px because the reader is already moving, and a panel that opens under
+   your own click has to feel attached to the click rather than flown in. */
+@keyframes room-reveal-open {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* The artifact panel rises further than everything else. */
 @keyframes room-reveal-panel {
   from {
@@ -2352,6 +2401,12 @@ li:hover > .room-ide-label {
 [data-reveal] {
   animation: room-reveal var(--dur-reveal) var(--ease-reveal)
     calc(var(--reveal-at, 0ms) * var(--reveal-scale)) backwards;
+}
+
+/* No delay and `both`, unlike the scroll reveals: there is nothing to stagger
+   against, and the element was mounted by the press that wants to see it. */
+[data-reveal="open"] {
+  animation: room-reveal-open var(--dur) var(--ease-ui) both;
 }
 
 [data-reveal="opacity"] {

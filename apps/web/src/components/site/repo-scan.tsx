@@ -24,6 +24,11 @@ import Link from "next/link";
  *
  * See src/github/publicScan.ts for what the scan reads (the root package.json,
  * over unauthenticated HTTP) and app/api/scan for the hop.
+ *
+ * The result panel arrives on `data-reveal="open"`, the same variant the
+ * dashboard's expanding rows use, because this is the same event: content that
+ * exists because somebody pressed something. It used to appear between two
+ * frames, which after a second of waiting read as a jump rather than an answer.
  */
 
 interface Dep {
@@ -90,7 +95,10 @@ function Result({ scan }: { scan: Scan }) {
   const untracked = scan.depsDeclared - scan.depsTracked;
 
   return (
-    <div className="mt-6 overflow-hidden rounded-xl border border-edge border-t-edge-lit bg-surface text-left">
+    <div
+      data-reveal="open"
+      className="mt-6 overflow-hidden rounded-xl border border-edge border-t-edge-lit bg-surface text-left"
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge bg-surface-2 px-5 py-3">
         <a
           href={scan.url}
@@ -182,10 +190,17 @@ export function RepoScan() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target: value }),
       });
-      const data = (await res.json()) as Scan & { error?: string };
+      const data = (await res.json()) as Scan & { error?: unknown };
       if (id !== run.current) return;
       if (!res.ok) {
-        setState({ kind: "failed", message: data.error ?? "Could not read that." });
+        // `error` is only rendered when it is a string. Not every error body
+        // that reaches this box is the `{ error: "..." }` this route speaks:
+        // the backend's coarse IP limiter answers in a JSON-RPC envelope, so
+        // `error` arrives as `{ code, message }` and putting an object into
+        // JSX throws — the rate-limit path would have crashed the page instead
+        // of explaining itself.
+        const message = typeof data.error === "string" ? data.error : null;
+        setState({ kind: "failed", message: message ?? "Could not read that." });
         return;
       }
       setState({ kind: "done", scan: data });

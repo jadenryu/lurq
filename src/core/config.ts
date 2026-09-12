@@ -87,6 +87,11 @@ const EnvSchema = z.object({
   LURQ_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
   /** Coarser per-IP rate limit (blunts unauthenticated floods before auth). */
   LURQ_IP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(240),
+  /** Per-IP limit for `POST /scan/public`, the one unauthenticated route that
+   *  reads GitHub, queries the database, and queues ingestion work. The coarse
+   *  IP limit is the wrong ceiling for it: 240 scans a minute is nothing for a
+   *  JSON-RPC caller and a great deal of somebody else's GitHub budget. */
+  LURQ_SCAN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
   /** Rate-limit window, milliseconds (applies to both limiters). */
   LURQ_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   /** Bearer token guarding `/metrics`. Unset → the endpoint is disabled (404). */
