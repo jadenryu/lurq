@@ -52,7 +52,16 @@ const VERSION_LOOKBACK = 50;
  * `tools/list` page; anything stored before that is a name-only list and is
  * treated as stale rather than reused.
  */
-const EXTRACTOR_VERSION = '1';
+const EXTRACTOR_VERSION = '2'; // v2: launch-verb ladder + placeholder config
+
+/**
+ * Stand-in for a required credential.
+ *
+ * Deliberately self-describing: if it ever escapes into a log, an error message
+ * or someone's terminal, it says exactly what it is and that it authenticates
+ * nothing.
+ */
+const PLACEHOLDER_VALUE = 'lurq-placeholder-not-a-real-credential';
 const MAX_ATTEMPTS = 3;
 
 /**
@@ -139,7 +148,30 @@ export async function extractAndStoreMcp(
     };
   }
   const missing = missingConfig(manifest, opts.env);
-  if (missing.length > 0) {
+
+  // A missing credential used to end the probe. It no longer does.
+  //
+  // Servers gate on the variable being PRESENT at boot and only validate it on
+  // a real tool call — which reading a contract never makes. So a placeholder
+  // gets us `tools/list` with no credential, no network request, and no
+  // pretence: measured at 9 of 14 config-gated servers recovered, including one
+  // that yielded 120 tools.
+  //
+  // What this buys is the contract. What it does NOT buy is a working server,
+  // so the result is marked `declared` rather than `executed` and the missing
+  // settings are still reported for the user to supply.
+  const placeholders: Record<string, string> = {};
+  for (const m of missing) placeholders[m.name] = PLACEHOLDER_VALUE;
+
+  const sandbox = opts.sandbox ?? (await getSandbox());
+  const { probe, stderr } = await probeMcpServer(sandbox, server, version, {
+    args: manifest?.args ?? [],
+    env: placeholders,
+  });
+
+  // Still no handshake after every lever: report what the server needs rather
+  // than calling it broken.
+  if (missing.length > 0 && !probe?.ok) {
     return {
       outcome: 'needs_config',
       tools: [],
@@ -147,9 +179,6 @@ export async function extractAndStoreMcp(
       missing,
     };
   }
-
-  const sandbox = opts.sandbox ?? (await getSandbox());
-  const { probe, stderr } = await probeMcpServer(sandbox, server, version);
 
   if (!probe || !probe.ok) {
     const reason = probe

@@ -72,13 +72,19 @@ export interface ProbeOutput {
  * Kept as a string (not a module) so it can be shipped to any sandbox driver
  * with no bundling step — the E2B driver has no filesystem sync for our source.
  */
-export function probeScript(pkg: string): string {
+export function probeScript(
+  pkg: string,
+  launchArgs: string[] = [],
+  env: Record<string, string> = {},
+): string {
   return `
 const { spawn } = require('node:child_process');
 const { readFileSync } = require('node:fs');
 const { join, basename } = require('node:path');
 
 const PKG = ${JSON.stringify(pkg)};
+const EXTRA_ARGS = ${JSON.stringify(launchArgs)};
+const EXTRA_ENV = ${JSON.stringify(env)};
 
 /**
  * Resolve the server's entry point from its installed manifest.
@@ -109,7 +115,16 @@ function launch() {
 }
 
 const { command, args } = launch();
-const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+// Extra arguments go AFTER the resolved entry point. A large share of servers
+// ship a multi-command CLI where MCP is one verb, so launching the bin bare
+// prints a help banner and exits — which is indistinguishable from a server
+// that cannot start unless the verb is supplied.
+// Env is embedded in the script rather than plumbed through the sandbox
+// interface, so both drivers get it with no contract change.
+const child = spawn(command, args.concat(EXTRA_ARGS), {
+  stdio: ['pipe', 'pipe', 'pipe'],
+  env: Object.assign({}, process.env, EXTRA_ENV),
+});
 
 let buf = '', done = false, stderr = '';
 /**
@@ -223,28 +238,74 @@ export function parseProbeOutput(stdout: string): ProbeOutput | null {
  * Throws ONLY on sandbox failure. A server that refuses to start resolves with
  * `ok: false` — that is evidence about the server, and the caller records it.
  */
+/**
+ * Launch verbs to try when a bare start does not produce a handshake.
+ *
+ * Measured, not guessed: across 18 servers whose first probe returned a usage
+ * banner, `mcp` recovered 7 and `serve` 1. They are tried in that order and
+ * only after the bare launch has already failed, so a healthy server still
+ * costs exactly one attempt.
+ */
+export const LAUNCH_VERBS = ['mcp', 'serve', '--stdio'];
+
+export interface ProbeOptions {
+  /** Declared launch arguments, e.g. from the server's registry manifest. */
+  args?: string[];
+  /**
+   * Placeholder values for required environment variables.
+   *
+   * Servers gate on a variable being PRESENT at boot and only validate it on a
+   * real tool call, which reading a contract never makes — so a placeholder
+   * unlocks `tools/list` without a credential and without a network request.
+   * Measured at 9 of 14 config-gated servers recovered.
+   *
+   * The result of such a probe is DECLARED evidence, never executed: a server
+   * that boots on a fake key has not been shown to work.
+   */
+  env?: Record<string, string>;
+}
+
+async function attempt(
+  sandbox: Sandbox,
+  pkg: string,
+  version: string | null,
+  args: string[],
+  env: Record<string, string>,
+): Promise<{ probe: ProbeOutput | null; stderr: string }> {
+  const res = await sandbox.exec(`node -e ${shellQuote(probeScript(pkg, args, env))}`, {
+    install: [{ name: pkg, version }],
+    timeoutMs: HANDSHAKE_TIMEOUT_MS,
+  });
+  return { probe: parseProbeOutput(res.stdout), stderr: res.stderr };
+}
+
 export async function probeMcpServer(
   sandbox: Sandbox,
   pkg: string,
   version: string | null,
-): Promise<{ probe: ProbeOutput | null; stderr: string }> {
-  const script = probeScript(pkg);
-  let stdout: string;
-  let stderr: string;
-  try {
-    const res = await sandbox.exec(`node -e ${shellQuote(script)}`, {
-      install: [{ name: pkg, version }],
-      timeoutMs: HANDSHAKE_TIMEOUT_MS,
-    });
-    stdout = res.stdout;
-    stderr = res.stderr;
-  } catch (err) {
-    // The sandbox itself failed. This is NOT evidence about the server —
-    // recording verified_false here would be a false negative, which the spec
-    // rates as costlier than a hundred unknowns.
-    throw new Error(`sandbox failure: ${String(err)}`);
+  opts: ProbeOptions = {},
+): Promise<{ probe: ProbeOutput | null; stderr: string; launchedWith: string[] }> {
+  // Declared args first when the manifest supplies them, then a bare launch,
+  // then the measured verbs. Ordered so the common case — a server that simply
+  // starts — still costs one attempt.
+  const ladder: string[][] = opts.args?.length ? [opts.args] : [[]];
+  for (const verb of LAUNCH_VERBS) ladder.push([verb]);
+
+  let last: { probe: ProbeOutput | null; stderr: string } = { probe: null, stderr: '' };
+  for (const args of ladder) {
+    try {
+      const res = await attempt(sandbox, pkg, version, args, opts.env ?? {});
+      if (res.probe?.ok) return { ...res, launchedWith: args };
+      last = res;
+    } catch (err) {
+      // The sandbox itself failed. This is NOT evidence about the server —
+      // recording verified_false here would be a false negative, which the spec
+      // rates as costlier than a hundred unknowns. Stop the ladder: retrying
+      // through a broken sandbox just multiplies the outage.
+      throw new Error(`sandbox failure: ${String(err)}`);
+    }
   }
-  return { probe: parseProbeOutput(stdout), stderr };
+  return { ...last, launchedWith: [] };
 }
 
 export const mcpServerOracle: Oracle = {

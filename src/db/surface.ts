@@ -163,7 +163,10 @@ export async function storeSurface(
     sourceLine: s.sourceRef?.line ?? null,
   }));
   for (let i = 0; i < rows.length; i += 500) {
-    await db.insert(symbols).values(rows.slice(i, i + 500)).onConflictDoNothing();
+    await db
+      .insert(symbols)
+      .values(rows.slice(i, i + 500))
+      .onConflictDoNothing();
   }
 
   return { entityId: entity.id, symbolsWritten: rows.length, verdict: 'verified_true' };
@@ -226,9 +229,7 @@ export async function getPackagesMissingGraphSurface(
   // user: a real package.json is made of popular packages, so covering the head
   // of the distribution first is what turns `check-upgrade` from a demo into a
   // tool that answers on the dependencies someone actually has.
-  const order = opts.byDownloads
-    ? sql`${packages.weeklyDownloads} desc nulls last`
-    : sql`random()`;
+  const order = opts.byDownloads ? sql`${packages.weeklyDownloads} desc nulls last` : sql`random()`;
   const rows = await db
     .select({ name: packages.name, version: packages.latestVersion })
     .from(packages)
@@ -361,10 +362,7 @@ export async function enqueuePreviousSurface(
  * is not the predecessor by number. The question a diff answers is "what changed
  * when this was released", so publication order is the honest one.
  */
-export function previousVersion(
-  history: { version: string }[],
-  version: string,
-): string | null {
+export function previousVersion(history: { version: string }[], version: string): string | null {
   const idx = history.findIndex((h) => h.version === version);
   // Not in the timeline, or already the oldest we know: nothing to compare to.
   if (idx === -1 || idx + 1 >= history.length) return null;
