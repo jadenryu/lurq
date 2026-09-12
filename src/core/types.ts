@@ -111,7 +111,13 @@ export type DiscoverySource =
   | 'npm-changes';
 
 /** Lifecycle of a discovery-queue candidate (§2B). */
-export type DiscoveryStatus = 'pending' | 'ingested' | 'rejected';
+/**
+ * `rejected` means the merit gate said no — a verdict about the package, and
+ * permanent. `failed` means ingest itself kept throwing, which is a verdict
+ * about us, and is cleared by re-queueing once the bug is fixed. Conflating the
+ * two would either retry genuine rejects forever or bury a fixable bug.
+ */
+export type DiscoveryStatus = 'pending' | 'ingested' | 'rejected' | 'failed';
 
 /**
  * Categories for which bundle size is meaningful and Bundlephobia is consulted

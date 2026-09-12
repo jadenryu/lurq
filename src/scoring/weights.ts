@@ -184,6 +184,12 @@ export const DISCOVERY = {
   searchSizePerCategory: 10,
   /** Max dependency-graph neighbors to enqueue per tracked seed. */
   graphNeighborsPerSeed: 20,
+  /** Ingest failures a candidate gets before it is marked `failed` and stops
+   *  being retried. Three, because the failures worth retrying are transient
+   *  (a registry 5xx, a GitHub rate limit) and clear within an hour or two,
+   *  while the ones that are not — a manifest we cannot parse — would otherwise
+   *  re-buy an LLM summary every cycle for as long as the crawler runs. */
+  maxIngestAttempts: 3,
 } as const;
 
 // ── Tunable weight model: defaults ← user-config ← env (§4) ──────────────────

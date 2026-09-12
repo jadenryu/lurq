@@ -2,7 +2,7 @@
  * Read/write helpers for the `discovery_queue` table (§2B). The crawler enqueues
  * candidates here; the merit gate pre-scores and graduates them.
  */
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { DiscoverySource, DiscoveryStatus } from '../core/types';
 import type { Database } from './client';
 import { discoveryQueue, packages, type DiscoveryQueueRow } from './schema';
@@ -50,6 +50,31 @@ export async function getPendingCandidates(
   limit: number,
 ): Promise<DiscoveryQueueRow[]> {
   return db.select().from(discoveryQueue).where(eq(discoveryQueue.status, 'pending')).limit(limit);
+}
+
+/**
+ * Record a failed ingest attempt, retiring the candidate once it has spent its
+ * budget. Returns the new attempt count.
+ *
+ * Done as one statement so the increment and the retirement decision see the
+ * same value: reading `attempts`, adding one in JS and writing it back would let
+ * two concurrent cycles both read 2, both write 3, and leave a candidate that
+ * has now failed four times still pending.
+ */
+export async function recordIngestFailure(
+  db: Database,
+  name: string,
+  maxAttempts: number,
+): Promise<number> {
+  const [row] = await db
+    .update(discoveryQueue)
+    .set({
+      attempts: sql`${discoveryQueue.attempts} + 1`,
+      status: sql`case when ${discoveryQueue.attempts} + 1 >= ${maxAttempts} then 'failed' else ${discoveryQueue.status} end`,
+    })
+    .where(eq(discoveryQueue.name, name))
+    .returning({ attempts: discoveryQueue.attempts });
+  return row?.attempts ?? 0;
 }
 
 export async function setDiscoveryStatus(

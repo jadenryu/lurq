@@ -221,6 +221,13 @@ export const discoveryQueue = pgTable(
     /** Lightweight quality-only pre-score (§2B). Null until the gate runs. */
     preScore: integer('pre_score'),
     status: text('status').$type<DiscoveryStatus>().notNull().default('pending'),
+    /** Failed ingests bump this; past DISCOVERY.maxIngestAttempts the candidate
+     *  is marked `failed` and stops being retried. Without it a package that
+     *  throws after its summary call — a malformed manifest, a constraint
+     *  violation — is re-ingested every cycle forever, paying the LLM each time
+     *  and never reaching the write that would take it off the queue. Same
+     *  treatment `compat_verify_queue.attempts` already gives a failing set. */
+    attempts: integer('attempts').notNull().default(0),
     discoveredAt: ts('discovered_at').notNull().defaultNow(),
   },
   (table) => [index('discovery_queue_status_idx').on(table.status)],

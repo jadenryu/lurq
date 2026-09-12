@@ -7,6 +7,7 @@ import { logger } from '../core/logger';
 import { DEFAULT_ECOSYSTEM, type Category, type Ecosystem } from '../core/types';
 import type { VersionInfo } from '../ingestion/types';
 import type { Database } from './client';
+import type { ReusableFields } from '../pipeline/reuse';
 import {
   packageVersions,
   packages,
@@ -111,6 +112,47 @@ export async function latestVersionsFor(
         ),
       );
     for (const row of rows) out.set(row.name, row.latestVersion);
+  }
+  return out;
+}
+
+/**
+ * The fields a re-ingest needs to decide whether it may skip the LLM summary and
+ * the embedding, for a set of names in one query (see `pipeline/reuse.ts`).
+ *
+ * `embedding` is a vector(1536) column, so this is the one bulk read in this
+ * file that is measured in megabytes rather than rows: at 1536 float4s it is
+ * ~6KB a package, and a 2,000-package sync pulls ~12MB. That is still far
+ * cheaper than re-embedding 2,000 packages, and the chunking below keeps any
+ * single statement bounded.
+ */
+export async function reusableFieldsFor(
+  db: Database,
+  names: string[],
+  ecosystem: Ecosystem = DEFAULT_ECOSYSTEM,
+): Promise<Map<string, ReusableFields>> {
+  const out = new Map<string, ReusableFields>();
+  for (let i = 0; i < names.length; i += NAME_CHUNK) {
+    const rows = await db
+      .select({
+        name: packages.name,
+        latestVersion: packages.latestVersion,
+        summary: packages.summary,
+        usageGuide: packages.usageGuide,
+        embedding: packages.embedding,
+        embeddingProvider: packages.embeddingProvider,
+      })
+      .from(packages)
+      .where(
+        and(
+          inArray(packages.name, names.slice(i, i + NAME_CHUNK)),
+          eq(packages.ecosystem, ecosystem),
+        ),
+      );
+    for (const row of rows) {
+      const { name, ...fields } = row;
+      out.set(name, fields);
+    }
   }
   return out;
 }
