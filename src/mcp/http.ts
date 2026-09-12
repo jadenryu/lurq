@@ -80,6 +80,7 @@ import {
   MAX_RUNS_PER_POST,
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
+import { builderProfile, type BuilderProfile } from '../github/builderProfile';
 import { parseTarget, publicScan, type PublicScan } from '../github/publicScan';
 import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
@@ -112,6 +113,9 @@ export interface ScanCacheEntry {
   value: PublicScan | null;
 }
 
+/** The same entry for a builder profile, which holds several scans. */
+type ProfileCacheEntry = Omit<ScanCacheEntry, 'value'> & { value: BuilderProfile | null };
+
 /** A settled answer: every declared dependency was already in the index. */
 const SCAN_TTL_MS = 15 * 60_000;
 /**
@@ -140,6 +144,11 @@ export function scanTtl(scan: PublicScan | null): number {
   return scan.depsTracked < scan.depsDeclared ? SCAN_PROVISIONAL_TTL_MS : SCAN_TTL_MS;
 }
 
+/** A builder profile holds only as long as its least settled repo. */
+export function profileTtl(profile: BuilderProfile | null): number {
+  return profile ? Math.min(SCAN_TTL_MS, ...profile.repos.map(scanTtl)) : SCAN_PROVISIONAL_TTL_MS;
+}
+
 /**
  * Make room without wiping the cache.
  *
@@ -148,7 +157,10 @@ export function scanTtl(scan: PublicScan | null): number {
  * Drop what has expired first, and only then the oldest entries — a Map
  * iterates in insertion order, so that is the front of it.
  */
-export function evictScans(cache: Map<string, ScanCacheEntry>, max = SCAN_CACHE_MAX): void {
+export function evictScans<T extends { at: number; ttl: number }>(
+  cache: Map<string, T>,
+  max = SCAN_CACHE_MAX,
+): void {
   const now = Date.now();
   for (const [k, v] of cache) if (now - v.at >= v.ttl) cache.delete(k);
   for (const k of cache.keys()) {
@@ -396,6 +408,52 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     } catch (err) {
       logger.error('public scan failed:', formatError(err));
       res.status(502).json({ error: 'Could not read that repository.' });
+    }
+  });
+
+  /**
+   * The builder report behind /dashboard/report: a GitHub profile's archetype,
+   * trait scores and up to six stack scans. A larger /scan/public, so it shares
+   * that route's limiter and the shape of its cache.
+   *
+   * Returns the WHOLE profile. The web hop cuts it down for signed-out visitors;
+   * builderProfile.ts says why it is never computed smaller. Everything in it is
+   * public GitHub and npm data, so the cut is a conversion boundary, not a
+   * security one, and anyone calling this directly is held by `scanLimiter`.
+   */
+  const profileCache = new Map<string, ProfileCacheEntry>();
+
+  app.post('/scan/profile', ipLimiter, scanLimiter, async (req: Request, res: Response) => {
+    const raw = (req.body ?? {}) as { target?: unknown };
+    const target = typeof raw.target === 'string' ? parseTarget(raw.target) : null;
+    if (!target) {
+      res.status(400).json({ error: 'Give a GitHub username or a repo (owner/name).' });
+      return;
+    }
+
+    // A typed repo profiles its owner, with that repo read first.
+    const login = target.kind === 'repo' ? target.owner : target.login;
+    const featured = target.kind === 'repo' ? target.name : undefined;
+    // GitHub logins and repo names are case-insensitive, so the cache is too.
+    const key = `${login}/${featured ?? ''}`.toLowerCase();
+    const missing = () => res.status(404).json({ error: 'No public GitHub profile found for that.' });
+
+    const hit = profileCache.get(key);
+    if (hit && Date.now() - hit.at < hit.ttl) {
+      if (!hit.value) missing();
+      else res.json(hit.value);
+      return;
+    }
+
+    try {
+      const profile = await builderProfile(db, login, featured);
+      if (profileCache.size >= SCAN_CACHE_MAX) evictScans(profileCache);
+      profileCache.set(key, { at: Date.now(), ttl: profileTtl(profile), value: profile });
+      if (!profile) missing();
+      else res.json(profile);
+    } catch (err) {
+      logger.error('profile scan failed:', formatError(err));
+      res.status(502).json({ error: 'Could not read that profile.' });
     }
   });
 
