@@ -43,7 +43,7 @@ import {
   upsertRepos,
 } from '../db/repos';
 import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
-import { parseSelectionPolicy } from '../policy/parse';
+import { validateSelectionPolicy } from '../policy/parse';
 import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
 import {
@@ -1341,14 +1341,18 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   app.put('/selection-policy', requireIssuerSecret, async (req: Request, res: Response) => {
     const ownerId = ownerFrom(req);
-    const policy = parseSelectionPolicy((req.body ?? {}).policy);
-    if (!ownerId || !policy) {
-      res.status(400).json({ error: 'ownerId and a complete policy are required.' });
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const parsed = validateSelectionPolicy((req.body ?? {}).policy);
+    if ('error' in parsed) {
+      res.status(400).json({ error: parsed.error });
       return;
     }
     try {
-      await setSelectionPolicy(db, ownerId, policy);
-      res.status(200).json({ policy });
+      const previous = await setSelectionPolicy(db, ownerId, parsed.policy);
+      res.status(200).json({ policy: parsed.policy, previous });
     } catch (err) {
       logger.error(
         'selection policy write failed:',
@@ -1466,15 +1470,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       });
       return;
     }
-    const policy = parseSelectionPolicy((req.body ?? {}).policy);
-    if (!policy) {
-      res.status(400).json({ error: 'policy is missing or invalid.' });
+    const parsed = validateSelectionPolicy((req.body ?? {}).policy);
+    if ('error' in parsed) {
+      res.status(400).json({ error: parsed.error });
       return;
     }
     try {
-      await setSelectionPolicy(db, ownerId, policy);
+      // `previous` is what lets `lurq policy push` print the change it made,
+      // diffed against what was actually replaced rather than a stale pull.
+      const previous = await setSelectionPolicy(db, ownerId, parsed.policy);
       logger.info(`selection policy replaced by key ${(req as AuthedRequest).lurqKey!.prefix}`);
-      res.status(200).json({ policy });
+      res.status(200).json({ policy: parsed.policy, previous });
     } catch (err) {
       logger.error('policy write failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not save policy.' });

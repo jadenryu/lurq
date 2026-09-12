@@ -29,7 +29,7 @@ describe('ruleRepo', () => {
 
   it('lets an explicit allow beat a rule the package would otherwise fail', () => {
     const result = ruleRepo(
-      policy({ allow: ['moment'], blockDeprecated: true }),
+      policy({ allow: [{ name: 'moment' }], blockDeprecated: true }),
       ['moment'],
       facts({ moment: { deprecated: true } }),
     );

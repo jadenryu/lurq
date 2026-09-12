@@ -7,8 +7,9 @@
  * is the post-merge apply, and needs a policy:write key.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { describeRules } from '../policy/enforce';
-import { parseSelectionPolicy } from '../policy/parse';
+import { resolveApiKey } from '../core/userConfig';
+import { describeRules, diffPolicies } from '../policy/enforce';
+import { validateSelectionPolicy } from '../policy/parse';
 import type { SelectionPolicy } from '../policy/types';
 import { getPolicy, putPolicy, type RemoteOptions } from './remote';
 
@@ -22,7 +23,7 @@ export async function runPolicyPull(file: string | undefined, opts: RemoteOption
   console.log(`wrote ${file}`);
 }
 
-/** The file as a policy, or null after printing why not. */
+/** The file as a policy, or null after printing what is wrong with it. */
 export function readPolicyFile(file: string): SelectionPolicy | null {
   let raw: unknown;
   try {
@@ -31,14 +32,17 @@ export function readPolicyFile(file: string): SelectionPolicy | null {
     console.error(`${file}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
-  // Same parser the server runs, so --check can never pass a file push rejects.
-  const policy = parseSelectionPolicy(raw);
-  if (!policy) {
-    console.error(
-      `${file} is not a valid policy. Start from \`lurq policy pull\` output; every field it writes is required.`,
-    );
+  // Same validator the server runs, so --check can never pass a file push rejects.
+  const result = validateSelectionPolicy(raw);
+  if ('error' in result) {
+    console.error(`${file}: ${result.error}`);
+    return null;
   }
-  return policy;
+  return result.policy;
+}
+
+function indent(lines: string[], empty: string): string {
+  return lines.length ? lines.map((line) => `  ${line}`).join('\n') : `  ${empty}`;
 }
 
 export async function runPolicyPush(
@@ -50,8 +54,26 @@ export async function runPolicyPush(
     process.exitCode = 1;
     return;
   }
-  const saved = opts.check ? policy : await putPolicy(policy, opts);
-  const rules = describeRules(saved);
-  console.log(opts.check ? `${file} is a valid policy.` : 'policy replaced.');
-  console.log(rules.length ? rules.map((r) => `  ${r}`).join('\n') : '  no rules enforced.');
+
+  if (opts.check) {
+    console.log(`${file} is a valid policy.`);
+    // With a key on hand, show the change merging this file would make: that is
+    // what the person approving the PR is actually deciding. Without one (a
+    // fork's PR has no secrets), validity is all that can honestly be said.
+    if (!resolveApiKey(opts.apiKey)) {
+      console.log(indent(describeRules(policy), 'no rules enforced.'));
+      return;
+    }
+    console.log('pushing it would change:');
+    console.log(indent(diffPolicies(await getPolicy(opts), policy), 'nothing.'));
+    return;
+  }
+
+  const { previous } = await putPolicy(policy, opts);
+  console.log('policy replaced.');
+  console.log(
+    previous
+      ? indent(diffPolicies(previous, policy), 'no rule changes.')
+      : indent(describeRules(policy), 'no rules enforced.'),
+  );
 }

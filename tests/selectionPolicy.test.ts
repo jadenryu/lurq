@@ -48,14 +48,14 @@ describe('hasRules', () => {
     // saved: reading it as absence is how a policy silently stops applying.
     expect(hasRules(policy({ minWeeklyDownloads: 0 }))).toBe(true);
     // `allow` alone is not a rule — it only ever creates exceptions to others.
-    expect(hasRules(policy({ allow: ['x'] }))).toBe(false);
+    expect(hasRules(policy({ allow: [{ name: 'x' }] }))).toBe(false);
   });
 });
 
 describe('check', () => {
   it('lets an explicit allow beat every other rule', () => {
     const p = policy({
-      allow: ['left-pad'],
+      allow: [{ name: 'left-pad' }],
       deny: [{ name: 'left-pad' }],
       blockDeprecated: true,
       minConfidence: 'proven',
@@ -250,7 +250,7 @@ describe('applyPolicy', () => {
 
 describe('parseSelectionPolicy', () => {
   const valid = {
-    allow: ['lodash'],
+    allow: [{ name: 'lodash' }],
     deny: [{ name: 'axios', reason: 'internal client' }],
     minConfidence: 'proven',
     licenses: ['MIT'],
@@ -267,7 +267,12 @@ describe('parseSelectionPolicy', () => {
   };
 
   it('accepts a complete policy', () => {
-    expect(parseSelectionPolicy({ ...valid, ...laterRules })).toEqual({ ...valid, ...laterRules });
+    expect(parseSelectionPolicy({ ...valid, ...laterRules })).toEqual({
+      mode: 'enforce',
+      ...valid,
+      ...laterRules,
+      minPackageAgeDays: null,
+    });
   });
 
   // `valid` is deliberately the pre-expansion shape. A CLI or an older tab that
@@ -276,7 +281,9 @@ describe('parseSelectionPolicy', () => {
   // advisory rule must not have one switched on for it.
   it('accepts a policy written before the later rules existed', () => {
     expect(parseSelectionPolicy(valid)).toEqual({
+      mode: 'enforce',
       ...valid,
+      minPackageAgeDays: null,
       blockArchived: false,
       maxAdvisorySeverity: null,
       minWeeklyDownloads: null,
@@ -334,15 +341,15 @@ describe('parseSelectionPolicy', () => {
   it('trims names and drops an empty reason rather than storing one', () => {
     const out = parseSelectionPolicy({
       ...valid,
-      allow: ['  lodash  '],
+      allow: [{ name: '  lodash  ' }],
       deny: [{ name: 'axios', reason: '   ' }],
     });
-    expect(out?.allow).toEqual(['lodash']);
+    expect(out?.allow).toEqual([{ name: 'lodash' }]);
     expect(out?.deny).toEqual([{ name: 'axios' }]);
   });
 
   it('rejects blank and oversized names', () => {
-    expect(parseSelectionPolicy({ ...valid, allow: ['   '] })).toBeNull();
+    expect(parseSelectionPolicy({ ...valid, allow: [{ name: '   ' }] })).toBeNull();
     expect(parseSelectionPolicy({ ...valid, allow: ['a'.repeat(215)] })).toBeNull();
   });
 

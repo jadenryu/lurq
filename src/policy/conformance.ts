@@ -22,7 +22,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { DEFAULT_ECOSYSTEM, type Advisory, type Confidence, type Ecosystem } from '../core/types';
 import type { Database } from '../db/client';
 import { packages, repos } from '../db/schema';
-import { getSelectionPolicy } from '../db/selectionPolicy';
+import { daysSince, getEnforcedPolicy } from '../db/selectionPolicy';
 import { declaredDeps } from '../github/drift';
 import { check, hasRules } from './enforce';
 import type { Exclusion, SelectionPolicy } from './types';
@@ -54,6 +54,7 @@ export interface RuleFacts {
   weeklyDownloads?: number | null;
   monthsSinceRelease?: number | null;
   bundleKb?: number | null;
+  daysSincePublished?: number | null;
 }
 
 export interface RepoConformance {
@@ -117,6 +118,7 @@ async function loadRuleFacts(
         weeklyDownloads: packages.weeklyDownloads,
         lastReleaseAt: packages.lastReleaseAt,
         bundleMinGzipKb: packages.bundleMinGzipKb,
+        firstPublishedAt: packages.firstPublishedAt,
       })
       .from(packages)
       .where(
@@ -135,6 +137,7 @@ async function loadRuleFacts(
         weeklyDownloads: row.weeklyDownloads,
         monthsSinceRelease: monthsSince(row.lastReleaseAt),
         bundleKb: row.bundleMinGzipKb,
+        daysSincePublished: daysSince(row.firstPublishedAt),
       });
     }
   }
@@ -182,6 +185,7 @@ export function ruleRepo(
         weeklyDownloads: fact.weeklyDownloads,
         monthsSinceRelease: fact.monthsSinceRelease,
         bundleKb: fact.bundleKb,
+        daysSincePublished: fact.daysSincePublished,
       },
     );
     if (exclusion) violations.push(exclusion);
@@ -211,7 +215,7 @@ export async function repoConformance(
   db: Database,
   ownerId: string,
 ): Promise<ConformanceReport> {
-  const policy = await getSelectionPolicy(db, ownerId);
+  const policy = await getEnforcedPolicy(db, ownerId);
   // No rules means no work: skip the repo and package reads entirely rather than
   // computing an empty answer expensively.
   if (!hasRules(policy)) return { enforcing: false, repos: [] };

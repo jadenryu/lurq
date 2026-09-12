@@ -55,8 +55,24 @@ export function hasRules(policy: SelectionPolicy): boolean {
     policy.maxAdvisorySeverity !== null ||
     policy.minWeeklyDownloads !== null ||
     policy.maxStaleMonths !== null ||
-    policy.maxBundleKb !== null
+    policy.maxBundleKb !== null ||
+    policy.minPackageAgeDays !== null
   );
+}
+
+/**
+ * The policy as enforced at `now`: exceptions past their expiry removed.
+ *
+ * Applied by the loader that owns the clock, never inside `check`, so the rules
+ * stay a pure function. And never applied to what `GET /policy` returns: a pull
+ * that silently dropped expired entries would delete them on the next push,
+ * erasing the record that an exception existed and lapsed.
+ */
+export function withoutExpired(policy: SelectionPolicy, now: Date): SelectionPolicy {
+  const today = now.toISOString().slice(0, 10);
+  // `expires` is the first day the exception no longer applies. ISO dates
+  // compare correctly as strings, which is why the parser insists on that form.
+  return { ...policy, allow: policy.allow.filter((a) => !a.expires || a.expires > today) };
 }
 
 /**
@@ -67,10 +83,19 @@ export function hasRules(policy: SelectionPolicy): boolean {
 export function describeRules(policy: SelectionPolicy): string[] {
   if (!hasRules(policy)) return [];
   const out: string[] = [];
-  if (policy.allow.length) out.push(`Always allowed, whatever else applies: ${policy.allow.join(', ')}.`);
+  if (policy.mode === 'warn') {
+    out.push('Warn only: packages that break these rules are reported, not refused.');
+  }
+  for (const a of policy.allow) {
+    const until = a.expires ? ` until ${a.expires}` : '';
+    out.push(`Always allowed${until}: ${a.name}${a.reason ? ` (${a.reason})` : ''}.`);
+  }
   for (const d of policy.deny) out.push(`Never use ${d.name}${d.reason ? `: ${d.reason}` : '.'}`);
   if (policy.maxAdvisorySeverity) {
     out.push(`No packages with a known advisory above ${policy.maxAdvisorySeverity}.`);
+  }
+  if (policy.minPackageAgeDays !== null) {
+    out.push(`No packages first published less than ${policy.minPackageAgeDays} days ago.`);
   }
   if (policy.licenses) {
     out.push(
@@ -92,9 +117,28 @@ export function describeRules(policy: SelectionPolicy): string[] {
   return out;
 }
 
+/**
+ * What changed between two policies, as `-`/`+` rule sentences.
+ *
+ * Diffed on the sentences rather than the JSON: a reviewer approving a policy
+ * change reads "- Never use request" faster than a nested field path, and two
+ * policies that describe the same rules are the same policy for that purpose.
+ */
+export function diffPolicies(before: SelectionPolicy, after: SelectionPolicy): string[] {
+  const was = describeRules(before);
+  const now = describeRules(after);
+  return [
+    ...was.filter((r) => !now.includes(r)).map((r) => `- ${r}`),
+    ...now.filter((r) => !was.includes(r)).map((r) => `+ ${r}`),
+  ];
+}
+
 export interface PolicyResult {
   allowed: Candidate[];
+  /** Refused. Always empty in warn mode. */
   excluded: Exclusion[];
+  /** Would have been refused; kept in `allowed`. Always empty in enforce mode. */
+  warned: Exclusion[];
 }
 
 /**
@@ -110,14 +154,19 @@ export function applyPolicy(
 ): PolicyResult {
   const allowed: Candidate[] = [];
   const excluded: Exclusion[] = [];
+  const warned: Exclusion[] = [];
+  const warnOnly = policy.mode === 'warn';
 
   for (const candidate of candidates) {
     const exclusion = check(policy, candidate, facts.get(candidate.name));
-    if (exclusion) excluded.push(exclusion);
-    else allowed.push(candidate);
+    if (!exclusion) allowed.push(candidate);
+    else if (warnOnly) {
+      warned.push(exclusion);
+      allowed.push(candidate);
+    } else excluded.push(exclusion);
   }
 
-  return { allowed, excluded };
+  return { allowed, excluded, warned };
 }
 
 /**
@@ -139,7 +188,7 @@ export function check(
 ): Exclusion | null {
   const { name } = pkg;
 
-  if (policy.allow.includes(name)) return null;
+  if (policy.allow.some((a) => a.name === name)) return null;
 
   const denied = policy.deny.find((d) => d.name === name);
   if (denied) {
@@ -168,6 +217,21 @@ export function check(
         reason: `Known ${hit.severity} advisory (${hit.id}): ${hit.summary}. Your policy allows ${policy.maxAdvisorySeverity} and below.`,
       };
     }
+  }
+
+  // Next to security because it is security: a brand-new package is where
+  // malware, account takeovers and squatted names a model hallucinated all live
+  // before anyone has looked. Cheaper to wait out than to clean up.
+  if (
+    policy.minPackageAgeDays !== null &&
+    facts?.daysSincePublished != null &&
+    facts.daysSincePublished < policy.minPackageAgeDays
+  ) {
+    return {
+      name,
+      rule: 'age',
+      reason: `First published ${facts.daysSincePublished} days ago; your policy requires ${policy.minPackageAgeDays}. New packages are where supply-chain attacks live before anyone notices.`,
+    };
   }
 
   if (policy.blockDeprecated && facts?.deprecated) {

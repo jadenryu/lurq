@@ -296,10 +296,13 @@ export async function getPolicy(opts: RemoteOptions = {}): Promise<SelectionPoli
   return (await request<{ policy: SelectionPolicy }>('GET', '/policy', undefined, opts)).policy;
 }
 
-/** Replace the policy. The server rejects a key without policy:write (403). */
-export async function putPolicy(
+/**
+ * Replace the policy. The server rejects a key without policy:write (403).
+ * `previous` is absent from a server older than policy history.
+ */
+export function putPolicy(
   policy: SelectionPolicy,
   opts: RemoteOptions = {},
-): Promise<SelectionPolicy> {
-  return (await request<{ policy: SelectionPolicy }>('PUT', '/policy', { policy }, opts)).policy;
+): Promise<{ policy: SelectionPolicy; previous?: SelectionPolicy }> {
+  return request('PUT', '/policy', { policy }, opts);
 }

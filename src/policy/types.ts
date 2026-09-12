@@ -27,7 +27,30 @@ export interface DenyRule {
   reason?: string;
 }
 
+/**
+ * A package every rule lets through.
+ *
+ * Carries a reason and an optional expiry because a permanent, unexplained
+ * exception is how a policy rots: a year later nobody knows why the GPL parser
+ * is allowed or whether the reason still holds. An expiry forces the question
+ * to be asked again; the reason tells whoever asks it what was decided.
+ */
+export interface AllowRule {
+  name: string;
+  reason?: string;
+  /** First day (YYYY-MM-DD, UTC) the exception no longer applies. Absent = permanent. */
+  expires?: string;
+}
+
+/**
+ * `enforce` refuses. `warn` reports what would have been refused and lets it
+ * through, which is how a rule gets rolled out: see what it would catch across
+ * real agent traffic before it is allowed to block anyone.
+ */
+export type PolicyMode = 'enforce' | 'warn';
+
 export interface SelectionPolicy {
+  mode: PolicyMode;
   /**
    * Always allowed, evaluated before every other rule. This is the escape hatch
    * for the package a team has deliberately accepted despite the rules — an
@@ -35,7 +58,7 @@ export interface SelectionPolicy {
    * Without it, any rule strong enough to be useful is also strong enough to be
    * switched off entirely the first time it is inconvenient.
    */
-  allow: string[];
+  allow: AllowRule[];
   /** Never recommended. Beats everything except `allow`. */
   deny: DenyRule[];
   /**
@@ -96,6 +119,17 @@ export interface SelectionPolicy {
    * dependency is never refused by a size rule someone set for the frontend.
    */
   maxBundleKb: number | null;
+  /**
+   * Refuse packages first published fewer than this many days ago. `null` = no rule.
+   *
+   * A cool-down, as package firewalls call it. Malware, maintainer-account
+   * takeovers and names squatted because a model hallucinated them are all
+   * youngest in their first days on the registry, before anyone has looked.
+   * Measured from the package's first publish, not its latest release: lurq
+   * rules on which package to add, and a mature package's new patch is not
+   * what this rule is about.
+   */
+  minPackageAgeDays: number | null;
 }
 
 /**
@@ -104,6 +138,7 @@ export interface SelectionPolicy {
  * that starts enforcing rules nobody set is indistinguishable from a bug.
  */
 export const DEFAULT_SELECTION_POLICY: SelectionPolicy = {
+  mode: 'enforce',
   allow: [],
   deny: [],
   minConfidence: null,
@@ -114,6 +149,7 @@ export const DEFAULT_SELECTION_POLICY: SelectionPolicy = {
   minWeeklyDownloads: null,
   maxStaleMonths: null,
   maxBundleKb: null,
+  minPackageAgeDays: null,
 };
 
 /** Which rule refused a package. */
@@ -126,7 +162,8 @@ export type ExclusionRule =
   | 'confidence'
   | 'adoption'
   | 'stale'
-  | 'size';
+  | 'size'
+  | 'age';
 
 /**
  * A package the policy removed, and why.
@@ -166,6 +203,8 @@ export interface PolicyFacts {
   monthsSinceRelease?: number | null;
   /** Minified + gzipped, in KB. Null for anything not size-measured. */
   bundleKb?: number | null;
+  /** Whole days since the package was first published. */
+  daysSincePublished?: number | null;
 }
 
 /**
@@ -176,4 +215,7 @@ export interface PolicyFacts {
  * reading a missing field as approval is exactly the failure this whole layer
  * exists to prevent.
  */
-export type PolicyVerdict = { allowed: true } | ({ allowed: false } & Exclusion);
+export type PolicyVerdict =
+  // `warning` is set in warn mode: the package broke a rule that is not yet enforced.
+  | { allowed: true; warning?: Exclusion }
+  | ({ allowed: false } & Exclusion);

@@ -10,7 +10,13 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { Database } from './client';
 import { packages, selectionPolicies } from './schema';
 import { DEFAULT_ECOSYSTEM, type Ecosystem } from '../core/types';
-import { DEFAULT_SELECTION_POLICY, type SelectionPolicy, type PolicyFacts } from '../policy/types';
+import { withoutExpired } from '../policy/enforce';
+import {
+  DEFAULT_SELECTION_POLICY,
+  type AllowRule,
+  type PolicyFacts,
+  type SelectionPolicy,
+} from '../policy/types';
 
 /**
  * The owner's policy, or the default when they have never set one.
@@ -33,15 +39,37 @@ export async function getSelectionPolicy(
   // Merged over the default so a policy written before a rule existed does not
   // arrive with that field undefined — the enforcement code reads `null` as
   // "no rule" and `undefined` would slip past those checks unevaluated.
-  return row ? { ...DEFAULT_SELECTION_POLICY, ...row.policy } : DEFAULT_SELECTION_POLICY;
+  if (!row) return DEFAULT_SELECTION_POLICY;
+  const stored = { ...DEFAULT_SELECTION_POLICY, ...row.policy };
+  // Rows saved before exceptions carried a reason or expiry hold bare names.
+  // Normalised here so no reader downstream has to know both shapes existed.
+  const allow = (stored.allow as (AllowRule | string)[]).map((a) =>
+    typeof a === 'string' ? { name: a } : a,
+  );
+  return { ...stored, allow };
 }
 
-/** Create or replace the owner's policy. */
+/**
+ * The policy as enforcement applies it right now: lapsed exceptions removed.
+ *
+ * Every enforcement path reads through this; `GET /policy` and the dashboard
+ * read `getSelectionPolicy`, so an expired exception stays visible (and in a
+ * pulled file) until someone deletes it on purpose.
+ */
+export async function getEnforcedPolicy(
+  db: Database,
+  ownerId: string | null,
+): Promise<SelectionPolicy> {
+  return withoutExpired(await getSelectionPolicy(db, ownerId), new Date());
+}
+
+/** Create or replace the owner's policy. Returns the policy it replaced. */
 export async function setSelectionPolicy(
   db: Database,
   ownerId: string,
   policy: SelectionPolicy,
-): Promise<void> {
+): Promise<SelectionPolicy> {
+  const previous = await getSelectionPolicy(db, ownerId);
   await db
     .insert(selectionPolicies)
     .values({ ownerId, policy, updatedAt: new Date() })
@@ -49,6 +77,13 @@ export async function setSelectionPolicy(
       target: selectionPolicies.ownerId,
       set: { policy, updatedAt: new Date() },
     });
+  return previous;
+}
+
+/** Whole days from `date` to now; null when the date is unknown. */
+export function daysSince(date: Date | null): number | null {
+  if (!date) return null;
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
 /** Whole months from `date` to now; null when the date is unknown. */
@@ -87,6 +122,7 @@ export async function loadPolicyFacts(
       weeklyDownloads: packages.weeklyDownloads,
       lastReleaseAt: packages.lastReleaseAt,
       bundleMinGzipKb: packages.bundleMinGzipKb,
+      firstPublishedAt: packages.firstPublishedAt,
     })
     .from(packages)
     .where(and(inArray(packages.name, names), eq(packages.ecosystem, ecosystem)));
@@ -101,6 +137,7 @@ export async function loadPolicyFacts(
       // clock, which is what lets every one of them be tested exhaustively.
       monthsSinceRelease: monthsSince(row.lastReleaseAt),
       bundleKb: row.bundleMinGzipKb,
+      daysSincePublished: daysSince(row.firstPublishedAt),
     });
   }
   return out;
