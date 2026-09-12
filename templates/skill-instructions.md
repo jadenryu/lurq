@@ -62,6 +62,12 @@ whatever was popular then; lurq is re-synced daily and its claims are checkable.
   A server that wants a token comes back UNVERIFIABLE, never `verified_false`: "we could
   not check" and "we checked and it is broken" are different claims, and only the second
   is a reason not to use it. Ask the user for the values rather than guessing them.
+- **Wire several MCP servers into one agent** → `mcp_stack` with the whole set. They
+  are separate processes, so nothing resolves between them the way npm packages do —
+  they clash in the single flat tool namespace you assemble from all of them. Two
+  servers exposing `search` leave you unable to express which you mean, and nothing
+  errors: one silently shadows the other. A server that has not been probed makes the
+  answer UNKNOWN, never clean.
 - **Upgrade an MCP server an agent depends on** → `mcp_drift` with the server and the two
   versions. Two of its findings have no package equivalent. **Silent drift** is a tool
   whose schema moved while its description stayed byte-identical — no changelog reader

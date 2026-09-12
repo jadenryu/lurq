@@ -3,6 +3,7 @@ import {
   mcpServerOracle,
   parseProbeOutput,
   probeScript,
+  probeMcpServer,
   shellQuote,
 } from '../src/graph/oracles/mcpServer';
 import { applyTtl, fingerprint } from '../src/db/graph';
@@ -233,5 +234,105 @@ describe('environment fingerprint', () => {
     expect(fingerprint(ENV)).not.toBe(fingerprint({ ...ENV, runtimeVer: '22.0.0' }));
     // resolver is part of the identity: npm and pnpm resolve differently
     expect(fingerprint(ENV)).not.toBe(fingerprint({ ...ENV, resolver: 'pnpm@9' }));
+  });
+});
+
+/**
+ * The launch ladder, measured rather than guessed.
+ *
+ * Across 65 servers whose probe failed, 35% printed a usage banner because the
+ * bin is a multi-command CLI where MCP is one verb, and 28% exited on a missing
+ * credential. Neither is a broken server; both were reported as one.
+ */
+describe('launch ladder', () => {
+  const okProbeWith = (n: number) =>
+    JSON.stringify({
+      ok: true,
+      stage: 'done',
+      pages: 1,
+      truncated: false,
+      tools: Array.from({ length: n }, (_, i) => ({ name: `t${i}` })),
+    });
+  const usageBanner = JSON.stringify({
+    ok: false,
+    stage: 'spawn',
+    error: 'exited 1: Usage: thing <command>',
+  });
+
+  it('costs a healthy server exactly one attempt', async () => {
+    let calls = 0;
+    const sb = fakeSandbox(async () => {
+      calls++;
+      return { exitCode: 0, stdout: okProbeWith(3), stderr: '' };
+    });
+    const r = await probeMcpServer(sb, 'some-mcp', null);
+    expect(r.probe?.ok).toBe(true);
+    expect(calls).toBe(1);
+    expect(r.launchedWith).toEqual([]);
+  });
+
+  it('recovers a server whose bin needs a subcommand', async () => {
+    const sb = fakeSandbox(async (cmd) => ({
+      exitCode: 0,
+      // Only the invocation carrying the `mcp` verb answers.
+      stdout: cmd.includes('"mcp"') ? okProbeWith(9) : usageBanner,
+      stderr: '',
+    }));
+    const r = await probeMcpServer(sb, 'some-mcp', null);
+    expect(r.probe?.ok).toBe(true);
+    expect(r.launchedWith).toEqual(['mcp']);
+  });
+
+  it('prefers the manifest-declared arguments over guessing', async () => {
+    const seen: string[] = [];
+    const sb = fakeSandbox(async (cmd) => {
+      seen.push(cmd);
+      return { exitCode: 0, stdout: okProbeWith(2), stderr: '' };
+    });
+    const r = await probeMcpServer(sb, 'some-mcp', null, { args: ['serve'] });
+    expect(r.launchedWith).toEqual(['serve']);
+    expect(seen).toHaveLength(1);
+  });
+
+  // A sandbox outage is not evidence about any server, so multiplying it across
+  // four launch attempts would turn one outage into four false negatives.
+  it('stops the ladder when the sandbox itself fails', async () => {
+    let calls = 0;
+    const sb = fakeSandbox(async () => {
+      calls++;
+      throw new Error('E2B down');
+    });
+    await expect(probeMcpServer(sb, 'some-mcp', null)).rejects.toThrow(/sandbox failure/);
+    expect(calls).toBe(1);
+  });
+
+  it('gives up honestly when no lever works', async () => {
+    const sb = fakeSandbox(async () => ({ exitCode: 1, stdout: usageBanner, stderr: '' }));
+    const r = await probeMcpServer(sb, 'some-mcp', null);
+    expect(r.probe?.ok).toBe(false);
+    expect(r.launchedWith).toEqual([]);
+  });
+});
+
+describe('placeholder configuration', () => {
+  it('embeds the placeholder env in the script it ships to the sandbox', () => {
+    const s = probeScript('some-mcp', [], {
+      SOME_API_KEY: 'lurq-placeholder-not-a-real-credential',
+    });
+    expect(s).toContain('SOME_API_KEY');
+    expect(s).toContain('EXTRA_ENV');
+    // Merged over the sandbox's own environment, not replacing it — the server
+    // still needs PATH and friends to start at all.
+    expect(s).toContain('Object.assign({}, process.env, EXTRA_ENV)');
+  });
+
+  it('places launch arguments after the resolved entry point', () => {
+    const s = probeScript('some-mcp', ['mcp']);
+    expect(s).toContain('args.concat(EXTRA_ARGS)');
+    expect(s).toContain('["mcp"]');
+  });
+
+  it('still generates a valid script with both levers applied', () => {
+    expect(() => new Function(probeScript('some-mcp', ['mcp'], { A_B: 'x' }))).not.toThrow();
   });
 });

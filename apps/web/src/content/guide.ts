@@ -118,6 +118,14 @@ export const TOOLS: GuideTool[] = [
     input: "packages[] \u00b7 mcpServers[] (names and versions, read locally)",
   },
   {
+    name: "mcp_stack",
+    group: "check",
+    purpose:
+      "Whether the MCP servers wired into one agent can coexist. They are separate processes, so nothing resolves between them \u2014 they clash in the flat tool namespace the agent assembles, where two servers exposing the same tool name leave it unable to say which it means and one silently shadows the other. Also reports the standing context cost of the whole set.",
+    prompt: "do my MCP servers conflict with each other?",
+    input: "servers[] (name \u00b7 optional version)",
+  },
+  {
     name: "mcp_surface",
     group: "check",
     purpose:

@@ -31,7 +31,7 @@ import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { enqueueCandidates, getQueuedNames } from '../db/discovery';
 import { getAllPackageNames } from '../db/packages';
-import { enqueueSurface } from '../db/surface';
+import { enqueueSurface, getMcpServerNames } from '../db/surface';
 import { getWatchCursor, setWatchCursor } from '../db/watch';
 import { syncOnePackage } from './single';
 
@@ -124,19 +124,30 @@ export async function fetchHeadSeq(
   return parseChangesPage(body).lastSeq;
 }
 
-/** The two membership sets the loop decides against: what we already track (→
- *  re-sync on publish) and what is already queued (→ skip, the gate will get to
- *  it). Read together so a refresh can never leave them from different moments. */
-async function loadSeenSets(db: Database): Promise<[Set<string>, Set<string>]> {
-  const [tracked, queued] = await Promise.all([getAllPackageNames(db), getQueuedNames(db)]);
-  return [new Set(tracked), queued];
+/** The membership sets the loop decides against: what we already track (→
+ *  re-sync on publish), what is already queued (→ skip, the gate will get to
+ *  it), and which of the tracked names are MCP servers (→ also re-probe the
+ *  tool contract). Read together so a refresh can never leave them from
+ *  different moments. */
+async function loadSeenSets(
+  db: Database,
+): Promise<[Set<string>, Set<string>, Set<string>]> {
+  const [tracked, queued, mcp] = await Promise.all([
+    getAllPackageNames(db),
+    getQueuedNames(db),
+    // Derived from what has actually been probed, so the roster grows with real
+    // demand instead of with a curated list somebody has to maintain. Failure
+    // is non-fatal: the npm half of the loop must keep running regardless.
+    getMcpServerNames(db).catch(() => [] as string[]),
+  ]);
+  return [new Set(tracked), queued, new Set(mcp)];
 }
 
 export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Promise<void> {
   const { signal, fetchImpl = fetch } = opts;
   let backoff = 1000;
 
-  let [tracked, queued] = await loadSeenSets(db);
+  let [tracked, queued, mcpServers] = await loadSeenSets(db);
   let seenAt = Date.now();
 
   let cursor =
@@ -148,7 +159,7 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
     return;
   }
   logger.info(
-    `watch: following from seq=${cursor} (${tracked.size} tracked, ${queued.size} queued)`,
+    `watch: following from seq=${cursor} (${tracked.size} tracked, ${queued.size} queued, ${mcpServers.size} mcp)`,
   );
 
   while (!signal?.aborted) {
@@ -158,7 +169,7 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
       backoff = 1000; // healthy response, reset
 
       if (Date.now() - seenAt > TRACKED_REFRESH_MS) {
-        [tracked, queued] = await loadSeenSets(db);
+        [tracked, queued, mcpServers] = await loadSeenSets(db);
         seenAt = Date.now();
       }
 
@@ -177,6 +188,7 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
       };
 
       let resynced = 0;
+      let mcpQueued = 0;
       for (const change of changes) {
         if (signal?.aborted) break;
         const route = routeChange(change, tracked, queued);
@@ -201,6 +213,22 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
           await enqueueSurface(db, change.id, null).catch((err) =>
             logger.warn(`watch: surface enqueue failed for ${change.id}: ${String(err)}`),
           );
+
+          // If this package is also an MCP server, its TOOL CONTRACT may have
+          // moved — a different artifact from its exports, and one a published
+          // tarball's immutability says nothing about.
+          //
+          // This is the line that turns MCP drift from something a user has to
+          // go and ask about into something lurq notices. Without it a server
+          // was re-read only when somebody ran `audit --probe` by hand, which
+          // is exactly the upkeep npm packages have always had and MCP servers
+          // did not.
+          if (mcpServers.has(change.id)) {
+            await enqueueSurface(db, change.id, null, 'mcp_server').catch((err) =>
+              logger.warn(`watch: mcp probe enqueue failed for ${change.id}: ${String(err)}`),
+            );
+            mcpQueued++;
+          }
         } else if (route === 'enqueue') {
           // Record it locally as we buffer, so the same package publishing twenty
           // times in an hour costs one insert attempt rather than twenty.
@@ -220,7 +248,11 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
         await setWatchCursor(db, FEED_ID, cursor);
       }
       if (changes.length > 0) {
-        logger.info(`watch: ${changes.length} change(s), ${resynced} re-synced, seq=${cursor}`);
+        logger.info(
+          `watch: ${changes.length} change(s), ${resynced} re-synced` +
+            (mcpQueued ? `, ${mcpQueued} mcp re-probe(s)` : '') +
+            `, seq=${cursor}`,
+        );
       }
 
       // A page that did not fill means we are at the head — stop hammering.

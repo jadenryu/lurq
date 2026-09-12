@@ -22,9 +22,7 @@ export function buildProgram(): Command {
 
   program
     .name(SERVER_NAME)
-    .description(
-      'lurq - a fresh, objectively-scored index of JS/TS packages for AI coding agents.',
-    )
+    .description('lurq - a fresh, objectively-scored index of JS/TS packages for AI coding agents.')
     .version(VERSION, '-v, --version', 'output the lurq version')
     // Confine program-level flags to the slot before the subcommand name.
     // Without this, commander lets the program consume a `--version` written
@@ -141,7 +139,9 @@ export function buildProgram(): Command {
   program
     .command('usage')
     .argument('<package>', 'npm package name')
-    .description("version-exact API surface (exported symbols/signatures) + drift from a known version")
+    .description(
+      'version-exact API surface (exported symbols/signatures) + drift from a known version',
+    )
     .option('--target <v>', 'target version (defaults to latest)')
     // Historical spelling of --target, kept working but out of the help text so
     // only one spelling is advertised.
@@ -176,7 +176,9 @@ export function buildProgram(): Command {
   program
     .command('compat')
     .argument('<packages...>', 'npm package names to check together')
-    .description('check whether a set of packages forms a coherent stack (peer/engine + recorded evidence)')
+    .description(
+      'check whether a set of packages forms a coherent stack (peer/engine + recorded evidence)',
+    )
     // The checker has always taken exact versions (CheckCompatOptions.versions);
     // there was just no way to say so from the CLI. Arguments are bare names, so
     // `next@15` would look up a package called "next@15" and come back unknown.
@@ -200,12 +202,21 @@ export function buildProgram(): Command {
     .option('--json', 'output the plan as JSON (feed to `check-upgrade --plan`)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
-    .option('--repo <owner/name>', 'apply this repo\'s policy (defaults to $GITHUB_REPOSITORY)')
-    .action(async (dir: string, opts: { json?: boolean; url?: string; apiKey?: string; repo?: string }) => {
-      const { buildUpgradePlan, formatUpgradePlan } = await import('./upgradePlan');
-      const plan = await buildUpgradePlan(dir, { url: opts.url, apiKey: opts.apiKey, repo: opts.repo });
-      console.log(opts.json ? JSON.stringify(plan, null, 2) : formatUpgradePlan(plan));
-    });
+    .option('--repo <owner/name>', "apply this repo's policy (defaults to $GITHUB_REPOSITORY)")
+    .action(
+      async (
+        dir: string,
+        opts: { json?: boolean; url?: string; apiKey?: string; repo?: string },
+      ) => {
+        const { buildUpgradePlan, formatUpgradePlan } = await import('./upgradePlan');
+        const plan = await buildUpgradePlan(dir, {
+          url: opts.url,
+          apiKey: opts.apiKey,
+          repo: opts.repo,
+        });
+        console.log(opts.json ? JSON.stringify(plan, null, 2) : formatUpgradePlan(plan));
+      },
+    );
 
   program
     .command('check-upgrade')
@@ -248,14 +259,12 @@ export function buildProgram(): Command {
     .option('--against <version>', 'compare with this published version (default: latest)')
     .option('--json', 'output the check as JSON')
     .option('--exit-code', 'exit 1 when the bump is understated (for CI / prepublish)')
-    .action(
-      async (dir: string, opts: { against?: string; json?: boolean; exitCode?: boolean }) => {
-        const { checkRelease, formatReleaseCheck } = await import('../surface/release');
-        const check = await checkRelease(dir, { against: opts.against });
-        console.log(opts.json ? JSON.stringify(check, null, 2) : formatReleaseCheck(check));
-        if (opts.exitCode && check.verdict !== 'ok') process.exitCode = 1;
-      },
-    );
+    .action(async (dir: string, opts: { against?: string; json?: boolean; exitCode?: boolean }) => {
+      const { checkRelease, formatReleaseCheck } = await import('../surface/release');
+      const check = await checkRelease(dir, { against: opts.against });
+      console.log(opts.json ? JSON.stringify(check, null, 2) : formatReleaseCheck(check));
+      if (opts.exitCode && check.verdict !== 'ok') process.exitCode = 1;
+    });
 
   // The same question as check-upgrade, asked by the other party: not "will this
   // dependency break me" but "will this change break the people calling me".
@@ -291,12 +300,31 @@ export function buildProgram(): Command {
     .argument('[dir]', 'project directory (defaults to the current one)')
     .description('what this project depends on, and what is outdated, vulnerable or drifting')
     .option('--project-only', 'ignore user-level agent configs; read only files in the project')
-    .option('--probe', 'probe your MCP servers now instead of waiting for the worker (needs DATABASE_URL)')
+    .option(
+      '--probe',
+      'probe your MCP servers now instead of waiting for the worker (needs DATABASE_URL)',
+    )
     .option('--probe-budget <seconds>', 'wall-clock ceiling for probing (default 90)')
     .option('--json', 'output JSON instead of a table')
-    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean; probe?: boolean; probeBudget?: string }) => {
-      const { runAudit } = await import('./commands');
-      await runAudit(dir, opts);
+    .action(
+      async (
+        dir: string | undefined,
+        opts: { json?: boolean; projectOnly?: boolean; probe?: boolean; probeBudget?: string },
+      ) => {
+        const { runAudit } = await import('./commands');
+        await runAudit(dir, opts);
+      },
+    );
+
+  program
+    .command('mcp-stack')
+    .argument('[dir]', 'project directory (defaults to the current one)')
+    .description('do your configured MCP servers coexist? checks for tool-name collisions')
+    .option('--project-only', 'read only config files in the project')
+    .option('--json', 'output JSON instead of a table')
+    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean }) => {
+      const { runMcpStack } = await import('./commands');
+      await runMcpStack(dir, opts);
     });
 
   program
@@ -334,14 +362,21 @@ export function buildProgram(): Command {
   program
     .command('edit-weights')
     .description('override, reset, or explain the scoring weights (layered over defaults)')
-    .option('--set <pair>', 'override key=value, e.g. composite.lambda=0.5 (repeatable)', (v: string, acc: string[]) => acc.concat(v), [])
+    .option(
+      '--set <pair>',
+      'override key=value, e.g. composite.lambda=0.5 (repeatable)',
+      (v: string, acc: string[]) => acc.concat(v),
+      [],
+    )
     .option('--reset', 'remove all overrides and restore defaults')
     .option('--explain <component>', 'explain a component (e.g. adoption, quality, lambda)')
     .option('--project', 'write to project-local .lurq/weights.json instead of the user config')
-    .action(async (opts: { set?: string[]; reset?: boolean; explain?: string; project?: boolean }) => {
-      const { runEditWeights } = await import('./commands');
-      await runEditWeights(opts);
-    });
+    .action(
+      async (opts: { set?: string[]; reset?: boolean; explain?: string; project?: boolean }) => {
+        const { runEditWeights } = await import('./commands');
+        await runEditWeights(opts);
+      },
+    );
 
   // ── Plumbing ──────────────────────────────────────────────────────────────
   // Nobody types these to answer a question about a package: `install-skill` is

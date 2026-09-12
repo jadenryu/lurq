@@ -23,6 +23,7 @@ import type { Advisory } from '../core/types';
 import { packages } from '../db/schema';
 import { queryVulnerableInstalls } from '../ingestion/sources/osv';
 import { assessVerdict } from '../security/verdict';
+import { checkMcpStack, isCrowded } from '../compat/mcpStack';
 import { contractOf, MCP_TIER } from '../surface/mcp';
 import { fetchServerManifest, missingConfig } from '../surface/mcpRegistry';
 import { loadStored, rowsToSurface } from '../mcp/surfaceHandlers';
@@ -189,7 +190,11 @@ function privilegeSummary(tools: { annotations: Record<string, boolean> }[]): {
   };
 }
 
-async function assessMcpServer(db: Database, s: InventoryMcpServer): Promise<AuditItem> {
+async function assessMcpServer(
+  db: Database,
+  s: InventoryMcpServer,
+  idx: IndexRow | undefined,
+): Promise<AuditItem> {
   const name = s.packageName ?? s.endpoint ?? s.alias;
   const item: AuditItem = {
     name,
@@ -226,6 +231,43 @@ async function assessMcpServer(db: Database, s: InventoryMcpServer): Promise<Aud
       severity: 'moderate',
       detail: `needs ${missing.map((m) => m.name).join(', ')} before it will start${missing.some((m) => m.secret) ? ' (at least one is a credential — ask the user, never guess)' : ''}`,
     });
+  }
+
+  // Every npm signal applies to a server, because a server is an npm package.
+  // Without this read the audit could report nine tools and their privilege
+  // posture while saying nothing about the release being five versions old —
+  // which is the question the user actually asked.
+  item.latest = idx?.latestVersion ?? null;
+  if (idx?.deprecated) {
+    item.findings.push({
+      kind: 'deprecated',
+      severity: 'moderate',
+      detail: 'the publisher has marked this server deprecated',
+    });
+  }
+  if ((idx?.advisories?.length ?? 0) > 0) {
+    item.findings.push({
+      kind: 'vulnerable',
+      severity: 'high',
+      detail: `${idx!.advisories!.length} advisory(ies) recorded against this server`,
+    });
+  }
+  if (s.version && idx?.latestVersion) {
+    const d = drift(s.version, idx.latestVersion);
+    // Behind on a server is worse than behind on a library: the tool contract
+    // your agent is holding was built against a release that has since moved,
+    // and `mcp_drift` can name exactly what changed.
+    if (d) {
+      item.findings.push({
+        ...d,
+        detail:
+          `${s.version} → ${idx.latestVersion}; run ` +
+          `\`lurq mcp-drift ${s.packageName} --from ${s.version} --to ${idx.latestVersion}\` ` +
+          `for the contract delta`,
+      });
+    }
+  } else if (!idx) {
+    item.skipReason ??= 'not-in-index';
   }
 
   const stored = await loadStored(db, s.packageName, s.version, 0, 'mcp_server');
@@ -289,7 +331,13 @@ export async function assessInventory(
   opts: AssessOptions = {},
 ): Promise<AuditReport> {
   const lookup = opts.vulnLookup ?? queryVulnerableInstalls;
-  const names = inv.packages.map((p) => p.name);
+  // One indexed read covering BOTH halves. Server package names go into the
+  // same query rather than a lookup each: eight servers should cost one round
+  // trip, not eight.
+  const names = [
+    ...inv.packages.map((p) => p.name),
+    ...inv.mcpServers.map((s) => s.packageName).filter((n): n is string => Boolean(n)),
+  ];
   const indexed = await loadIndexed(db, names);
 
   // One OSV round trip for the WHOLE tree — directs and transitives together.
@@ -355,13 +403,53 @@ export async function assessInventory(
   }
 
   for (const s of inv.mcpServers) {
-    items.push(await assessMcpServer(db, s));
+    items.push(
+      await assessMcpServer(db, s, s.packageName ? indexed.get(s.packageName) : undefined),
+    );
   }
 
   // `discovered` counts what the user declared, not what the tree contains: the
   // answered fraction has to stay a statement about their dependencies, and a
   // thousand transitives would drown it.
   const declared = items.filter((i) => i.unit !== 'transitive');
+  // Stack-level compatibility: the servers individually may be fine and still
+  // collide when the agent flattens them into one tool namespace. Run once over
+  // the probeable set rather than per-server, because a collision is a property
+  // of the COMBINATION and no single server can see it.
+  const stackNotes: string[] = [];
+  const stdioServers = inv.mcpServers.filter((s) => s.kind === 'npm-stdio' && s.packageName);
+  if (stdioServers.length > 1) {
+    const stack = await checkMcpStack(
+      db,
+      stdioServers.map((s) => ({ server: s.packageName!, version: s.version })),
+    ).catch(() => null);
+    for (const c of stack?.collisions ?? []) {
+      // Attached to every server involved: the user has to change one of them,
+      // and which one is their call, not ours.
+      for (const server of c.servers) {
+        const item = items.find((i) => i.unit === 'mcp' && i.name === server);
+        item?.findings.push({
+          kind: 'contract-drift',
+          severity: c.writes ? 'high' : 'moderate',
+          detail:
+            `tool name "${c.tool}" is also exposed by ${c.servers.filter((x) => x !== server).join(', ')}; ` +
+            `the agent cannot say which it means` +
+            (c.writes ? ' — and at least one of them can modify something' : ''),
+        });
+      }
+    }
+    if (stack && isCrowded(stack)) {
+      stackNotes.push(
+        `${stack.totalTools} MCP tools across ${stdioServers.length} servers (~${stack.estimatedContextTokens!.toLocaleString()} tokens of schema in every request) — worth trimming`,
+      );
+    }
+    if (stack?.unread.length) {
+      stackNotes.push(
+        `tool-name collisions were only checked across the ${stdioServers.length - stack.unread.length} probed server(s); ${stack.unread.length} unprobed`,
+      );
+    }
+  }
+
   const coverage: Coverage = {
     discovered: declared.length,
     answered: declared.filter((i) => i.status === 'answered').length,
@@ -372,7 +460,7 @@ export async function assessInventory(
     vulnComplete,
   };
 
-  const notes = [...inv.notes];
+  const notes = [...inv.notes, ...stackNotes];
   if (!vulnComplete) {
     notes.push(
       'the vulnerability lookup did not complete, so vulnerability results are PARTIAL — absence of a finding here is not an all-clear',
@@ -412,7 +500,7 @@ export async function queueUnknown(
   ownerId: string | null = null,
 ): Promise<number> {
   const names = report.items
-    .filter((i) => i.unit === 'npm' && i.skipReason === 'not-in-index')
+    .filter((i) => i.unit !== 'transitive' && i.skipReason === 'not-in-index')
     .map((i) => i.name);
   if (names.length === 0) return 0;
   try {

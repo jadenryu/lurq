@@ -1138,3 +1138,62 @@ export async function runAudit(
   );
   for (const n of res.notes ?? []) console.log(dim(`· ${n}`));
 }
+
+/**
+ * `lurq mcp-stack` — do the servers this project wires together actually
+ * coexist?
+ *
+ * The npm question does not apply: servers are separate processes with nothing
+ * to resolve between them. They clash in the one flat tool namespace the agent
+ * assembles, where two servers exposing `search` leave it unable to say which
+ * it means — and nothing errors, one simply shadows the other.
+ */
+export async function runMcpStack(
+  dir: string | undefined,
+  opts: { json?: boolean; projectOnly?: boolean },
+): Promise<void> {
+  const { collectInventory } = await import('../audit/inventory');
+  const { checkMcpStack, isCrowded } = await import('../compat/mcpStack');
+  const inv = collectInventory(dir ?? process.cwd(), { projectOnly: opts.projectOnly });
+  const servers = inv.mcpServers
+    .filter((s) => s.kind === 'npm-stdio' && s.packageName)
+    .map((s) => ({ server: s.packageName!, version: s.version }));
+
+  if (servers.length === 0) {
+    console.log(dim('no npm-launched MCP servers configured for this project'));
+    return;
+  }
+
+  const report = await withDb((db) => checkMcpStack(db, servers));
+  if (opts.json) return console.log(JSON.stringify(report, null, 2));
+
+  const colour =
+    report.overall === 'conflict' ? red : report.overall === 'unknown' ? yellow : green;
+  console.log(`${bold(inv.root)}  ${colour(report.overall)}`);
+
+  for (const c of report.collisions) {
+    const tag = c.writes ? red('writes') : yellow('read-only');
+    console.log(`${red('✗')} ${bold(c.tool)} exposed by ${c.servers.join(' and ')}  [${tag}]`);
+  }
+
+  console.log(
+    table(
+      ['Server', 'Version', 'Tools', 'Writes', 'Destroys'],
+      report.members.map((m) => [
+        m.server,
+        m.version ?? dim('unpinned'),
+        m.tools === null ? yellow('not probed') : String(m.tools),
+        m.tools === null ? '—' : String(m.writes),
+        m.tools === null ? '—' : m.destroys > 0 ? red(String(m.destroys)) : '0',
+      ]),
+    ),
+  );
+  console.log(dim(report.note));
+  if (isCrowded(report)) {
+    console.log(
+      yellow(
+        `~${report.estimatedContextTokens!.toLocaleString()} tokens of tool schema ride in every request — worth trimming`,
+      ),
+    );
+  }
+}
