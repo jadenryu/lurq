@@ -2,29 +2,27 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The dashboard's one surface treatment: `.panel-lit` (the same lifted card with a
- * hairline top-light used by the marketing hero and benchmark sections), an
- * optional mono-uppercase eyebrow, and an optional right-aligned action. Every
- * panel on every dashboard page goes through here so padding, radius and eyebrow
- * styling can't drift card to card.
+ * The dashboard's one surface treatment.
  *
- * Corners use `--radius-panel` (8px), not the marketing `--radius-xl` (~17px).
+ * Flat, not lifted. A drop shadow under every panel is what made this route read
+ * as a scrapbook of cards floating on a field: fifteen boxes each claiming to be
+ * the front-most thing on screen, none of them grouping with the others. Real
+ * consoles (Cloudflare, OpenRouter, Vercel) draw one hairline and stop — depth is
+ * spent on the *one* thing that floats (a menu, a dialog), never on content.
+ *
+ * So: `--surface` ground, a 1px `--edge` border, a 6px corner, and no shadow.
+ * Hierarchy comes from the header rule, the padding step, and the ink ramp.
+ *
+ * `--panel-px` is published on the element so `PanelHeader` can bleed its rule
+ * to the panel's edges without knowing which padding step the caller chose.
  */
 
-/**
- * A label, set like the rest of the page.
- *
- * This was mono, uppercase, on a 0.16em track, the treatment the marketing
- * side removed in f4babe7 for the reason it applies here too: small-caps mono
- * labels read as chrome from a template rather than as this product's voice,
- * and stacked above every panel they were the loudest type on screen after the
- * numbers they were supposed to be subordinate to.
- *
- * Geist at 12px, medium, at --ink-3. The hierarchy is carried by weight and
- * value, which is what the variable font is for, and it matches the drift
- * board's headers exactly.
- */
+/** A label, set like the rest of the page: weight and value carry it, not caps. */
 export const eyebrow = "text-[12px] font-medium tracking-[-0.005em] text-ink-3";
+
+/** Column heads, filter labels, section meta: the one place small caps earn it. */
+export const microLabel =
+  "text-[10.5px] font-medium uppercase tracking-[0.07em] text-ink-3";
 
 export function Panel({
   children,
@@ -41,10 +39,14 @@ export function Panel({
   return (
     <div
       id={id}
+      style={
+        {
+          "--panel-px": padding === "tight" ? "0.875rem" : "1.125rem",
+        } as React.CSSProperties
+      }
       className={cn(
-        "panel-lit rounded-[var(--radius-panel)] border border-edge border-t-edge-lit",
-        padding === "default" && "p-5 md:p-6",
-        padding === "tight" && "p-4 md:p-5",
+        "rounded-[var(--radius-panel)] border border-edge bg-surface",
+        padding !== "none" && "p-[var(--panel-px)]",
         className,
       )}
     >
@@ -53,7 +55,12 @@ export function Panel({
   );
 }
 
-/** Eyebrow + optional trailing slot (a count, a toggle, a link). */
+/**
+ * Section head: title, optional trailing slot, and a rule that runs the full
+ * width of the panel rather than stopping inside its padding. The full-bleed rule
+ * is the whole difference between "a card with some text at the top" and a
+ * console section — it's what tells you the header governs everything below it.
+ */
 export function PanelHeader({
   title,
   trailing,
@@ -64,8 +71,17 @@ export function PanelHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center justify-between gap-4", className)}>
-      <p className={eyebrow}>{title}</p>
+    <div
+      className={cn(
+        // `[&+*]:mt-0!` is the reason this is one line instead of fifteen edits:
+        // every caller predates the rule and hand-wrote its own `mt-4`/`mt-5`
+        // under the old text-only header, which would now stack on top of the
+        // header's own gap. The header owns the space beneath it.
+        "-mx-[var(--panel-px)] -mt-[var(--panel-px)] mb-[var(--panel-px)] flex h-11 items-center justify-between gap-4 border-b border-edge px-[var(--panel-px)] [&+*]:mt-0!",
+        className,
+      )}
+    >
+      <p className="text-[13px] font-medium tracking-[-0.01em] text-ink">{title}</p>
       {trailing}
     </div>
   );
@@ -75,11 +91,6 @@ export function PanelHeader({
  * Small outline chip. `tone` carries state, using the reserved status hues from
  * the soft syntax palette: never a solid saturated badge, and never a status
  * color standing in for plain identity (that's what `neutral` is for).
- *
- * Set in Geist, not mono. A chip is a label — "deprecated", "2 majors" — and
- * mono micro-caps on a label is the template chrome this file already retired
- * once for `eyebrow`. Mono is reserved for things whose characters matter:
- * versions, package names, paths, commands, key prefixes.
  */
 export function Chip({
   children,
@@ -95,7 +106,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center whitespace-nowrap rounded-[var(--radius-chip)] border px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded-[var(--radius-chip)] border px-1.5 py-px text-[10.5px] font-medium uppercase tracking-[0.05em]",
         tone === "neutral" && "border-edge text-ink-2",
         tone === "good" && "border-ok/35 text-ok",
         tone === "bad" && "border-bad/40 text-bad",
@@ -137,13 +148,13 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[var(--radius-control)] border border-edge bg-surface-2 px-5 py-6">
+    <div className="relative overflow-hidden rounded-[var(--radius-control)] border border-edge bg-surface-2 px-4 py-4">
       <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-signal/40" />
-      <p className="font-heading text-base font-medium tracking-tight">{title}</p>
+      <p className="text-sm font-medium tracking-tight">{title}</p>
       {children && (
-        <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-ink-2">{children}</p>
+        <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-ink-2">{children}</p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   );
 }
@@ -160,5 +171,35 @@ export function InlineError({ children }: { children: ReactNode }) {
       <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-bad" />
       <p className="text-sm text-ink-2">{children}</p>
     </div>
+  );
+}
+
+/**
+ * A dense row list — the console answer to "several things, each with a couple of
+ * facts". Rows are hairline-separated, full-bleed inside their panel, and light
+ * up on hover so the row (not a 40px label inside it) is the target.
+ *
+ * Pair with `padding="none"` on the Panel so the rows reach the border.
+ */
+export function Rows({ children, className }: { children: ReactNode; className?: string }) {
+  return <ul className={cn("divide-y divide-edge", className)}>{children}</ul>;
+}
+
+export function Row({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <li
+      className={cn(
+        "flex items-center gap-3 px-[var(--panel-px)] py-2 transition-colors hover:bg-surface-2/70",
+        className,
+      )}
+    >
+      {children}
+    </li>
   );
 }

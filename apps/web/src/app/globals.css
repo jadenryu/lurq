@@ -358,6 +358,26 @@
   --font-heading: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   font-family: var(--font-sans);
+
+  /* One density knob for the whole route.
+
+     Tailwind v4 compiles `text-sm` to `font-size: var(--text-sm)`, so
+     redefining the scale on this subtree rescales every size utility the
+     dashboard already uses — ~400 of them — without touching a component. The
+     product surface reads a step smaller than the marketing page on purpose: a
+     console is read by someone scanning for a number, and 16px body copy in a
+     data table is what made this one feel like a brochure with tables in it.
+
+     Body and label steps only. Nothing above --text-lg moves, so the page
+     titles and hero figures keep their intended size. */
+  --text-xs: 0.6875rem;   /* 11px  — meta, ticks */
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.8125rem;   /* 13px  — the dashboard's body size */
+  --text-sm--line-height: 1.5;
+  --text-base: 0.875rem;  /* 14px  — lead paragraphs, form fields */
+  --text-base--line-height: 1.55;
+  --text-lg: 1rem;        /* 16px  — panel titles that want more than 13 */
+  --text-lg--line-height: 1.4;
 }
 
 
@@ -409,12 +429,6 @@
      not the token.
 
    What is left is the shadow, which is the part that was doing work. */
-.panel-lit {
-  position: relative;
-  background: var(--surface);
-  box-shadow: 0 20px 48px -28px color-mix(in oklab, black 75%, transparent);
-}
-
 /* Faint greyscale grid; masked so it reads as ambient depth, not a hard cage. */
 .bg-grid {
   background-image:
