@@ -19,6 +19,18 @@ export class RemoteError extends Error {
   }
 }
 
+/**
+ * No key anywhere on this machine. Its own class, not a bare 401, because the
+ * entry point answers it by offering setup, and a key the server *rejected*
+ * must not trigger that: re-running setup will not fix a revoked key.
+ */
+export class MissingKeyError extends RemoteError {
+  constructor(message = 'No API key configured. Run `lurq setup` to connect this machine.') {
+    super(message, 401);
+    this.name = 'MissingKeyError';
+  }
+}
+
 /** Endpoint the CLI talks to, with the same precedence `setup` uses. */
 export function endpoint(override?: string): string {
   const base = resolveEndpoint(override) ?? DEFAULT_ENDPOINT;
@@ -33,9 +45,7 @@ function mcpUrl(override?: string): string {
 
 export function apiKey(override?: string): string {
   const key = resolveApiKey(override);
-  if (!key) {
-    throw new RemoteError('No API key configured. Run `lurq setup` to connect this machine.', 401);
-  }
+  if (!key) throw new MissingKeyError();
   return key;
 }
 

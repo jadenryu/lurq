@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import updateNotifier from 'update-notifier';
 import { buildProgram } from '../cli/index';
+import { withSetupOnMissingKey } from '../cli/install';
 import { loadEnv } from '../core/config';
 import { enforceGate } from '../core/gate';
 import { logger } from '../core/logger';
@@ -17,8 +18,8 @@ enforceGate(process.argv.slice(2));
 
 notifyOnUpdate();
 
-buildProgram()
-  .parseAsync(process.argv)
+// A fresh program per attempt: commander instances are single-use.
+withSetupOnMissingKey(() => buildProgram().parseAsync(process.argv))
   .catch((err) => {
     logger.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
