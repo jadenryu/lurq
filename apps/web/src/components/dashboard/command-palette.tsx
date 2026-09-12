@@ -48,7 +48,7 @@ export function CommandPalette({
   const [copied, setCopied] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo(() => searchCapabilities(query, 6), [query]);
+  const matches = useMemo(() => searchCapabilities(query, 6), [query]);
 
   /**
    * Two modes, one box.
@@ -153,6 +153,10 @@ export function CommandPalette({
 
   /** Ask needs a real question, not a stray keystroke. */
   const canAsk = query.trim().length > 8;
+  /** No keyword hit means the catalog returned its generic first six, which
+   *  answer nothing. A real question then goes straight to Ask: first row,
+   *  preselected, so Enter asks instead of opening an unrelated page. */
+  const results = canAsk && !matches.some((c) => c.score > 0) ? [] : matches;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -237,9 +241,10 @@ export function CommandPalette({
             );
           })}
 
-          {/* The second mode. Below the catalog matches, never instead of them:
-              a question about the product is answered instantly from the local
-              index, and only a question about YOUR data is worth a round trip. */}
+          {/* The second mode. Below the catalog matches when there are any: a
+              question about the product is answered instantly from the local
+              index, and only a question the catalog cannot answer is worth a
+              round trip. With no match, it is the only row. */}
           {canAsk && (
             <button
               role="option"
@@ -253,10 +258,10 @@ export function CommandPalette({
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-foreground">
-                  Ask about your own repos, drift and usage
+                  Ask lurq about packages, upgrades and your repos
                 </p>
                 <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  Reads your account and answers from what it finds — never from memory.
+                  Looks it up in the index and your account, and answers from what it finds, never from memory.
                 </p>
               </div>
               <span className="shrink-0 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
