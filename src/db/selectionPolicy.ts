@@ -51,10 +51,18 @@ export async function setSelectionPolicy(
     });
 }
 
+/** Whole months from `date` to now; null when the date is unknown. */
+function monthsSince(date: Date | null): number | null {
+  if (!date) return null;
+  const ms = Date.now() - date.getTime();
+  if (ms < 0) return 0;
+  return Math.floor(ms / (1000 * 60 * 60 * 24 * 30.44));
+}
+
 /**
- * License and deprecation for the named packages.
+ * Every package fact the selection rules read, for the named packages.
  *
- * Kept out of the search queries on purpose. Adding two columns to both legs of
+ * Kept out of the search queries on purpose. Adding these columns to both legs of
  * the hybrid retrieval would widen the hot path for every caller so that policy
  * — which most callers do not have — could read them. One keyed lookup over at
  * most five names is cheaper than that, and it keeps search unaware of policy.
@@ -74,11 +82,26 @@ export async function loadPolicyFacts(
       name: packages.name,
       license: packages.license,
       deprecated: packages.deprecated,
+      archived: packages.archived,
+      advisories: packages.advisories,
+      weeklyDownloads: packages.weeklyDownloads,
+      lastReleaseAt: packages.lastReleaseAt,
+      bundleMinGzipKb: packages.bundleMinGzipKb,
     })
     .from(packages)
     .where(and(inArray(packages.name, names), eq(packages.ecosystem, ecosystem)));
   for (const row of rows) {
-    out.set(row.name, { license: row.license, deprecated: row.deprecated });
+    out.set(row.name, {
+      license: row.license,
+      deprecated: row.deprecated,
+      archived: row.archived,
+      advisories: row.advisories,
+      weeklyDownloads: row.weeklyDownloads,
+      // Resolved here, not in `check`: the rules stay a pure function with no
+      // clock, which is what lets every one of them be tested exhaustively.
+      monthsSinceRelease: monthsSince(row.lastReleaseAt),
+      bundleKb: row.bundleMinGzipKb,
+    });
   }
   return out;
 }
