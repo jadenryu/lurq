@@ -7,6 +7,10 @@ import { siteUrl as url } from "@/lib/site";
 // Public marketing pages only: /dashboard and the auth routes are intentionally
 // excluded (and disallowed in robots.ts).
 
+// /book-demo is deliberately absent: it is a one-line redirect to /sign-up, and
+// a <loc> that answers 307 spends crawl budget to say "not here". Put it back
+// the day it renders something.
+//
 // Hand-written, because there are no [param] routes left to derive from: the
 // /product, /solutions, /proof and /changelog trees were removed and the site is
 // the landing page plus the standing pages below. If a generated route group
@@ -19,7 +23,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: url("/"), lastModified, changeFrequency: "weekly", priority: 1 },
     { url: url("/about"), lastModified, changeFrequency: "monthly", priority: 0.7 },
     { url: url("/partnerships"), lastModified, changeFrequency: "monthly", priority: 0.6 },
-    { url: url("/book-demo"), lastModified, changeFrequency: "monthly", priority: 0.6 },
     { url: url("/security"), lastModified, changeFrequency: "monthly", priority: 0.5 },
     { url: url("/license"), lastModified, changeFrequency: "yearly", priority: 0.3 },
     { url: url("/privacy"), lastModified, changeFrequency: "yearly", priority: 0.3 },

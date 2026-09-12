@@ -218,8 +218,8 @@ export default function SecurityPage() {
         </ul>
         <p>
           If one of these blocks an evaluation,{" "}
-          <Link href="/book-demo">tell us which one</Link> — that is the signal that
-          moves it up the list.
+          <a href="mailto:contact@lurq.run">tell us which one</a> — that is the
+          signal that moves it up the list.
         </p>
       </Prose>
     </PageShell>

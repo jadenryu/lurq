@@ -53,7 +53,12 @@ export function parseTarget(raw: string): ScanTarget | null {
   if (!input) return null;
 
   // A pasted URL, with or without a scheme, with or without trailing path.
-  input = input.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  // The leading-slash strip is not cosmetic: `/owner/repo` splits to an empty
+  // owner and was rejected outright. The landing page draws a `/` glyph beside
+  // its input, so typing the slash you can see is the obvious thing to do, and
+  // every caller that is not that input — the CLI, an agent, a pasted path —
+  // could hit it too. Normalizing here fixes all of them at once.
+  input = input.replace(/^https?:\/\//i, '').replace(/^\/+/, '').replace(/^www\./i, '');
   if (input.toLowerCase().startsWith('github.com/')) input = input.slice('github.com/'.length);
   input = input.replace(/^@/, '').replace(/\.git$/i, '').replace(/\/+$/, '');
 

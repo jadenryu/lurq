@@ -19,6 +19,11 @@ describe('parseTarget', () => {
     // A deep link to a file in the repo is still that repo.
     expect(parseTarget('github.com/vercel/next.js/tree/canary')).toEqual(repo);
     expect(parseTarget('  vercel/next.js  ')).toEqual(repo);
+    // The scan box draws a `/` next to the field, so people type the slash they
+    // can see. This used to split to an empty owner and be refused outright.
+    expect(parseTarget('/vercel/next.js')).toEqual(repo);
+    expect(parseTarget('///vercel/next.js')).toEqual(repo);
+    expect(parseTarget(' /vercel/next.js')).toEqual(repo);
   });
 
   it('reads a profile as a profile', () => {
@@ -35,5 +40,9 @@ describe('parseTarget', () => {
     // Not a path traversal into someone else's namespace.
     expect(parseTarget('owner/../../etc/passwd')).toBeNull();
     expect(parseTarget('owner/na me')).toBeNull();
+    // Stripping the leading slash must not open a way past the owner check.
+    expect(parseTarget('/')).toBeNull();
+    expect(parseTarget('/../owner')).toBeNull();
+    expect(parseTarget('/owner/../../etc/passwd')).toBeNull();
   });
 });
