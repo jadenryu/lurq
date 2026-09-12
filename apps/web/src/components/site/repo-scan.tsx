@@ -212,7 +212,17 @@ export function RepoScan() {
         <input
           id="repo-scan"
           value={target}
-          onChange={(e) => setTarget(e.target.value)}
+          // The glyph to the left is already a slash, so a typed or pasted
+          // leading slash reads as `//owner/repo`. Fold it into the one that
+          // is there rather than showing the user two. Leading whitespace goes
+          // with it: a paste from a URL bar or a chat message often carries a
+          // space, and `" /owner/repo"` would otherwise keep its slash.
+          //
+          // Safe on a controlled input: when the stripped value equals the
+          // current state React bails out of the re-render, but its controlled
+          // -input restore still snaps the DOM value back to state, so the
+          // rejected character does not linger in the field.
+          onChange={(e) => setTarget(e.target.value.replace(/^[\s/]+/, ""))}
           placeholder="your-name/your-repo, or just your-name"
           spellCheck={false}
           autoComplete="off"
