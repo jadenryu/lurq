@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { Resend } from 'resend';
-import { rateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import { PLANS, type Tier } from '@lurq/core/plans';
 
 /**
@@ -32,10 +32,11 @@ export async function POST(request: Request) {
 
   // Low ceiling: this is a human clicking a button, not a polled endpoint. It
   // also caps how much mail one account can put in the operator's inbox.
-  if (!rateLimit(`billing:request:${userId}`, 3, 3_600_000)) {
+  const limit = checkRateLimit(`billing:request:${userId}`, 3, 3_600_000);
+  if (!limit.ok) {
     return NextResponse.json(
       { error: "We already have your request. We'll be in touch shortly." },
-      { status: 429 },
+      { status: 429, headers: rateLimitHeaders(limit) },
     );
   }
 

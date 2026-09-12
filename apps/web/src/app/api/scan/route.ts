@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 /**
  * The landing page's scan box, forwarded to the backend's public scan.
@@ -14,8 +14,41 @@ import { rateLimit } from "@/lib/rate-limit";
  */
 export const dynamic = "force-dynamic";
 
-/** Scans per IP per minute. Generous for a person, useless as a scan API. */
+/**
+ * Scans per IP per minute. Generous for a person, useless as a scan API.
+ *
+ * A courtesy layer, not the ceiling. lib/rate-limit counts in memory, so on a
+ * serverless host each warm instance enforces this independently and the real
+ * limit is 6 × however many are up. The authoritative one is `scanLimiter` on
+ * the backend's /scan/public, which is Redis-backed when REDIS_URL is set and
+ * therefore correct across instances. This exists to keep an obvious refresh
+ * loop from crossing the network at all.
+ */
 const PER_MINUTE = 6;
+
+/**
+ * The backend's rate-limit verdict, passed through instead of swallowed.
+ *
+ * Its limiter is the authoritative one, so when it is the limiter that fired,
+ * its headers are the ones that say when to come back. Without this the
+ * browser got a bare 429 from a hop that had not limited anything.
+ */
+const RATE_LIMIT_HEADERS = [
+  "retry-after",
+  "ratelimit-limit",
+  "ratelimit-remaining",
+  "ratelimit-reset",
+  "ratelimit-policy",
+] as const;
+
+function forwardedLimitHeaders(res: Response): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of RATE_LIMIT_HEADERS) {
+    const value = res.headers.get(name);
+    if (value) out[name] = value;
+  }
+  return out;
+}
 
 function clientIp(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
@@ -29,10 +62,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Scanning isn't available right now." }, { status: 503 });
   }
 
-  if (!rateLimit(`scan:${clientIp(req)}`, PER_MINUTE)) {
+  const limit = checkRateLimit(`scan:${clientIp(req)}`, PER_MINUTE);
+  if (!limit.ok) {
     return NextResponse.json(
       { error: "That's a lot of scans. Give it a minute." },
-      { status: 429 },
+      { status: 429, headers: rateLimitHeaders(limit) },
     );
   }
 
@@ -77,7 +111,10 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json(data, { status: res.status });
+    return NextResponse.json(data, {
+      status: res.status,
+      headers: forwardedLimitHeaders(res),
+    });
   } catch {
     return NextResponse.json({ error: "Could not reach the index." }, { status: 502 });
   }

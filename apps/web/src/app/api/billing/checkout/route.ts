@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { LurqIssuerError, startCheckout } from "@/lib/lurq-issuer";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { PLANS, type Tier } from "@lurq/core/plans";
 
 /**
@@ -24,8 +24,12 @@ export async function POST(request: Request) {
 
   // Checkout session creation is a Stripe API call per request. Throttle it so a
   // stuck client cannot turn a double-click into a rate-limit problem upstream.
-  if (!rateLimit(`billing:checkout:${userId}`, 10, 60_000)) {
-    return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
+  const limit = checkRateLimit(`billing:checkout:${userId}`, 10, 60_000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: rateLimitHeaders(limit) },
+    );
   }
 
   let tier: Tier = "pro";

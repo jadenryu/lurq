@@ -70,7 +70,7 @@ export default function Home() {
   return (
     <>
       <SiteNav />
-      <main className="flex-1">
+      <main id="content" tabIndex={-1} className="flex-1">
         <Hero />
         {/* Answers the first question the hero raises: does this work with the
             editor I already have. */}
