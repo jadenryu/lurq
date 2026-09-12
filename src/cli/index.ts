@@ -90,6 +90,38 @@ export function buildProgram(): Command {
       );
     });
 
+  // Selection policy as a file in the repo: pull it, review changes in a PR,
+  // push from CI. Pushing needs a key with the policy:write scope, which the key
+  // `setup` stores never has.
+  const policy = program
+    .command('policy')
+    .description('keep your selection policy in a file: pull it, review it, push it');
+
+  policy
+    .command('pull')
+    .argument('[file]', 'write the policy here (default: stdout)')
+    .description('download the policy your agents are held to')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(async (file: string | undefined, opts: { url?: string; apiKey?: string }) => {
+      const { runPolicyPull } = await import('./policy');
+      await runPolicyPull(file, opts);
+    });
+
+  policy
+    .command('push')
+    .argument('<file>', 'policy JSON, as written by `lurq policy pull`')
+    .description('replace the policy with this file (needs a policy:write key)')
+    .option('--check', 'validate the file only; send nothing (for PR checks)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(
+      async (file: string, opts: { check?: boolean; url?: string; apiKey?: string }) => {
+        const { runPolicyPush } = await import('./policy');
+        await runPolicyPush(file, opts);
+      },
+    );
+
   // Answers "can lurq do X" without making anyone read `--help` twice. Local
   // and instant: the catalog ships in the binary, so this works before setup and
   // offline.

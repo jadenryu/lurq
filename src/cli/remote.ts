@@ -8,6 +8,7 @@
  */
 import { DEFAULT_ENDPOINT } from '../core/constants';
 import { resolveApiKey, resolveEndpoint } from '../core/userConfig';
+import type { SelectionPolicy } from '../policy/types';
 
 export class RemoteError extends Error {
   constructor(
@@ -85,14 +86,16 @@ async function postJson(
   body: unknown,
   headers: Record<string, string>,
   timeoutMs = 60_000,
+  method: 'GET' | 'POST' | 'PUT' = 'POST',
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify(body),
+      // fetch rejects a GET that carries a body, even an empty one.
+      body: method === 'GET' ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (err) {
@@ -103,7 +106,15 @@ async function postJson(
   }
 }
 
-async function post<T>(path: string, body: unknown, opts: RemoteOptions = {}): Promise<T> {
+const post = <T>(path: string, body: unknown, opts: RemoteOptions = {}): Promise<T> =>
+  request<T>('POST', path, body, opts);
+
+async function request<T>(
+  method: 'GET' | 'POST' | 'PUT',
+  path: string,
+  body: unknown,
+  opts: RemoteOptions = {},
+): Promise<T> {
   const url = `${endpoint(opts.url)}${path}`;
   // `apiKey()` is evaluated here rather than inside postJson, so a missing key
   // throws before any request is built and needs no unwrapping downstream.
@@ -112,6 +123,7 @@ async function post<T>(path: string, body: unknown, opts: RemoteOptions = {}): P
     body,
     { Authorization: `Bearer ${apiKey(opts.apiKey)}` },
     opts.timeoutMs,
+    method,
   );
 
   if (!res.ok) {
@@ -277,4 +289,17 @@ export function reportUpgradeRuns(
   opts: RemoteOptions = {},
 ): Promise<{ recorded: number; rejected: number }> {
   return post<{ recorded: number; rejected: number }>('/upgrade-runs', { runs }, opts);
+}
+
+/** The account's selection policy, as the dashboard would save it. */
+export async function getPolicy(opts: RemoteOptions = {}): Promise<SelectionPolicy> {
+  return (await request<{ policy: SelectionPolicy }>('GET', '/policy', undefined, opts)).policy;
+}
+
+/** Replace the policy. The server rejects a key without policy:write (403). */
+export async function putPolicy(
+  policy: SelectionPolicy,
+  opts: RemoteOptions = {},
+): Promise<SelectionPolicy> {
+  return (await request<{ policy: SelectionPolicy }>('PUT', '/policy', { policy }, opts)).policy;
 }

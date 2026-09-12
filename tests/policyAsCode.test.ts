@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 import { hasScope, parseScopes } from '../src/auth/apiKeys';
+import { readPolicyFile, runPolicyPush } from '../src/cli/policy';
 import { describeRules } from '../src/policy/enforce';
 import { DEFAULT_SELECTION_POLICY, type SelectionPolicy } from '../src/policy/types';
 
@@ -72,5 +76,31 @@ describe('describeRules', () => {
       'A release within the last 18 months.',
       'Bundle size at most 50 KB min+gzip.',
     ]);
+  });
+});
+
+describe('lurq policy push', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lurq-policy-'));
+  const file = (name: string, body: string) => {
+    const path = join(dir, name);
+    writeFileSync(path, body);
+    return path;
+  };
+
+  it('reads a pulled policy back as the same policy', () => {
+    const pulled = file('ok.json', JSON.stringify(policy({ deny: [{ name: 'request' }] })));
+    expect(readPolicyFile(pulled)).toEqual(policy({ deny: [{ name: 'request' }] }));
+  });
+
+  it('fails --check on an invalid file without touching the network', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await runPolicyPush(file('partial.json', '{"allow":[]}'), { check: true });
+    await runPolicyPush(file('broken.json', '{"allow":'), { check: true });
+    expect(process.exitCode).toBe(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    process.exitCode = undefined;
+    err.mockRestore();
+    fetchSpy.mockRestore();
   });
 });
