@@ -291,8 +291,10 @@ export function buildProgram(): Command {
     .argument('[dir]', 'project directory (defaults to the current one)')
     .description('what this project depends on, and what is outdated, vulnerable or drifting')
     .option('--project-only', 'ignore user-level agent configs; read only files in the project')
+    .option('--probe', 'probe your MCP servers now instead of waiting for the worker (needs DATABASE_URL)')
+    .option('--probe-budget <seconds>', 'wall-clock ceiling for probing (default 90)')
     .option('--json', 'output JSON instead of a table')
-    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean }) => {
+    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean; probe?: boolean; probeBudget?: string }) => {
       const { runAudit } = await import('./commands');
       await runAudit(dir, opts);
     });
