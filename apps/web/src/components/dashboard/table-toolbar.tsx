@@ -38,7 +38,7 @@ export function TableToolbar({
           placeholder={placeholder}
           aria-label={placeholder}
           className={cn(
-            "h-9 w-full rounded-[var(--radius-control)] border border-border bg-transparent pl-9 pr-8 font-mono text-xs",
+            "h-8 w-full rounded-[var(--radius-control)] border border-edge bg-surface pl-9 pr-8 font-mono text-xs",
             "placeholder:text-ink-3 focus-visible:border-signal/50 focus-visible:outline-none",
             "[&::-webkit-search-cancel-button]:appearance-none",
           )}
@@ -56,7 +56,9 @@ export function TableToolbar({
       </div>
 
       {filters && onFilterChange && (
-        <div className="flex items-center gap-1.5">
+        // One segmented track, matching RangeTabs. These options are mutually
+        // exclusive, and a row of separately outlined pills claims they aren't.
+        <div className="inline-flex h-8 items-center gap-0.5 rounded-[var(--radius-control)] border border-edge bg-surface-2 p-0.5">
           {filters.map((f) => {
             const active = activeFilter === f.id;
             return (
@@ -66,10 +68,10 @@ export function TableToolbar({
                 onClick={() => onFilterChange(f.id)}
                 aria-pressed={active}
                 className={cn(
-                  "h-9 rounded-[var(--radius-control)] border px-3 font-mono text-xs lowercase tracking-wide transition-colors",
+                  "rounded-[3px] px-2.5 text-[12px] font-medium leading-7 lowercase transition-colors",
                   active
-                    ? "border-signal/45 bg-signal/10 text-foreground"
-                    : "border-border text-muted-foreground hover:text-foreground",
+                    ? "bg-surface text-ink shadow-[0_1px_0_0_var(--edge-lit)]"
+                    : "text-ink-3 hover:text-ink",
                 )}
               >
                 {f.label}
@@ -92,4 +94,4 @@ export function TableToolbar({
 
 /** Shared header-cell styling so every dashboard table matches. */
 export const thClass =
-  "text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3";
+  "text-[10.5px] font-medium uppercase tracking-[0.07em] text-ink-3";

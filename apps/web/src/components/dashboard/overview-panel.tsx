@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { ChartValues, ColumnChart, BarList } from "@/components/dashboard/charts";
-import { Chip, EmptyState, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
+import { Chip, EmptyState, Panel, PanelHeader, Row, Rows, microLabel } from "@/components/dashboard/panel";
 import { Stagger, StaggerItem } from "@/components/dashboard/motion";
-import { HeroFigure, StatRow, StatTile } from "@/components/dashboard/stat-tile";
+import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import type { OverviewData } from "@/lib/dashboard-data";
 import { fmtDay, relativeTime } from "@/lib/format";
 
@@ -11,7 +11,7 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3 transition-colors hover:text-foreground"
+      className={`inline-flex items-center gap-1 transition-colors hover:text-ink ${microLabel}`}
     >
       {children}
       <ArrowUpRight className="size-3" />
@@ -20,9 +20,13 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
 }
 
 /**
- * The dashboard's front door: four counters, the volume trend, what the agent has
- * been calling, and the two most recent feeds, enough to answer "is lurq working
- * for me?" without navigating.
+ * The dashboard's front door, laid out as a console rather than a card wall:
+ * one metric strip, one dominant plot, then a three-up band of dense lists.
+ *
+ * The old shape was six equal-weight cards in three stacked rows, which asked the
+ * reader to decide what mattered. A strip at the top, a chart that owns the fold,
+ * and short lists underneath answers "is lurq working for me?" in the order the
+ * question is actually asked.
  */
 export function OverviewPanel({ data, days }: { data: OverviewData; days: number }) {
   const { keys, usage, outcomes, contributions } = data;
@@ -31,67 +35,51 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
   const decided = outcomes.length;
   const accepted = outcomes.filter((o) => o.accepted).length;
   const acceptance = decided > 0 ? Math.round((accepted / decided) * 100) : null;
-  const recent = outcomes.slice(0, 5);
-  const topPackages = contributions.packages.slice(0, 5);
+  const recent = outcomes.slice(0, 6);
+  const topPackages = contributions.packages.slice(0, 6);
 
   return (
-    <div className="space-y-6">
-      {/* The counters arrive left to right, then the panels below them in two
-          further waves. Each Stagger starts on mount, so the small `delay` on
-          the later groups is what makes the page read top-down rather than all
-          three rows animating at once. */}
-      {/* md, not lg: at 768–1024px this row used to drop to two columns while
-          every other page still showed four, so the tiles resized when you
-          switched tabs. StatRow owns this everywhere it can; here the stagger
-          wrapper needs the grid itself, so the scale is matched by hand. */}
-      <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StaggerItem>
-          {/* Every tile on the landing view goes somewhere. This is the first
-              screen anyone sees, and four numbers that do nothing set the
-              expectation that the rest of the dashboard is a poster. */}
-          <StatTile label="calls today" value={usage.today} href="/dashboard/usage" />
-        </StaggerItem>
-        <StaggerItem>
-          <StatTile
-            label="active keys"
-            value={activeKeys.length}
-            hint={keys.length > activeKeys.length ? `${keys.length - activeKeys.length} revoked` : undefined}
-            href="/dashboard/keys"
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <StatTile
-            label="packages added"
-            value={contributions.total}
-            hint="first requested by you"
-            href="/dashboard/contributions"
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <StatTile
-            label="acceptance"
-            value={acceptance === null ? "-" : `${acceptance}%`}
-            hint={decided > 0 ? `${accepted}/${decided} recommendations` : "no outcomes yet"}
-            href="/dashboard/activity"
-          />
-        </StaggerItem>
-      </Stagger>
+    <div className="space-y-4">
+      <StatRow>
+        {/* Every tile on the landing view goes somewhere. This is the first screen
+            anyone sees, and four numbers that do nothing set the expectation that
+            the rest of the dashboard is a poster. */}
+        <StatTile label="calls today" value={usage.today} href="/dashboard/usage" />
+        <StatTile
+          label={`calls · ${days}d`}
+          value={total}
+          hint={`${(total / Math.max(usage.series.length, 1)).toFixed(total < 1000 ? 1 : 0)} / day avg`}
+          href="/dashboard/usage"
+        />
+        <StatTile
+          label="active keys"
+          value={activeKeys.length}
+          hint={keys.length > activeKeys.length ? `${keys.length - activeKeys.length} revoked` : undefined}
+          href="/dashboard/keys"
+        />
+        <StatTile
+          label="acceptance"
+          value={acceptance === null ? "—" : `${acceptance}%`}
+          hint={decided > 0 ? `${accepted}/${decided} recommendations` : "no outcomes yet"}
+          href="/dashboard/activity"
+        />
+      </StatRow>
 
-      {/* items-start: without it the two cards stretch to equal height and the
-          shorter one ends up with a large dead band under its content. */}
-      <Stagger className="grid items-start gap-6 lg:grid-cols-3" delay={0.06}>
-        <StaggerItem className="lg:col-span-2">
-          <Panel>
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <HeroFigure
-                label="total calls"
-                value={total}
-                hint={`Across the last ${days} days.`}
-              />
+      <Stagger className="space-y-4" delay={0.06}>
+        <StaggerItem>
+          {/* Full width, and the only plot on the page. A trend line squeezed into
+              two thirds of a 1024px column next to a bar list was the reason it
+              read as a widget instead of as the page's subject. */}
+          <Panel padding="none">
+            <div className="flex h-11 items-center justify-between gap-4 border-b border-edge px-[var(--panel-px)]">
+              <div className="flex items-baseline gap-2.5">
+                <p className="text-[13px] font-medium tracking-[-0.01em] text-ink">requests</p>
+                <span className={microLabel}>last {days} days</span>
+              </div>
               <SectionLink href="/dashboard/usage">usage detail</SectionLink>
             </div>
-            <div className="mt-6">
-              <ColumnChart data={usage.series} />
+            <div className="px-[var(--panel-px)] pb-4 pt-4">
+              <ColumnChart data={usage.series} height={200} />
               <ChartValues
                 columns={["day", "calls"]}
                 rows={usage.series.map((p) => [fmtDay(p.date), p.count])}
@@ -101,93 +89,91 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
         </StaggerItem>
 
         <StaggerItem>
-          <Panel>
-            <PanelHeader title="by tool" />
-            <div className="mt-5">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel>
+              <PanelHeader title="by tool" />
               {usage.byTool.length > 0 ? (
                 <BarList
                   layout="stacked"
-                  items={usage.byTool.map((t) => ({ label: t.tool, count: t.count }))}
+                  items={usage.byTool.slice(0, 6).map((t) => ({
+                    label: t.tool,
+                    count: t.count,
+                    href: `/dashboard/guide#tool-${t.tool}`,
+                  }))}
                 />
               ) : (
                 <EmptyState title="No calls yet">
                   Tool usage appears here once your agent starts querying the index.
                 </EmptyState>
               )}
-            </div>
-          </Panel>
-        </StaggerItem>
-      </Stagger>
+            </Panel>
 
-      <Stagger className="grid gap-6 lg:grid-cols-2" delay={0.12}>
-        <StaggerItem>
-          <Panel>
-            <PanelHeader
-              title="recent activity"
-              trailing={<SectionLink href="/dashboard/activity">all</SectionLink>}
-            />
-            <div className="mt-5">
+            <Panel padding="none">
+              <PanelHeader
+                title="recent activity"
+                trailing={<SectionLink href="/dashboard/activity">all</SectionLink>}
+                className="mx-0 mt-0 mb-0 px-[var(--panel-px)]"
+              />
               {recent.length === 0 ? (
-                <EmptyState title="No activity yet">
-                  Outcomes land here once your agent reports whether a recommendation worked.
-                </EmptyState>
+                <div className="p-[var(--panel-px)]">
+                  <EmptyState title="No activity yet">
+                    Outcomes land here once your agent reports whether a recommendation
+                    worked.
+                  </EmptyState>
+                </div>
               ) : (
-                <ul className="divide-y divide-border/60">
+                <Rows>
                   {recent.map((o) => (
-                    <li
-                      key={`${o.packageName}-${o.createdAt}`}
-                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                    >
-                      <span className="min-w-0 flex-1 truncate font-mono text-sm">{o.packageName}</span>
+                    <Row key={`${o.packageName}-${o.createdAt}`}>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink">
+                        {o.packageName}
+                      </span>
                       <Chip tone={o.accepted ? "good" : "neutral"} dot>
                         {o.accepted ? "accepted" : "passed"}
                       </Chip>
-                      <span className="w-16 shrink-0 text-right font-mono text-[0.65rem] tabular-nums text-ink-3">
+                      <span className="w-14 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-3">
                         {relativeTime(o.createdAt)}
                       </span>
-                    </li>
+                    </Row>
                   ))}
-                </ul>
+                </Rows>
               )}
-            </div>
-          </Panel>
-        </StaggerItem>
+            </Panel>
 
-        <StaggerItem>
-          <Panel>
-            <PanelHeader
-              title="your contributions"
-              trailing={<SectionLink href="/dashboard/contributions">all</SectionLink>}
-            />
-            <div className="mt-5">
+            <Panel padding="none">
+              <PanelHeader
+                title="your contributions"
+                trailing={<SectionLink href="/dashboard/contributions">all</SectionLink>}
+                className="mx-0 mt-0 mb-0 px-[var(--panel-px)]"
+              />
               {topPackages.length === 0 ? (
-                <EmptyState title="No contributions yet">
-                  Evaluate a package nobody has asked lurq about, and you get the credit here.
-                </EmptyState>
+                <div className="p-[var(--panel-px)]">
+                  <EmptyState title="No contributions yet">
+                    Evaluate a package nobody has asked lurq about, and you get the credit
+                    here.
+                  </EmptyState>
+                </div>
               ) : (
-                <ul className="divide-y divide-border/60">
+                <Rows>
                   {topPackages.map((p) => (
-                    <li
-                      key={p.name}
-                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                    >
-                      <span className="min-w-0 flex-1 truncate font-mono text-sm">{p.name}</span>
-                      {p.category && <Chip>{p.category}</Chip>}
-                      <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                        {p.healthScore ?? "-"}
+                    <Row key={p.name}>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink">
+                        {p.name}
                       </span>
-                    </li>
+                      {p.category && <Chip>{p.category}</Chip>}
+                      <span className="w-8 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-2">
+                        {p.healthScore ?? "—"}
+                      </span>
+                    </Row>
                   ))}
-                </ul>
+                </Rows>
               )}
-            </div>
-          </Panel>
+            </Panel>
+          </div>
         </StaggerItem>
       </Stagger>
 
-      <p className={eyebrow}>
-        scores are computed from public signals · never editorial
-      </p>
+      <p className={microLabel}>scores are computed from public signals · never editorial</p>
     </div>
   );
 }

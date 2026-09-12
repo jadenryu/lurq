@@ -18,8 +18,12 @@ export const RANGES = [
 
 export function RangeTabs({ active, basePath }: { active: number; basePath: string }) {
   return (
+    // A segmented control, not three loose buttons: one inset track with the
+    // selected cell lifted out of it. Three separate outlined pills read as
+    // three unrelated actions, which is exactly wrong for a set where picking one
+    // un-picks the others.
     <div
-      className="flex items-center gap-1.5"
+      className="inline-flex h-8 items-center gap-0.5 rounded-[var(--radius-control)] border border-edge bg-surface-2 p-0.5"
       role="group"
       aria-label="Time range"
     >
@@ -31,10 +35,10 @@ export function RangeTabs({ active, basePath }: { active: number; basePath: stri
             href={`${basePath}?days=${r.days}`}
             aria-current={selected ? "true" : undefined}
             className={cn(
-              "h-9 rounded-[var(--radius-control)] border px-3 font-mono text-xs leading-9 transition-colors",
+              "rounded-[3px] px-2.5 text-[12px] font-medium leading-7 tabular-nums transition-colors",
               selected
-                ? "border-signal/45 bg-signal/10 text-foreground"
-                : "border-border text-muted-foreground hover:text-foreground",
+                ? "bg-surface text-ink shadow-[0_1px_0_0_var(--edge-lit)]"
+                : "text-ink-3 hover:text-ink",
             )}
           >
             {r.label}
