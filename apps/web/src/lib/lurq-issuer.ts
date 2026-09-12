@@ -448,7 +448,10 @@ export async function fetchContributions(
 export type AdvisorySeverity = "info" | "low" | "moderate" | "high" | "critical";
 
 export interface SelectionPolicy {
-  allow: string[];
+  /** `warn` reports what the rules would refuse without refusing it. */
+  mode: "enforce" | "warn";
+  /** `expires` is the first day (YYYY-MM-DD) the exception no longer applies. */
+  allow: { name: string; reason?: string; expires?: string }[];
   deny: { name: string; reason?: string }[];
   minConfidence: "unproven" | "promising" | "emerging" | "proven" | null;
   licenses: string[] | null;
@@ -461,9 +464,12 @@ export interface SelectionPolicy {
   maxStaleMonths: number | null;
   /** Minified + gzipped, KB. */
   maxBundleKb: number | null;
+  /** Cool-down: days since the package was first published. */
+  minPackageAgeDays: number | null;
 }
 
 export const EMPTY_SELECTION_POLICY: SelectionPolicy = {
+  mode: "enforce",
   allow: [],
   deny: [],
   minConfidence: null,
@@ -474,6 +480,7 @@ export const EMPTY_SELECTION_POLICY: SelectionPolicy = {
   minWeeklyDownloads: null,
   maxStaleMonths: null,
   maxBundleKb: null,
+  minPackageAgeDays: null,
 };
 
 export async function fetchSelectionPolicy(ownerId: string): Promise<SelectionPolicy> {
@@ -481,6 +488,37 @@ export async function fetchSelectionPolicy(ownerId: string): Promise<SelectionPo
   if (!res.ok) throw new LurqIssuerError("Could not read policy.", 502);
   const data = (await res.json()) as { policy: SelectionPolicy };
   return data.policy;
+}
+
+/** A package the policy refused (or warned about), grouped over the window. */
+export interface PolicyDecision {
+  packageName: string;
+  rule: string;
+  action: "blocked" | "warned";
+  count: number;
+  /** UTC day of the latest hit. */
+  lastDay: string;
+}
+
+/** One saved change to the policy, as -/+ rule sentences. */
+export interface PolicyChange {
+  /** `dashboard`, or `key lurq_live_…` for a CLI push. */
+  actor: string;
+  at: string;
+  changes: string[];
+}
+
+export async function fetchPolicyDecisions(ownerId: string, days = 30): Promise<PolicyDecision[]> {
+  const qs = new URLSearchParams({ ownerId, days: String(days) });
+  const res = await issuerFetch(`/selection-policy/decisions?${qs.toString()}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read policy decisions.", 502);
+  return ((await res.json()) as { decisions: PolicyDecision[] }).decisions;
+}
+
+export async function fetchPolicyHistory(ownerId: string): Promise<PolicyChange[]> {
+  const res = await issuerFetch(`/selection-policy/history?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read policy history.", 502);
+  return ((await res.json()) as { changes: PolicyChange[] }).changes;
 }
 
 /** One connected repo, ruled against the policy. Mirrors src/policy/conformance. */

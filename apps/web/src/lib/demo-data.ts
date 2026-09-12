@@ -20,6 +20,8 @@ import type {
   DashboardOutcome,
   DashboardRepo,
   DashboardUsage,
+  PolicyChange,
+  PolicyDecision,
   RepoAlert,
   RepoBrief,
   RepoDetailPayload,
@@ -303,7 +305,11 @@ export function demoAlerts(): RepoAlert[] {
  */
 export function demoSelectionPolicy(): SelectionPolicy {
   return {
-    allow: ["lodash", "moment-timezone"],
+    mode: "enforce",
+    allow: [
+      { name: "lodash" },
+      { name: "moment-timezone", reason: "Legacy scheduling code", expires: "2027-01-01" },
+    ],
     deny: [
       { name: "axios", reason: "Use the internal http client (@acme/http)." },
       { name: "request", reason: "Unmaintained; use undici." },
@@ -316,6 +322,7 @@ export function demoSelectionPolicy(): SelectionPolicy {
     minWeeklyDownloads: 10000,
     maxStaleMonths: 24,
     maxBundleKb: null,
+    minPackageAgeDays: 7,
   };
 }
 
@@ -729,4 +736,37 @@ export function demoRepoDetail(fullName: string): Omit<RepoDetailPayload, keyof 
     workflowPath: ".github/workflows/lurq-upgrade.yml",
     setupUrl: `https://github.com/${fullName}/new/main`,
   };
+}
+
+/** A UTC timestamp `days` before now, so the fixtures never read as stale. */
+function demoAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/** What the demo policy above caught, consistent with its rules. */
+export function demoPolicyDecisions(): PolicyDecision[] {
+  return [
+    { packageName: "axios", rule: "denied", action: "blocked", count: 14, lastDay: demoAgo(0).slice(0, 10) },
+    { packageName: "request", rule: "denied", action: "blocked", count: 6, lastDay: demoAgo(2).slice(0, 10) },
+    { packageName: "left-pad", rule: "stale", action: "blocked", count: 3, lastDay: demoAgo(4).slice(0, 10) },
+    { packageName: "react-hook-forms", rule: "age", action: "blocked", count: 2, lastDay: demoAgo(1).slice(0, 10) },
+  ];
+}
+
+export function demoPolicyHistory(): PolicyChange[] {
+  return [
+    {
+      actor: "key lurq_live_ci4f2a",
+      at: demoAgo(1),
+      changes: ["+ No packages first published less than 7 days ago."],
+    },
+    {
+      actor: "dashboard",
+      at: demoAgo(9),
+      changes: [
+        "- Warn only: packages that break these rules are reported, not refused.",
+        "+ Never use request: Unmaintained; use undici.",
+      ],
+    },
+  ];
 }

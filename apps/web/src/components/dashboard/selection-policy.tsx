@@ -295,9 +295,11 @@ export function SelectionPolicyPanel({
     policy.minWeeklyDownloads !== null,
     policy.maxStaleMonths !== null,
     policy.maxBundleKb !== null,
+    policy.minPackageAgeDays !== null,
   ];
   const inForce = active.filter(Boolean).length;
   const enforcing = inForce > 0;
+  const warnOnly = policy.mode === "warn";
 
   async function save() {
     setSaving(true);
@@ -333,14 +335,26 @@ export function SelectionPolicyPanel({
             <span className="text-[12px] tabular-nums text-ink-3">
               {inForce} of {active.length} rules
             </span>
-            <Chip tone={enforcing ? "accent" : "neutral"} dot>
-              {enforcing ? "Enforcing" : "Not enforcing"}
+            <Chip tone={!enforcing ? "neutral" : warnOnly ? "warn" : "accent"} dot>
+              {!enforcing ? "Not enforcing" : warnOnly ? "Warn only" : "Enforcing"}
             </Chip>
           </div>
         }
       />
 
       <div className="mt-5 space-y-5">
+        <Row
+          label="Warn only"
+          description="Report what these rules would refuse, without refusing it. Agents get the warning and nothing is blocked. Roll a new rule out this way, see what it catches in the activity below, then switch back to enforcing."
+        >
+          <Toggle
+            on={warnOnly}
+            disabled={locked}
+            labels={["warn", "enforce"]}
+            onClick={() => patch({ mode: warnOnly ? "enforce" : "warn" })}
+          />
+        </Row>
+
         <Row
           label="Blocked packages"
           description="Never recommended, and flagged when an agent evaluates one it found on its own. The reason is handed to the agent verbatim, “use the internal http client” redirects it; “denied” just makes it try again."
@@ -359,13 +373,14 @@ export function SelectionPolicyPanel({
         />
         <div className="-mt-3">
           <NameList
-            items={policy.allow}
+            items={policy.allow.map((a) => a.name)}
             placeholder="package name, then Enter"
             disabled={locked}
             empty="no exceptions"
-            onAdd={(name) => patch({ allow: [...policy.allow, name] })}
-            onRemove={(name) => patch({ allow: policy.allow.filter((a) => a !== name) })}
+            onAdd={(name) => patch({ allow: [...policy.allow, { name }] })}
+            onRemove={(name) => patch({ allow: policy.allow.filter((a) => a.name !== name) })}
           />
+          <ExceptionNotes allow={policy.allow} />
         </div>
 
         <Row
@@ -529,6 +544,18 @@ export function SelectionPolicyPanel({
         </div>
 
         <NumberRule
+          label="Minimum package age"
+          description="Refuses packages first published fewer than this many days ago. Brand-new packages are where malware, hijacked maintainer accounts and names squatted because a model hallucinated them sit before anyone has looked. Waiting a few days is cheap; cleaning up after one is not."
+          unit="days since first publish"
+          presets={[7, 30, 90]}
+          min={1}
+          max={365}
+          value={policy.minPackageAgeDays}
+          disabled={locked}
+          onChange={(minPackageAgeDays) => patch({ minPackageAgeDays })}
+        />
+
+        <NumberRule
           label="Minimum adoption"
           description="A floor on weekly npm downloads. The bluntest rule here on purpose: it is the one number every engineer already has an intuition for, and it says “nothing nobody else runs in production” without anyone having to reason about evidence grades."
           unit="weekly downloads"
@@ -579,6 +606,36 @@ export function SelectionPolicyPanel({
         </Button>
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Reason and expiry for the exceptions that carry them (set from a policy file;
+ * the chips above only show names). An expired exception is called out, because
+ * a name still sitting in the list reads as still applying, and it is not.
+ */
+function ExceptionNotes({ allow }: { allow: SelectionPolicy["allow"] }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const noted = allow.filter((a) => a.reason || a.expires);
+  if (!noted.length) return null;
+  return (
+    <ul className="mt-2.5 space-y-1">
+      {noted.map((a) => {
+        const lapsed = !!a.expires && a.expires <= today;
+        return (
+          <li key={a.name} className="font-mono text-[0.7rem] text-ink-3">
+            <span className="text-ink-2">{a.name}</span>
+            {a.reason && <> · {a.reason}</>}
+            {a.expires && (
+              <span className={lapsed ? "text-warn" : undefined}>
+                {" · "}
+                {lapsed ? `expired ${a.expires}, no longer applied` : `expires ${a.expires}`}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

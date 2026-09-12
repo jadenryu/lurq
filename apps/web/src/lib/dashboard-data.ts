@@ -30,6 +30,8 @@ import {
   demoRepoBrief,
   demoRepoDetail,
   demoRepos,
+  demoPolicyDecisions,
+  demoPolicyHistory,
   demoSelectionPolicy,
   demoUsage,
   isDemoUser,
@@ -62,6 +64,10 @@ import {
   fetchConformance,
   EMPTY_CONFORMANCE,
   type ConformanceReport,
+  fetchPolicyDecisions,
+  fetchPolicyHistory,
+  type PolicyChange,
+  type PolicyDecision,
   type BillingSummary,
 } from "@/lib/lurq-issuer";
 
@@ -234,6 +240,29 @@ export async function loadSelectionPolicy(): Promise<Loaded<SelectionPolicy>> {
     );
     return { data: EMPTY_SELECTION_POLICY, demo: false, failed: true };
   }
+}
+
+const ACTIVITY_DAYS = 30;
+
+export interface PolicyActivity {
+  days: number;
+  decisions: PolicyDecision[];
+  changes: PolicyChange[];
+}
+
+/** What the policy caught over the last month, and who changed it. */
+export function loadPolicyActivity(): Promise<Loaded<PolicyActivity>> {
+  return load(
+    async (userId) => {
+      const [decisions, changes] = await Promise.all([
+        fetchPolicyDecisions(userId, ACTIVITY_DAYS),
+        fetchPolicyHistory(userId),
+      ]);
+      return { days: ACTIVITY_DAYS, decisions, changes };
+    },
+    () => ({ days: ACTIVITY_DAYS, decisions: demoPolicyDecisions(), changes: demoPolicyHistory() }),
+    { days: ACTIVITY_DAYS, decisions: [], changes: [] },
+  );
 }
 
 export async function loadRepos(): Promise<Loaded<ReposData>> {

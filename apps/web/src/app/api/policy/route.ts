@@ -18,6 +18,7 @@ const LIMITS = {
   minWeeklyDownloads: { min: 0, max: 100_000_000 },
   maxStaleMonths: { min: 1, max: 240 },
   maxBundleKb: { min: 1, max: 100_000 },
+  minPackageAgeDays: { min: 1, max: 365 },
 } as const;
 
 /**
@@ -43,8 +44,34 @@ function parsePolicy(input: unknown): SelectionPolicy | null {
     return out;
   };
 
-  const allow = strings(raw.allow);
-  if (!allow) return null;
+  // Exceptions carry a reason and an expiry when set from a policy file. Both are
+  // kept on the way through: dropping them on a dashboard save would turn an
+  // expiring exception into a permanent one without anyone deciding that.
+  if (!Array.isArray(raw.allow) || raw.allow.length > MAX_ENTRIES) return null;
+  const allow: SelectionPolicy["allow"] = [];
+  for (const item of raw.allow) {
+    // A bare name is what this form sent before exceptions had those fields.
+    const entry = typeof item === "string" ? { name: item } : item;
+    if (!entry || typeof entry !== "object") return null;
+    const rule = entry as Record<string, unknown>;
+    if (typeof rule.name !== "string") return null;
+    const name = rule.name.trim();
+    if (!name || name.length > MAX_LEN) return null;
+    const out: SelectionPolicy["allow"][number] = { name };
+    if (rule.reason != null) {
+      if (typeof rule.reason !== "string" || rule.reason.length > MAX_LEN) return null;
+      if (rule.reason.trim()) out.reason = rule.reason.trim();
+    }
+    if (rule.expires != null) {
+      if (typeof rule.expires !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(rule.expires)) return null;
+      out.expires = rule.expires;
+    }
+    allow.push(out);
+  }
+
+  // Same reasoning as the other late fields: absent means the pre-existing
+  // behaviour (enforce), and anything else is rejected rather than guessed.
+  if (raw.mode !== undefined && raw.mode !== "enforce" && raw.mode !== "warn") return null;
 
   if (!Array.isArray(raw.deny) || raw.deny.length > MAX_ENTRIES) return null;
   const deny: SelectionPolicy["deny"] = [];
@@ -107,8 +134,11 @@ function parsePolicy(input: unknown): SelectionPolicy | null {
   if (maxStaleMonths === false) return null;
   const maxBundleKb = bounded(raw.maxBundleKb, LIMITS.maxBundleKb);
   if (maxBundleKb === false) return null;
+  const minPackageAgeDays = bounded(raw.minPackageAgeDays, LIMITS.minPackageAgeDays);
+  if (minPackageAgeDays === false) return null;
 
   return {
+    mode: raw.mode === "warn" ? "warn" : "enforce",
     allow,
     deny,
     minConfidence,
@@ -119,6 +149,7 @@ function parsePolicy(input: unknown): SelectionPolicy | null {
     minWeeklyDownloads,
     maxStaleMonths,
     maxBundleKb,
+    minPackageAgeDays,
   };
 }
 
