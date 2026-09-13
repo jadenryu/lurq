@@ -218,7 +218,7 @@ export default function SecurityPage() {
         </ul>
         <p>
           If one of these blocks an evaluation,{" "}
-          <Link href="/book-demo">tell us which one</Link> — that is the signal that
+          <Link href="/#contact">tell us which one</Link> — that is the signal that
           moves it up the list.
         </p>
       </Prose>

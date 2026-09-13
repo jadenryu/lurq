@@ -16,6 +16,8 @@ import { CONTACT_EMAIL } from '@/content/copy';
 import { useRevealOnce } from '@/lib/use-reveal-once';
 import {
   ANNUAL_DISCOUNT,
+  GRACE_CALLS_PER_DAY,
+  OVERAGE_CAP_MULTIPLE,
   PLAN_LIST,
   annualPriceCents,
   type BillingInterval,
@@ -104,7 +106,7 @@ function BuyButton({ plan, interval }: { plan: Plan; interval: BillingInterval }
   // come back, rather than opening Stripe for an account that does not exist.
   if (!isSignedIn) {
     return (
-      <Link href={`/sign-up?next=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
+      <Link href={`/sign-up?redirect_url=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
         {`Start ${plan.name}`}
       </Link>
     );
@@ -254,6 +256,16 @@ function PlanCard({
       <p className="mt-4 border-t border-edge pt-4 text-[13px] font-medium text-ink">
         {allowanceLabel(plan)}
       </p>
+      {/* What happens past the pool is part of the price, so it sits with the
+          allowance rather than in the note under the cards. Read from plans.ts,
+          the same numbers http.ts and billing/overage.ts act on. */}
+      {plan.monthlyCalls !== null ? (
+        <p className="mt-1.5 text-[12px] leading-[1.5] text-ink-3">
+          {plan.overageCentsPer1k && interval === 'month'
+            ? `Past the pool: $${plan.overageCentsPer1k / 100} per 1,000 calls, up to ${OVERAGE_CAP_MULTIPLE}x the pool`
+            : `Past the limit: ${GRACE_CALLS_PER_DAY} calls a day until the month turns`}
+        </p>
+      ) : null}
       <p className="mt-2 text-[13px] leading-[1.6] text-ink-2">{plan.tagline}</p>
 
       <div className="mt-6 flex-1">
@@ -327,7 +339,7 @@ export function Pricing() {
 
         <div
           ref={ref}
-          data-playing={played ? 'true' : 'false'}
+          data-playing={played === undefined ? undefined : String(played)}
           className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-2 min-[1080px]:grid-cols-4"
         >
           {PLAN_LIST.map((plan, i) => (

@@ -36,7 +36,8 @@ import type {
   McpFinding,
 } from "@/lib/lurq-issuer";
 
-const DEFAULT_DEMO_EMAILS = ["me.shivansh007@gmail.com"];
+// No default: a hard-coded address is a real stranger's account seeing fixtures.
+const DEFAULT_DEMO_EMAILS: string[] = [];
 
 function csv(raw: string | undefined, fallback: string[]): string[] {
   const list = raw === undefined ? fallback : raw.split(",");
@@ -45,7 +46,7 @@ function csv(raw: string | undefined, fallback: string[]): string[] {
 
 /**
  * Accounts that see fixtures. Set `LURQ_DEMO_EMAILS` to a comma-separated list to
- * override, or to an empty string to switch demo mode off entirely (e.g. in prod).
+ * enable demo mode. Unset or empty means no demo accounts.
  */
 function demoEmails(): string[] {
   return csv(process.env.LURQ_DEMO_EMAILS, DEFAULT_DEMO_EMAILS);

@@ -5,41 +5,46 @@ import { useEffect, useRef, useState } from "react";
 /**
  * "Has this section been reached yet." Flips true once and never back.
  *
- * The page's reveal schedule lives in CSS: children carry `--reveal-at`, start
- * `opacity: 0` with `animation-play-state: paused`, and run when `data-playing`
- * lands on the container. All this hook does is decide when that happens, which
- * is the one part CSS cannot express.
+ * The page's reveal schedule lives in CSS: children carry `--reveal-at` and run
+ * when `data-playing="true"` lands on the container. All this hook does is
+ * decide when that happens, which is the one part CSS cannot express.
  *
- * Both conditions below are load-bearing, and both are bugs that shipped:
+ * VISIBLE UNLESS ARMED. `played` is three-state:
+ * - undefined: never armed. The section renders finished, exactly as the server
+ *   sent it. This is what crawlers, no-JS captures, reduced-motion readers and
+ *   anything that never scrolls get, and a blank panel is the one failure a
+ *   reveal must never cause.
+ * - false: armed by script, content hidden (CSS keys on the attribute being
+ *   present) and waiting for the observer.
+ * - true: reached, the entrance runs.
+ * Only a section that is still below the fold at hydration is armed, so nothing
+ * already on screen blinks out and back in.
+ *
+ * Both observer conditions below are load-bearing, and both are bugs that shipped:
  *
  * 1. `threshold: 0`, never a ratio. A ratio asks for N% of the section on
  *    screen at once, and once a section is taller than ~8x the viewport that is
- *    unsatisfiable, so the callback never fires and the section stays blank
- *    forever. It is invisible on a desktop viewport, where the same section
- *    fits, and it only bites on a phone where the cards have stacked.
+ *    unsatisfiable, so the callback never fires.
  *
  * 2. `boundingClientRect.top < 0` as well as `isIntersecting`. The observer
  *    reports current state once on observe() and then only on change, so a
- *    visitor who has already scrolled past the section by the time React
- *    hydrates gets one callback saying "not intersecting" and no other, ever.
- *    Being above the viewport means it has been seen, which for a reveal is the
- *    same as being in it.
- *
- * Four older sections (capability-grid, agent-session, drift-board,
- * surface-switch) each carry their own copy of this and predate the hook. They
- * work; this exists so the fifth one is not a fifth copy of a rule that took two
- * bug reports to get right.
+ *    visitor who scrolled past the section before the callback gets one "not
+ *    intersecting" and no other. Above the viewport means it has been seen.
  */
-export function useRevealOnce<T extends HTMLElement>(): {
+export function useRevealOnce<T extends HTMLElement>(
+  rootMargin = "0px 0px -12% 0px",
+): {
   ref: React.RefObject<T | null>;
-  played: boolean;
+  played: boolean | undefined;
 } {
   const ref = useRef<T>(null);
-  const [played, setPlayed] = useState(false);
+  const [played, setPlayed] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !shouldArmReveal(el)) return;
+     
+    setPlayed(false);
 
     const io = new IntersectionObserver(
       (entries) => {
@@ -49,11 +54,20 @@ export function useRevealOnce<T extends HTMLElement>(): {
           io.disconnect(); // once, so scrolling back up cannot replay it
         }
       },
-      { threshold: 0, rootMargin: "0px 0px -12% 0px" },
+      { threshold: 0, rootMargin },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [rootMargin]);
 
   return { ref, played };
+}
+
+/** Script can observe, motion is welcome, and the element is still below the fold. */
+export function shouldArmReveal(el: Element): boolean {
+  return (
+    typeof IntersectionObserver !== "undefined" &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
+    el.getBoundingClientRect().top > window.innerHeight
+  );
 }

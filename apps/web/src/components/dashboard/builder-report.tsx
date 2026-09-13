@@ -337,7 +337,7 @@ function Traits({
   return (
     <Panel>
       <PanelHeader
-        title="how you scored"
+        title="trait scores"
         trailing={
           traits ? null : (
             <SignUpButton mode="modal" fallbackRedirectUrl={back} signInFallbackRedirectUrl={back}>
@@ -371,7 +371,7 @@ function Traits({
               <span className="w-10 shrink-0 text-right font-mono text-[12px] tabular-nums text-ink-2">
                 {traits ? (t.score ?? "n/a") : <Lock aria-label="locked" className="ml-auto size-3 text-ink-3" />}
               </span>
-              {t.id === archetype && <Chip tone="accent">your type</Chip>}
+              {t.id === archetype && <Chip tone="accent">top trait</Chip>}
             </div>
             {t.evidence.length > 0 && (
               <p className="mt-1 pl-[7.75rem] text-[11.5px] leading-snug text-ink-3">
@@ -390,8 +390,8 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
   const locked = report.locked!;
   const first = report.repos[0];
   const items = [
-    "How you scored on all four traits, and the facts behind each",
-    locked.repos > 0 && `${plural(locked.repos, "more repo")} of yours, read against the index`,
+    "The score on all four traits, and the facts behind each",
+    locked.repos > 0 && `${plural(locked.repos, "more repo")} on this profile, read against the index`,
     locked.deps > 0 &&
       first &&
       `${plural(locked.deps, "more dependency", "more dependencies")} in ${first.repo}`,
@@ -403,7 +403,7 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
     <Panel className="relative overflow-hidden">
       <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-signal" />
       <p className="text-[15px] font-medium tracking-[-0.01em] text-ink">
-        Your full report is already computed.
+        The full report is already computed.
       </p>
       <ul className="mt-2.5 space-y-1">
         {items.map((item) => (
@@ -505,9 +505,11 @@ function verdict(dep: ScanDep): { text: string; tone: string } {
 function DepRow({ dep }: { dep: ScanDep }) {
   const v = verdict(dep);
   return (
-    <li className="flex items-baseline gap-3 px-[var(--panel-px)] py-2">
-      <span className="truncate font-mono text-[12.5px] text-ink">{dep.name}</span>
-      <span className="shrink-0 font-mono text-[11.5px] text-ink-3">
+    // Wraps rather than overflowing: a canary range plus "→ latest" plus the
+    // verdict is wider than a phone, and shrink-0 on both pushed the page sideways.
+    <li className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-[var(--panel-px)] py-2">
+      <span className="min-w-0 max-w-full truncate font-mono text-[12.5px] text-ink">{dep.name}</span>
+      <span className="min-w-0 break-all font-mono text-[11.5px] text-ink-3">
         {dep.resolved ?? dep.range}
         {dep.latest && dep.latest !== dep.resolved ? ` → ${dep.latest}` : ""}
       </span>
