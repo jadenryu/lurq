@@ -20,21 +20,28 @@ const load = (yaml: string) => parse(yaml) as Workflow;
 const scanStep = (w: Workflow) => w.jobs.scan.steps.find((s) => s.run?.includes('mcp-scan'))!;
 
 describe('renderMcpScanWorkflow', () => {
-  it('is valid YAML, read-only, pinned, and scans only committed servers', () => {
+  it('is valid YAML, pinned, scans only committed servers, and keeps the dashboard issue', () => {
     const w = load(renderMcpScanWorkflow());
-    expect(w.permissions).toEqual({ contents: 'read' });
+    expect(w.permissions).toEqual({ contents: 'read', issues: 'write' });
     expect(w.on.schedule[0]!.cron).toBe('23 6 * * *');
     expect(w.on.pull_request.paths).toContain('.mcp.json');
     const step = scanStep(w);
-    expect(step.run).toBe(`npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload --fail-on high`);
-    expect(step.env).toEqual({ LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}' });
+    expect(step.run).toBe(`npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload --github-issue --fail-on high`);
+    expect(step.env).toEqual({ LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}', GITHUB_TOKEN: '${{ github.token }}' });
+  });
+
+  it('stays read-only without the issue', () => {
+    const w = load(renderMcpScanWorkflow({ githubIssue: false }));
+    expect(w.permissions).toEqual({ contents: 'read' });
+    expect(scanStep(w).run).not.toContain('--github-issue');
+    expect(scanStep(w).env).toEqual({ LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}' });
   });
 
   it('maps each server credential from a repository secret, never inline', () => {
     const step = scanStep(load(renderMcpScanWorkflow({ secrets: ['LINEAR_API_KEY', 'GITHUB_TOKEN', 'bad-name', 'LURQ_API_KEY'] })));
     expect(step.env).toEqual({
       LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}',
-      // GitHub reserves GITHUB_* secret names.
+      // A server that reads GITHUB_TOKEN gets its own credential; GitHub reserves GITHUB_* secret names.
       GITHUB_TOKEN: '${{ secrets.MCP_GITHUB_TOKEN }}',
       LINEAR_API_KEY: '${{ secrets.LINEAR_API_KEY }}',
     });
@@ -81,6 +88,11 @@ describe('lurq mcp-ci', () => {
     expect(step.run).toContain('--fail-on moderate');
     expect(Object.keys(step.env!).sort()).toEqual(['GITHUB_TOKEN', 'LINEAR_API_KEY', 'LURQ_API_KEY']);
     expect(w.jobs.scan.steps.some((s) => s.uses === 'astral-sh/setup-uv@v6')).toBe(true);
+  });
+
+  it('omits the issue with --no-issue', async () => {
+    await runMcpCi(root, { issue: false });
+    expect(load(readFileSync(join(root, MCP_SCAN_WORKFLOW_PATH), 'utf8')).permissions).toEqual({ contents: 'read' });
   });
 
   it('will not overwrite an existing workflow without --force', async () => {

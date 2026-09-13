@@ -79,6 +79,8 @@ import {
   type McpServersPayload,
   fetchNotificationPreferences,
   type NotificationPreferences,
+  fetchChannels,
+  type ChannelsPayload,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -414,5 +416,31 @@ export function loadNotificationPreferences(): Promise<Loaded<NotificationPrefer
     (userId) => fetchNotificationPreferences(userId),
     () => ({ urgentEmail: true, weeklyDigest: false, emailConfigured: true }),
     DEFAULT_NOTIFICATIONS,
+  );
+}
+
+/** Where alerts go besides email. Demo accounts see one Slack channel. */
+export function loadChannels(): Promise<Loaded<ChannelsPayload>> {
+  return load<ChannelsPayload>(
+    (userId) => fetchChannels(userId),
+    () => ({
+      allowed: true,
+      configured: true,
+      channels: [
+        {
+          id: 1,
+          kind: "slack",
+          label: "#eng-alerts",
+          urlHint: "hooks.slack.com/…9fK2",
+          minSeverity: "high",
+          enabled: true,
+          disabledReason: null,
+          lastDeliveredAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+          lastError: null,
+          createdAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+        },
+      ],
+    }),
+    { channels: [], allowed: false, configured: false },
   );
 }

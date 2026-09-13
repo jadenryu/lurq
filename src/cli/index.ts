@@ -392,6 +392,7 @@ export function buildProgram(): Command {
     .option('--no-history', 'do not compare with, or record, the previous scan')
     .option('--no-upload', 'keep this scan on this machine; do not record it to your account')
     .option('--require-upload', 'exit 1 if the scan could not be recorded to your account (for CI)')
+    .option('--github-issue', "keep a pinned 'lurq dashboard' issue current in this repository (in GitHub Actions)")
     .option(
       '--no-contribute',
       "do not offer published servers' contracts as corroboration for the public index",
@@ -410,6 +411,7 @@ export function buildProgram(): Command {
     .option('--force', 'replace an existing workflow file')
     .option('--cron <expr>', 'schedule (default: daily 06:23 UTC)')
     .option('--fail-on <severity>', 'fail the job at this severity: critical | high | moderate | low | none', 'high')
+    .option('--no-issue', 'do not maintain the pinned lurq dashboard issue')
     .action(async (dir: string | undefined, opts: import('./mcpScan').McpCiOpts) => {
       const { runMcpCi } = await import('./mcpScan');
       await runMcpCi(dir, opts);

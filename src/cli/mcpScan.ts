@@ -56,6 +56,8 @@ export interface McpScanCliOpts {
    * where a green job nobody reads is the only place an upload failure shows.
    */
   requireUpload?: boolean;
+  /** Keep the pinned lurq dashboard issue current (GitHub Actions). */
+  githubIssue?: boolean;
 }
 
 const THRESHOLDS = ['critical', 'high', 'moderate', 'low', 'info', 'none'] as const;
@@ -513,6 +515,49 @@ export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts):
     console.error(red(`upload required, and the scan was not fully recorded: ${report.uploadProblem}`));
     process.exitCode = 1;
   }
+  if (opts.githubIssue) await syncDashboardIssue(report);
+}
+
+/**
+ * Refresh the repository's dashboard issue. Never fails the job: the scan and
+ * its exit code are the gate; the issue is a view of them.
+ */
+export async function syncDashboardIssue(report: ScanReport, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const { githubEnvFrom, renderDashboardIssue, upsertDashboardIssue } = await import('../github/dashboardIssue');
+  const gh = githubEnvFrom(env);
+  if (!gh) {
+    console.error(yellow('--github-issue needs GITHUB_TOKEN and GITHUB_REPOSITORY; set by GitHub Actions'));
+    return;
+  }
+  let plan: import('./remote').RemotePlan | null = null;
+  let planNote: string | null = null;
+  if (resolveApiKey()) {
+    try {
+      const { buildUpgradePlan } = await import('./upgradePlan');
+      plan = await buildUpgradePlan(report.root, { repo: gh.repo });
+    } catch (err) {
+      planNote = `Not checked: ${err instanceof Error ? err.message : String(err)}`.slice(0, 200);
+    }
+  } else {
+    planNote = 'Add a LURQ_API_KEY secret to include dependency upgrades here.';
+  }
+  const runUrl = env.GITHUB_RUN_ID ? `${env.GITHUB_SERVER_URL ?? 'https://github.com'}/${gh.repo}/actions/runs/${env.GITHUB_RUN_ID}` : null;
+  const rendered = renderDashboardIssue({
+    repo: gh.repo,
+    generatedAt: new Date(),
+    runUrl,
+    dashboardUrl: 'https://lurq.run/dashboard/mcp',
+    scan: report,
+    plan,
+    planNote,
+  });
+  try {
+    const r = await upsertDashboardIssue(gh, rendered);
+    const what = r.action === 'closed' ? 'is closed, so it was left alone' : r.action;
+    console.error(dim(`dashboard issue ${what}${r.url ? `: ${r.url}` : ''}${r.commented ? ' (commented on new urgent findings)' : ''}`));
+  } catch (err) {
+    console.error(yellow(`::warning::could not update the lurq dashboard issue: ${err instanceof Error ? err.message : String(err)}`));
+  }
 }
 
 /**
@@ -559,6 +604,8 @@ export async function runMcpStackLive(dir: string | undefined, opts: McpScanCliO
 }
 
 export interface McpCiOpts {
+  /** `--no-issue` sets this false. */
+  issue?: boolean;
   print?: boolean;
   force?: boolean;
   cron?: string;
@@ -580,7 +627,7 @@ export async function runMcpCi(dir: string | undefined, opts: McpCiOpts): Promis
   const { MCP_SCAN_WORKFLOW_PATH, renderMcpScanWorkflow, secretNameFor } = await import('../github/mcpScanWorkflow');
   const secrets = [...new Set(cfg.servers.flatMap((s) => s.unresolved.filter((v) => !v.startsWith('input:'))))];
   const needsUv = cfg.servers.some((s) => s.registry === 'pypi' || /^(uvx|uv|pipx)$/.test((s.command ?? '').split(/[\\/]/).pop() ?? ''));
-  const yaml = renderMcpScanWorkflow({ cron: opts.cron, failOn: threshold ?? 'none', secrets, needsUv });
+  const yaml = renderMcpScanWorkflow({ cron: opts.cron, failOn: threshold ?? 'none', secrets, needsUv, githubIssue: opts.issue !== false });
 
   if (opts.print) {
     process.stdout.write(yaml);

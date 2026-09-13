@@ -4,7 +4,8 @@ import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { EmptyState } from "@/components/dashboard/panel";
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { NotificationsForm } from "@/components/dashboard/notifications-form";
-import { loadAlerts, loadNotificationPreferences } from "@/lib/dashboard-data";
+import { AlertChannels } from "@/components/dashboard/alert-channels";
+import { loadAlerts, loadChannels, loadNotificationPreferences } from "@/lib/dashboard-data";
 
 export const metadata: Metadata = {
   title: "notifications",
@@ -24,7 +25,11 @@ export const metadata: Metadata = {
  * empty state is the honest answer rather than a blank screen.
  */
 export default async function DashboardNotificationsPage() {
-  const [{ data: alerts, demo }, { data: email }] = await Promise.all([loadAlerts(), loadNotificationPreferences()]);
+  const [{ data: alerts, demo }, { data: email }, { data: channels }] = await Promise.all([
+    loadAlerts(),
+    loadNotificationPreferences(),
+    loadChannels(),
+  ]);
 
   return (
     <div>
@@ -52,6 +57,8 @@ export default async function DashboardNotificationsPage() {
         )}
 
         <NotificationsForm {...email} demo={demo} />
+
+        <AlertChannels {...channels} demo={demo} />
       </PageBody>
     </div>
   );

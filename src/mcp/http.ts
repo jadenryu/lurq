@@ -93,6 +93,10 @@ import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
 import { registerNotificationRoutes } from './notificationRoutes';
+import { registerChannelRoutes } from './channelRoutes';
+import { secretKey } from '../core/secretBox';
+import { channelsAllowed } from '../notify/channelRun';
+import { postJson } from '../notify/safeHttp';
 import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
@@ -1700,6 +1704,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   // ── Account email: preferences and unsubscribe (issuer) ────────────────────
   registerNotificationRoutes(app, { db, requireIssuerSecret, ownerFrom });
+  registerChannelRoutes(app, {
+    db,
+    requireIssuerSecret,
+    ownerFrom,
+    secretsKey: secretKey(config.LURQ_SECRETS_KEY),
+    webUrl: config.LURQ_WEB_URL.replace(/\/$/, ''),
+    allowed: (ownerId) => channelsAllowed(db, ownerId),
+    post: (url, m) => postJson(url, m.payload, m.headers),
+  });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
   //

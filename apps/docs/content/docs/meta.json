@@ -6,6 +6,7 @@
     "quickstart",
     "mcp-tools",
     "mcp-scan",
+    "alerts",
     "cli",
     "how-it-works",
     "self-hosting"

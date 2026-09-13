@@ -1280,7 +1280,9 @@ export const notificationDeliveries = pgTable(
   {
     id: serial('id').primaryKey(),
     ownerId: text('owner_id').notNull(),
-    kind: text('kind').$type<'urgent' | 'digest'>().notNull(),
+    kind: text('kind').$type<'urgent' | 'digest' | 'channel'>().notNull(),
+    /** Set on a channel delivery: the Slack/Discord/Teams/webhook it went to. */
+    channelId: integer('channel_id'),
     status: text('status').$type<'pending' | 'sent' | 'failed' | 'skipped'>().notNull(),
     idempotencyKey: text('idempotency_key').notNull().unique(),
     attempts: integer('attempts').notNull().default(0),
@@ -1316,3 +1318,39 @@ export const notificationItems = pgTable(
 
 export type NotificationPreferencesRow = typeof notificationPreferences.$inferSelect;
 export type NotificationDeliveryRow = typeof notificationDeliveries.$inferSelect;
+
+/**
+ * Where an account's alerts go besides email: a Slack, Discord or Teams
+ * webhook, or a signed JSON webhook.
+ *
+ * The URL is a credential (anyone holding a Slack webhook URL can post to that
+ * channel), so it is stored encrypted, bound to the owner. Removal is soft and
+ * wipes both secrets: the row stays as a record that the channel existed.
+ */
+export const notificationChannels = pgTable(
+  'notification_channels',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    kind: text('kind').$type<'slack' | 'discord' | 'teams' | 'webhook'>().notNull(),
+    label: text('label'),
+    urlCiphertext: text('url_ciphertext').notNull(),
+    /** Enough of the URL to recognise it: host and the last four characters. */
+    urlHint: text('url_hint').notNull(),
+    /** Webhook kind only: the HMAC secret receivers verify with. Encrypted. */
+    signingSecretCiphertext: text('signing_secret_ciphertext'),
+    minSeverity: text('min_severity').$type<Severity>().notNull().default('high'),
+    enabled: boolean('enabled').notNull().default(true),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    /** Why lurq switched it off, in words for the owner. Cleared on re-enable. */
+    disabledReason: text('disabled_reason'),
+    lastDeliveredAt: ts('last_delivered_at'),
+    lastError: text('last_error'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    deletedAt: ts('deleted_at'),
+  },
+  (table) => [index('notification_channels_owner_idx').on(table.ownerId)],
+);
+
+export type NotificationChannelRow = typeof notificationChannels.$inferSelect;
