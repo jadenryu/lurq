@@ -66,7 +66,7 @@
     "db:migrate": "tsx src/bin/operator.ts db migrate",
     "operator": "tsx src/bin/operator.ts",
     "operator:prod": "LURQ_ENV_FILE=.env.production tsx src/bin/operator.ts",
-    "prepublishOnly": "npm test && npm run build",
+    "prepublishOnly": "node scripts/assert-publish-from-main.mjs && npm test && npm run build",
     "content:drift": "tsx scripts/gen-drift.ts",
     "content:landing": "tsx scripts/build-landing-content.mts",
     "content:releases": "tsx scripts/gen-releases.ts",
