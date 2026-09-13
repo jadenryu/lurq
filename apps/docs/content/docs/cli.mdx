@@ -4,8 +4,8 @@ description: Use the same lurq engine straight from your terminal.
 ---
 
 The lurq engine is usable standalone from the terminal, with the same scoring and
-retrieval the MCP tools expose. Add `--json` to any command for machine-readable
-output.
+retrieval the MCP tools expose. Add `--json` to the query and check commands for
+machine-readable output.
 
 <Callout type="info">
   Run `lurq setup` first. The query commands read whichever index is configured:
@@ -13,20 +13,25 @@ output.
   `DATABASE_URL` is set and no key is. A key wins over `DATABASE_URL`: otherwise,
   running `lurq` inside your own Postgres-backed app would point package lookups
   at that app's database. Operators holding both can force the local index with
-  `LURQ_LOCAL=1`. See [Self-hosting](/docs/self-hosting).
+  `LURQ_LOCAL=1`. See [Self-hosting](/self-hosting).
 </Callout>
 
 ## Querying the index
 
 ```bash
-lurq recommend "a form library for react"
-lurq recommend "debounce a function"
+lurq verify lodahs
 lurq evaluate zod
 lurq compare drizzle-orm prisma typeorm
-lurq verify lodahs
 ```
 
-`recommend` accepts `--category` and `--min-confidence` to narrow results.
+Not sure which command answers your question? Ask in plain words:
+
+```bash
+lurq can "check a major upgrade"
+```
+
+`can` searches the catalog that ships with the CLI, so it works offline and
+before setup.
 
 ## API surfaces
 
@@ -43,17 +48,22 @@ lurq versions react                  # the stored version timeline (local index 
 knows and get the precise added / removed / renamed / changed list for the
 version you're actually installing.
 
-## Whole stacks
+## Whole stacks and projects
 
 ```bash
 lurq compat next react react-dom             # do these install together?
 lurq compat next react --pin next=15.5.4     # check exact versions
-lurq plan ./project.md                       # a description in, a scored stack out
-lurq plan ./project.md --open                # …rendered as a portable HTML roadmap
+lurq audit                                   # everything this project depends on
+lurq audit --project-only                    # …ignoring user-level agent configs
 ```
 
 `--pin` requires an exact published version. A range would silently resolve to
 `latest` and report the wrong version as pinned, so it's rejected outright.
+
+`audit` reads the project's `package.json`, lockfile, and the MCP servers
+configured for it, and reports what is outdated, deprecated, carries an advisory
+for the installed version, or has drifted. Anything it could not assess is
+counted as such, never reported clean.
 
 ## Upgrades
 
@@ -65,13 +75,16 @@ lurq upgrade-plan . --json > lurq-plan.json
 
 # do those upgrades remove symbols YOUR code references?      (needs nothing)
 lurq check-upgrade . --plan lurq-plan.json --exit-code
+
+# or name the upgrades directly, no plan needed
+lurq check-upgrade . --upgrade commander@11.1.0..12.1.0 --upgrade zod@3.23.8..4.0.0
 ```
 
 `check-upgrade` compares both versions' npm tarballs against the symbols your
 codebase actually imports, and reports them at `file:line`. It needs no API key,
 no network to lurq, and **no test suite** — which is the point: it catches
 breakage in code no test covers. `--exit-code` exits 1 when the report is not
-safe, for use as a CI gate.
+safe, for use as a CI gate. `--upgrade` takes `pkg@from..to`, and repeats.
 
 When the package itself proves a rename (the old version exported both names
 from the same function), the replacement is printed next to the call site:
@@ -88,7 +101,8 @@ tarballs, with nothing installed. Only errors the upgrade introduces are
 reported, so a renamed option or a narrowed parameter shows up at `file:line`
 even though the runtime exports never changed. It uses your project's own
 `typescript` when it has one, needs a `tsconfig.json`, and skips packages that
-ship no type definitions of their own. `--no-types` turns it off.
+ship no type definitions of their own. `--no-types` turns it off, for a faster,
+runtime-only check.
 
 What it reports:
 
@@ -109,16 +123,61 @@ guessed at, and a scan that stops at its file limit says so.
 An upgrade it could not establish is reported as `unverified` and is **never**
 counted as safe.
 
+`--report` sends the result to your lurq dashboard as well (it needs an API key,
+from `--api-key` or `LURQ_API_KEY`). It's opt-in and never changes the outcome of
+the check.
+
+## Before you publish
+
+The same diff, pointed the other way: will your change break the people who
+depend on you?
+
+```bash
+# does the version in package.json match what this release did to the API?
+lurq check-release --exit-code
+lurq check-release --against 2.3.0           # compare with a specific published version
+
+# does this change break callers of your own HTTP API?
+lurq check-api openapi.yaml --against main --exit-code
+```
+
+`check-release` compares the package in the directory with its latest published
+version (or `--against`), and `--exit-code` exits 1 when the version bump
+understates the change — a removal shipped as a minor, say. Use it in
+`prepublishOnly` or CI. It needs no key and no network to lurq.
+
+`check-api` compares an OpenAPI document with the same file at a git revision
+(`--against`, default `HEAD`), and exits 1 on a breaking change with
+`--exit-code`. With no argument it uses the first OpenAPI document it finds;
+`-C <dir>` points at another repository. Nothing leaves the machine.
+
+## MCP servers
+
+```bash
+lurq mcp-scan                                  # read every configured server's real contract
+lurq mcp-ci                                    # a GitHub Actions workflow that rescans daily
+lurq mcp-stack                                 # do your configured servers collide?
+lurq mcp-surface @modelcontextprotocol/server-filesystem
+lurq mcp-drift @modelcontextprotocol/server-filesystem --from <version> --to <version>
+```
+
+`mcp-scan` and `mcp-ci` have their own page: see
+[Scanning your MCP servers](/mcp-scan). `mcp-surface` returns a published
+server's tool contract as lurq probed it (`--version` for an exact version);
+`mcp-drift` needs both `--from` and `--to`, and reports what moved between them,
+including silent schema changes and tools that stopped being read-only.
+
 ## Scoring controls
 
 ```bash
 lurq weights                                  # show & explain the weight model
 lurq edit-weights --set composite.lambda=0.5  # override a weight (or --reset)
+lurq edit-weights --explain adoption          # what a component measures
 ```
 
-Both work without an index: the weight model ships with the package. `rescore`
-and `discover` rebuild a dataset and live on the operator plane, not the public
-CLI. See [Self-hosting](/docs/self-hosting).
+Both work without an index: the weight model ships with the package. Overrides
+are written to your user config, or to `.lurq/weights.json` in the project with
+`--project`.
 
 ## Selection policy
 
@@ -156,13 +215,15 @@ Two fields are worth knowing when you edit the file by hand:
   On the expiry date it stops applying, and stays in the file until you remove it.
 
 `push` replaces the whole policy. It needs an API key with the `policy:write`
-scope, created in the dashboard. The key `lurq setup` stores for your agents
-can read policy but never change it, so an agent cannot loosen its own rules.
+scope, created in the dashboard on a Team or Business plan. The key `lurq setup`
+stores for your agents can read policy but never change it, so an agent cannot
+loosen its own rules. How far back `policy log` reaches depends on the plan (see
+[Plans & limits](/plans-and-troubleshooting)).
 
 ## Setup and credentials
 
 ```bash
-# interactive: store the key, then wire up every assistant found (MCP + skills)
+# interactive: sign in in the browser, then wire up every assistant found
 lurq setup
 
 # scriptable: no prompts, no browser
@@ -174,9 +235,17 @@ lurq setup --agent claude-code
 # point at your own serve-http instead of api.lurq.run
 lurq setup --url https://lurq.internal/mcp
 
-# forget the stored key on this machine
+# forget the stored key on this machine (agents keep theirs)
 lurq logout
+
+# remove lurq from every agent and this machine
+lurq uninstall
 ```
+
+`--agent` takes `claude-code`, `cursor`, `windsurf`, `copilot`, `codex`,
+`gemini-cli`, `antigravity`, `kiro`, or `all`. See
+[per-agent configuration](/quickstart#per-agent-configuration) for what each one
+gets, and [Uninstall](/quickstart#uninstall) for what `uninstall` removes.
 
 The endpoint is stored with the key, so a later bare `lurq setup` stays on your
 server. `LURQ_ENDPOINT` overrides it for a single command without changing what
@@ -194,10 +263,10 @@ lurq install-skill --local
 
 ## Output format
 
-Every command supports `--json`:
+The query, check and scan commands support `--json`:
 
 ```bash
-lurq recommend "state management for react" --json
+lurq evaluate zod --json
 ```
 
 This emits structured output suitable for piping into other tools, the same

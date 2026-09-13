@@ -99,8 +99,8 @@ Not an error. lurq never guesses about a package it hasn't read.
 
 - **`evaluate` / `compare`** on a package lurq isn't tracking yet fetches and
   scores it on the spot, and says so: retry in a few seconds for the full read.
-- **`compat`** returns `unknown` when a member isn't in the index yet, and
-  queues it.
+- **`compat`** returns `unknown` when it has no version for a member, or the
+  resolve timed out.
 - **`resolve_surface`, `usage`, `mcp_surface`** return `unknown` when that
   version hasn't been extracted or probed, and queue it. `unknown` **never**
   means the symbol or tool is absent.
