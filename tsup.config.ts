@@ -45,6 +45,11 @@ export default defineConfig([
     target: 'node20',
     platform: 'node',
     outDir: 'dist-operator',
+    // React Email renders through react-dom/server, which is CommonJS and calls
+    // require() for node builtins. Bundled into ESM, esbuild turns those into a
+    // shim that throws "Dynamic require of util is not supported"; giving each
+    // chunk a real require makes the shim resolve them.
+    banner: { js: "import { createRequire as __lurqCreateRequire } from 'node:module'; const require = __lurqCreateRequire(import.meta.url);" },
     clean: true,
     sourcemap: true,
     // Splitting is load-bearing here, not a size optimization. With one flat
