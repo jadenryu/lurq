@@ -25,7 +25,8 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/" },
-  // og:image is auto-injected from app/opengraph-image.tsx.
+  // og:image is auto-injected from app/opengraph-image.jpg, a capture of the hero
+  // (regenerate with apps/web/scripts/capture-og-image.sh).
   openGraph: {
     type: "website",
     siteName: "lurq",
