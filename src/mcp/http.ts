@@ -217,6 +217,44 @@ export function errorEnvelope(
   return { status, body, clientFault };
 }
 
+/**
+ * MCP methods that describe the server and run nothing: the handshake, a ping,
+ * and the list calls. Registries, directories and inspectors (Smithery, Glama,
+ * the MCP Inspector) call exactly these to show what lurq offers, and they do it
+ * without anyone's API key.
+ */
+export const DISCOVERY_METHODS: ReadonlySet<string> = new Set([
+  'initialize',
+  'notifications/initialized',
+  'ping',
+  'tools/list',
+  'prompts/list',
+  'resources/list',
+  'resources/templates/list',
+]);
+
+/**
+ * May this `/mcp` request be served without a key?
+ *
+ * Only when it carries no Authorization header at all and every JSON-RPC message
+ * in it is a discovery method. The tool list is already public (the README
+ * prints it), so describing the server gives nothing away; anything that runs a
+ * tool, a `tools/call` included, still needs a key. A request that sends a
+ * header, even an empty or wrong one, takes the authenticated path and gets that
+ * path's precise error rather than silently becoming anonymous.
+ */
+export function isAnonymousDiscovery(authorization: string | undefined, body: unknown): boolean {
+  if (authorization !== undefined) return false;
+  const messages = Array.isArray(body) ? body : [body];
+  return (
+    messages.length > 0 &&
+    messages.every((m) => {
+      const method = (m as { method?: unknown } | null)?.method;
+      return typeof method === 'string' && DISCOVERY_METHODS.has(method);
+    })
+  );
+}
+
 /** Constant-time secret comparison (hash to a fixed length first, so length
  *  never leaks and mismatched lengths don't throw). */
 export function secretEquals(a: string, b: string): boolean {
@@ -1817,9 +1855,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     },
   );
 
-  app.post('/mcp', ipLimiter, auth, keyLimiter, quota, async (req: Request, res: Response) => {
+  const serveMcp = async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
-    // Thread the authenticated key's owner identity into the tools (§3.1).
+    // Thread the authenticated key's owner identity into the tools (§3.1). An
+    // anonymous discovery request has no key, so no owner and no quota notice,
+    // and it cannot reach a tool that would use either.
     const authed = req as AuthedRequest;
     const server = buildMcpServer(db, {
       ownerId: authed.lurqKey?.ownerId ?? null,
@@ -1840,7 +1880,21 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       logger.error('mcp request failed:', err instanceof Error ? err.message : String(err));
       if (!res.headersSent) res.status(500).json(rpcError(-32603, 'Internal error'));
     }
-  });
+  };
+
+  // Discovery without a key, so registries and directories can list lurq's tools.
+  // Checked before the IP limiter so a request that falls through to the
+  // authenticated route below is counted by that route's limiter exactly once.
+  // Discovery skips the key limiter and the monthly quota: there is no key to
+  // meter, and describing the server costs nobody an allowance.
+  app.post(
+    '/mcp',
+    (req: Request, _res: Response, next: NextFunction) =>
+      isAnonymousDiscovery(req.headers.authorization, req.body) ? next() : next('route'),
+    ipLimiter,
+    serveMcp,
+  );
+  app.post('/mcp', ipLimiter, auth, keyLimiter, quota, serveMcp);
 
   // Stateless server: no session GET/DELETE handling.
   app.all('/mcp', (_req: Request, res: Response) => {
