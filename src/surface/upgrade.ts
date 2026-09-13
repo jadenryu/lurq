@@ -18,10 +18,11 @@
  * that reports "safe" when it simply did not look is worse than no check, and it
  * is how a CI gate loses its credibility in one incident.
  */
-import { fetchAndExtract } from './fetch';
+import { extractUnpacked, unpackPackage, type Unpacked } from './fetch';
 import { diffSurfaces, type ArityChange } from './diff';
 import { SURFACE_CLAIM_KINDS } from './references';
 import type { PackageReferences, SymbolReference } from './references';
+import type { TypeCheck, TypeCheckFn, TypeDiagnostic } from './typecheck';
 import { runtimeSymbols, type ExtractedSurface, type SymbolKind } from './types';
 
 export interface UpgradeTarget {
@@ -79,6 +80,12 @@ export interface BreakingFinding {
    * has to read.
    */
   newExports: { symbol: string; kind: SymbolKind; arity: number | null }[];
+  /**
+   * Compiler errors the upgrade introduces in files that import the package:
+   * renamed options, narrowed parameters, widened return types. None of those
+   * change the runtime surface, so nothing above can see them. See typecheck.ts.
+   */
+  typeErrors?: TypeDiagnostic[];
 }
 
 /** How many candidate replacements travel with one finding. Enough to contain
@@ -92,6 +99,24 @@ export interface UpgradeReport {
   ok: string[];
   /** Could not be established — NEVER counted as safe. */
   unverified: { package: string; reason: string }[];
+  /**
+   * Which packages were type-checked, and why the rest were not. Informational:
+   * a JavaScript project, or a package typed through `@types/*`, cannot be type
+   * checked, and that is no reason to call the upgrade unsafe. Absent when the
+   * type check was switched off.
+   */
+  types?: TypeCoverage[];
+}
+
+export type TypeCoverage =
+  | { package: string; checked: true; files: number }
+  | { package: string; checked: false; reason: string };
+
+export interface UpgradeCheck {
+  finding?: BreakingFinding;
+  unverified?: string;
+  /** Absent when no type check was asked for. */
+  types?: TypeCheck;
 }
 
 /**
@@ -300,18 +325,81 @@ function compareEntry(
 export async function checkUpgradeOne(
   target: UpgradeTarget,
   refs: PackageReferences | undefined,
-): Promise<{ finding?: BreakingFinding; unverified?: string }> {
+  opts: { typeCheck?: TypeCheckFn } = {},
+): Promise<UpgradeCheck> {
   if (!refs || refs.symbols.size === 0) return {};
 
   const byEntry = groupByEntry(refs, target.package);
   if (byEntry.size === 0) return {};
-  const subpaths = [...byEntry.keys()].filter(Boolean);
 
-  const [from, to] = await Promise.all([
-    fetchAndExtract(target.package, target.fromVersion, { subpaths }),
-    fetchAndExtract(target.package, target.toVersion, { subpaths }),
+  // Both versions stay unpacked until the comparison is done: extraction reads
+  // each once, and the type check needs the two side by side. Settled rather
+  // than `all`, so one failed download cannot leak the other's temp directory.
+  const settled = await Promise.allSettled([
+    unpackPackage(target.package, target.fromVersion),
+    unpackPackage(target.package, target.toVersion),
   ]);
-  if (!from || !to) return { unverified: 'could not fetch one or both versions' };
+  try {
+    const failure = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected');
+    if (failure) throw failure.reason;
+    const [fromPkg, toPkg] = settled.map((s) => (s as PromiseFulfilledResult<Unpacked | null>).value);
+    if (!fromPkg || !toPkg) return { unverified: 'could not fetch one or both versions' };
+    return await compareVersions(target, refs, byEntry, fromPkg, toPkg, opts.typeCheck);
+  } finally {
+    await Promise.all(
+      settled.map((s) => (s.status === 'fulfilled' && s.value ? s.value.cleanup() : undefined)),
+    );
+  }
+}
+
+/** Every file that imports the package. Type-only imports included: they are
+ *  exactly what a type check is for. */
+function importingFiles(refs: PackageReferences, pkg: string): string[] {
+  const files = new Set<string>();
+  for (const uses of refs.symbols.values()) {
+    for (const r of uses) {
+      if (r.specifier === pkg || r.specifier.startsWith(`${pkg}/`)) files.add(r.file);
+    }
+  }
+  return [...files];
+}
+
+/** A type check that throws is one that did not run, never a failed upgrade. */
+function runTypeCheck(
+  typeCheck: TypeCheckFn | undefined,
+  pkg: string,
+  fromDir: string,
+  toDir: string,
+  files: string[],
+): TypeCheck | undefined {
+  if (!typeCheck) return undefined;
+  try {
+    return typeCheck(pkg, fromDir, toDir, files);
+  } catch (err) {
+    return { checked: false, reason: `type check failed: ${String(err).slice(0, 160)}` };
+  }
+}
+
+async function compareVersions(
+  target: UpgradeTarget,
+  refs: PackageReferences,
+  byEntry: Map<string, Map<string, SymbolReference[]>>,
+  fromPkg: Unpacked,
+  toPkg: Unpacked,
+  typeCheck: TypeCheckFn | undefined,
+): Promise<UpgradeCheck> {
+  const subpaths = [...byEntry.keys()].filter(Boolean);
+  const [from, to] = await Promise.all([
+    extractUnpacked(target.package, fromPkg, subpaths),
+    extractUnpacked(target.package, toPkg, subpaths),
+  ]);
+  const types = runTypeCheck(
+    typeCheck,
+    target.package,
+    fromPkg.pkgDir,
+    toPkg.pkgDir,
+    importingFiles(refs, target.package),
+  );
 
   const symbolsRemoved: BreakingFinding['symbolsRemoved'] = [];
   const arityChanged: BreakingFinding['arityChanged'] = [];
@@ -339,9 +427,9 @@ export async function checkUpgradeOne(
   }
 
   const unverified = blind.length ? blind.join('; ') : undefined;
-  if (!symbolsRemoved.length && !arityChanged.length) {
-    return unverified ? { unverified } : {};
-  }
+  const typeErrors = types?.checked ? types.introduced : [];
+  const extras = { ...(unverified ? { unverified } : {}), ...(types ? { types } : {}) };
+  if (!symbolsRemoved.length && !arityChanged.length && !typeErrors.length) return extras;
 
   // Candidates are what the TARGET exports, not what it added.
   //
@@ -392,23 +480,33 @@ export async function checkUpgradeOne(
       symbolsRemoved,
       arityChanged,
       newExports,
+      ...(typeErrors.length ? { typeErrors } : {}),
     },
-    ...(unverified ? { unverified } : {}),
+    ...extras,
   };
 }
 
 export async function checkUpgrade(
   targets: UpgradeTarget[],
   references: PackageReferences[],
+  opts: { typeCheck?: TypeCheckFn } = {},
 ): Promise<UpgradeReport> {
   const byPkg = new Map(references.map((r) => [r.package, r]));
   const breaking: BreakingFinding[] = [];
   const ok: string[] = [];
   const unverified: UpgradeReport['unverified'] = [];
+  const types: TypeCoverage[] = [];
 
   for (const t of targets) {
     try {
-      const res = await checkUpgradeOne(t, byPkg.get(t.package));
+      const res = await checkUpgradeOne(t, byPkg.get(t.package), opts);
+      if (res.types) {
+        types.push(
+          res.types.checked
+            ? { package: t.package, checked: true, files: res.types.files }
+            : { package: t.package, checked: false, reason: res.types.reason },
+        );
+      }
       if (res.finding) breaking.push(res.finding);
       if (res.unverified) unverified.push({ package: t.package, reason: res.unverified });
       if (!res.finding && !res.unverified) ok.push(t.package);
@@ -423,6 +521,7 @@ export async function checkUpgrade(
     breaking,
     ok,
     unverified,
+    ...(opts.typeCheck ? { types } : {}),
   };
 }
 
@@ -488,6 +587,16 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
         );
       }
     }
+    if (b.typeErrors?.length) {
+      out.push(`  Type errors this upgrade introduces (${b.typeErrors.length}):`);
+      for (const e of b.typeErrors.slice(0, REPORT_LOCATION_CAP)) {
+        const message = e.message.length > 140 ? `${e.message.slice(0, 139)}…` : e.message;
+        out.push(`    · ${e.file}:${e.line}  TS${e.code}  ${message}`);
+      }
+      if (b.typeErrors.length > REPORT_LOCATION_CAP) {
+        out.push(`    · (+${b.typeErrors.length - REPORT_LOCATION_CAP} more)`);
+      }
+    }
     // The reader's next question is always "replaced by what", so answer it here
     // rather than making them open the JSON. Named as candidates, not as a
     // mapping: these are the exports the target version gained, and which one
@@ -507,6 +616,19 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
     for (const u of report.unverified) out.push(`    · ${u.package}: ${u.reason}`);
     out.push('');
   }
+
+  const typed = report.types ?? [];
+  const unchecked = typed.filter(
+    (t): t is Extract<TypeCoverage, { checked: false }> => !t.checked,
+  );
+  if (typed.length > unchecked.length) {
+    out.push(`TYPES     checked ${typed.length - unchecked.length} package(s) in the files that import them`);
+  }
+  if (unchecked.length) {
+    out.push(`TYPES     not checked for ${unchecked.length} package(s):`);
+    for (const t of unchecked) out.push(`    · ${t.package}: ${t.reason}`);
+  }
+  if (typed.length) out.push('');
 
   if (report.ok.length) {
     out.push(`OK        ${report.ok.length} package(s), no referenced symbols removed`);

@@ -80,6 +80,8 @@ export interface CheckUpgradeOpts {
   report?: boolean;
   url?: string;
   apiKey?: string;
+  /** `--no-types` sets this false. */
+  types?: boolean;
 }
 
 /**
@@ -149,7 +151,14 @@ export async function runCheckUpgrade(dir: string, opts: CheckUpgradeOpts): Prom
   }
 
   const refs = scanReferences(dir);
-  const report = await checkUpgrade(targets, refs);
+  // On unless switched off. It is the only part that sees a renamed option or a
+  // narrowed parameter, and on a project with no tsconfig it reports itself as
+  // not checked rather than failing anything.
+  const typeCheck =
+    opts.types === false
+      ? undefined
+      : await (await import('../surface/typecheck')).createTypeChecker(dir);
+  const report = await checkUpgrade(targets, refs, { typeCheck });
 
   console.log(
     opts.json

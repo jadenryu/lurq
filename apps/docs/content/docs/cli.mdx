@@ -82,6 +82,14 @@ BLOCKING  cookie  1.1.1 → 2.0.1
     · cookie.parse → parseCookie    src/session.ts:239
 ```
 
+It also type-checks the files that import each package, twice: once against the
+old version's type definitions and once against the new one's, straight from the
+tarballs, with nothing installed. Only errors the upgrade introduces are
+reported, so a renamed option or a narrowed parameter shows up at `file:line`
+even though the runtime exports never changed. It uses your project's own
+`typescript` when it has one, needs a `tsconfig.json`, and skips packages that
+ship no type definitions of their own. `--no-types` turns it off.
+
 An upgrade it could not establish is reported as `unverified` and is **never**
 counted as safe.
 

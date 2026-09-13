@@ -290,6 +290,40 @@ describe('arity changes judged at the call site', () => {
     expect(judgeCalls({ path: 'parse', from: 1, to: 2 }, [ref()])).toBeNull();
   });
 
+  it('prints introduced type errors, and which packages were not type-checked', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'cookie',
+          fromVersion: '1.1.1',
+          toVersion: '2.0.1',
+          severity: 'warning',
+          symbolsRemoved: [],
+          arityChanged: [],
+          newExports: [],
+          typeErrors: [
+            {
+              file: 'src/session.ts',
+              line: 12,
+              code: 2353,
+              message: "Object literal may only specify known properties, and 'decode' does not exist in type 'ParseOptions'.",
+            },
+          ],
+        },
+      ],
+      ok: [],
+      unverified: [],
+      types: [
+        { package: 'cookie', checked: true, files: 3 },
+        { package: 'left-pad', checked: false, reason: 'the new version ships no type definitions of its own' },
+      ],
+    });
+    expect(out).toContain('src/session.ts:12  TS2353');
+    expect(out).toContain('TYPES     checked 1 package(s)');
+    expect(out).toContain('left-pad: the new version ships no type definitions of its own');
+  });
+
   it('prints the broken calls and their argument counts', () => {
     const out = formatUpgradeReport({
       safe: false,
