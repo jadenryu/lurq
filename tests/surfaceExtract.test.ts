@@ -180,6 +180,8 @@ beforeAll(() => {
 
   // What `require()` is handed, per Node.
   pkg('fmt-cjs', { 'index.js': `exports.a = 1;` });
+  // Node's condition for an ES module require() can load.
+  pkg('fmt-module-sync', { 'index.mjs': `export const a = 1;` }, { exports: { 'module-sync': './index.mjs', import: './index.mjs' } });
   pkg('fmt-type-module', { 'index.js': `export const a = 1;` }, { type: 'module' });
   pkg('fmt-import-only', { 'index.mjs': `export const a = 1;` }, { exports: { '.': { import: './index.mjs' } } });
   pkg(
@@ -612,6 +614,7 @@ describe('what require() is handed', () => {
     expect(requireFormat(pkgs['fmt-dual']!)).toBe('cjs');
     expect(requireFormat(pkgs['fmt-key-order']!)).toBe('esm');
     expect(requireFormat(pkgs['fmt-nested-type']!)).toBe('cjs');
+    expect(requireFormat(pkgs['fmt-module-sync']!)).toBe('esm');
   });
 });
 

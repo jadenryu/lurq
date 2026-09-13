@@ -99,10 +99,19 @@ function pickAllFromExports(exp: unknown, key = '.', depth = 0): string[] {
 }
 
 /** Resolve a file path, trying extensions and directory index files. */
-export function resolveFile(candidate: string): string | null {
+export function resolveFile(candidate: string, depth = 0): string | null {
   if (existsSync(candidate)) {
     try {
       if (statSync(candidate).isFile()) return candidate;
+      // A directory with its own package.json loads its `main`, as Node's
+      // require does. Packages use it to keep `pkg/sub` importable after moving
+      // the file (`sub/package.json` → `../dist/sub.js`); missing it reports a
+      // working deep import as withdrawn.
+      const main = depth < 4 ? readManifest(candidate)?.main : undefined;
+      if (main) {
+        const hit = resolveFile(resolvePath(candidate, main), depth + 1);
+        if (hit) return hit;
+      }
       // directory → index.*
       for (const ext of EXTENSIONS) {
         const idx = join(candidate, `index${ext}`);
@@ -224,7 +233,9 @@ export function resolveInternal(
  */
 export type RequireFormat = 'cjs' | 'esm' | 'unexported';
 
-const REQUIRE_CONDITIONS = new Set(['require', 'node', 'node-addons', 'default']);
+// `module-sync` is Node's condition for an ES module that require() can load
+// (20.19+, 22.10+). A package offering only it and `import` is not unexported.
+const REQUIRE_CONDITIONS = new Set(['require', 'module-sync', 'node', 'node-addons', 'default']);
 
 /**
  * Tier A reads whichever entry yields a surface, `import` conditions included,
