@@ -95,6 +95,7 @@ import { registerChannelRoutes } from './channelRoutes';
 import { secretKey } from '../core/secretBox';
 import { channelsAllowed } from '../notify/channelRun';
 import { postJson } from '../notify/safeHttp';
+import { agentAlertNotice } from '../notify/sources';
 import { renderPrometheus } from './metrics';
 import { alert, errorKind } from '../core/alert';
 import { processStripeWebhook } from '../billing/webhook';
@@ -1855,16 +1856,28 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     },
   );
 
+  // Open urgent changes ride on tool results (see agentNotice). Only tools/call
+  // pays for the lookup, and a failed lookup never fails the call.
+  // ponytail: two indexed queries per tool call; cache per owner for ~60s if MCP latency shows it.
+  const alertNotice = async (ownerId: string | null, body: unknown): Promise<string | null> => {
+    if (!ownerId || (body as { method?: unknown } | null)?.method !== 'tools/call') return null;
+    try {
+      return await agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, ''));
+    } catch (err) {
+      logger.error('agent alert lookup failed:', err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  };
+
   const serveMcp = async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
     // Thread the authenticated key's owner identity into the tools (§3.1). An
     // anonymous discovery request has no key, so no owner and no quota notice,
     // and it cannot reach a tool that would use either.
     const authed = req as AuthedRequest;
-    const server = buildMcpServer(db, {
-      ownerId: authed.lurqKey?.ownerId ?? null,
-      notice: quotaNotice(authed.entitlement),
-    });
+    const ownerId = authed.lurqKey?.ownerId ?? null;
+    const notices = [quotaNotice(authed.entitlement), await alertNotice(ownerId, req.body)];
+    const server = buildMcpServer(db, { ownerId, notice: notices.filter(Boolean).join('\n\n') || null });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
