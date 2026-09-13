@@ -55,16 +55,13 @@ import {
   entitlementFor,
   isAllowed,
   getSubscription,
-  getSubscriptionByCustomer,
   type Entitlement,
 } from '../db/subscriptions';
 import {
   billingEnabled,
-  constructEvent,
   createCheckoutSession,
   isCheckoutOrigin,
   createPortalSession,
-  handleEvent,
 } from '../billing/stripe';
 import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
 import { registerPublicPackageRoutes } from './publicPackages';
