@@ -47,6 +47,9 @@ const WORKSPACE: NavItem[] = [
   // already anchored `#autopilot` — and it names the outcome instead of the
   // noun.
   { href: "/dashboard/repos", label: "autopilot" },
+  // Every MCP server the account has scanned, with what changed. Beside
+  // autopilot because both are "what my agents depend on, kept honest".
+  { href: "/dashboard/mcp", label: "mcp servers" },
   { href: "/dashboard/policy", label: "policy" },
   { href: "/dashboard/audit", label: "audit log" },
   { href: "/dashboard/contributions", label: "contributions" },

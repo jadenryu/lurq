@@ -679,3 +679,154 @@ export async function callAskTool(
   if (!res.ok) throw new LurqIssuerError("Could not run that lookup.", res.status);
   return (await res.json()) as { isError: boolean; text: string };
 }
+
+// ── Live MCP scans ──────────────────────────────────────────────────────────
+
+export type ScanSeverity = "critical" | "high" | "moderate" | "low" | "info";
+
+export type McpScanStatus =
+  | "ok"
+  | "partial"
+  | "needs_config"
+  | "auth_required"
+  | "spawn_failed"
+  | "timeout"
+  | "unreachable"
+  | "protocol_error";
+
+export interface McpFinding {
+  kind: string;
+  severity: ScanSeverity;
+  tool: string | null;
+  where: string;
+  detail: string;
+  evidence: string | null;
+}
+
+export interface McpServerStats {
+  tools: number;
+  writes: number;
+  destroys: number;
+  openWorld: number;
+  annotated: number;
+  capabilities: Record<string, number>;
+}
+
+/** One server as one account runs it, with its latest contract summarised. */
+export interface DashboardMcpServer {
+  id: number;
+  serverKey: string;
+  alias: string;
+  registry: string;
+  packageName: string | null;
+  transport: string;
+  serverName: string | null;
+  serverVersion: string | null;
+  lastStatus: McpScanStatus;
+  lastError: string | null;
+  worstSeverity: ScanSeverity | null;
+  firstSeenAt: string;
+  lastScannedAt: string;
+  lastChangedAt: string | null;
+  toolCount: number | null;
+  writes: number | null;
+  destroys: number | null;
+  capabilities: Record<string, number>;
+  findings: number;
+  openEvents: number;
+  openWorst: ScanSeverity | null;
+}
+
+export interface McpChangeEvent {
+  id: number;
+  deploymentId: number;
+  severity: ScanSeverity;
+  summary: string;
+  createdAt: string;
+  acknowledgedAt: string | null;
+  /** Present on the account-wide feed. */
+  alias?: string;
+  serverKey?: string;
+  diff: {
+    rugPull: string[];
+    descriptionChanges: { tool: string; field: string; before: string | null; after: string | null }[];
+    newFindings: McpFinding[];
+    instructionsChanged: boolean;
+    promptsAdded: string[];
+    promptsRemoved: string[];
+    capabilitiesGained: { tool: string; capabilities: string[] }[];
+    contract: {
+      removedTools: string[];
+      addedTools: string[];
+      silentDrift: string[];
+      annotationFlips: { tool: string; hint: string; from: boolean; to: boolean; widensPrivilege: boolean }[];
+      breaking: boolean;
+    };
+  };
+}
+
+export interface McpToolInfo {
+  name: string;
+  title?: string;
+  description?: string;
+  annotations?: Record<string, unknown>;
+}
+
+export interface McpObservation {
+  id: number;
+  status: McpScanStatus;
+  contentHash: string | null;
+  serverVersion: string | null;
+  error: string | null;
+  source: string;
+  scanCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface McpServerDetail {
+  deployment: DashboardMcpServer;
+  contract: {
+    contentHash: string;
+    toolCount: number;
+    tools: McpToolInfo[];
+    prompts: { name: string; description?: string }[];
+    instructions: string | null;
+    analysis: {
+      capabilities: Record<string, { capability: string; evidence: string }[]>;
+      findings: McpFinding[];
+      stats: McpServerStats;
+    };
+  } | null;
+  observations: McpObservation[];
+  events: McpChangeEvent[];
+}
+
+export interface McpServersPayload {
+  servers: DashboardMcpServer[];
+  events: McpChangeEvent[];
+}
+
+export async function fetchMcpServers(ownerId: string): Promise<McpServersPayload> {
+  const res = await issuerFetch(`/mcp-servers?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read MCP servers.", 502);
+  return (await res.json()) as McpServersPayload;
+}
+
+export async function fetchMcpServer(ownerId: string, id: number): Promise<McpServerDetail | null> {
+  const res = await issuerFetch(`/mcp-servers/${id}?ownerId=${encodeURIComponent(ownerId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not read the MCP server.", 502);
+  return (await res.json()) as McpServerDetail;
+}
+
+export async function acknowledgeMcpChange(ownerId: string, eventId: number): Promise<boolean> {
+  const res = await issuerFetch(`/mcp-servers/events/${eventId}/acknowledge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (res.status === 404) return false;
+  if (!res.ok) throw new LurqIssuerError("Could not acknowledge the change.", 502);
+  return true;
+}
