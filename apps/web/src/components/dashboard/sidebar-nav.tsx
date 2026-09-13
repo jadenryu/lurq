@@ -230,7 +230,7 @@ export function DashboardNav({ locked = false }: { locked?: boolean }) {
       {!locked && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />}
 
       {/* Mobile: top bar (logo + account) then search, then a scrollable tab row. */}
-      <div className="border-b border-border md:hidden">
+      <div className="border-b border-border md:hidden min-w-0">
         <div className="flex h-16 items-center justify-between gap-3 px-5">
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
