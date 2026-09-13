@@ -651,9 +651,15 @@ export async function runSandbox(
 /** Version-exact API surface + drift from a known version (§4D). */
 export async function runUsage(
   pkg: string,
-  opts: { version?: string; known?: string; json?: boolean },
+  opts: { version?: string; known?: string; query?: string; offset?: number; json?: boolean },
 ): Promise<void> {
-  const args = { package: pkg, version: opts.version, knownVersion: opts.known };
+  const args = {
+    package: pkg,
+    version: opts.version,
+    knownVersion: opts.known,
+    query: opts.query,
+    offset: opts.offset,
+  };
   const res = await fromIndex('usage', args, async (db) => {
     const { handleUsage } = await import('../mcp/handlers');
     return handleUsage(db, args);
@@ -679,6 +685,9 @@ export async function runUsage(
       (res.surface ?? []).map((s) => [s.name, s.kind, s.signature ?? '']),
     ),
   );
+  // Paging, a name filter that matched nothing, or a shallow surface: each is a
+  // table that is not the whole API, and must not be read as one.
+  if (res.note) console.log(res.shallow ? yellow(res.note) : dim(res.note));
 
   if (res.delta) {
     const d = res.delta;
