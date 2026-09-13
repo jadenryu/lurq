@@ -11,6 +11,7 @@ import {
   type SymbolReference,
 } from '../src/surface/references';
 import {
+  checkUpgradeOne,
   formatUpgradeReport,
   isNamespaceMemberClaim,
   judgeCalls,
@@ -128,6 +129,22 @@ describe('reference scanner', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // Stopping silently at the limit would report on files nobody opened.
+  it('says when it stopped before the end of the codebase', () => {
+    const stats = { files: 0, truncated: false };
+    scanReferences(root, { limit: 1, stats });
+    expect(stats).toEqual({ files: 1, truncated: true });
+    const full = { files: 0, truncated: false };
+    scanReferences(root, { stats: full });
+    expect(full.truncated).toBe(false);
+  });
+
+  it('refuses a version range before touching the registry', async () => {
+    const refs = scanReferences(root).find((r) => r.package === 'fast-glob');
+    const res = await checkUpgradeOne({ package: 'fast-glob', fromVersion: '^3.2.0', toVersion: '3.3.3' }, refs);
+    expect(res).toEqual({ unverified: 'expected exact versions, got ^3.2.0..3.3.3' });
   });
 
   it('ignores relative imports, builtins, and node_modules', () => {

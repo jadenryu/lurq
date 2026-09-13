@@ -134,13 +134,14 @@ export function packageOfSpecifier(spec: string): string | null {
  * The walk stays as the fallback, because a directory that is not a git
  * checkout still has to be scannable.
  */
-function listSourceFiles(dir: string, limit = 5000): string[] {
+function listSourceFiles(dir: string, limit = 5000): SourceListing {
   const tracked = gitSourceFiles(dir, limit);
   if (tracked) return tracked;
 
   const out: string[] = [];
+  let truncated = false;
   const walk = (d: string) => {
-    if (out.length >= limit) return;
+    if (truncated) return;
     let entries: string[];
     try {
       entries = readdirSync(d);
@@ -148,7 +149,7 @@ function listSourceFiles(dir: string, limit = 5000): string[] {
       return;
     }
     for (const e of entries) {
-      if (out.length >= limit) return;
+      if (truncated) return;
       if (SKIP_DIRS.has(e) || e.startsWith('.')) continue;
       const full = join(d, e);
       let st;
@@ -158,15 +159,28 @@ function listSourceFiles(dir: string, limit = 5000): string[] {
         continue;
       }
       if (st.isDirectory()) walk(full);
-      else if (SOURCE_EXT.has(extname(e)) && !e.endsWith('.d.ts')) out.push(full);
+      else if (SOURCE_EXT.has(extname(e)) && !e.endsWith('.d.ts')) {
+        if (out.length >= limit) truncated = true;
+        else out.push(full);
+      }
     }
   };
   walk(dir);
-  return out;
+  return { files: out, truncated };
+}
+
+/**
+ * `truncated` means a source file exists past the limit. A caller that ignores
+ * it reports on files it never opened, so a check that must not claim "safe"
+ * without looking has to surface it.
+ */
+interface SourceListing {
+  files: string[];
+  truncated: boolean;
 }
 
 /** Source files per git, or null when `dir` is not a usable checkout. */
-function gitSourceFiles(dir: string, limit: number): string[] | null {
+function gitSourceFiles(dir: string, limit: number): SourceListing | null {
   let stdout: string;
   try {
     stdout = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
@@ -181,13 +195,14 @@ function gitSourceFiles(dir: string, limit: number): string[] | null {
 
   const out: string[] = [];
   for (const rel of stdout.split('\n')) {
-    if (!rel || out.length >= limit) break;
+    if (!rel) continue;
     if (!SOURCE_EXT.has(extname(rel)) || rel.endsWith('.d.ts')) continue;
     // node_modules can be committed; it is never the project's own source.
     if (rel.split('/').includes('node_modules')) continue;
+    if (out.length >= limit) return { files: out, truncated: true };
     out.push(join(dir, rel));
   }
-  return out;
+  return { files: out, truncated: false };
 }
 
 /** What the use at `node` is: a call and its argument count, or anything else. */
@@ -293,7 +308,14 @@ function collectValueIdentifiers(sf: ts.SourceFile): Set<string> {
   return out;
 }
 
-export function scanReferences(rootDir: string, opts: { limit?: number } = {}): PackageReferences[] {
+export function scanReferences(
+  rootDir: string,
+  opts: {
+    limit?: number;
+    /** Filled in with how much was read. `truncated` is set when files past `limit` were skipped. */
+    stats?: { files: number; truncated: boolean };
+  } = {},
+): PackageReferences[] {
   const byPackage = new Map<string, Map<string, SymbolReference[]>>();
 
   const record = (
@@ -335,7 +357,12 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     return same;
   };
 
-  for (const file of listSourceFiles(rootDir, opts.limit)) {
+  const listing = listSourceFiles(rootDir, opts.limit);
+  if (opts.stats) {
+    opts.stats.files = listing.files.length;
+    opts.stats.truncated = listing.truncated;
+  }
+  for (const file of listing.files) {
     let text: string;
     try {
       text = readFileSync(file, 'utf8');

@@ -18,6 +18,7 @@
  * that reports "safe" when it simply did not look is worse than no check, and it
  * is how a CI gate loses its credibility in one incident.
  */
+import semver from 'semver';
 import { extractUnpacked, unpackPackage, type Unpacked } from './fetch';
 import { diffSurfaces, type ArityChange } from './diff';
 import { SURFACE_CLAIM_KINDS } from './references';
@@ -332,6 +333,14 @@ export async function checkUpgradeOne(
   const byEntry = groupByEntry(refs, target.package);
   if (byEntry.size === 0) return {};
 
+  // A range is not a version. The registry answers `^2.0.0` with a 404, which
+  // would read as "not published" and send someone looking for a missing
+  // release. Dist-tags (`latest`, `next`) are not ranges and resolve fine.
+  const loose = [target.fromVersion, target.toVersion].filter((v) => semver.validRange(v) && !semver.valid(v));
+  if (loose.length) {
+    return { unverified: `expected exact versions, got ${target.fromVersion}..${target.toVersion}` };
+  }
+
   // Both versions stay unpacked until the comparison is done: extraction reads
   // each once, and the type check needs the two side by side. Settled rather
   // than `all`, so one failed download cannot leak the other's temp directory.
@@ -343,7 +352,10 @@ export async function checkUpgradeOne(
     const failure = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected');
     if (failure) throw failure.reason;
     const [fromPkg, toPkg] = settled.map((s) => (s as PromiseFulfilledResult<Unpacked | null>).value);
-    if (!fromPkg || !toPkg) return { unverified: 'could not fetch one or both versions' };
+    if (!fromPkg || !toPkg) {
+      const missing = [fromPkg ? null : target.fromVersion, toPkg ? null : target.toVersion].filter(Boolean);
+      return { unverified: `not published on npm: ${missing.map((v) => `${target.package}@${v}`).join(', ')}` };
+    }
     return await compareVersions(target, refs, byEntry, fromPkg, toPkg, opts.typeCheck);
   } finally {
     await Promise.all(
