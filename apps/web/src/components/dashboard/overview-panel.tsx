@@ -12,6 +12,7 @@ import {
   microLabel,
 } from "@/components/dashboard/panel";
 import { Stagger, StaggerItem } from "@/components/dashboard/motion";
+import { RangeTabs } from "@/components/dashboard/range-tabs";
 import { Delta, StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import type { OverviewData } from "@/lib/dashboard-data";
 import { fmtDay, relativeTime } from "@/lib/format";
@@ -146,7 +147,7 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
             >
               <p className={microLabel}>last 14 days</p>
               <div className="mt-2.5">
-                <ColumnChart data={series.slice(-14)} height={96} />
+                <ColumnChart data={usage.series.slice(-14)} height={96} />
               </div>
             </Drill>
           }
@@ -305,11 +306,13 @@ export function OverviewPanel({ data, days }: { data: OverviewData; days: number
         <StaggerItem>
           <Panel padding="none">
             <div className="flex h-11 items-center justify-between gap-4 border-b border-edge px-[var(--panel-px)]">
-              <div className="flex items-baseline gap-2.5">
-                <p className="text-[13px] font-medium tracking-[-0.01em] text-ink">requests</p>
-                <span className={microLabel}>last {days} days</span>
+              <p className="text-[13px] font-medium tracking-[-0.01em] text-ink">requests</p>
+              <div className="flex items-center gap-4">
+                <RangeTabs active={days} basePath="/dashboard" />
+                <span className="hidden sm:inline-flex">
+                  <SectionLink href="/dashboard/usage">usage detail</SectionLink>
+                </span>
               </div>
-              <SectionLink href="/dashboard/usage">usage detail</SectionLink>
             </div>
             <div className="px-[var(--panel-px)] pb-4 pt-4">
               <ColumnChart data={series} height={200} />

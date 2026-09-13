@@ -1,0 +1,92 @@
+---
+title: Alerts
+description: How lurq tells you something changed — email, Slack, Discord, Teams, webhooks, and a GitHub issue.
+---
+
+lurq watches your repositories and MCP servers and tells you when something
+changes. Every alert is also on the dashboard; these channels decide what reaches
+you there without looking.
+
+## Email
+
+- **Urgent alerts** are on by default and fire only for changes that need you
+  today: an MCP server rewrote a tool description so it now instructs your agent,
+  a tool stopped being read-only, or a breaking release that your repository's
+  version range will install on its own. One email per check, at most three a day.
+- **The weekly summary** is off until you turn it on. It arrives on Mondays and
+  covers everything that changed that week.
+
+Both are set on **Dashboard → Notifications**, and every email has a one-click
+unsubscribe link.
+
+## Slack, Discord and Teams
+
+Paste an incoming webhook URL on **Dashboard → Notifications → Channels** and
+choose the lowest severity to send. lurq posts a test message before saving the
+channel. Each channel then receives one batched message per check with every
+change at or above that severity.
+
+- **Slack:** create an incoming webhook (`https://hooks.slack.com/services/…`).
+- **Discord:** Server settings → Integrations → Webhooks (`https://discord.com/api/webhooks/…`).
+- **Teams:** use the **Workflows** app's "Send webhook alerts to a channel" template.
+  Office 365 connector URLs were retired by Microsoft in May 2026 and are refused.
+
+Channels are part of the Team plan. A channel whose URL stops working (deleted,
+revoked) is switched off with the reason shown, and can be resumed.
+
+Webhook URLs are credentials, so lurq stores them encrypted and never shows them
+again after you add them.
+
+## Webhooks
+
+A generic webhook receives a JSON `POST`:
+
+```json
+{
+  "type": "lurq.alerts",
+  "delivery": "channel:12:4f1c…",
+  "sentAt": "2026-09-14T13:02:11.000Z",
+  "dashboardUrl": "https://lurq.run/dashboard/notifications",
+  "more": 0,
+  "items": [
+    {
+      "key": "mcp:381",
+      "severity": "critical",
+      "source": "mcp",
+      "title": "notes: add_note now instructs your agent",
+      "detail": "1 tool(s) rewrote their description and now instruct the model: add_note",
+      "url": "https://lurq.run/dashboard/mcp/41"
+    }
+  ]
+}
+```
+
+`X-Lurq-Delivery` identifies the delivery; a retry repeats it, so use it to
+dedupe. `X-Lurq-Signature` is `t=<unix seconds>,v1=<hex>`, an HMAC-SHA256 of
+`<t>.<raw body>` with the signing secret shown once when you add the webhook.
+Verify it against the raw body and reject old timestamps:
+
+```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+export function verify(secret: string, header: string, rawBody: string): boolean {
+  const parts = Object.fromEntries(header.split(',').map((p) => p.split('=', 2)));
+  const t = Number(parts.t);
+  if (!Number.isInteger(t) || Math.abs(Date.now() / 1000 - t) > 300) return false;
+  const expected = createHmac('sha256', secret).update(`${t}.${rawBody}`).digest();
+  const given = Buffer.from(parts.v1 ?? '', 'hex');
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+```
+
+## GitHub issue
+
+`lurq mcp-ci` writes a workflow that, besides scanning daily, keeps one pinned
+**lurq dashboard** issue in the repository current: your MCP servers, what needs
+attention, what changed, and the dependency upgrades waiting. The body is edited
+in place, which notifies nobody; lurq comments, which does notify watchers, only
+when a scan finds something urgent, and never twice for the same thing.
+
+Close the issue to stop lurq updating it, or generate the workflow with
+`lurq mcp-ci --no-issue` to leave it out. Text from MCP servers is escaped in the
+issue, so a tool description cannot mention anyone or link anywhere.

@@ -504,6 +504,9 @@ export function registerOperatorCommands(program: Command): void {
     .option('--surface <n>', 'demand-driven surface extractions drained per cycle', (v) =>
       parseInt(v, 10),
     )
+    .option('--mcp <n>', 'queued MCP servers probed per cycle (each spawns a sandbox)', (v) =>
+      parseInt(v, 10),
+    )
     .option('--once', 'run exactly one cycle and exit')
     .action(
       async (opts: {
@@ -512,6 +515,7 @@ export function registerOperatorCommands(program: Command): void {
         extract?: number;
         compatVerify?: number;
         surface?: number;
+        mcp?: number;
         once?: boolean;
       }) => {
         const { requireConfig } = await import('../core/config');
@@ -523,10 +527,22 @@ export function registerOperatorCommands(program: Command): void {
           extractPerCycle: opts.extract,
           compatVerifyPerCycle: opts.compatVerify,
           surfacePerCycle: opts.surface,
+          mcpPerCycle: opts.mcp,
           once: opts.once,
         });
       },
     );
+
+  program
+    .command('notify-preview')
+    .description('render account email and channel alerts from sample data, to preview and edit the templates in src/notify')
+    .option('--out <dir>', 'where to write the files', 'notify-preview')
+    .option('--send-to <email>', 'also send both emails to this address through Resend (needs RESEND_API_KEY)')
+    .option('--no-open', 'do not open the urgent email in a browser')
+    .action(async (opts: { out?: string; sendTo?: string; open?: boolean }) => {
+      const { runNotifyPreview } = await import('../notify/preview');
+      await runNotifyPreview(opts);
+    });
 
   program
     .command('rescore')
@@ -760,7 +776,8 @@ export function registerOperatorCommands(program: Command): void {
     .description('grant a paid plan for money collected outside Stripe')
     .option('--tier <tier>', 'plan to grant', 'pro')
     .requiredOption('--months <n>', 'how long before it lapses (1-36)')
-    .action(async (ownerId: string, opts: { tier: string; months: string }) => {
+    .option('--seats <n>', 'seats for a per-seat plan (floored at its minimum)')
+    .action(async (ownerId: string, opts: { tier: string; months: string; seats?: string }) => {
       const { runBillingGrant } = await import('./billing');
       await runBillingGrant(ownerId, opts);
     });
@@ -778,6 +795,21 @@ export function registerOperatorCommands(program: Command): void {
     .action(async (ownerId: string) => {
       const { runBillingRevoke } = await import('./billing');
       await runBillingRevoke(ownerId);
+    });
+  billing
+    .command('report-overage')
+    .description('send calls past each Team pool to Stripe as metered usage (hourly cron)')
+    .action(async () => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { reportOverage } = await import('../billing/overage');
+      const { db, close } = createDb({ max: 1 });
+      try {
+        for (const line of await reportOverage(db)) console.log(line);
+      } finally {
+        await close();
+      }
     });
   billing
     .command('setup')

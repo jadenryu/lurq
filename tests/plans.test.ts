@@ -1,9 +1,82 @@
 import { describe, expect, it } from 'vitest';
-import { PLANS, PLAN_LIST, isServed, planFor, type Tier } from '../src/core/plans';
+import {
+  PLANS,
+  PLAN_LIST,
+  ANNUAL_DISCOUNT,
+  OVERAGE_CAP_MULTIPLE,
+  annualPriceCents,
+  billedSeats,
+  isServed,
+  monthlyAllowance,
+  overageCalls,
+  planFor,
+  quotaState,
+  type Tier,
+} from '../src/core/plans';
+
+describe('seats and the pooled allowance', () => {
+  it('bills a per-seat plan at no fewer than its minimum', () => {
+    expect(billedSeats(PLANS.team, 1)).toBe(3);
+    expect(billedSeats(PLANS.team, null)).toBe(3);
+    expect(billedSeats(PLANS.team, 8)).toBe(8);
+  });
+
+  it('ignores seats on flat plans', () => {
+    // A Pro row carrying a stray quantity must not multiply its allowance.
+    expect(billedSeats(PLANS.pro, 12)).toBe(1);
+    expect(monthlyAllowance(PLANS.pro, 12)).toBe(PLANS.pro.monthlyCalls);
+  });
+
+  it('pools calls across seats and leaves uncapped uncapped', () => {
+    expect(monthlyAllowance(PLANS.team, 8)).toBe(8 * PLANS.team.monthlyCalls!);
+    expect(monthlyAllowance(PLANS.enterprise, 50)).toBeNull();
+  });
+
+  it('keeps CI policy keys and the long decision log off the individual plans', () => {
+    expect(PLANS.free.ciPolicyKeys).toBe(false);
+    expect(PLANS.pro.ciPolicyKeys).toBe(false);
+    expect(PLANS.team.ciPolicyKeys).toBe(true);
+    const days = PLAN_LIST.map((p) => p.decisionLogDays);
+    expect(days).toEqual([...days].sort((a, b) => a - b));
+  });
+});
+
+describe('annual prices', () => {
+  it('charges twelve months less the discount', () => {
+    expect(ANNUAL_DISCOUNT).toBe(0.2);
+    expect(annualPriceCents(PLANS.pro)).toBe(14_400); // $12/mo
+    expect(annualPriceCents(PLANS.team)).toBe(24_000); // $20/seat/mo
+  });
+});
+
+describe('quotaState and overage', () => {
+  it('is within quota under the pool, and uncapped always is', () => {
+    expect(quotaState(1_000, 999, false)).toEqual({ withinQuota: true, inOverage: false });
+    expect(quotaState(null, 10_000_000, false)).toEqual({ withinQuota: true, inOverage: false });
+  });
+
+  it('serves overage past the pool only when the subscription is metered', () => {
+    expect(quotaState(1_000, 1_000, false).inOverage).toBe(false);
+    expect(quotaState(1_000, 1_000, true).inOverage).toBe(true);
+  });
+
+  it('stops overage at the ceiling, so a runaway loop cannot bill without bound', () => {
+    const ceiling = 1_000 * OVERAGE_CAP_MULTIPLE;
+    expect(quotaState(1_000, ceiling - 1, true).inOverage).toBe(true);
+    expect(quotaState(1_000, ceiling, true).inOverage).toBe(false);
+  });
+
+  it('bills only calls past the pool, capped at the ceiling', () => {
+    expect(overageCalls(1_000, 800)).toBe(0);
+    expect(overageCalls(1_000, 1_250)).toBe(250);
+    expect(overageCalls(1_000, 50_000)).toBe(1_000 * (OVERAGE_CAP_MULTIPLE - 1));
+    expect(overageCalls(null, 50_000)).toBe(0);
+  });
+});
 
 describe('planFor (entitlement resolution)', () => {
   it('resolves each known tier', () => {
-    for (const tier of ['free', 'pro', 'enterprise'] as Tier[]) {
+    for (const tier of ['free', 'pro', 'team', 'enterprise'] as Tier[]) {
       expect(planFor(tier).tier).toBe(tier);
     }
   });
@@ -53,12 +126,18 @@ describe('the plan table itself', () => {
 
     const rates = PLAN_LIST.map((p) => p.ratePerMinute);
     for (let i = 1; i < rates.length; i++) expect(rates[i]!).toBeGreaterThan(rates[i - 1]!);
+
+    // Zero would read as "no limit" in the web route, so free must be positive.
+    const ask = PLAN_LIST.map((p) => p.askDailyUsd);
+    expect(ask[0]!).toBeGreaterThan(0);
+    for (let i = 1; i < ask.length; i++) expect(ask[i]!).toBeGreaterThan(ask[i - 1]!);
   });
 
   it('keeps free free and paid paid', () => {
     expect(PLANS.free.paid).toBe(false);
     expect(PLANS.free.priceCents).toBe(0);
     expect(PLANS.pro.paid).toBe(true);
+    expect(PLANS.team.paid).toBe(true);
     expect(PLANS.enterprise.paid).toBe(true);
   });
 

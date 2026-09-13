@@ -35,6 +35,8 @@ function actionOf(c: Capability): { kind: "open" | "copy"; label: string; value:
   return { kind: "copy", label: "copy", value: c.mcp ?? "" };
 }
 
+type Row = { kind: "capability"; c: Capability } | { kind: "ask" };
+
 export function CommandPalette({
   open,
   onOpenChange,
@@ -50,68 +52,15 @@ export function CommandPalette({
 
   const matches = useMemo(() => searchCapabilities(query, 6), [query]);
 
-  /**
-   * Two modes, one box.
-   *
-   * Catalog search stays exactly as it was — local, instant, offline-capable,
-   * and incapable of inventing a capability. Ask is the second mode, for the
-   * question a keyword matcher structurally cannot answer: not "what can lurq
-   * do" but "what is true about MY account". It only runs on Enter against the
-   * Ask row, never per keystroke, so the default path costs nothing.
-   */
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [asking, setAsking] = useState(false);
-  const abort = useRef<AbortController | null>(null);
-
-  const ask = useCallback(async (question: string) => {
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
-    setAsking(true);
-    setAnswer("");
-    try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question }),
-        signal: controller.signal,
-      });
-      if (!res.ok || !res.body) {
-        setAnswer(
-          res.status === 503
-            ? "Ask is not configured on this deployment. Catalog search above still works."
-            : await res.text().catch(() => "Something went wrong."),
-        );
-        return;
-      }
-      // Streamed so a multi-tool question shows its first sentence rather than
-      // holding a blank box for the whole tool loop.
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setAnswer((prev) => (prev ?? "") + decoder.decode(value, { stream: true }));
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") setAnswer("Could not reach lurq.");
-    } finally {
-      setAsking(false);
-    }
-  }, []);
-
   /** Every open/close goes through here, so a reopened palette always starts
    *  fresh instead of resuming the last search. Reset on the event rather than
    *  in an effect watching `open` — that would be a second render pass to undo
    *  state we already knew was stale at the moment it closed. */
   const change = useCallback(
     (next: boolean) => {
-      abort.current?.abort();
       setQuery("");
       setActive(0);
       setCopied(null);
-      setAnswer(null);
-      setAsking(false);
       onOpenChange(next);
     },
     [onOpenChange],
@@ -151,28 +100,58 @@ export function CommandPalette({
     [change, router],
   );
 
+  const trimmed = query.trim();
+
+  /** Ask gets its own page: an agent's answer needs room to stream and has to
+   *  survive the palette closing. The palette only hands the question over. */
+  const askNow = () => {
+    change(false);
+    router.push(`/dashboard/ask?q=${encodeURIComponent(trimmed)}`);
+  };
+
   /** Ask needs a real question, not a stray keystroke. */
-  const canAsk = query.trim().length > 8;
+  const canAsk = trimmed.length > 8;
+  /**
+   * Two modes, one box, and Enter has to pick the right one.
+   *
+   * Almost every sentence shares a word with some catalog entry, so "which repo
+   * is worst off" used to preselect "connect a repo" and Enter copied a command
+   * nobody asked for. Something that reads as a question — a "?" or three words
+   * — now puts Ask first. A keyword still lands on the catalog, and the other
+   * mode is always one arrow away (or ⌘⏎, which always asks).
+   *
+   * ponytail: word-count heuristic, not intent classification. If it misfires
+   * in practice, score the top match against the query length instead.
+   */
+  const isQuestion = canAsk && (trimmed.endsWith("?") || trimmed.split(/\s+/).length >= 3);
   /** No keyword hit means the catalog returned its generic first six, which
-   *  answer nothing. A real question then goes straight to Ask: first row,
-   *  preselected, so Enter asks instead of opening an unrelated page. */
+   *  answer nothing. */
   const results = canAsk && !matches.some((c) => c.score > 0) ? [] : matches;
+  const caps: Row[] = results.map((c) => ({ kind: "capability", c }));
+  const rows: Row[] = !canAsk
+    ? caps
+    : isQuestion
+      ? [{ kind: "ask" }, ...caps]
+      : [...caps, { kind: "ask" }];
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => {
-        // +1 row: the Ask row sits below the catalog matches.
-        const rows = results.length + (canAsk ? 1 : 0);
         const next = e.key === "ArrowDown" ? i + 1 : i - 1;
-        return (next + rows) % Math.max(rows, 1);
+        return (next + rows.length) % Math.max(rows.length, 1);
       });
       return;
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      if (active === results.length) void ask(query.trim());
-      else if (results[active]) run(results[active]);
+      if (e.metaKey || e.ctrlKey) {
+        if (trimmed) askNow();
+        return;
+      }
+      const row = rows[active];
+      if (row?.kind === "ask") askNow();
+      else if (row) run(row.c);
     }
   };
 
@@ -204,14 +183,43 @@ export function CommandPalette({
               setActive(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="what are you trying to do?"
-            aria-label="Search what lurq can do"
+            placeholder="go somewhere, or ask a question"
+            aria-label="Search what lurq can do, or ask a question"
             className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-3"
           />
         </div>
 
         <div ref={listRef} role="listbox" className="max-h-[52vh] overflow-y-auto p-2">
-          {results.map((c, i) => {
+          {rows.map((row, i) => {
+            const className = cn(
+              "flex w-full items-start gap-3 rounded-[var(--radius-control)] px-3 py-2.5 text-left transition-colors",
+              i === active ? "bg-secondary" : "hover:bg-muted/50",
+            );
+            if (row.kind === "ask") {
+              return (
+                <button
+                  key="ask"
+                  role="option"
+                  aria-selected={i === active}
+                  onClick={askNow}
+                  onMouseMove={() => setActive(i)}
+                  className={className}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-foreground">
+                      <span className="text-signal">ask</span> “{trimmed}”
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      An agent reads the index and your account, and answers from what it finds.
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
+                    ask
+                  </span>
+                </button>
+              );
+            }
+            const { c } = row;
             const action = actionOf(c);
             return (
               <button
@@ -220,10 +228,7 @@ export function CommandPalette({
                 aria-selected={i === active}
                 onClick={() => run(c)}
                 onMouseMove={() => setActive(i)}
-                className={cn(
-                  "flex w-full items-start gap-3 rounded-[var(--radius-control)] px-3 py-2.5 text-left transition-colors",
-                  i === active ? "bg-secondary" : "hover:bg-muted/50",
-                )}
+                className={className}
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-foreground">{c.title}</p>
@@ -240,55 +245,11 @@ export function CommandPalette({
               </button>
             );
           })}
-
-          {/* The second mode. Below the catalog matches when there are any: a
-              question about the product is answered instantly from the local
-              index, and only a question the catalog cannot answer is worth a
-              round trip. With no match, it is the only row. */}
-          {canAsk && (
-            <button
-              role="option"
-              aria-selected={active === results.length}
-              onClick={() => void ask(query.trim())}
-              onMouseMove={() => setActive(results.length)}
-              className={cn(
-                "mt-1 flex w-full items-start gap-3 rounded-[var(--radius-control)] border-t border-border px-3 py-2.5 text-left transition-colors",
-                active === results.length ? "bg-secondary" : "hover:bg-muted/50",
-              )}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-foreground">
-                  Ask lurq about packages, upgrades and your repos
-                </p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  Looks it up in the index and your account, and answers from what it finds, never from memory.
-                </p>
-              </div>
-              <span className="shrink-0 font-mono text-[0.65rem] uppercase tracking-[0.16em] text-ink-3">
-                {asking ? "reading" : "ask"}
-              </span>
-            </button>
-          )}
-
-          {answer !== null && (
-            <div className="mt-2 rounded-[var(--radius-control)] border border-edge bg-surface-2/50 px-3 py-2.5">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-2">
-                {answer}
-                {asking && (
-                  <span
-                    aria-hidden
-                    className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-px animate-pulse bg-signal/70"
-                  />
-                )}
-              </p>
-              {asking && <span className="sr-only">Reading your account…</span>}
-            </div>
-          )}
         </div>
 
         <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[11px] font-medium tracking-[0.04em] uppercase text-ink-3">
-          <span>↑↓ move · ⏎ run · esc close</span>
-          <span>your agent can ask this too: the `capabilities` tool</span>
+          <span>↑↓ move · ⏎ run · ⌘⏎ ask · esc close</span>
+          <span className="hidden sm:inline">your agent can ask this too: the `capabilities` tool</span>
         </div>
       </DialogContent>
     </Dialog>
@@ -315,7 +276,7 @@ export function CommandPaletteTrigger({
       )}
     >
       <span aria-hidden>›</span>
-      <span className="flex-1 text-left">what can lurq do?</span>
+      <span className="flex-1 text-left">search or ask</span>
       {/* Hidden where it would be a lie: a phone has no ⌘K. */}
       <kbd className="hidden rounded-sm border border-border px-1.5 py-0.5 text-[0.65rem] md:inline">
         ⌘K

@@ -61,6 +61,12 @@ import type {
 } from '../github/types';
 import type { ExtractionTier, SymbolKind } from '../surface/types';
 import type { Tier } from '../core/plans';
+import type { Severity } from '../audit/types';
+import type { McpTool } from '../surface/mcp';
+import type { PromptInfo, ResourceTemplateInfo } from '../mcpScan/snapshot';
+import type { ServerAnalysis, SnapshotDiff } from '../mcpScan/analyze';
+import type { Registry } from '../mcpScan/config';
+import type { ScanStatus } from '../mcpScan/errors';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -631,6 +637,8 @@ export const repoAlerts = pgTable(
   },
   (table) => [
     index('repo_alerts_owner_created_idx').on(table.ownerId, table.createdAt),
+    // The notification sender scans recent alerts across every owner.
+    index('repo_alerts_created_idx').on(table.createdAt),
     // One alert per repo per release. A re-sync of the same version — and the
     // watcher re-syncs on every publish, including non-latest backports — must
     // not re-notify.
@@ -749,6 +757,13 @@ export const entities = pgTable(
  *   - `tier` (§6.4.3): surfaces extracted at different tiers are NOT comparable,
  *     so the tier has to travel with every symbol or diffs go wrong quietly.
  */
+/**
+ * `max_arity` for a function that reads any number of arguments.
+ * ponytail: a sentinel rather than a second column. One nullable integer already
+ * carries the IR's three states (not measured, unbounded, a count).
+ */
+export const UNBOUNDED_ARITY = -1;
+
 export const symbols = pgTable(
   'symbols',
   {
@@ -770,6 +785,13 @@ export const symbols = pgTable(
     signature: text('signature'),
     sourceFile: text('source_file'),
     sourceLine: integer('source_line'),
+    /** Character offset of the declaration. Two exports sharing file and offset
+     *  are one value under two names, which is how a diff read from storage finds
+     *  a proven rename. Null on rows extracted before it was recorded. */
+    sourceOffset: integer('source_offset'),
+    /** Most arguments the function reads: null when not measured, UNBOUNDED_ARITY
+     *  for a rest parameter or `arguments`. See SurfaceSymbol.maxArity. */
+    maxArity: integer('max_arity'),
   },
   // Keyed by TIER as well as path: a package version has one surface per tier and
   // they are not interchangeable (§6.4.3). Without the tier in the key, storing a
@@ -983,6 +1005,20 @@ export const subscriptions = pgTable(
     /** Set when the user cancels but has paid through the period. */
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     /**
+     * Seats bought, from the Stripe subscription quantity. Only per-seat plans
+     * read it, and `billedSeats` floors it at the plan's minimum, so a flat plan
+     * or a pre-seat row carrying the default 1 resolves correctly either way.
+     */
+    seats: integer('seats').notNull().default(1),
+    /** The subscription carries the metered overage item, so calls past the pool bill. */
+    overageEnabled: boolean('overage_enabled').notNull().default(false),
+    /** Calendar month ('YYYY-MM') that `overageReported` counts. */
+    overageMonth: text('overage_month'),
+    /** Overage calls already sent to Stripe for `overageMonth`. */
+    overageReported: integer('overage_reported').notNull().default(0),
+    /** The plan item's Stripe interval ('month' | 'year'). Null for manual grants. */
+    billingInterval: text('billing_interval'),
+    /**
      * Stripe delivers out of order and retries, so a late duplicate of an older
      * event must not overwrite newer state. The webhook drops any event whose
      * timestamp is older than the one that produced the current row.
@@ -1049,3 +1085,272 @@ export const stackResolutions = pgTable(
 
 export type StackResolutionRow = typeof stackResolutions.$inferSelect;
 export type NewStackResolutionRow = typeof stackResolutions.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live MCP scans. Contracts read by the user's own client, with their own
+// configuration, uploaded under their account.
+//
+// Shaped for a daily scan across many accounts without the tables growing at
+// the rate of scans:
+//   - a contract is stored ONCE per content hash, whoever uploaded it
+//   - an observation is a CHANGE POINT: an unchanged daily scan updates
+//     `last_seen_at` and `scan_count` on the current row instead of inserting
+//   - change events are unique per (deployment, from, to), so a server that
+//     flaps between two contracts re-arms one event rather than filling a feed
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Everything the model reads from one server version, content-addressed.
+ *
+ * Immutable and owner-independent: two accounts running the same public server
+ * share one row, and a private server's row is only ever reached through that
+ * owner's deployment. There is deliberately no read by hash from outside.
+ * ponytail: no GC for contracts no deployment points at any more; add a sweep
+ * when the table's size is worth a job.
+ */
+export const mcpContracts = pgTable(
+  'mcp_contracts',
+  {
+    contentHash: text('content_hash').primaryKey(),
+    /** Schema-only hash; equal means calls validate identically. */
+    contractHash: text('contract_hash').notNull(),
+    tools: jsonb('tools').$type<McpTool[]>().notNull(),
+    prompts: jsonb('prompts').$type<PromptInfo[]>().notNull(),
+    resourceTemplates: jsonb('resource_templates').$type<ResourceTemplateInfo[]>().notNull(),
+    instructions: text('instructions'),
+    toolCount: integer('tool_count').notNull(),
+    bytes: integer('bytes').notNull(),
+    /** Computed server-side at insert, never taken from the client. */
+    analysis: jsonb('analysis').$type<ServerAnalysis>().notNull(),
+    analyzerVersion: text('analyzer_version').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('mcp_contracts_contract_idx').on(table.contractHash)],
+);
+
+/**
+ * One server as one account runs it: identity plus configuration fingerprint.
+ *
+ * The same package under two configurations is two deployments, because it
+ * exposes two contracts. Denormalizes the latest state so the dashboard list is
+ * one indexed read.
+ */
+export const mcpDeployments = pgTable(
+  'mcp_deployments',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    serverKey: text('server_key').notNull(),
+    configFingerprint: text('config_fingerprint').notNull(),
+    /** The name the user gave it, as last seen. Display only. */
+    alias: text('alias').notNull(),
+    registry: text('registry').$type<Registry>().notNull(),
+    packageName: text('package_name'),
+    transport: text('transport').notNull(),
+    /** Self-reported by the server in its handshake. */
+    serverName: text('server_name'),
+    serverVersion: text('server_version'),
+    lastStatus: text('last_status').$type<ScanStatus>().notNull(),
+    lastError: text('last_error'),
+    /** The last contract actually read. Kept when a later scan fails. */
+    lastContentHash: text('last_content_hash'),
+    worstSeverity: text('worst_severity').$type<Severity>(),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastScannedAt: ts('last_scanned_at').notNull().defaultNow(),
+    lastChangedAt: ts('last_changed_at'),
+  },
+  (table) => [
+    uniqueIndex('mcp_deployments_identity_idx').on(table.ownerId, table.serverKey, table.configFingerprint),
+    index('mcp_deployments_owner_idx').on(table.ownerId, table.lastScannedAt),
+  ],
+);
+
+/**
+ * What a deployment looked like over an interval: run-length encoded scans.
+ *
+ * A new row only when status, contract or self-reported version moves; every
+ * identical scan in between bumps `scan_count` and `last_seen_at`. The history
+ * is therefore exact to the scan cadence and bounded by how often servers
+ * actually change.
+ */
+export const mcpObservations = pgTable(
+  'mcp_observations',
+  {
+    id: serial('id').primaryKey(),
+    deploymentId: integer('deployment_id')
+      .notNull()
+      .references(() => mcpDeployments.id),
+    ownerId: text('owner_id').notNull(),
+    status: text('status').$type<ScanStatus>().notNull(),
+    contentHash: text('content_hash'),
+    serverVersion: text('server_version'),
+    error: text('error'),
+    /** `cli` or `ci`: who ran the scan that opened this interval. */
+    source: text('source').notNull(),
+    scanCount: integer('scan_count').notNull().default(1),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+  },
+  (table) => [index('mcp_observations_deployment_idx').on(table.deploymentId, table.firstSeenAt)],
+);
+
+/** A contract change worth telling the owner about, with the full diff. */
+export const mcpChangeEvents = pgTable(
+  'mcp_change_events',
+  {
+    id: serial('id').primaryKey(),
+    deploymentId: integer('deployment_id')
+      .notNull()
+      .references(() => mcpDeployments.id),
+    ownerId: text('owner_id').notNull(),
+    fromHash: text('from_hash').notNull(),
+    toHash: text('to_hash').notNull(),
+    severity: text('severity').$type<Severity>().notNull(),
+    summary: text('summary').notNull(),
+    diff: jsonb('diff').$type<SnapshotDiff>().notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    acknowledgedAt: ts('acknowledged_at'),
+  },
+  (table) => [
+    uniqueIndex('mcp_change_events_pair_idx').on(table.deploymentId, table.fromHash, table.toHash),
+    index('mcp_change_events_owner_idx').on(table.ownerId, table.createdAt),
+    index('mcp_change_events_created_idx').on(table.createdAt),
+  ],
+);
+
+/**
+ * An account's scan of a PUBLISHED server, offered as corroboration.
+ *
+ * A client can never write straight into the shared index: a poisoned tool list
+ * would be served to everyone. A version's contract is promoted only when
+ * enough distinct accounts independently read the same content hash, and the
+ * sandbox probe stays the authority that overrides it.
+ */
+export const mcpPublicReports = pgTable(
+  'mcp_public_reports',
+  {
+    registry: text('registry').notNull(),
+    packageName: text('package_name').notNull(),
+    version: text('version').notNull(),
+    contentHash: text('content_hash').notNull(),
+    ownerId: text('owner_id').notNull(),
+    reportedAt: ts('reported_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.registry, table.packageName, table.version, table.contentHash, table.ownerId] }),
+    index('mcp_public_reports_version_idx').on(table.registry, table.packageName, table.version),
+  ],
+);
+
+export type McpContractRow = typeof mcpContracts.$inferSelect;
+export type McpDeploymentRow = typeof mcpDeployments.$inferSelect;
+export type McpObservationRow = typeof mcpObservations.$inferSelect;
+export type McpChangeEventRow = typeof mcpChangeEvents.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account email. Two kinds only, chosen so the inbox stays worth reading:
+// URGENT (on by default, rare by construction) and a weekly DIGEST (opt-in).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One row per account, created the first time anything needs it.
+ *
+ * No email address here: the sender reads the verified primary from Clerk at
+ * send time, so a changed address is never stale and lurq holds no list.
+ * `unsubscribe_token` is random rather than derived, so it is revocable and
+ * needs no signing secret.
+ */
+export const notificationPreferences = pgTable('notification_preferences', {
+  ownerId: text('owner_id').primaryKey(),
+  urgentEmail: boolean('urgent_email').notNull().default(true),
+  weeklyDigest: boolean('weekly_digest').notNull().default(false),
+  unsubscribeToken: text('unsubscribe_token').notNull().unique(),
+  lastDigestAt: ts('last_digest_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * One row per email. `idempotency_key` is unique, so two workers building the
+ * same email cannot both send it, and the same key goes to Resend so a retry of
+ * a send that did land is dropped on their side too.
+ */
+export const notificationDeliveries = pgTable(
+  'notification_deliveries',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    kind: text('kind').$type<'urgent' | 'digest' | 'channel'>().notNull(),
+    /** Set on a channel delivery: the Slack/Discord/Teams/webhook it went to. */
+    channelId: integer('channel_id'),
+    status: text('status').$type<'pending' | 'sent' | 'failed' | 'skipped'>().notNull(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    attempts: integer('attempts').notNull().default(0),
+    /** Why it failed or was skipped. Our own words, never a recipient address. */
+    error: text('error'),
+    providerId: text('provider_id'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    sentAt: ts('sent_at'),
+  },
+  (table) => [
+    index('notification_deliveries_owner_idx').on(table.ownerId, table.kind, table.createdAt),
+    index('notification_deliveries_status_idx').on(table.status, table.createdAt),
+  ],
+);
+
+/**
+ * Which alert went out in which email. The primary key is the item itself
+ * (`alert:<id>`, `mcp:<id>`), so claiming it is the dedupe: an item can belong to
+ * one email, ever.
+ */
+export const notificationItems = pgTable(
+  'notification_items',
+  {
+    itemKey: text('item_key').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    deliveryId: integer('delivery_id')
+      .notNull()
+      .references(() => notificationDeliveries.id),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('notification_items_delivery_idx').on(table.deliveryId)],
+);
+
+export type NotificationPreferencesRow = typeof notificationPreferences.$inferSelect;
+export type NotificationDeliveryRow = typeof notificationDeliveries.$inferSelect;
+
+/**
+ * Where an account's alerts go besides email: a Slack, Discord or Teams
+ * webhook, or a signed JSON webhook.
+ *
+ * The URL is a credential (anyone holding a Slack webhook URL can post to that
+ * channel), so it is stored encrypted, bound to the owner. Removal is soft and
+ * wipes both secrets: the row stays as a record that the channel existed.
+ */
+export const notificationChannels = pgTable(
+  'notification_channels',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    kind: text('kind').$type<'slack' | 'discord' | 'teams' | 'webhook'>().notNull(),
+    label: text('label'),
+    urlCiphertext: text('url_ciphertext').notNull(),
+    /** Enough of the URL to recognise it: host and the last four characters. */
+    urlHint: text('url_hint').notNull(),
+    /** Webhook kind only: the HMAC secret receivers verify with. Encrypted. */
+    signingSecretCiphertext: text('signing_secret_ciphertext'),
+    minSeverity: text('min_severity').$type<Severity>().notNull().default('high'),
+    enabled: boolean('enabled').notNull().default(true),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    /** Why lurq switched it off, in words for the owner. Cleared on re-enable. */
+    disabledReason: text('disabled_reason'),
+    lastDeliveredAt: ts('last_delivered_at'),
+    lastError: text('last_error'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    deletedAt: ts('deleted_at'),
+  },
+  (table) => [index('notification_channels_owner_idx').on(table.ownerId)],
+);
+
+export type NotificationChannelRow = typeof notificationChannels.$inferSelect;

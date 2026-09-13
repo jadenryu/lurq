@@ -6,7 +6,7 @@
  * Every command supports `--json` for machine-readable output.
  */
 import { Command, Option } from 'commander';
-import { SERVER_NAME, VERSION } from '../core/constants';
+import { KEYS_URL, SERVER_NAME, VERSION } from '../core/constants';
 import { SUPPORTED_AGENTS } from './installSkill';
 
 /**
@@ -33,7 +33,7 @@ export function buildProgram(): Command {
     .addHelpText(
       'after',
       '\nNew here? Run `lurq setup` once: it stores your API key and connects every\n' +
-        'coding agent on this machine. Get a key at https://lurq.run/dashboard/keys\n',
+        `coding agent on this machine. Get a key at ${KEYS_URL}\n`,
     );
 
   // Bare `npx lurqrun` (or a bare `lurq`) on an unconfigured machine runs setup.
@@ -41,7 +41,16 @@ export function buildProgram(): Command {
   // ends up with the command on their PATH, a stored key, and every agent wired.
   // Once a key exists, a bare `lurq` means "what can this do?" instead, so it
   // prints help rather than re-running a wizard nobody asked for.
-  program.action(async () => {
+  program.action(async (_opts: unknown, cmd: Command) => {
+    // A root action makes commander pass anything it does not recognise here as
+    // operands, so `lurq evalute zod` started setup (no key) or printed help and
+    // exited 0 (with one): a typo that looked like success. Anything after the
+    // bare command is an unknown command; report it the way commander would
+    // without a root action, with its "did you mean" and a non-zero exit.
+    // `unknownCommand` is public in commander's source but missing from its types.
+    if (cmd.args.length > 0) {
+      (program as Command & { unknownCommand(): never }).unknownCommand();
+    }
     const { resolveApiKey } = await import('../core/userConfig');
     if (resolveApiKey()) {
       program.outputHelp();
@@ -85,9 +94,19 @@ export function buildProgram(): Command {
       const path = userConfigPath();
       console.log(
         clearUserConfig()
-          ? `Removed ${path}. Agent MCP configs still hold the key; re-run \`lurq setup\` to change them.`
-          : 'No stored API key on this machine.',
+          ? `Removed ${path}. Your agents' MCP configs still hold the key: \`lurq uninstall\` removes those too.`
+          : 'No stored API key on this machine. To remove lurq from your agents, run `lurq uninstall`.',
       );
+    });
+
+  program
+    .command('uninstall')
+    .description("undo setup: remove lurq's MCP entries, agent instructions and the stored key")
+    .option('--agent <agent>', `only this agent: ${AGENT_CHOICES}`)
+    .option('--yes', 'remove without asking')
+    .action(async (opts: { agent?: string; yes?: boolean }) => {
+      const { runUninstall } = await import('./uninstall');
+      await runUninstall(opts);
     });
 
   // Selection policy as a file in the repo: pull it, review changes in a PR,
@@ -202,16 +221,29 @@ export function buildProgram(): Command {
     // only one spelling is advertised.
     .addOption(new Option('--version <v>', 'alias for --target').hideHelp())
     .option('--known <v>', 'a version you know; shows the API delta to the target')
+    .option('--query <text>', 'only symbols whose name contains this')
+    .option('--offset <n>', 'first symbol to show, to page past the first 80', (v) =>
+      Math.max(0, parseInt(v, 10) || 0),
+    )
     .option('--json', 'output JSON')
     .action(
       async (
         pkg: string,
-        opts: { target?: string; version?: string; known?: string; json?: boolean },
+        opts: {
+          target?: string;
+          version?: string;
+          known?: string;
+          query?: string;
+          offset?: number;
+          json?: boolean;
+        },
       ) => {
         const { runUsage } = await import('./commands');
         await runUsage(pkg, {
           version: opts.target ?? opts.version,
           known: opts.known,
+          query: opts.query,
+          offset: opts.offset,
           json: opts.json,
         });
       },
@@ -286,6 +318,7 @@ export function buildProgram(): Command {
     .option('--report', 'send the result to your lurq dashboard (CI; needs an API key)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .option('--no-types', 'skip the type check (runtime surface only; faster)')
     .action(
       async (
         dir: string,
@@ -297,6 +330,7 @@ export function buildProgram(): Command {
           report?: boolean;
           url?: string;
           apiKey?: string;
+          types?: boolean;
         },
       ) => {
         const { runCheckUpgrade } = await import('./checkUpgrade');
@@ -357,7 +391,7 @@ export function buildProgram(): Command {
     .option('--project-only', 'ignore user-level agent configs; read only files in the project')
     .option(
       '--probe',
-      'probe your MCP servers now instead of waiting for the worker (needs DATABASE_URL)',
+      'probe your MCP servers now instead of waiting for the worker (self-hosted index only)',
     )
     .option('--probe-budget <seconds>', 'wall-clock ceiling for probing (default 90)')
     .option('--json', 'output JSON instead of a table')
@@ -372,15 +406,66 @@ export function buildProgram(): Command {
     );
 
   program
+    .command('mcp-scan')
+    .argument('[dir]', 'project directory (defaults to the current one)')
+    .description(
+      'connect to every MCP server you have configured and read what it really exposes: its tools, what they do, anything steering your agent, and what changed since the last scan',
+    )
+    .option('--project-only', 'read only config files in the project')
+    .option('--trust-project', 'launch servers committed to the repository without asking')
+    .option('--only <aliases>', 'comma-separated server names to scan')
+    .option('--timeout <seconds>', 'per-server connect deadline (default 60)')
+    .option('--concurrency <n>', 'servers scanned at once (default 4)')
+    .option(
+      '--fail-on <severity>',
+      'exit 1 when anything this severe is found: critical | high | moderate | low | none',
+      'none',
+    )
+    .option('--no-history', 'do not compare with, or record, the previous scan')
+    .option('--no-upload', 'keep this scan on this machine; do not record it to your account')
+    .option('--require-upload', 'exit 1 if the scan could not be recorded to your account (for CI)')
+    .option('--github-issue', "keep a pinned 'lurq dashboard' issue current in this repository (in GitHub Actions)")
+    .option(
+      '--no-contribute',
+      "do not offer published servers' contracts as corroboration for the public index",
+    )
+    .option('--json', 'output JSON instead of a report')
+    .action(async (dir: string | undefined, opts: import('./mcpScan').McpScanCliOpts) => {
+      const { runMcpScan } = await import('./mcpScan');
+      await runMcpScan(dir, opts);
+    });
+
+  program
+    .command('mcp-ci')
+    .argument('[dir]', 'repository directory (defaults to the current one)')
+    .description("write a GitHub Actions workflow that rescans this repository's MCP servers daily and when their config changes")
+    .option('--print', 'print the workflow instead of writing it')
+    .option('--force', 'replace an existing workflow file')
+    .option('--cron <expr>', 'schedule (default: daily 06:23 UTC)')
+    .option('--fail-on <severity>', 'fail the job at this severity: critical | high | moderate | low | none', 'high')
+    .option('--no-issue', 'do not maintain the pinned lurq dashboard issue')
+    .action(async (dir: string | undefined, opts: import('./mcpScan').McpCiOpts) => {
+      const { runMcpCi } = await import('./mcpScan');
+      await runMcpCi(dir, opts);
+    });
+
+  program
     .command('mcp-stack')
     .argument('[dir]', 'project directory (defaults to the current one)')
-    .description('do your configured MCP servers coexist? checks for tool-name collisions')
+    .description('do your configured MCP servers coexist? checks tool-name collisions and shadowing, live')
     .option('--project-only', 'read only config files in the project')
+    .option('--trust-project', 'launch servers committed to the repository without asking')
+    .option('--timeout <seconds>', 'per-server connect deadline (default 60)')
     .option('--json', 'output JSON instead of a table')
-    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean }) => {
-      const { runMcpStack } = await import('./commands');
-      await runMcpStack(dir, opts);
-    });
+    .action(
+      async (
+        dir: string | undefined,
+        opts: { json?: boolean; projectOnly?: boolean; trustProject?: boolean; timeout?: string },
+      ) => {
+        const { runMcpStack } = await import('./commands');
+        await runMcpStack(dir, opts);
+      },
+    );
 
   program
     .command('mcp-surface')

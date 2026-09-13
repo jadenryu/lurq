@@ -48,7 +48,7 @@ export function Faq() {
           <p className="mt-10 max-w-[34ch] text-[14px] leading-[1.6] text-ink-2">
             {FAQ_CONTACT_BEFORE}{" "}
             <Link
-              href="/book-demo"
+              href="/#contact"
               className="text-ink underline decoration-edge-lit underline-offset-4 transition-[color,text-decoration-color] hover:decoration-ink-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark"
               style={{ transitionDuration: "var(--dur-hover)" }}
             >

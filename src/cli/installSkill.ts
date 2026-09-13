@@ -17,7 +17,19 @@
  * `{ serverUrl, headers }`; Gemini CLI uses `{ httpUrl, headers }` (`url` there
  * means SSE); Codex (TOML) uses `url` + an inline `http_headers` table.
  */
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
@@ -222,25 +234,57 @@ export interface InstallResult {
   instructionsPath?: string;
 }
 
-function readJsonObject(path: string): Record<string, any> {
+export function readJsonObject(path: string): Record<string, any> {
   if (!existsSync(path)) return {};
   const text = readFileSync(path, 'utf8').trim();
   if (!text) return {};
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    // Cursor and VS Code accept comments and trailing commas in these files, and
+    // JSON.parse does not. Rewriting the file would drop the user's comments, so
+    // stop and say what to do instead of printing "Unexpected token '/'".
+    throw new Error(
+      `${path} is not plain JSON (${err instanceof Error ? err.message : String(err)}). ` +
+        'If it has comments or trailing commas, lurq will not rewrite it and lose them: ' +
+        'remove them and re-run, or edit the "lurq" server entry by hand.',
+    );
+  }
 }
+
+/** Owner-only, for new files: most of what setup writes carries the API key. */
+const KEY_FILE_MODE = 0o600;
 
 /**
  * Write via a temp file + rename, which is atomic within a directory. These are
  * the user's own agent configs — `~/.claude.json` holds Claude Code's entire
  * project state — and a crash partway through a plain write truncates the file.
  * A reader sees either the old config or the new one, never a half-written one.
+ *
+ * Two things a rename gets wrong by default, both fixed here:
+ *  - Permissions. The temp file took the umask, so a 0600 `~/.cursor/mcp.json`
+ *    came back 0644, readable by every account on the machine with the key in
+ *    it. An existing file keeps its mode; a new one gets `newFileMode`.
+ *  - Symlinks. Dotfile managers (stow, chezmoi, home-manager) keep these configs
+ *    as links into a repository, and renaming onto the link replaced it with a
+ *    plain file, quietly forking the user's config. We write to the link's target.
  */
-function writeFileAtomic(path: string, contents: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.lurq-${process.pid}.tmp`;
+export function writeFileAtomic(path: string, contents: string, newFileMode = KEY_FILE_MODE): void {
+  let target = path;
+  let mode = newFileMode;
   try {
-    writeFileSync(tmp, contents, 'utf8');
-    renameSync(tmp, path);
+    target = realpathSync(path);
+    mode = statSync(target).mode & 0o777;
+  } catch {
+    // Not there yet (or a dangling link, written as a new file at the path).
+  }
+  mkdirSync(dirname(target), { recursive: true });
+  const tmp = `${target}.lurq-${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, contents, { encoding: 'utf8', mode });
+    // writeFileSync's mode is filtered through the umask; chmod is not.
+    chmodSync(tmp, mode);
+    renameSync(tmp, target);
   } catch (err) {
     try {
       rmSync(tmp, { force: true });
@@ -251,7 +295,7 @@ function writeFileAtomic(path: string, contents: string): void {
   }
 }
 
-function writeJson(path: string, obj: unknown): void {
+export function writeJson(path: string, obj: unknown): void {
   writeFileAtomic(path, JSON.stringify(obj, null, 2) + '\n');
 }
 
@@ -367,7 +411,7 @@ function installTomlBlock(spec: AgentSpec, block: string): InstallResult {
 /** Delimit the block we own inside a context file the user also writes in, so a
  *  re-run replaces our text and leaves theirs alone. HTML comments render as
  *  nothing in every markdown viewer these agents use. */
-const BLOCK_START = '<!-- lurq:start -->';
+export const BLOCK_START = '<!-- lurq:start -->';
 const BLOCK_END = '<!-- lurq:end -->';
 
 /** One-line trigger description for the Claude Code skill's frontmatter. This is
@@ -407,6 +451,21 @@ export function upsertMarkedBlock(text: string, block: string): string {
   return `${text.slice(0, start)}${wrapped}${after.replace(/^\n*/, '\n')}`;
 }
 
+/**
+ * The inverse of `upsertMarkedBlock`: `text` without our block, or unchanged
+ * when there is none. The blank line that separated the block from the user's
+ * text goes with it, so setup followed by uninstall gives the file back as it was.
+ */
+export function removeMarkedBlock(text: string): string {
+  const start = text.indexOf(BLOCK_START);
+  if (start === -1) return text;
+  const endAt = text.indexOf(BLOCK_END, start);
+  const before = text.slice(0, start).replace(/\s+$/, '');
+  const after = endAt === -1 ? '' : text.slice(endAt + BLOCK_END.length).replace(/^\s+/, '');
+  const joined = [before, after].filter(Boolean).join('\n\n');
+  return joined ? joined.replace(/\s*$/, '\n') : '';
+}
+
 /** The `~/.claude/skills/lurq/SKILL.md` body: frontmatter + the full guide. */
 export function buildSkillFile(guide: string): string {
   return [
@@ -435,14 +494,15 @@ export function installInstructions(spec: AgentSpec): string | null {
     const brief = template('agent-rules.md');
     if (!brief) return null;
     const current = existsSync(target.path) ? readFileSync(target.path, 'utf8') : '';
-    writeFileAtomic(target.path, upsertMarkedBlock(current, brief));
+    // Instructions hold no secret, so a new file gets the ordinary mode.
+    writeFileAtomic(target.path, upsertMarkedBlock(current, brief), 0o644);
     return target.path;
   }
 
   // Ours alone, and loaded on demand, so the full guide fits.
   const guide = template('skill-instructions.md');
   if (!guide) return null;
-  writeFileAtomic(target.path, target.kind === 'skill' ? buildSkillFile(guide) : guide);
+  writeFileAtomic(target.path, target.kind === 'skill' ? buildSkillFile(guide) : guide, 0o644);
   return target.path;
 }
 
@@ -572,12 +632,12 @@ export function printInstallReport(
   } else {
     console.log('  1. Restart the agent so it picks up the new MCP server.');
   }
-  console.log('  • Ask it to recommend a library. It should call lurq.');
+  console.log('  • Ask it to add a package. It should check the package with lurq first.');
   // The invocation that actually works on THIS machine, not the one we wish
   // they had. Printing `lurq …` to someone who ran the wizard from npx and
   // declined the global install sends them straight to "command not found".
   const { command, onPath } = lurqInvocation();
-  console.log(`  • Or use the terminal directly: \`${command} recommend "a form library for React"\`.`);
+  console.log(`  • Or use the terminal directly: \`${command} verify zod\`.`);
   if (!onPath) {
     // No em dash: b7a6d1b took them out of everything a user reads.
     console.log(`\n  There is no \`lurq\` command on this machine yet. Everything above`);

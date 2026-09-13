@@ -28,10 +28,13 @@ describe('setup --yes', () => {
     process.env.HOME = mkdtempSync(join(tmpdir(), 'lurq-yes-home-'));
     process.env.LURQ_HOME = mkdtempSync(join(tmpdir(), 'lurq-yes-cfg-'));
     vi.spyOn(console, 'log').mockImplementation(() => {});
+    // setup --yes validates the key before writing; never against the real service.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     if (savedHome) process.env.HOME = savedHome;
     delete process.env.LURQ_HOME;
   });

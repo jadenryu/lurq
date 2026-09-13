@@ -22,16 +22,30 @@
  * be read, never a hedge on a set that WAS read. A collision check that
  * silently skips the server it could not probe would report a clean namespace
  * for a stack it never assembled.
+ *
+ * The analysis is pure (`analyzeStack`) so it runs identically on tools read
+ * from the index and on tools a client read live from its own servers — the
+ * second is the only way to cover remote, PyPI, Docker and private servers.
  */
 import type { Database } from '../db/client';
-import { loadStored, rowsToSurface } from '../mcp/surfaceHandlers';
-import { contractOf, MCP_TIER } from '../surface/mcp';
+import {
+  contractOf,
+  MCP_TIER,
+  resolveAnnotations,
+  type McpTool,
+  type ResolvedAnnotations,
+} from '../surface/mcp';
 
 export type McpStackVerdict = 'conflict' | 'compatible' | 'unknown';
 
 export interface McpToolRef {
   server: string;
   version: string | null;
+  /**
+   * The tool list, when the caller already has it (read live from its own
+   * connection). Skips the index entirely.
+   */
+  tools?: Pick<McpTool, 'name' | 'annotations'>[];
 }
 
 export interface McpCollision {
@@ -87,50 +101,99 @@ const TOKENS_PER_TOOL = 250;
 /** Total tools past which a stack is worth trimming rather than growing. */
 const CROWDED_TOOL_COUNT = 60;
 
-export async function checkMcpStack(
+/** One server's tools reduced to what the stack analysis reads. Null = unread. */
+export interface StackMemberInput {
+  server: string;
+  version: string | null;
+  tools: { name: string; annotations: ResolvedAnnotations }[] | null;
+}
+
+const NPM_NAME = /^(?:@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/;
+
+/**
+ * Tools for each server: inline when the caller sent them, else from the index.
+ *
+ * An unread npm server is queued for a probe on the way out. `mcp_surface` has
+ * always done this; the stack check did not, so a user who only ever asked "do
+ * these coexist?" got UNKNOWN forever and the queue never learned the servers
+ * existed. A server already probed and found broken is not re-queued.
+ */
+export async function loadStackMembers(
   db: Database,
   servers: McpToolRef[],
   tenantId = 0,
-): Promise<McpStackReport> {
+): Promise<StackMemberInput[]> {
+  const out: StackMemberInput[] = [];
+  for (const s of servers) {
+    if (s.tools) {
+      out.push({
+        server: s.server,
+        version: s.version,
+        tools: s.tools.map((t) => ({ name: t.name, annotations: resolveAnnotations(t.annotations) })),
+      });
+      continue;
+    }
+    // Loaded here, on the index path only. `lurq mcp-scan` imports this module
+    // for `isCrowded` and always passes live tools, and a static import would
+    // make every hosted scan resolve drizzle-orm, which the CLI does not install.
+    const [{ enqueueSurface }, { loadStored, rowsToSurface }] = await Promise.all([
+      import('../db/surface'),
+      import('../mcp/surfaceHandlers'),
+    ]);
+    const stored = await loadStored(db, s.server, s.version, tenantId, 'mcp_server');
+    if (!stored || stored.rows.length === 0 || stored.verdict === 'verified_false') {
+      if (stored?.verdict !== 'verified_false' && NPM_NAME.test(s.server)) {
+        await enqueueSurface(db, s.server, s.version, 'mcp_server').catch(() => {});
+      }
+      out.push({ server: s.server, version: s.version, tools: null });
+      continue;
+    }
+    const surface = rowsToSurface(s.server, s.version, stored.rows, MCP_TIER);
+    out.push({
+      server: s.server,
+      version: s.version,
+      // A symbol written by an older extractor has no contract; the spec
+      // defaults (writes, destroys) are the honest reading of "we don't know".
+      tools: surface.symbols.map((sym) => ({
+        name: sym.path,
+        annotations: contractOf(sym)?.annotations ?? resolveAnnotations(null),
+      })),
+    });
+  }
+  return out;
+}
+
+/** Collisions, privilege counts and context cost for a set of servers. Pure. */
+export function analyzeStack(inputs: StackMemberInput[]): McpStackReport {
   const members: McpStackMember[] = [];
   const unread: string[] = [];
   /** tool name → servers exposing it, in configuration order. */
   const byTool = new Map<string, { servers: string[]; writes: boolean }>();
 
-  for (const s of servers) {
-    const stored = await loadStored(db, s.server, s.version, tenantId, 'mcp_server');
-    if (!stored || stored.rows.length === 0 || stored.verdict === 'verified_false') {
-      unread.push(s.server);
-      members.push({ server: s.server, version: s.version, tools: null, writes: 0, destroys: 0 });
+  for (const m of inputs) {
+    if (!m.tools) {
+      unread.push(m.server);
+      members.push({ server: m.server, version: m.version, tools: null, writes: 0, destroys: 0 });
       continue;
     }
-    const surface = rowsToSurface(s.server, s.version, stored.rows, MCP_TIER);
     let writes = 0;
     let destroys = 0;
-    for (const sym of surface.symbols) {
-      const ann = contractOf(sym)?.annotations;
-      // Absent annotations resolve to the spec defaults, which are NOT benign:
-      // a tool that declares nothing is assumed to write and to destroy.
-      const canWrite = ann ? !ann.readOnlyHint : true;
-      const canDestroy = ann ? ann.destructiveHint : true;
+    for (const t of m.tools) {
+      // Resolved annotations already carry the spec defaults, which are NOT
+      // benign: a tool that declares nothing is assumed to write and to destroy.
+      const canWrite = !t.annotations.readOnlyHint;
       if (canWrite) writes++;
-      if (canDestroy) destroys++;
+      if (t.annotations.destructiveHint) destroys++;
 
-      const seen = byTool.get(sym.path);
+      const seen = byTool.get(t.name);
       if (seen) {
-        if (!seen.servers.includes(s.server)) seen.servers.push(s.server);
+        if (!seen.servers.includes(m.server)) seen.servers.push(m.server);
         seen.writes ||= canWrite;
       } else {
-        byTool.set(sym.path, { servers: [s.server], writes: canWrite });
+        byTool.set(t.name, { servers: [m.server], writes: canWrite });
       }
     }
-    members.push({
-      server: s.server,
-      version: s.version,
-      tools: surface.symbols.length,
-      writes,
-      destroys,
-    });
+    members.push({ server: m.server, version: m.version, tools: m.tools.length, writes, destroys });
   }
 
   const collisions: McpCollision[] = [...byTool.entries()]
@@ -160,6 +223,14 @@ export async function checkMcpStack(
     unread,
     note,
   };
+}
+
+export async function checkMcpStack(
+  db: Database,
+  servers: McpToolRef[],
+  tenantId = 0,
+): Promise<McpStackReport> {
+  return analyzeStack(await loadStackMembers(db, servers, tenantId));
 }
 
 /** Is this stack large enough that its standing context cost is worth naming? */

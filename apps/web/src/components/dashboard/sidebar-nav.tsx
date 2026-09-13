@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SignInButton, SignUpButton } from "@clerk/nextjs";
+import { OrganizationSwitcher, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { Lock } from "lucide-react";
 import { AccountMenu } from "@/components/dashboard/account-menu";
@@ -39,6 +39,9 @@ const REPORT = "/dashboard/report";
  */
 const WORKSPACE: NavItem[] = [
   { href: "/dashboard", label: "overview" },
+  // Questions about the account, answered by an agent reading it. The ⌘K
+  // palette hands typed questions here.
+  { href: "/dashboard/ask", label: "ask" },
   // Where the landing page's scan box lands, so it is also the first page many
   // people ever see in here.
   { href: REPORT, label: "builder report" },
@@ -47,6 +50,9 @@ const WORKSPACE: NavItem[] = [
   // already anchored `#autopilot` — and it names the outcome instead of the
   // noun.
   { href: "/dashboard/repos", label: "autopilot" },
+  // Every MCP server the account has scanned, with what changed. Beside
+  // autopilot because both are "what my agents depend on, kept honest".
+  { href: "/dashboard/mcp", label: "mcp servers" },
   { href: "/dashboard/policy", label: "policy" },
   { href: "/dashboard/audit", label: "audit log" },
   { href: "/dashboard/contributions", label: "contributions" },
@@ -66,7 +72,6 @@ const ACCOUNT: NavItem[] = [
   // processor requires you to provide.
   { href: "/dashboard/billing", label: "billing" },
   { href: "/dashboard/notifications", label: "notifications" },
-  { href: "/dashboard/preferences", label: "preferences" },
   // Sixth row, and the one place a reader can get back to a key they closed the
   // tab on. `lurq setup` opens this URL and the docs quickstart links straight
   // to it, so it has to be findable from inside the product too.
@@ -230,7 +235,19 @@ export function DashboardNav({ locked = false }: { locked?: boolean }) {
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
           </Link>
-          <div className="w-auto">{locked ? <Guest compact /> : <AccountMenu compact />}</div>
+          <div className="flex w-auto items-center gap-2">
+            {locked ? (
+              <Guest compact />
+            ) : (
+              <>
+                <OrganizationSwitcher
+                  afterSelectOrganizationUrl="/dashboard"
+                  afterSelectPersonalUrl="/dashboard"
+                />
+                <AccountMenu compact />
+              </>
+            )}
+          </div>
         </div>
         {!locked && (
           <div className="px-4 pb-3">
@@ -308,7 +325,23 @@ export function DashboardNav({ locked = false }: { locked?: boolean }) {
           </nav>
         </LayoutGroup>
 
-        <div className="border-t border-edge p-2">{locked ? <Guest /> : <AccountMenu />}</div>
+        <div className="border-t border-edge p-2">
+          {locked ? (
+            <Guest />
+          ) : (
+            <>
+              {/* Picking an organization makes it the account every dashboard
+                  page reads and writes (lib/owner.ts). Personal stays listed so
+                  nobody loses their own keys by joining a team. */}
+              <OrganizationSwitcher
+                afterSelectOrganizationUrl="/dashboard"
+                afterSelectPersonalUrl="/dashboard"
+                appearance={{ elements: { rootBox: "mb-2 w-full", organizationSwitcherTrigger: "w-full justify-between" } }}
+              />
+              <AccountMenu />
+            </>
+          )}
+        </div>
       </aside>
     </>
   );

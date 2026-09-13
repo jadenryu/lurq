@@ -11,7 +11,7 @@
  * install wizard never pull server-only deps into their startup path.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
-import type { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
@@ -53,18 +53,18 @@ import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
 import {
   entitlementFor,
+  isAllowed,
   getSubscription,
-  getSubscriptionByCustomer,
   type Entitlement,
 } from '../db/subscriptions';
 import {
   billingEnabled,
-  constructEvent,
   createCheckoutSession,
+  isCheckoutOrigin,
   createPortalSession,
-  handleEvent,
 } from '../billing/stripe';
-import { PLANS, type Tier } from '../core/plans';
+import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
+import { registerPublicPackageRoutes } from './publicPackages';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -89,7 +89,15 @@ import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
+import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
+import { registerNotificationRoutes } from './notificationRoutes';
+import { registerChannelRoutes } from './channelRoutes';
+import { secretKey } from '../core/secretBox';
+import { channelsAllowed } from '../notify/channelRun';
+import { postJson } from '../notify/safeHttp';
 import { renderPrometheus } from './metrics';
+import { alert, errorKind } from '../core/alert';
+import { processStripeWebhook } from '../billing/webhook';
 
 interface AuthedRequest extends Request {
   lurqKey?: ApiKeyRow;
@@ -105,6 +113,10 @@ interface RawBodyRequest extends Request {
 function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
 }
+
+/** The next step for a caller with no working key, appended to both 401s. */
+export const GET_A_KEY =
+  'Get a key at https://www.lurq.run/dashboard/keys, or run `npx lurqrun` to set one up.';
 
 /** One cached public scan: the answer, when it was taken, and how long it holds. */
 export interface ScanCacheEntry {
@@ -209,6 +221,44 @@ export function errorEnvelope(
   return { status, body, clientFault };
 }
 
+/**
+ * MCP methods that describe the server and run nothing: the handshake, a ping,
+ * and the list calls. Registries, directories and inspectors (Smithery, Glama,
+ * the MCP Inspector) call exactly these to show what lurq offers, and they do it
+ * without anyone's API key.
+ */
+export const DISCOVERY_METHODS: ReadonlySet<string> = new Set([
+  'initialize',
+  'notifications/initialized',
+  'ping',
+  'tools/list',
+  'prompts/list',
+  'resources/list',
+  'resources/templates/list',
+]);
+
+/**
+ * May this `/mcp` request be served without a key?
+ *
+ * Only when it carries no Authorization header at all and every JSON-RPC message
+ * in it is a discovery method. The tool list is already public (the README
+ * prints it), so describing the server gives nothing away; anything that runs a
+ * tool, a `tools/call` included, still needs a key. A request that sends a
+ * header, even an empty or wrong one, takes the authenticated path and gets that
+ * path's precise error rather than silently becoming anonymous.
+ */
+export function isAnonymousDiscovery(authorization: string | undefined, body: unknown): boolean {
+  if (authorization !== undefined) return false;
+  const messages = Array.isArray(body) ? body : [body];
+  return (
+    messages.length > 0 &&
+    messages.every((m) => {
+      const method = (m as { method?: unknown } | null)?.method;
+      return typeof method === 'string' && DISCOVERY_METHODS.has(method);
+    })
+  );
+}
+
 /** Constant-time secret comparison (hash to a fixed length first, so length
  *  never leaks and mismatched lengths don't throw). */
 export function secretEquals(a: string, b: string): boolean {
@@ -276,17 +326,33 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   const app = express();
   app.set('trust proxy', 1); // Railway terminates TLS at the edge.
   app.use(helmet());
+  // Operator alert on any 5xx, whichever route produced it: most routes catch
+  // their own failures and answer 500 themselves, so the terminal error handler
+  // alone would miss nearly all of them. On `finish`, so it runs after the
+  // response is out and cannot slow or fail it. The route pattern rather than
+  // the path keeps ids out of the message. The two webhooks alert with their own
+  // detail, so they are skipped here rather than reported twice.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.on('finish', () => {
+      if (res.statusCode < 500 || req.path === '/billing/webhook') return;
+      const route = (req.route as { path?: unknown } | undefined)?.path;
+      alert('server-error', `${req.method} ${typeof route === 'string' ? route : req.path} answered ${res.statusCode}`);
+    });
+    next();
+  });
   // `verify` keeps the bytes the parser already had in hand. GitHub signs the raw
   // body, and a re-serialized parse result is not byte-identical, so the webhook
   // signature is uncheckable without this. Costs a reference, not a copy.
-  app.use(
-    express.json({
-      limit: '1mb',
-      verify: (req, _res, buf) => {
-        (req as RawBodyRequest).rawBody = buf;
-      },
-    }),
-  );
+  const jsonBody = express.json({
+    limit: '1mb',
+    verify: (req, _res, buf) => {
+      (req as RawBodyRequest).rawBody = buf;
+    },
+  });
+  // Scan uploads carry whole tool contracts and parse their own body, with a
+  // larger ceiling and only after auth (see mcpScanRoutes). Every other route
+  // keeps the 1mb limit.
+  app.use((req, res, next) => (req.path === MCP_SCAN_UPLOAD_PATH ? next() : jsonBody(req, res, next)));
 
   // Unauthenticated, no DB hit — for Railway's healthcheck. Intentionally not
   // rate-limited: it's a static response with no backend cost, and limiting it
@@ -332,6 +398,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // unauthenticated on purpose: it is a static description of the product —
   // the same list the docs print — and holds nothing about any account. Behind
   // the IP limiter only, since it costs no backend work at all.
+  // Public, keyless package summaries for the lurq.run/npm pages. Behind the IP
+  // limiter only; publicPackages.ts keeps them to a summary of the top packages.
+  registerPublicPackageRoutes(app, db, ipLimiter);
+
   app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
     const limit = Math.min(Number(req.query.limit) || 6, CAPABILITIES.length);
@@ -458,17 +528,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   // Bearer API-key auth: resolve and attach the key, or 401.
+  //
+  // The 401 text is usually the first thing a new user sees, pasted from their
+  // agent's MCP log, so it says where a key comes from. Deliberately no
+  // WWW-Authenticate header: lurq has no OAuth, and MCP clients that see one
+  // start OAuth discovery and bury this message under a failed sign-in flow.
   const auth = async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
     const header = req.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token) {
-      res.status(401).json(rpcError(-32001, 'Missing API key. Pass Authorization: Bearer <key>.'));
+      res.status(401).json(rpcError(-32001, `Missing API key. Pass Authorization: Bearer <key>. ${GET_A_KEY}`));
       return;
     }
     try {
       const row = await lookupActiveKey(db, token);
       if (!row) {
-        res.status(401).json(rpcError(-32001, 'Invalid or revoked API key.'));
+        res.status(401).json(rpcError(-32001, `Invalid or revoked API key. ${GET_A_KEY}`));
         return;
       }
       req.lurqKey = row;
@@ -545,25 +620,45 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * paying customer at once. Over-serving during an outage is recoverable;
    * locking out the paid tier is the incident.
    */
+  /**
+   * One line for the agent, appended to tool results past the pool. A header is
+   * invisible to a model reading a tool result; this is what gets relayed to the
+   * developer, which is the only way an over-limit account learns it is one.
+   */
+  const quotaNotice = (ent: Entitlement | undefined): string | null => {
+    if (!ent || ent.withinQuota) return null;
+    if (ent.inOverage) {
+      return `lurq: this account is past its ${ent.limit} included calls this month; further calls are billed as ${ent.plan.name} overage.`;
+    }
+    if (ent.inGrace) {
+      return `lurq: monthly limit reached (${ent.used}/${ent.limit} calls). A few grace calls a day remain until the month turns. Tell the user they can upgrade at ${config.LURQ_WEB_URL}/dashboard/billing`;
+    }
+    return null;
+  };
+
   const quota = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const authed = req as AuthedRequest;
     const ownerId = authed.lurqKey?.ownerId ?? null;
     try {
       const ent = await resolveEntitlement(ownerId);
       authed.entitlement = ent;
-      if (!ent.withinQuota) {
+      if (!isAllowed(ent)) {
         res
           .status(402)
           .json(
             rpcError(
               -32002,
               `Monthly limit reached for the ${ent.plan.name} plan ` +
-                `(${ent.used}/${ent.plan.monthlyCalls} calls). ` +
-                `It resets when the month turns. Upgrade at ${config.LURQ_WEB_URL}/#pricing`,
+                `(${ent.used}/${ent.limit} calls), and today's ${GRACE_CALLS_PER_DAY} grace calls are spent. ` +
+                `It resets when the month turns. Upgrade at ${config.LURQ_WEB_URL}/dashboard/billing`,
             ),
           );
         return;
       }
+      // Over the allowance but inside the daily grace: served, and marked so a
+      // client reading headers can say why it is about to stop.
+      if (ent.inOverage) res.setHeader('X-Lurq-Quota', 'overage');
+      else if (ent.inGrace) res.setHeader('X-Lurq-Quota', 'grace');
       next();
     } catch (err) {
       logger.error(
@@ -626,6 +721,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const ownerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
     const tier = typeof req.body?.tier === 'string' ? (req.body.tier as Tier) : 'pro';
     const email = typeof req.body?.email === 'string' ? req.body.email : null;
+    const interval = req.body?.interval === 'year' ? 'year' : 'month';
+    const from = isCheckoutOrigin(req.body?.from) ? req.body.from : undefined;
     if (!ownerId) {
       res.status(400).json({ error: 'ownerId is required.' });
       return;
@@ -635,7 +732,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const url = await createCheckoutSession(db, { ownerId, tier, email });
+      const url = await createCheckoutSession(db, { ownerId, tier, interval, email, from });
       if (!url) {
         res.status(503).json({ error: 'That plan is not available for checkout yet.' });
         return;
@@ -672,14 +769,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   /** What the dashboard renders: the plan, its state, and the month so far. */
   /**
-   * Daily Ask ceiling per account, in micro-dollars. Env-overridable because
-   * the right number is a product decision that will move with pricing, and
-   * moving it should not need a deploy of the web app too.
+   * Daily Ask ceiling for one account, in micro-dollars: the plan's
+   * `askDailyUsd` (core/plans.ts), so asking more is a reason to upgrade rather
+   * than a cost absorbed on every free account. plans.ts is the only place the
+   * number lives; to turn Ask off everywhere, unset the web app's Anthropic key.
+   *
+   * Floored at one micro-dollar because the web route reads a zero limit as
+   * "no limit".
    */
-  const ASK_DAILY_LIMIT_MICROS = Math.max(
-    0,
-    Math.round(Number(process.env.LURQ_ASK_DAILY_USD ?? '3') * 1_000_000),
-  );
+  const askLimit = async (ownerId: string): Promise<{ micros: number; tier: string }> => {
+    const { plan } = await resolveEntitlement(ownerId);
+    return { micros: Math.max(1, Math.round(plan.askDailyUsd * 1_000_000)), tier: plan.tier };
+  };
+
+  /** One call may not move the ledger by more than this, so a caller bug is a
+   *  wrong number rather than a bottomless credit. Four times a question's reserve. */
+  const ASK_DELTA_MAX_MICROS = 1_000_000;
 
   /**
    * The Ask budget, read and written by the dashboard's /api/ask.
@@ -699,8 +804,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const spentMicros = await getAskSpendToday(db, ownerId);
-      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+      const [spentMicros, limit] = await Promise.all([
+        getAskSpendToday(db, ownerId),
+        askLimit(ownerId),
+      ]);
+      res.status(200).json({ spentMicros, limitMicros: limit.micros });
     } catch (err) {
       // Deliberately a 500, not a zero. A caller that cannot read the ledger
       // must fail closed, and it can only do that if this says "unknown"
@@ -711,7 +819,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   app.post('/ask-budget', requireIssuerSecret, async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { ownerId?: unknown; usdMicros?: unknown };
+    const body = (req.body ?? {}) as { ownerId?: unknown; usdMicros?: unknown; answered?: unknown };
     const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
     const micros = Number(body.usdMicros);
     if (!ownerId) {
@@ -719,17 +827,37 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     // Signed: a caller reserves its worst case up front and refunds the unused
-    // part after, so a refund is a legitimate negative. Bounded either way — a
-    // single call may not move the ledger by more than a whole day's ceiling,
-    // which turns a bug in the caller into a wrong number rather than a
-    // bottomless credit.
-    if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DAILY_LIMIT_MICROS) {
-      res.status(400).json({ error: "usdMicros must be a finite delta within one day's limit." });
+    // part after, so a refund is a legitimate negative. Bounded either way.
+    if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DELTA_MAX_MICROS) {
+      res.status(400).json({ error: 'usdMicros must be a finite delta of at most $1.' });
       return;
     }
     try {
-      const spentMicros = await addAskSpend(db, ownerId, Math.round(micros));
-      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+      const [spentMicros, limit] = await Promise.all([
+        addAskSpend(db, ownerId, Math.round(micros)),
+        askLimit(ownerId),
+      ]);
+      res.status(200).json({ spentMicros, limitMicros: limit.micros });
+
+      // Product analytics: numbers and a model id only, never the question, so
+      // the privacy page's promise holds. Picked field by field — the caller is
+      // trusted (issuer secret) but its body is not shaped.
+      const a = body.answered;
+      if (a && typeof a === 'object') {
+        const r = a as Record<string, unknown>;
+        capture(ownerId, 'ask_answered', {
+          tier: limit.tier,
+          model: typeof r.model === 'string' ? r.model.slice(0, 64) : null,
+          turns: Number(r.turns) || 0,
+          usd: Number(r.usd) || 0,
+          cacheReadTokens: Number(r.cacheReadTokens) || 0,
+        });
+      }
+      // The conversion signal: a reserve that crossed the plan's ceiling is
+      // exactly the question the web route is about to refuse.
+      if (micros > 0 && spentMicros > limit.micros) {
+        capture(ownerId, 'ask_limit_hit', { tier: limit.tier });
+      }
     } catch (err) {
       logger.error('ask budget write failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not record Ask spend.' });
@@ -754,7 +882,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
         cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
         used: ent.used,
-        limit: ent.plan.monthlyCalls,
+        limit: ent.limit,
+        seats: ent.seats,
+        interval: sub?.billingInterval ?? null,
         billingEnabled: billingEnabled(),
         manageable: Boolean(sub?.stripeCustomerId),
       });
@@ -769,48 +899,19 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * requireIssuerSecret or the IP limiter: Stripe calls it from its own ranges
    * and a burst of retries must not be throttled into looking like an outage.
    *
-   * Answers 200 for anything it managed to verify, including events it does not
-   * act on. A non-2xx makes Stripe retry for three days, so reserving failure
-   * for "we could not verify this at all" is what keeps the retry queue honest.
+   * Processes before answering, and answers 5xx when processing fails so Stripe
+   * retries. The status contract lives in billing/webhook.ts.
    */
   app.post('/billing/webhook', async (req: Request, res: Response) => {
-    const raw = (req as RawBodyRequest).rawBody;
     const signature = req.headers['stripe-signature'];
-    let event;
-    try {
-      event = await constructEvent(
-        raw ?? '',
-        typeof signature === 'string' ? signature : undefined,
-      );
-    } catch (err) {
-      logger.warn(
-        `billing webhook: bad signature: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      res.status(400).json({ error: 'Invalid signature.' });
-      return;
-    }
-    if (!event) {
-      res.status(404).end();
-      return;
-    }
-
-    // Acknowledge before doing the work. Stripe times out at 20 seconds and a
-    // retry of an already-applied event is wasted round trips on both sides.
-    res.status(200).json({ received: true });
-    try {
-      const outcome = await handleEvent(db, event);
-      logger.info(`billing webhook: ${outcome}`);
-      // The plan just moved. Drop the cached entitlement so the next call sees
-      // it immediately rather than up to a minute later — the one moment the
-      // staleness would be felt is the moment someone has just paid.
-      const object = event.data.object as { customer?: unknown };
-      if (typeof object.customer === 'string') {
-        const row = await getSubscriptionByCustomer(db, object.customer);
-        if (row) invalidateEntitlement(row.ownerId);
-      }
-    } catch (err) {
-      logger.error('billing webhook failed:', formatError(err));
-    }
+    const reply = await processStripeWebhook(
+      db,
+      (req as RawBodyRequest).rawBody,
+      typeof signature === 'string' ? signature : undefined,
+      invalidateEntitlement,
+    );
+    if (reply.body === undefined) res.status(reply.status).end();
+    else res.status(reply.status).json(reply.body);
   });
 
   app.post('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
@@ -828,6 +929,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
+    // CI policy keys are the Team line. Keys already issued keep working; this
+    // only stops new ones. Fails open on a lookup error, like `quota`.
+    if (scopes.includes('policy:write')) {
+      const ent = await resolveEntitlement(ownerId).catch(() => null);
+      if (ent && !ent.plan.ciPolicyKeys) {
+        res.status(403).json({
+          error: `Keys that change policy from CI come with the Team plan. You are on ${ent.plan.name}.`,
+        });
+        return;
+      }
+    }
     try {
       const { key, row } = await createKey(db, { ownerId, label, tier: 'free', scopes });
       capture(ownerId, 'api_key_created', { tier: row.tier });
@@ -1182,10 +1294,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       await syncInstallation(ownerId, action.installationId, action.added);
     } catch (err) {
       // The ack already went out; GitHub will not retry. Logged rather than
-      // thrown, and the next nightly scan reconciles anything missed.
+      // thrown, and the next nightly scan reconciles anything missed — but
+      // alerted, because until then the repo is missing from someone's dashboard.
       logger.error(
         `webhook handling failed for installation ${action.installationId}:`,
         err instanceof Error ? err.message : String(err),
+      );
+      alert(
+        'github-webhook',
+        `${action.kind} for installation ${action.installationId} failed (${errorKind(err)})`,
       );
     }
   });
@@ -1476,9 +1593,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         : {};
     try {
       const ent = await resolveEntitlement(ownerId);
-      if (!ent.withinQuota) {
+      if (!isAllowed(ent)) {
         res.status(402).json({
-          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.plan.monthlyCalls} calls).`,
+          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.limit} calls).`,
         });
         return;
       }
@@ -1524,8 +1641,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       res.status(400).json({ error: 'days must be a whole number from 1 to 365.' });
       return;
     }
+    // Clamped to the plan's window rather than refused, and the served window is
+    // echoed back so the caller can tell a quiet week from a short plan.
+    const ent = await resolveEntitlement(ownerId).catch(() => null);
+    const maxDays = ent?.plan.decisionLogDays ?? 365;
+    const served = Math.min(days, maxDays);
     try {
-      res.status(200).json({ days, decisions: await summarizeDecisions(db, ownerId, days) });
+      res
+        .status(200)
+        .json({ days: served, maxDays, decisions: await summarizeDecisions(db, ownerId, served) });
     } catch (err) {
       logger.error('policy decisions read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read policy decisions.' });
@@ -1601,6 +1725,31 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   app.get('/policy/decisions', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     const ownerId = keyOwner(req, res);
     if (ownerId) await sendPolicyDecisions(ownerId, req.query.days, res);
+  });
+
+  // ── Live MCP scans: CLI upload (API key) and dashboard reads (issuer) ──────
+  registerMcpScanRoutes(app, {
+    db,
+    ipLimiter,
+    auth: auth as unknown as RequestHandler,
+    keyLimiter,
+    quota,
+    bigJson: express.json({ limit: MCP_SCAN_BODY_LIMIT }),
+    requireIssuerSecret,
+    ownerFrom,
+    keyOwner,
+  });
+
+  // ── Account email: preferences and unsubscribe (issuer) ────────────────────
+  registerNotificationRoutes(app, { db, requireIssuerSecret, ownerFrom });
+  registerChannelRoutes(app, {
+    db,
+    requireIssuerSecret,
+    ownerFrom,
+    secretsKey: secretKey(config.LURQ_SECRETS_KEY),
+    webUrl: config.LURQ_WEB_URL.replace(/\/$/, ''),
+    allowed: (ownerId) => channelsAllowed(db, ownerId),
+    post: (url, m) => postJson(url, m.payload, m.headers),
   });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
@@ -1706,10 +1855,16 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     },
   );
 
-  app.post('/mcp', ipLimiter, auth, keyLimiter, quota, async (req: Request, res: Response) => {
+  const serveMcp = async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
-    // Thread the authenticated key's owner identity into the tools (§3.1).
-    const server = buildMcpServer(db, { ownerId: (req as AuthedRequest).lurqKey?.ownerId ?? null });
+    // Thread the authenticated key's owner identity into the tools (§3.1). An
+    // anonymous discovery request has no key, so no owner and no quota notice,
+    // and it cannot reach a tool that would use either.
+    const authed = req as AuthedRequest;
+    const server = buildMcpServer(db, {
+      ownerId: authed.lurqKey?.ownerId ?? null,
+      notice: quotaNotice(authed.entitlement),
+    });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -1725,7 +1880,21 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       logger.error('mcp request failed:', err instanceof Error ? err.message : String(err));
       if (!res.headersSent) res.status(500).json(rpcError(-32603, 'Internal error'));
     }
-  });
+  };
+
+  // Discovery without a key, so registries and directories can list lurq's tools.
+  // Checked before the IP limiter so a request that falls through to the
+  // authenticated route below is counted by that route's limiter exactly once.
+  // Discovery skips the key limiter and the monthly quota: there is no key to
+  // meter, and describing the server costs nobody an allowance.
+  app.post(
+    '/mcp',
+    (req: Request, _res: Response, next: NextFunction) =>
+      isAnonymousDiscovery(req.headers.authorization, req.body) ? next() : next('route'),
+    ipLimiter,
+    serveMcp,
+  );
+  app.post('/mcp', ipLimiter, auth, keyLimiter, quota, serveMcp);
 
   // Stateless server: no session GET/DELETE handling.
   app.all('/mcp', (_req: Request, res: Response) => {

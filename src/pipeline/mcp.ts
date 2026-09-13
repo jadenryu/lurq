@@ -33,6 +33,7 @@ import {
 } from '../db/surface';
 import { recordObservation, upsertClaim, upsertEntity } from '../db/graph';
 import { probeMcpServer, mcpServerOracle } from '../graph/oracles/mcpServer';
+import { sniffMissingEnv } from '../mcpScan/errors';
 import { getSandbox } from '../sandbox/index';
 import type { Sandbox } from '../sandbox/types';
 import { MCP_TIER, mcpSurface, surfaceHash, type McpTool } from '../surface/mcp';
@@ -99,24 +100,9 @@ export interface McpExtractResult {
   missing?: RequiredConfig[];
 }
 
-/**
- * A handshake failure that reads like a missing setting rather than a defect.
- *
- * Only consulted when the registry has nothing to say, and deliberately narrow:
- * it must see a SHOUTY_ENV_NAME next to a word about being required. A server
- * whose real crash merely mentions an environment variable should not be
- * excused as unconfigured, because excusing a genuine failure hides it.
- *
- * ponytail: heuristic on someone else's error text. The registry manifest is
- * the real answer; delete this when enough servers publish one.
- */
-const ENV_COMPLAINT =
-  /\b([A-Z][A-Z0-9]{2,}(?:_[A-Z0-9]+)+)\b[^.\n]{0,60}?\b(required|must be set|not set|missing|is not defined)\b|\b(required|must be set|missing)\b[^.\n]{0,60}?\b([A-Z][A-Z0-9]{2,}(?:_[A-Z0-9]+)+)\b/;
-
-export function sniffMissingEnv(text: string): string | null {
-  const m = ENV_COMPLAINT.exec(text);
-  return m ? (m[1] ?? m[4] ?? null) : null;
-}
+// Shared with the live scan, which classifies the same crashes on the user's
+// machine. Only consulted here when the registry has nothing to say.
+export { sniffMissingEnv };
 
 /**
  * Probe one MCP server and persist its tool surface.

@@ -105,6 +105,22 @@ const EnvSchema = z.object({
    *  tool called) that join the web app's identified visitors. Unset → nothing
    *  is sent, which is every local and stdio install. */
   LURQ_POSTHOG_KEY: z.string().min(1).optional(),
+  /** Slack- or Discord-compatible incoming webhook URL for operator alerts
+   *  (core/alert.ts): webhook processing failures and 5xx responses, rate
+   *  limited. Unset → nothing is sent. */
+  LURQ_ALERT_WEBHOOK_URL: z.string().url().optional(),
+  /** Resend API key for account email: urgent alerts and the opt-in weekly
+   *  summary. Unset → nothing is sent; the dashboard and CLI still show all of it. */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  /** Sender, on a Resend-verified domain. */
+  LURQ_MAIL_FROM: z.string().min(3).default('lurq <alerts@lurq.run>'),
+  /** Clerk secret key, used only to read a recipient's verified primary email at
+   *  send time — lurq stores no email addresses. Unset → nothing is sent. */
+  CLERK_SECRET_KEY: z.string().min(1).optional(),
+  /** 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts stored
+   *  Slack/Discord/Teams/webhook URLs, which are credentials. Unset → alert
+   *  channels are disabled rather than stored in the clear. */
+  LURQ_SECRETS_KEY: z.string().min(1).optional(),
 
   // Billing (Stripe). Every secret here lives on this service and nowhere else:
   // the web app holds no Stripe credential and reaches checkout through the
@@ -137,6 +153,13 @@ const EnvSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
   STRIPE_PRICE_PRO: z.string().min(1).optional(),
+  /** Per-seat Price id backing Team. The subscription quantity is the seat count. */
+  STRIPE_PRICE_TEAM: z.string().min(1).optional(),
+  /** Yearly Price ids, 20% under twelve months (core/plans ANNUAL_DISCOUNT). */
+  STRIPE_PRICE_PRO_ANNUAL: z.string().min(1).optional(),
+  STRIPE_PRICE_TEAM_ANNUAL: z.string().min(1).optional(),
+  /** Metered Price billed from the overage meter, attached to monthly Team. */
+  STRIPE_PRICE_TEAM_OVERAGE: z.string().min(1).optional(),
   /** Price id backing Enterprise. Normally unset: Enterprise is sold by
    *  conversation, and `contactOnly` in core/plans.ts is what the page reads. */
   STRIPE_PRICE_ENTERPRISE: z.string().min(1).optional(),

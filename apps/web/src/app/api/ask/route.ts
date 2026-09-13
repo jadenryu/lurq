@@ -1,9 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
-import { callAskTool, fetchAskTools, recordAskSpend, type AskTool } from "@/lib/lurq-issuer";
+import {
+  callAskTool,
+  fetchAskTools,
+  recordAskSpend,
+  type AskAnswered,
+  type AskTool,
+} from "@/lib/lurq-issuer";
 import { costOf, reserveFor } from "@lurq/core/modelPricing";
 
 /**
@@ -33,7 +39,9 @@ import { costOf, reserveFor } from "@lurq/core/modelPricing";
 /** Streaming answers, so a multi-tool question doesn't sit on a blank box. */
 export const dynamic = "force-dynamic";
 
-const MODEL = "claude-opus-5";
+// Sonnet, not Opus: the work is picking a tool and summarising its JSON, which
+// does not repay Opus pricing ($2/$10 vs $5/$25 per MTok, ~2.5x cheaper).
+const MODEL = "claude-sonnet-5";
 const MAX_TOKENS = 2048;
 
 /** Ceiling on one account's spend per rolling hour. */
@@ -246,8 +254,8 @@ Rules:
   connected and can read the code.`;
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return new Response("Unauthorized", { status: 401 });
+  const owner = await currentOwner();
+  if (!owner) return new Response("Unauthorized", { status: 401 });
 
   const apiKey = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY;
   // A missing key is a deployment state, not a user error — say which, so the
@@ -264,7 +272,7 @@ export async function POST(req: Request) {
   // spend, and it resets on cold start. A real per-account budget belongs with
   // the usage metering the backend already does (db/usage.ts), not here. Swap
   // for @upstash/ratelimit if this ever needs to hold across instances.
-  const limit = checkRateLimit(`ask:${userId}`, 10, 60_000);
+  const limit = checkRateLimit(`ask:${owner.ownerId}`, 10, 60_000);
   if (!limit.ok) {
     return new Response("Too many questions. Wait a minute and try again.", {
       status: 429,
@@ -311,7 +319,7 @@ export async function POST(req: Request) {
   try {
     // The reserve response carries the ceiling too, so this is one round trip,
     // not a read followed by a write.
-    ({ spentMicros: afterReserve, limitMicros } = await recordAskSpend(userId, reserveMicros));
+    ({ spentMicros: afterReserve, limitMicros } = await recordAskSpend(owner.ownerId, reserveMicros));
   } catch {
     // Fail CLOSED. Without a ledger we do not know what has been spent, and
     // guessing "nothing" turns a backend outage into unlimited spend — the
@@ -322,11 +330,13 @@ export async function POST(req: Request) {
     );
   }
 
-  /** Hand the reserve back. Used on every exit path, including the refusal. */
-  const settle = async (actualUsd: number) => {
+  /** Hand the reserve back. Used on every exit path, including the refusal.
+   *  The final settle also carries the question's shape for product analytics:
+   *  numbers and the model id only, never the question text. */
+  const settle = async (actualUsd: number, answered?: AskAnswered) => {
     const delta = Math.round(actualUsd * 1_000_000) - reserveMicros;
-    if (delta === 0) return;
-    await recordAskSpend(userId, delta).catch((err) => {
+    if (delta === 0 && !answered) return;
+    await recordAskSpend(owner.ownerId, delta, answered).catch((err) => {
       console.error(
         "[lurq] ask spend NOT settled — today's budget is now wrong for this account:",
         err instanceof Error ? err.message : String(err),
@@ -341,7 +351,9 @@ export async function POST(req: Request) {
     // what a client assumes when the header is missing — is wrong by hours.
     const d = new Date();
     const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
-    return new Response("You have reached today's Ask limit. It resets at midnight UTC.", {
+    return new Response(
+      "You have reached today's Ask limit. It resets at midnight UTC, and paid plans get a higher one: /dashboard/billing",
+      {
       status: 429,
       headers: { "Retry-After": String(Math.max(1, Math.ceil((midnight - Date.now()) / 1000))) },
     });
@@ -386,7 +398,7 @@ export async function POST(req: Request) {
           if (
             turnCost + reserve > QUESTION_USD ||
             turnCost + reserve > remainingUsd ||
-            spentThisHour(userId) + turnCost + reserve > HOURLY_USD
+            spentThisHour(owner.ownerId) + turnCost + reserve > HOURLY_USD
           ) {
             send(
               turn === 0
@@ -431,7 +443,7 @@ export async function POST(req: Request) {
           for (const block of response.content) {
             if (block.type !== "tool_use") continue;
             try {
-              const out = await runTool(block.name, block.input, userId, remoteNames);
+              const out = await runTool(block.name, block.input, owner.ownerId, remoteNames);
               results.push({
                 type: "tool_result",
                 tool_use_id: block.id,
@@ -468,12 +480,17 @@ export async function POST(req: Request) {
         console.warn("[lurq] ask failed:", err instanceof Error ? err.message : String(err));
         send(`\n\n${message}`);
       } finally {
-        addSpend(userId, turnCost);
+        addSpend(owner.ownerId, turnCost);
         // Awaited inside the stream's finally so the charge lands before the
         // response closes. A failure here is logged, not swallowed silently:
         // an unrecorded charge is spend the next question will not see.
         // Refund the slice of the reserve this question did not use.
-        await settle(turnCost);
+        await settle(turnCost, {
+          model: MODEL,
+          turns: turnsUsed,
+          usd: Number(turnCost.toFixed(5)),
+          cacheReadTokens: cacheRead,
+        });
         // One structured line per question. Without it a bad answer is
         // unreproducible: you cannot tell whether a prompt change helped, and
         // you cannot see caching working or silently not working. Deliberately
@@ -482,12 +499,12 @@ export async function POST(req: Request) {
         console.log(
           JSON.stringify({
             at: "ask",
-            owner: userId,
+            owner: owner.ownerId,
             turns: turnsUsed,
             chars: question.length,
             cacheReadTokens: cacheRead,
             usd: Number(turnCost.toFixed(5)),
-            hourUsd: Number(spentThisHour(userId).toFixed(5)),
+            hourUsd: Number(spentThisHour(owner.ownerId).toFixed(5)),
           }),
         );
         controller.close();

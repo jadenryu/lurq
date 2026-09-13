@@ -1,7 +1,7 @@
 /**
  * Server-only loaders for the dashboard pages. One place that knows how to:
  *
- *  1. resolve the signed-in `ownerId` (always the individual Clerk `userId`),
+ *  1. resolve the signed-in `ownerId` (the Active Organization, else the Clerk user; lib/owner.ts),
  *  2. substitute demo fixtures for the accounts in `LURQ_DEMO_EMAILS`,
  *  3. degrade without taking the page down when the MCP server is unreachable.
  *
@@ -19,7 +19,8 @@
  */
 import { cache } from "react";
 import { unstable_rethrow } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
+import { PLANS } from "@lurq/core/plans";
 import {
   demoAlerts,
   demoConformance,
@@ -34,6 +35,9 @@ import {
   demoPolicyHistory,
   demoSelectionPolicy,
   demoUsage,
+  demoMcpEvents,
+  demoMcpServerDetail,
+  demoMcpServers,
   isDemoUser,
 } from "@/lib/demo-data";
 import {
@@ -69,6 +73,14 @@ import {
   type PolicyChange,
   type PolicyDecision,
   type BillingSummary,
+  fetchMcpServer,
+  fetchMcpServers,
+  type McpServerDetail,
+  type McpServersPayload,
+  fetchNotificationPreferences,
+  type NotificationPreferences,
+  fetchChannels,
+  type ChannelsPayload,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -82,13 +94,13 @@ export interface Loaded<T> {
 const EMPTY_USAGE: DashboardUsage = { today: 0, series: [], byTool: [] };
 
 /**
- * Resolve `{ userId, demo }` once per request; `null` userId means signed out.
+ * Resolve `{ ownerId, demo }` once per request; `null` ownerId means signed out.
  *
  * Wrapped in React's `cache` because the demo check hits Clerk's Backend API, and
  * the overview page fans out to four loaders in parallel, without memoization
  * that's four identical round trips to Clerk for one page render.
  */
-const context = cache(async (): Promise<{ userId: string | null; demo: boolean }> => {
+const context = cache(async (): Promise<{ ownerId: string | null; demo: boolean }> => {
   // Guarded because this is the ONE call every loader makes before its own
   // try/catch. `load()` reads the context first and only then enters the block
   // that degrades a failed read — so an `auth()` throw (a Clerk blip, a request
@@ -99,9 +111,9 @@ const context = cache(async (): Promise<{ userId: string | null; demo: boolean }
   // unauthenticated visitor to /sign-in, so the worst case is one redirect
   // instead of a crash, and the warning keeps the real cause in the logs.
   try {
-    const { userId } = await auth();
-    if (!userId) return { userId: null, demo: false };
-    return { userId, demo: await isDemoUser(userId) };
+    const owner = await currentOwner();
+    if (!owner) return { ownerId: null, demo: false };
+    return { ownerId: owner.ownerId, demo: await isDemoUser(owner.userId) };
   } catch (err) {
     // Next signals control flow by THROWING: `DynamicServerError` when a route
     // touches request data during static generation, plus redirect() and
@@ -114,7 +126,7 @@ const context = cache(async (): Promise<{ userId: string | null; demo: boolean }
       "[lurq] session lookup failed; treating this request as signed out.",
       err instanceof Error ? err.message : String(err),
     );
-    return { userId: null, demo: false };
+    return { ownerId: null, demo: false };
   }
 });
 
@@ -125,22 +137,24 @@ const EMPTY_BILLING: BillingSummary = {
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
   used: 0,
-  limit: 200,
+  limit: PLANS.free.monthlyCalls,
+  seats: 1,
+  interval: null,
   billingEnabled: false,
   manageable: false,
 };
 
 /** Run a live read, or hand back the fixture, without ever throwing. */
 async function load<T>(
-  live: (userId: string) => Promise<T>,
+  live: (ownerId: string) => Promise<T>,
   fixture: () => T,
   empty: T,
 ): Promise<Loaded<T>> {
-  const { userId, demo } = await context();
-  if (!userId) return { data: empty, demo: false, failed: false };
+  const { ownerId, demo } = await context();
+  if (!ownerId) return { data: empty, demo: false, failed: false };
   if (demo) return { data: fixture(), demo: true, failed: false };
   try {
-    return { data: await live(userId), demo: false, failed: false };
+    return { data: await live(ownerId), demo: false, failed: false };
   } catch (err) {
     // The user sees a new-user state, so this line is the only trace an outage
     // leaves. Keep it loud enough to find in logs.
@@ -171,7 +185,7 @@ export function loadKeys(): Promise<Loaded<DashboardKey[]>> {
 
 export function loadUsage(days = 30): Promise<Loaded<DashboardUsage>> {
   return load(
-    (userId) => fetchUsage(userId, days),
+    (ownerId) => fetchUsage(ownerId, days),
     () => demoUsage(days),
     EMPTY_USAGE,
   );
@@ -190,13 +204,13 @@ export function loadConformance(): Promise<Loaded<ConformanceReport>> {
 }
 
 export function loadOutcomes(): Promise<Loaded<DashboardOutcome[]>> {
-  return load((userId) => fetchOutcomes(userId), demoOutcomes, []);
+  return load((ownerId) => fetchOutcomes(ownerId), demoOutcomes, []);
 }
 
 export function loadContributions(): Promise<
   Loaded<{ total: number; packages: DashboardContribution[] }>
 > {
-  return load((userId) => fetchContributions(userId), demoContributions, {
+  return load((ownerId) => fetchContributions(ownerId), demoContributions, {
     total: 0,
     packages: [],
   });
@@ -225,14 +239,14 @@ export interface ReposData {
  * rest of this file follows about never presenting an absence as an answer.
  */
 export async function loadSelectionPolicy(): Promise<Loaded<SelectionPolicy>> {
-  const { userId, demo } = await context();
-  if (!userId) return { data: EMPTY_SELECTION_POLICY, demo: false, failed: false };
+  const { ownerId, demo } = await context();
+  if (!ownerId) return { data: EMPTY_SELECTION_POLICY, demo: false, failed: false };
   // A fixture, not the empty policy: demo mode renders the conformance panel
   // right below this one reporting violations, and an empty policy next to a
   // list of broken rules is a contradiction the reader can see.
   if (demo) return { data: demoSelectionPolicy(), demo: true, failed: false };
   try {
-    return { data: await fetchSelectionPolicy(userId), demo: false, failed: false };
+    return { data: await fetchSelectionPolicy(ownerId), demo: false, failed: false };
   } catch (err) {
     console.warn(
       "[lurq] selection policy read failed.",
@@ -253,10 +267,10 @@ export interface PolicyActivity {
 /** What the policy caught over the last month, and who changed it. */
 export function loadPolicyActivity(): Promise<Loaded<PolicyActivity>> {
   return load(
-    async (userId) => {
+    async (ownerId) => {
       const [decisions, changes] = await Promise.all([
-        fetchPolicyDecisions(userId, ACTIVITY_DAYS),
-        fetchPolicyHistory(userId),
+        fetchPolicyDecisions(ownerId, ACTIVITY_DAYS),
+        fetchPolicyHistory(ownerId),
       ]);
       return { days: ACTIVITY_DAYS, decisions, changes };
     },
@@ -266,12 +280,12 @@ export function loadPolicyActivity(): Promise<Loaded<PolicyActivity>> {
 }
 
 export async function loadRepos(): Promise<Loaded<ReposData>> {
-  const { userId, demo } = await context();
-  if (!userId) return { data: { repos: [], configured: false }, demo: false, failed: false };
+  const { ownerId, demo } = await context();
+  if (!ownerId) return { data: { repos: [], configured: false }, demo: false, failed: false };
   if (demo) return { data: { repos: demoRepos(), configured: true }, demo: true, failed: false };
   try {
     return {
-      data: { repos: await fetchRepos(userId), configured: true },
+      data: { repos: await fetchRepos(ownerId), configured: true },
       demo: false,
       failed: false,
     };
@@ -295,7 +309,7 @@ export async function loadRepos(): Promise<Loaded<ReposData>> {
  * read as an incident.
  */
 export function loadAlerts(): Promise<Loaded<RepoAlert[]>> {
-  return load((userId) => fetchAlerts(userId), demoAlerts, []);
+  return load((ownerId) => fetchAlerts(ownerId), demoAlerts, []);
 }
 
 const EMPTY_BRIEF: RepoBrief = { upgrades: [], omitted: 0, pending: 0 };
@@ -306,11 +320,11 @@ const EMPTY_BRIEF: RepoBrief = { upgrades: [], omitted: 0, pending: 0 };
  * one surface diff per upgrade: resolves behind a boundary.
  */
 export async function loadRepoBrief(id: number): Promise<Loaded<RepoBrief>> {
-  const { userId, demo } = await context();
-  if (!userId) return { data: EMPTY_BRIEF, demo: false, failed: false };
+  const { ownerId, demo } = await context();
+  if (!ownerId) return { data: EMPTY_BRIEF, demo: false, failed: false };
   if (demo) return { data: demoRepoBrief(), demo: true, failed: false };
   try {
-    return { data: await fetchRepoBrief(userId, id), demo: false, failed: false };
+    return { data: await fetchRepoBrief(ownerId, id), demo: false, failed: false };
   } catch (err) {
     console.warn(
       "[lurq] migration brief read failed.",
@@ -323,8 +337,8 @@ export async function loadRepoBrief(id: number): Promise<Loaded<RepoBrief>> {
 export type RepoDetail = RepoDetailPayload;
 
 export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
-  const { userId, demo } = await context();
-  if (!userId) return { data: null, demo: false, failed: false };
+  const { ownerId, demo } = await context();
+  if (!ownerId) return { data: null, demo: false, failed: false };
   if (demo) {
     const repo = demoRepos().find((r) => r.id === id);
     return {
@@ -334,7 +348,7 @@ export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
     };
   }
   try {
-    return { data: await fetchRepo(userId, id), demo: false, failed: false };
+    return { data: await fetchRepo(ownerId, id), demo: false, failed: false };
   } catch (err) {
     console.warn(
       "[lurq] repo detail read failed.",
@@ -347,7 +361,7 @@ export async function loadRepo(id: number): Promise<Loaded<RepoDetail | null>> {
 /** Autopilot impact. Zeroes on failure, this sits beside real numbers, so an
  *  error must not render as an alarming figure. */
 export async function loadImpact(days = 30): Promise<Loaded<UpgradeImpact>> {
-  return load((userId) => fetchImpact(userId, days), demoImpact, EMPTY_IMPACT);
+  return load((ownerId) => fetchImpact(ownerId, days), demoImpact, EMPTY_IMPACT);
 }
 
 export interface OverviewData {
@@ -378,4 +392,55 @@ export async function loadOverview(days = 30): Promise<Loaded<OverviewData>> {
     demo: keys.demo,
     failed: keys.failed && usage.failed && outcomes.failed && contributions.failed,
   };
+}
+
+/** Every MCP server the account has scanned, and the change feed across them. */
+export function loadMcpServers(): Promise<Loaded<McpServersPayload>> {
+  return load(
+    (ownerId) => fetchMcpServers(ownerId),
+    () => ({ servers: demoMcpServers(), events: demoMcpEvents() }),
+    { servers: [], events: [] },
+  );
+}
+
+/** One server's contract, findings and history. Null when it is not this account's. */
+export function loadMcpServer(id: number): Promise<Loaded<McpServerDetail | null>> {
+  return load((ownerId) => fetchMcpServer(ownerId, id), () => demoMcpServerDetail(id), null);
+}
+
+const DEFAULT_NOTIFICATIONS: NotificationPreferences = { urgentEmail: true, weeklyDigest: false, emailConfigured: false };
+
+/** The account's email settings. A failed read renders the defaults with `failed` set. */
+export function loadNotificationPreferences(): Promise<Loaded<NotificationPreferences>> {
+  return load(
+    (userId) => fetchNotificationPreferences(userId),
+    () => ({ urgentEmail: true, weeklyDigest: false, emailConfigured: true }),
+    DEFAULT_NOTIFICATIONS,
+  );
+}
+
+/** Where alerts go besides email. Demo accounts see one Slack channel. */
+export function loadChannels(): Promise<Loaded<ChannelsPayload>> {
+  return load<ChannelsPayload>(
+    (userId) => fetchChannels(userId),
+    () => ({
+      allowed: true,
+      configured: true,
+      channels: [
+        {
+          id: 1,
+          kind: "slack",
+          label: "#eng-alerts",
+          urlHint: "hooks.slack.com/…9fK2",
+          minSeverity: "high",
+          enabled: true,
+          disabledReason: null,
+          lastDeliveredAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+          lastError: null,
+          createdAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+        },
+      ],
+    }),
+    { channels: [], allowed: false, configured: false },
+  );
 }

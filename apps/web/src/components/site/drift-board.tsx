@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { shouldArmReveal } from "@/lib/use-reveal-once";
 import drift from "@/content/generated/drift.json";
 import { MODEL_CUTOFFS, type Vendor } from "@/content/model-cutoffs";
 import { axisTicks, type AxisTick } from "@/lib/drift-axis";
@@ -457,7 +458,9 @@ export function DriftBoard() {
   // Weekly installs descending is the order the query already returns, so the
   // first paint matches the server HTML and nothing reshuffles on hydration.
   const [sort, setSort] = useState<Sort>({ key: "weekly_downloads", desc: true });
-  const [shown, setShown] = useState(false);
+  // undefined until script arms the entrance, so the board renders finished
+  // without it: see lib/use-reveal-once.ts.
+  const [shown, setShown] = useState<boolean | undefined>(undefined);
   /** Whether the picker is still advancing itself. A click ends it for good. */
   const [cycling, setCycling] = useState(true);
   /** On screen. Nothing advances a board nobody is looking at. */
@@ -511,6 +514,7 @@ export function DriftBoard() {
     // the board is actually on screen, and a timer advancing a section nobody
     // is looking at burns a render every five seconds to change a chart in an
     // empty room.
+    if (shouldArmReveal(el)) setShown(false);
     const io = new IntersectionObserver(
       ([entry]) => {
         const on = !!entry?.isIntersecting;

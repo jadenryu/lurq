@@ -1,7 +1,7 @@
 {
   "name": "lurqrun",
-  "version": "0.1.1",
-  "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
+  "version": "0.1.7",
+  "description": "Verify npm packages before your AI coding agent installs them: hallucinated and typosquatted names, advisories, API drift and version conflicts. MCP server, CLI and agent skill for Claude Code, Cursor and VS Code.",
   "type": "module",
   "license": "MIT",
   "author": "jadenryu",
@@ -9,18 +9,28 @@
     "type": "git",
     "url": "git+https://github.com/jadenryu/lurq.git"
   },
-  "homepage": "https://github.com/jadenryu/lurq#readme",
+  "homepage": "https://www.lurq.run",
   "bugs": {
     "url": "https://github.com/jadenryu/lurq/issues"
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "npm",
     "dependencies",
-    "recommendations",
+    "package-verification",
+    "hallucinated-packages",
+    "slopsquatting",
+    "typosquatting",
+    "supply-chain-security",
+    "dependency-management",
+    "ai-agents",
+    "coding-agent",
     "claude-code",
-    "ai-coding"
+    "cursor",
+    "vscode",
+    "copilot"
   ],
   "bin": {
     "lurq": "dist/bin/lurq.js"
@@ -30,13 +40,32 @@
   ],
   "files": [
     "dist",
-    "src/data/seed.json",
     "templates",
-    "drizzle",
     "README.md"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20.17.0"
+  },
+  "lurq": {
+    "inlinedDependencies": [
+      "@inquirer/prompts",
+      "@modelcontextprotocol/sdk",
+      "commander",
+      "dotenv",
+      "semver",
+      "yaml",
+      "zod"
+    ],
+    "selfHostDependencies": [
+      "drizzle-orm",
+      "express",
+      "express-rate-limit",
+      "helmet",
+      "ioredis",
+      "postgres",
+      "rate-limit-redis",
+      "stripe"
+    ]
   },
   "scripts": {
     "build": "tsup",
@@ -56,7 +85,9 @@
     "db:migrate": "tsx src/bin/operator.ts db migrate",
     "operator": "tsx src/bin/operator.ts",
     "operator:prod": "LURQ_ENV_FILE=.env.production tsx src/bin/operator.ts",
-    "prepublishOnly": "npm test && npm run build",
+    "prepack": "node scripts/publish-manifest.mjs strip",
+    "postpack": "node scripts/publish-manifest.mjs restore",
+    "prepublishOnly": "node scripts/assert-publish-from-main.mjs && npm test && npm run build",
     "content:drift": "tsx scripts/gen-drift.ts",
     "content:landing": "tsx scripts/build-landing-content.mts",
     "content:releases": "tsx scripts/gen-releases.ts"
@@ -76,7 +107,6 @@
     "semver": "^7.8.5",
     "stripe": "^22.6.0",
     "typescript": "^5.5.4",
-    "update-notifier": "^7.3.1",
     "yaml": "^2.9.0",
     "zod": "^3.23.8"
   },

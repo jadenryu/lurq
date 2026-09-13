@@ -25,10 +25,10 @@ export const PLAN_DESCRIPTION =
   'Turn a detailed program description (spec/README) or a list of component needs into an evidence-scored build plan: a real, lurq-scored package recommended per component, plus a Mermaid roadmap other agents can parse. Recommends building blocks slot-by-slot from the index, it does not invent an architecture from a bare prompt.';
 
 export const VERIFY_DESCRIPTION =
-  'Confirm an npm package is real, healthy, and not risky before installing, guards against hallucinated or typosquatted dependency names. Checks the live registry.';
+  'Confirm an npm package is real, healthy, and not risky before installing: guards against hallucinated or typosquatted names, deprecations and known advisories, and returns a safety verdict with its reasons and what was not checked. Checks the live registry. The cheap gate to call before every install; use evaluate when you need the full scores.';
 
 export const COMPAT_DESCRIPTION =
-  'Check whether a set of packages forms a coherent stack. Resolves the whole set the way npm would and returns a definitive verdict: compatible, conflict (with the exact clashing constraints), or unknown. Checks peer-dependency and engine ranges from declared metadata, plus any recorded sandbox conflicts. Read-only, never installs or executes package code. Call before committing to a multi-package stack.';
+  'Check whether a set of packages forms a coherent stack. Resolves the whole set the way npm would and returns a definitive verdict: compatible, conflict (with the exact clashing constraints), or unknown. Checks peer-dependency and engine ranges from declared metadata, plus any recorded sandbox conflicts. Read-only: never installs or executes package code. Not always instant: a set checked before answers immediately, but a new set is resolved live from registry metadata, which can take up to ~25 seconds. Call once with the whole stack before committing to it.';
 
 /**
  * The `packages` parameter carries the batching instruction, not just the

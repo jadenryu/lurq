@@ -151,7 +151,9 @@ export function formatUpgradePlan(plan: UpgradePlanResult): string {
     );
     if (upgrade.scopeReason) out.push(`  held: ${upgrade.scopeReason}`);
     if (upgrade.removed.length) {
-      out.push(`  removes ${upgrade.removed.length}: ${upgrade.removed.slice(0, 8).join(', ')}`);
+      const renamed = new Map((upgrade.renamed ?? []).map((r) => [r.path, r.to]));
+      const label = (path: string) => (renamed.has(path) ? `${path} → ${renamed.get(path)!.join(' | ')}` : path);
+      out.push(`  removes ${upgrade.removed.length}: ${upgrade.removed.slice(0, 8).map(label).join(', ')}`);
     }
     for (const change of upgrade.arityChanged.slice(0, 5)) {
       out.push(`  arity ${change.path}: ${change.from ?? '?'} → ${change.to ?? '?'}`);

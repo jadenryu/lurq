@@ -3,22 +3,24 @@ title: Introduction
 description: What lurq is, and why your coding agent needs it.
 ---
 
-**lurq** is a continuously-updated, evidence-scored index of JS/TS frameworks
-and libraries, exposed to AI coding assistants as an MCP server, a CLI, and an
-installable agent skill. It gives your agent **fresh, objective dependency
-recommendations**, including packages published after the model's training
-cutoff.
+**lurq** is the **verification layer for everything your coding agent
+installs**. Before an agent adds a package, pins a version, writes an import, or
+wires in an MCP server, lurq checks it against live evidence: does it exist, is
+it safe, does it install alongside the rest of the stack, and does the version
+actually export what the agent is about to call. It reaches your agent as an MCP
+server, a CLI, and an installable agent skill.
 
-Think of lurq as a **companion to your coding agent**: lurq recommends and
-explains packages; your agent writes the code. It's tuned for token cost,
+Think of lurq as a **companion to your coding agent**: your agent writes the
+code; lurq checks what it is about to depend on. It's tuned for token cost,
 speed, and retrieval quality.
 
 ## Why it exists
 
-Coding agents are good at writing code but bad at picking dependencies. They:
+Coding agents are good at writing code but bad at judging dependencies. They:
 
-- recommend packages frozen at their **training cutoff**, missing anything newer;
-- **hallucinate** package names that were never published;
+- reach for packages frozen at their **training cutoff**, missing anything newer;
+- **hallucinate** package names that were never published, which typosquatters
+  then register;
 - lean on whatever was popular when the model was trained, not what's healthy now.
 
 …and they write code against APIs that moved. A package name can be right,
@@ -33,38 +35,49 @@ computed, never hand-written, and every response carries a `dataAsOf` timestamp.
 
 ## What you get
 
-Once connected, your agent can call eleven MCP tools:
+Once connected, your agent can call fifteen MCP tools:
 
-**Choosing**
+**Before installing**
 
-- [`recommend`](/docs/mcp-tools#recommend): best current packages for a need
-- [`evaluate`](/docs/mcp-tools#evaluate): full evidence read for one package
-- [`compare`](/docs/mcp-tools#compare): rank 2–5 packages by health
-- [`verify`](/docs/mcp-tools#verify): is a package real, healthy, and safe?
+- [`verify`](/mcp-tools#verify): is a package real, healthy, and safe?
+- [`evaluate`](/mcp-tools#evaluate): full evidence read for one package
+- [`compare`](/mcp-tools#compare): rank 2–5 packages by health
+- [`policy`](/mcp-tools#policy): the rules your account holds agents to
 
-**Whole stacks**
+**Whole stacks and projects**
 
-- [`compat`](/docs/mcp-tools#compat): will these packages actually install together?
-- [`plan`](/docs/mcp-tools#plan): source every slot in a stack at once
-- [`diagram`](/docs/mcp-tools#diagram): a reference-architecture diagram for a stack
+- [`compat`](/mcp-tools#compat): will these packages actually install together?
+- [`audit`](/mcp-tools#audit): a whole project's dependencies and MCP servers in one call
+- [`diagram`](/mcp-tools#diagram): a reference-architecture diagram for a stack
 
 **Writing the code**
 
-- [`usage`](/docs/mcp-tools#usage): a version's real API, and what changed since the one you know
-- [`resolve_surface`](/docs/mcp-tools#resolve_surface): exactly what a version exports at runtime
-- [`diff_surface`](/docs/mcp-tools#diff_surface): what a version bump adds, removes, or re-shapes
-- [`report_outcome`](/docs/mcp-tools#report_outcome): tell lurq how the pick worked out
+- [`usage`](/mcp-tools#usage): a version's real API, and what changed since the one you know
+- [`resolve_surface`](/mcp-tools#resolve_surface): exactly what a version exports at runtime
+- [`diff_surface`](/mcp-tools#diff_surface): what a version bump adds, removes, or re-shapes
+
+**MCP servers**
+
+- [`mcp_surface`](/mcp-tools#mcp_surface): a server's real tool contract
+- [`mcp_drift`](/mcp-tools#mcp_drift): what a server changed between two versions
+- [`mcp_stack`](/mcp-tools#mcp_stack): do these servers collide in one agent?
+
+**Housekeeping**
+
+- [`capabilities`](/mcp-tools#capabilities): which lurq tool answers this situation
+- [`report_outcome`](/mcp-tools#report_outcome): tell lurq how a pick worked out
 
 The same engine is available from your terminal — see the
-[CLI reference](/docs/cli) — including `lurq check-upgrade`, which tells you
+[CLI reference](/cli) — including `lurq check-upgrade`, which tells you
 whether an upgrade removes a symbol *your* code references, with no test suite
-required.
+required, and `lurq mcp-scan`, which reads what every MCP server you have
+configured really exposes.
 
 ## Scope
 
 <Callout type="info">
-  v1 covers the **JavaScript / TypeScript web stack (npm) only**. More
-  ecosystems are on the roadmap.
+  v1 covers the **JavaScript / TypeScript web stack (npm) only**, plus MCP
+  servers from any source. More package ecosystems are on the roadmap.
 </Callout>
 
-Ready to connect your agent? Head to the [Quick start](/docs/quickstart).
+Ready to connect your agent? Head to the [Quick start](/quickstart).

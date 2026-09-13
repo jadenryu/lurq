@@ -85,15 +85,16 @@ self-host against your own database with `--local`.
 npx lurqrun
 ```
 
-**Uninstall** is three separate things, because setup writes to three places:
+**Uninstall** undoes setup, and leaves everything else in those files as it was:
 
 ```bash
-lurq logout                # forget the API key (~/.lurq/config.json)
-npm uninstall -g lurqrun   # remove the `lurq` command
+lurq uninstall             # MCP entries, agent instructions, the stored key
+lurq uninstall --agent cursor   # just one agent
+npm uninstall -g lurqrun   # then remove the `lurq` command itself
 ```
 
-The third is the MCP entries in your agents' config files. Delete the `lurq` entry from whichever of these you
-use:
+It lists what it will remove and asks first (`--yes` skips the question). For reference, these are the files setup
+writes to:
 
 | Assistant | MCP config | Instructions file |
 |---|---|---|
@@ -106,9 +107,9 @@ use:
 | Antigravity | `~/.gemini/config/mcp_config.json` | `~/.gemini/GEMINI.md` |
 | Kiro | `~/.kiro/settings/mcp.json` | `~/.kiro/steering/lurq.md` |
 
-`lurq logout` **only** clears the key stored for the CLI. A copy of it
-lives in each MCP entry above, so revoke the key from
-[the dashboard](https://lurq.run/dashboard/keys).
+`lurq logout` **only** clears the key stored for the CLI; a copy of it lives in each MCP entry above until
+`lurq uninstall` removes them. Either way the key keeps working until you revoke it from
+[the dashboard](https://www.lurq.run/dashboard/keys).
 
 </details>
 
@@ -148,7 +149,7 @@ lurq verify jsonwebtoken
 
 # API surfaces
 lurq usage zod --known 3.22.4              # what changed since the version you know
-lurq versions react                        # stored version timeline
+lurq versions react                        # version timeline (self-hosted index only)
 
 # Stacks
 lurq compat next react react-dom           # do these install together?
@@ -167,10 +168,17 @@ lurq can "will this upgrade break my code" # which lurq capability answers this?
 # Configuration & serving
 lurq weights                               # the exact ranking weights, printed
 lurq edit-weights --set composite.lambda=0.5
+lurq uninstall                             # take lurq back out of every agent config
+
+# Self-hosting (your own Postgres via DATABASE_URL)
 lurq serve-http                            # run it as a rate-limited service of your own
 ```
 
-Use the '-- json ' flag for every read command.
+Every read command takes `--json` for machine-readable output.
+
+The published CLI installs only what the commands above need. Self-hosting (`lurq serve`, `lurq serve-http`, or a
+local `DATABASE_URL` index) also needs the server packages (Postgres driver, Express, Redis client, and so on); the
+first command that needs them prints the exact `npm install` line.
 
 ---
 
@@ -185,10 +193,12 @@ and resolve with what calls your code references.
 **The gate needs no tests at all.**
 
 ```
-blocking   a referenced symbol disappears      → the code will throw
-warning    a referenced symbol changed arity   → it may silently misbehave
+blocking   a referenced symbol or deep import disappears,
+           or require() of a now-ESM package breaks         → the code will throw
+warning    a call's argument count no longer fits, a new type
+           error, or a Node / peer version the repo lacks   → it may misbehave or not build
 ok         nothing referenced is affected
-unverified could not be established            → never counted as safe
+unverified could not be established                         → never counted as safe
 ```
 
 ### The loop

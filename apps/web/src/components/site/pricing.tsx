@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 
@@ -14,7 +14,15 @@ import {
 } from '@/content/pricing';
 import { CONTACT_EMAIL } from '@/content/copy';
 import { useRevealOnce } from '@/lib/use-reveal-once';
-import { PLAN_LIST, type Plan } from '@lurq/core/plans';
+import {
+  ANNUAL_DISCOUNT,
+  GRACE_CALLS_PER_DAY,
+  OVERAGE_CAP_MULTIPLE,
+  PLAN_LIST,
+  annualPriceCents,
+  type BillingInterval,
+  type Plan,
+} from '@lurq/core/plans';
 
 /**
  * Three plans on the room surface, after the reader has been shown how to
@@ -38,15 +46,23 @@ import { PLAN_LIST, type Plan } from '@lurq/core/plans';
  */
 
 /** How the price reads. Whole dollars, because every plan is whole dollars. */
-function priceLabel(plan: Plan): string {
-  return plan.priceCents === 0 ? '$0' : `$${Math.round(plan.priceCents / 100)}`;
+function priceLabel(plan: Plan, interval: BillingInterval): string {
+  // Yearly reads as its monthly equivalent, the way buyers compare plans; the
+  // card says it is billed yearly underneath.
+  const cents =
+    interval === 'year' && plan.paid && !plan.contactOnly
+      ? annualPriceCents(plan) / 12
+      : plan.priceCents;
+  return `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 }
 
 /** The allowance line, pulled out of the feature list into its own row. */
 function allowanceLabel(plan: Plan): string {
-  return plan.monthlyCalls === null
-    ? 'Uncapped hosted calls'
-    : `${plan.monthlyCalls.toLocaleString('en-US')} hosted calls a month`;
+  if (plan.monthlyCalls === null) return 'Uncapped hosted calls';
+  const calls = plan.monthlyCalls.toLocaleString('en-US');
+  return plan.perSeat
+    ? `${calls} calls a month per seat, pooled · ${plan.minSeats ?? 1}-seat minimum`
+    : `${calls} hosted calls a month`;
 }
 
 const BTN =
@@ -69,17 +85,28 @@ const BTN_OUTLINE = `${BTN} border border-edge text-ink hover:border-ink`;
  * the plan by hand. The click still means "I want to buy this" either way; only
  * the fulfilment differs, and that is our problem rather than theirs.
  */
-function BuyButton({ plan }: { plan: Plan }) {
+function BuyButton({ plan, interval }: { plan: Plan; interval: BillingInterval }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requested, setRequested] = useState(false);
   const { isSignedIn } = useAuth();
 
+  // Back from Stripe restores this page from the back-forward cache with the
+  // button still spent. Reset it, or the buyer who changed their mind cannot
+  // try again without reloading.
+  useEffect(() => {
+    const restore = (e: PageTransitionEvent) => {
+      if (e.persisted) setPending(false);
+    };
+    window.addEventListener('pageshow', restore);
+    return () => window.removeEventListener('pageshow', restore);
+  }, []);
+
   // Signed out, checkout would bounce off a 401. Send them to sign up first and
   // come back, rather than opening Stripe for an account that does not exist.
   if (!isSignedIn) {
     return (
-      <Link href={`/sign-up?next=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
+      <Link href={`/sign-up?redirect_url=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
         {`Start ${plan.name}`}
       </Link>
     );
@@ -92,7 +119,7 @@ function BuyButton({ plan }: { plan: Plan }) {
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: plan.tier }),
+        body: JSON.stringify({ tier: plan.tier, interval, from: 'pricing' }),
       });
       const data = (await res.json()) as { url?: string; error?: string; contact?: boolean };
       if (data.url) {
@@ -105,7 +132,7 @@ function BuyButton({ plan }: { plan: Plan }) {
         const ask = await fetch('/api/billing/request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tier: plan.tier }),
+          body: JSON.stringify({ tier: plan.tier, interval }),
         });
         const asked = (await ask.json()) as { ok?: boolean; error?: string };
         if (asked.ok) {
@@ -152,13 +179,13 @@ function BuyButton({ plan }: { plan: Plan }) {
   );
 }
 
-function PlanAction({ plan }: { plan: Plan }) {
+function PlanAction({ plan, interval }: { plan: Plan; interval: BillingInterval }) {
   const { isSignedIn } = useAuth();
 
   if (plan.contactOnly) {
     return (
       <a
-        href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('lurq Enterprise')}`}
+        href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`lurq ${plan.name}`)}`}
         className={BTN_OUTLINE}
       >
         Talk to us
@@ -166,7 +193,7 @@ function PlanAction({ plan }: { plan: Plan }) {
     );
   }
 
-  if (plan.paid) return <BuyButton plan={plan} />;
+  if (plan.paid) return <BuyButton plan={plan} interval={interval} />;
 
   // Free routes the way the nav's CTA routes, and swaps to the dashboard when
   // signed in for the reason the nav gives: offering "Get started" to someone
@@ -178,8 +205,19 @@ function PlanAction({ plan }: { plan: Plan }) {
   );
 }
 
-function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previous?: Plan }) {
-  const featured = plan.tier === 'pro';
+function PlanCard({
+  plan,
+  index,
+  previous,
+  interval,
+}: {
+  plan: Plan;
+  index: number;
+  previous?: Plan;
+  interval: BillingInterval;
+}) {
+  // Team, not Pro: it is the plan the ladder is built to sell.
+  const featured = plan.tier === 'team';
 
   return (
     <article
@@ -202,11 +240,15 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
       </header>
 
       <p className="mt-5 flex items-baseline gap-1">
+        {plan.priceFrom ? <span className="mr-0.5 text-[13px] text-ink-3">from</span> : null}
         <span className="font-sans text-[34px] font-medium leading-none tracking-[-0.03em] text-ink">
-          {priceLabel(plan)}
+          {priceLabel(plan, interval)}
         </span>
-        <span className="text-[13px] text-ink-3">/mo</span>
+        <span className="text-[13px] text-ink-3">{plan.perSeat ? '/seat/mo' : '/mo'}</span>
       </p>
+      {interval === 'year' && plan.paid && !plan.contactOnly ? (
+        <p className="mt-1.5 text-[12px] text-ink-3">billed yearly</p>
+      ) : null}
 
       {/* The allowance gets its own line above the fold of the card: it is the
           number people are comparing, and burying it third in a bullet list
@@ -214,6 +256,16 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
       <p className="mt-4 border-t border-edge pt-4 text-[13px] font-medium text-ink">
         {allowanceLabel(plan)}
       </p>
+      {/* What happens past the pool is part of the price, so it sits with the
+          allowance rather than in the note under the cards. Read from plans.ts,
+          the same numbers http.ts and billing/overage.ts act on. */}
+      {plan.monthlyCalls !== null ? (
+        <p className="mt-1.5 text-[12px] leading-[1.5] text-ink-3">
+          {plan.overageCentsPer1k && interval === 'month'
+            ? `Past the pool: $${plan.overageCentsPer1k / 100} per 1,000 calls, up to ${OVERAGE_CAP_MULTIPLE}x the pool`
+            : `Past the limit: ${GRACE_CALLS_PER_DAY} calls a day until the month turns`}
+        </p>
+      ) : null}
       <p className="mt-2 text-[13px] leading-[1.6] text-ink-2">{plan.tagline}</p>
 
       <div className="mt-6 flex-1">
@@ -224,7 +276,7 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
           {plan.features
             // The allowance already has its own row above; repeating it as a
             // bullet is the card arguing with itself.
-            .filter((f) => !/hosted calls/i.test(f))
+            .filter((f) => !/\bcalls\b/i.test(f))
             .map((f) => (
               <li key={f} className="flex gap-2.5 text-[13px] leading-[1.5] text-ink-2">
                 <span aria-hidden className="mt-[1px] shrink-0 text-ink-3">
@@ -237,7 +289,7 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
       </div>
 
       <div className="mt-7">
-        <PlanAction plan={plan} />
+        <PlanAction plan={plan} interval={interval} />
       </div>
     </article>
   );
@@ -245,6 +297,7 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
 
 export function Pricing() {
   const { ref, played } = useRevealOnce<HTMLDivElement>();
+  const [interval, setBilling] = useState<BillingInterval>('month');
 
   return (
     <section id="pricing" className="w-full py-24 min-[900px]:py-32">
@@ -265,12 +318,38 @@ export function Pricing() {
         <p className="mt-6 max-w-[58ch] text-[14px] leading-[1.6] text-ink-2">{PRICING_BODY}</p>
 
         <div
+          role="group"
+          aria-label="Billing period"
+          className="mt-8 inline-flex rounded-full border border-edge p-1 text-[13px]"
+        >
+          {(['month', 'year'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={interval === value}
+              onClick={() => setBilling(value)}
+              className={`rounded-full px-3.5 py-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark ${
+                interval === value ? 'bg-ink text-ground' : 'text-ink-2 hover:text-ink'
+              }`}
+            >
+              {value === 'month' ? 'Monthly' : `Yearly, ${Math.round(ANNUAL_DISCOUNT * 100)}% off`}
+            </button>
+          ))}
+        </div>
+
+        <div
           ref={ref}
-          data-playing={played ? 'true' : 'false'}
-          className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-3"
+          data-playing={played === undefined ? undefined : String(played)}
+          className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-2 min-[1080px]:grid-cols-4"
         >
           {PLAN_LIST.map((plan, i) => (
-            <PlanCard key={plan.tier} plan={plan} index={i} previous={PLAN_LIST[i - 1]} />
+            <PlanCard
+              key={plan.tier}
+              plan={plan}
+              index={i}
+              previous={PLAN_LIST[i - 1]}
+              interval={interval}
+            />
           ))}
         </div>
 

@@ -19,10 +19,29 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: url("/"), lastModified, changeFrequency: "weekly", priority: 1 },
     { url: url("/about"), lastModified, changeFrequency: "monthly", priority: 0.7 },
     { url: url("/partnerships"), lastModified, changeFrequency: "monthly", priority: 0.6 },
-    { url: url("/book-demo"), lastModified, changeFrequency: "monthly", priority: 0.6 },
     { url: url("/security"), lastModified, changeFrequency: "monthly", priority: 0.5 },
     { url: url("/license"), lastModified, changeFrequency: "yearly", priority: 0.3 },
     { url: url("/privacy"), lastModified, changeFrequency: "yearly", priority: 0.3 },
     { url: url("/terms"), lastModified, changeFrequency: "yearly", priority: 0.3 },
+    // The docs are a separate zone (apps/docs) with no sitemap of their own, so
+    // they are listed here or not at all. Mirrors apps/docs/content/docs.
+    ...[
+      "",
+      "/quickstart",
+      "/mcp-tools",
+      "/mcp-scan",
+      "/alerts",
+      "/cli",
+      "/plans-and-troubleshooting",
+      "/how-it-works",
+      "/self-hosting",
+    ].map(
+      (slug) => ({
+        url: url(`/docs${slug}`),
+        lastModified,
+        changeFrequency: "weekly" as const,
+        priority: slug === "" || slug === "/quickstart" ? 0.8 : 0.6,
+      }),
+    ),
   ];
 }

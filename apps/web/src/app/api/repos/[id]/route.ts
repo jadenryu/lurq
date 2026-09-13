@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { isDemoUser } from "@/lib/demo-data";
 import {
   disconnectRepo,
@@ -22,13 +22,13 @@ function parsePolicy(input: unknown): RepoPolicy | null {
 }
 
 async function guard(id: string): Promise<
-  { ok: true; userId: string; repoId: number } | { ok: false; response: NextResponse }
+  { ok: true; ownerId: string; repoId: number } | { ok: false; response: NextResponse }
 > {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return { ok: false, response: NextResponse.json({ error: "Sign in first." }, { status: 401 }) };
   }
-  if (await isDemoUser(userId)) {
+  if (await isDemoUser(owner.userId)) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Not available on demo data." }, { status: 409 }),
@@ -38,7 +38,7 @@ async function guard(id: string): Promise<
   if (!Number.isInteger(repoId)) {
     return { ok: false, response: NextResponse.json({ error: "Bad repo id." }, { status: 400 }) };
   }
-  return { ok: true, userId, repoId };
+  return { ok: true, ownerId: owner.ownerId, repoId };
 }
 
 function failure(err: unknown): NextResponse {
@@ -60,7 +60,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/repos/[id]">) 
   }
 
   try {
-    await updateRepoPolicy(checked.userId, checked.repoId, policy);
+    await updateRepoPolicy(checked.ownerId, checked.repoId, policy);
     return NextResponse.json({ policy });
   } catch (err) {
     return failure(err);
@@ -72,7 +72,7 @@ export async function DELETE(_req: Request, ctx: RouteContext<"/api/repos/[id]">
   const checked = await guard(id);
   if (!checked.ok) return checked.response;
   try {
-    await disconnectRepo(checked.userId, checked.repoId);
+    await disconnectRepo(checked.ownerId, checked.repoId);
     return NextResponse.json({ removed: true });
   } catch (err) {
     return failure(err);

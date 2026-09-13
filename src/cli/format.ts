@@ -4,7 +4,22 @@
  */
 
 const ESC = '[';
-const wrap = (code: string, s: string) => `${ESC}${code}m${s}${ESC}0m`;
+/**
+ * Whether to emit colour, decided per call so a test (or a late env change) is
+ * honoured. Escape codes are for a person at a terminal: piped into a file, a
+ * CI log or an agent's tool result they arrive as literal `[2m` noise.
+ *   - NO_COLOR (any non-empty value) turns it off, per no-color.org;
+ *   - FORCE_COLOR turns it on even when piped (`0`/`false` turn it off);
+ *   - otherwise colour only when stdout is a TTY.
+ */
+export function colorEnabled(): boolean {
+  if (process.env.NO_COLOR) return false;
+  const force = process.env.FORCE_COLOR;
+  if (force !== undefined) return force !== '0' && force !== 'false';
+  return process.stdout.isTTY === true;
+}
+
+const wrap = (code: string, s: string) => (colorEnabled() ? `${ESC}${code}m${s}${ESC}0m` : s);
 
 export const bold = (s: string) => wrap('1', s);
 export const dim = (s: string) => wrap('2', s);

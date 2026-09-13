@@ -5,7 +5,10 @@
     "index",
     "quickstart",
     "mcp-tools",
+    "mcp-scan",
+    "alerts",
     "cli",
+    "plans-and-troubleshooting",
     "how-it-works",
     "self-hosting"
   ]

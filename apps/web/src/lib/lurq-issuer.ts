@@ -76,6 +76,11 @@ export async function issueKey(args: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
   });
+  // 403 is a plan gate with a message worth showing; anything else is ours.
+  if (res.status === 403) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new LurqIssuerError(data.error ?? "Your plan cannot issue that key.", 403);
+  }
   if (!res.ok) throw new LurqIssuerError("Could not issue a key. Try again.", 502);
   const data = (await res.json()) as { key?: string; prefix?: string };
   if (!data.key) throw new LurqIssuerError("Issuer returned no key.", 502);
@@ -367,6 +372,8 @@ export interface UpgradeBrief {
   deprecated: boolean;
   verdict: UpgradeVerdict;
   removed: string[];
+  /** Removed exports the package still ships under another name. Absent from an older API. */
+  renamed?: { path: string; to: string[] }[];
   arityChanged: { path: string; from: number | null; to: number | null }[];
   typeOnlyRemoved: string[];
   newlyDeprecated: string[];
@@ -567,8 +574,12 @@ export async function updateSelectionPolicy(
 // URL and redirects to it, so nothing that faces the browser holds a key.
 
 export interface BillingSummary {
-  tier: "free" | "pro" | "enterprise";
+  tier: "free" | "pro" | "team" | "enterprise";
   planName: string;
+  /** Seats billed. 1 for flat plans. */
+  seats: number;
+  /** Null before a Stripe subscription exists, and for hand-granted plans. */
+  interval: "month" | "year" | null;
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -591,7 +602,10 @@ export async function fetchBilling(ownerId: string): Promise<BillingSummary> {
 export async function startCheckout(args: {
   ownerId: string;
   tier: string;
+  interval?: "month" | "year";
   email?: string | null;
+  /** Where Stripe's back link returns: the billing page or the landing pricing section. */
+  from?: "dashboard" | "pricing";
 }): Promise<string | null> {
   const res = await issuerFetch("/billing/checkout", {
     method: "POST",
@@ -635,11 +649,23 @@ export interface AskBudget {
   limitMicros: number;
 }
 
-export async function recordAskSpend(ownerId: string, usdMicros: number): Promise<AskBudget> {
+/** What one answered question looked like, for product analytics. Never its text. */
+export interface AskAnswered {
+  model: string;
+  turns: number;
+  usd: number;
+  cacheReadTokens: number;
+}
+
+export async function recordAskSpend(
+  ownerId: string,
+  usdMicros: number,
+  answered?: AskAnswered,
+): Promise<AskBudget> {
   const res = await issuerFetch("/ask-budget", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ownerId, usdMicros }),
+    body: JSON.stringify({ ownerId, usdMicros, answered }),
   });
   if (!res.ok) throw new LurqIssuerError("Could not record Ask spend.", res.status);
   return (await res.json()) as AskBudget;
@@ -678,4 +704,277 @@ export async function callAskTool(
   }
   if (!res.ok) throw new LurqIssuerError("Could not run that lookup.", res.status);
   return (await res.json()) as { isError: boolean; text: string };
+}
+
+// ── Live MCP scans ──────────────────────────────────────────────────────────
+
+export type ScanSeverity = "critical" | "high" | "moderate" | "low" | "info";
+
+export type McpScanStatus =
+  | "ok"
+  | "partial"
+  | "needs_config"
+  | "auth_required"
+  | "spawn_failed"
+  | "timeout"
+  | "unreachable"
+  | "protocol_error";
+
+export interface McpFinding {
+  kind: string;
+  severity: ScanSeverity;
+  tool: string | null;
+  where: string;
+  detail: string;
+  evidence: string | null;
+}
+
+export interface McpServerStats {
+  tools: number;
+  writes: number;
+  destroys: number;
+  openWorld: number;
+  annotated: number;
+  capabilities: Record<string, number>;
+}
+
+/** One server as one account runs it, with its latest contract summarised. */
+export interface DashboardMcpServer {
+  id: number;
+  serverKey: string;
+  alias: string;
+  registry: string;
+  packageName: string | null;
+  transport: string;
+  serverName: string | null;
+  serverVersion: string | null;
+  lastStatus: McpScanStatus;
+  lastError: string | null;
+  worstSeverity: ScanSeverity | null;
+  firstSeenAt: string;
+  lastScannedAt: string;
+  lastChangedAt: string | null;
+  toolCount: number | null;
+  writes: number | null;
+  destroys: number | null;
+  capabilities: Record<string, number>;
+  findings: number;
+  openEvents: number;
+  openWorst: ScanSeverity | null;
+}
+
+export interface McpChangeEvent {
+  id: number;
+  deploymentId: number;
+  severity: ScanSeverity;
+  summary: string;
+  createdAt: string;
+  acknowledgedAt: string | null;
+  /** Present on the account-wide feed. */
+  alias?: string;
+  serverKey?: string;
+  diff: {
+    rugPull: string[];
+    descriptionChanges: { tool: string; field: string; before: string | null; after: string | null }[];
+    newFindings: McpFinding[];
+    instructionsChanged: boolean;
+    promptsAdded: string[];
+    promptsRemoved: string[];
+    capabilitiesGained: { tool: string; capabilities: string[] }[];
+    contract: {
+      removedTools: string[];
+      addedTools: string[];
+      silentDrift: string[];
+      annotationFlips: { tool: string; hint: string; from: boolean; to: boolean; widensPrivilege: boolean }[];
+      breaking: boolean;
+    };
+  };
+}
+
+export interface McpToolInfo {
+  name: string;
+  title?: string;
+  description?: string;
+  annotations?: Record<string, unknown>;
+}
+
+export interface McpObservation {
+  id: number;
+  status: McpScanStatus;
+  contentHash: string | null;
+  serverVersion: string | null;
+  error: string | null;
+  source: string;
+  scanCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface McpServerDetail {
+  deployment: DashboardMcpServer;
+  contract: {
+    contentHash: string;
+    toolCount: number;
+    tools: McpToolInfo[];
+    prompts: { name: string; description?: string }[];
+    instructions: string | null;
+    analysis: {
+      capabilities: Record<string, { capability: string; evidence: string }[]>;
+      findings: McpFinding[];
+      stats: McpServerStats;
+    };
+  } | null;
+  observations: McpObservation[];
+  events: McpChangeEvent[];
+}
+
+export interface McpServersPayload {
+  servers: DashboardMcpServer[];
+  events: McpChangeEvent[];
+}
+
+export async function fetchMcpServers(ownerId: string): Promise<McpServersPayload> {
+  const res = await issuerFetch(`/mcp-servers?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read MCP servers.", 502);
+  return (await res.json()) as McpServersPayload;
+}
+
+export async function fetchMcpServer(ownerId: string, id: number): Promise<McpServerDetail | null> {
+  const res = await issuerFetch(`/mcp-servers/${id}?ownerId=${encodeURIComponent(ownerId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not read the MCP server.", 502);
+  return (await res.json()) as McpServerDetail;
+}
+
+export async function acknowledgeMcpChange(ownerId: string, eventId: number): Promise<boolean> {
+  const res = await issuerFetch(`/mcp-servers/events/${eventId}/acknowledge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (res.status === 404) return false;
+  if (!res.ok) throw new LurqIssuerError("Could not acknowledge the change.", 502);
+  return true;
+}
+
+// ── Account email ────────────────────────────────────────────────────────────
+
+export interface NotificationPreferences {
+  urgentEmail: boolean;
+  weeklyDigest: boolean;
+  /** False when the deployment has no email provider: toggles govern nothing yet. */
+  emailConfigured: boolean;
+}
+
+export async function fetchNotificationPreferences(ownerId: string): Promise<NotificationPreferences> {
+  const res = await issuerFetch(`/notification-preferences?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read email settings.", 502);
+  return (await res.json()) as NotificationPreferences;
+}
+
+export async function updateNotificationPreferences(
+  ownerId: string,
+  patch: Partial<Pick<NotificationPreferences, "urgentEmail" | "weeklyDigest">>,
+): Promise<NotificationPreferences> {
+  const res = await issuerFetch("/notification-preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ...patch }),
+  });
+  if (!res.ok) throw new LurqIssuerError("Could not save email settings.", 502);
+  return (await res.json()) as NotificationPreferences;
+}
+
+/** Unsubscribe by the token in an email link. Resolves the same whether or not it matched. */
+export async function unsubscribeWithToken(token: string, kind: "urgent" | "digest"): Promise<boolean> {
+  const res = await issuerFetch("/notifications/unsubscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, kind }),
+  });
+  return res.ok;
+}
+
+// ── Alert channels ───────────────────────────────────────────────────────────
+
+export type ChannelKind = "slack" | "discord" | "teams" | "webhook";
+export type ChannelSeverity = "critical" | "high" | "moderate" | "low";
+
+export interface AlertChannel {
+  id: number;
+  kind: ChannelKind;
+  label: string | null;
+  urlHint: string;
+  minSeverity: ChannelSeverity;
+  enabled: boolean;
+  disabledReason: string | null;
+  lastDeliveredAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+}
+
+export interface ChannelsPayload {
+  channels: AlertChannel[];
+  /** The plan includes channels. */
+  allowed: boolean;
+  /** The deployment can store channel URLs. */
+  configured: boolean;
+}
+
+/** An error the API meant for the person at the form, passed through as-is. */
+async function apiError(res: Response, fallback: string): Promise<LurqIssuerError> {
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  return new LurqIssuerError(body?.error ?? fallback, res.status);
+}
+
+export async function fetchChannels(ownerId: string): Promise<ChannelsPayload> {
+  const res = await issuerFetch(`/notification-channels?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw await apiError(res, "Could not read alert channels.");
+  return (await res.json()) as ChannelsPayload;
+}
+
+export async function createChannel(
+  ownerId: string,
+  input: { kind: ChannelKind; url: string; label?: string; minSeverity: ChannelSeverity },
+): Promise<{ channel: AlertChannel; signingSecret?: string }> {
+  const res = await issuerFetch("/notification-channels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ...input }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not add the channel.");
+  return (await res.json()) as { channel: AlertChannel; signingSecret?: string };
+}
+
+export async function updateChannel(
+  ownerId: string,
+  id: number,
+  patch: Partial<Pick<AlertChannel, "enabled" | "minSeverity" | "label">>,
+): Promise<AlertChannel> {
+  const res = await issuerFetch(`/notification-channels/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ...patch }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not update the channel.");
+  return ((await res.json()) as { channel: AlertChannel }).channel;
+}
+
+export async function testChannel(ownerId: string, id: number): Promise<{ ok: boolean; error: string | null }> {
+  const res = await issuerFetch(`/notification-channels/${id}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not test the channel.");
+  return (await res.json()) as { ok: boolean; error: string | null };
+}
+
+export async function removeChannel(ownerId: string, id: number): Promise<void> {
+  const res = await issuerFetch(`/notification-channels/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not remove the channel.");
 }

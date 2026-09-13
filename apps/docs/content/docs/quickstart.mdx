@@ -19,27 +19,23 @@ npx lurqrun
 ```
 
 That runs the setup wizard. It offers to install `lurqrun` globally first, so
-`lurq` works in any terminal without npx, then opens
-[the dashboard](https://lurq.run/dashboard/keys) in your browser so you can sign
-in and create an API key, and walks you through pasting it back. From there it
-does everything in one pass:
+`lurq` works in any terminal without npx, then opens lurq in your browser. Sign
+in (or create an account) and the browser **hands the key back to the wizard by
+itself**: there is nothing to copy. If that can't work, on an SSH session or a
+headless box say, the wizard prints the link and falls back to asking you to
+paste a key from [Dashboard → API keys](https://www.lurq.run/dashboard/keys).
+
+From there it does everything in one pass:
 
 1. **Validates the key** against the hosted endpoint.
 2. **Stores it** in `~/.lurq/config.json`, owner-readable only (mode `0600`).
 3. **Detects your assistants**: Claude Code, Cursor, Windsurf, VS Code /
    Copilot, Codex, Gemini CLI, Antigravity, Kiro.
-4. **Writes a keyed remote MCP entry** for each one:
-
-```json
-{
-  "type": "http",
-  "url": "https://api.lurq.run/mcp",
-  "headers": { "Authorization": "Bearer <your-key>" }
-}
-```
-
-5. **Installs the agent skill**, so the model reaches for lurq on its own rather
-   than answering about a package from memory.
+4. **Writes a keyed remote MCP entry** for each one, in the shape that agent
+   expects (see [per-agent configuration](#per-agent-configuration)).
+5. **Installs standing instructions** where the agent has a place for them, so
+   the model reaches for lurq on its own rather than answering about a package
+   from memory.
 
 **No database credentials ever touch your machine.** Restart your agent afterward
 so it picks up the new MCP server.
@@ -59,22 +55,26 @@ export and no database:
 
 ```bash
 lurq verify jsonwebtoken
-lurq recommend "a form library for react"
+lurq evaluate zod
 lurq compare date-fns dayjs moment
 lurq usage zod --known 3.22.4
 ```
 
-See the [CLI reference](/docs/cli) for the full set.
+See the [CLI reference](/cli) for the full set.
 
 ## 3. Verify your agent is connected
 
-Ask it something dependency-shaped, for example:
+Ask it to add a dependency, for example:
 
-> "What's the best current form library for React?"
+> "Add zod to this project."
 
-You should see it call the `recommend` tool and return a short, scored list with
-a `dataAsOf` timestamp. If nothing happens, confirm the agent was restarted and
-that the MCP server shows up in its tool list.
+Before it installs anything, you should see it call lurq's `verify` tool, and get
+back whether the package exists, its risk level and flags, and a `dataAsOf`
+timestamp. To see the same answer without an agent, run `lurq verify zod`.
+
+If the agent doesn't call lurq, confirm it was restarted and that `lurq` shows up
+in its MCP tool list. More in
+[troubleshooting](/plans-and-troubleshooting#my-agent-never-calls-lurq).
 
 ## Non-interactive setup
 
@@ -86,12 +86,100 @@ lurq setup --yes --no-open --api-key <key>
 ```
 
 Use `--agent all` to configure every detected assistant, or `--agent claude-code`
-for one. With `--yes`, the key can also come from `LURQ_API_KEY`.
+for one. With `--yes`, the key can also come from `LURQ_API_KEY`. The wizard needs
+a terminal, so this is also the form to use anywhere there isn't one.
+
+## Per-agent configuration
+
+Setup writes one `lurq` entry into each agent's own MCP config, merged into what
+is already there. The shape differs per agent, and the wrong field name is the
+most common reason a hand-written entry silently fails. Every entry points at
+`https://api.lurq.run/mcp` and sends `Authorization: Bearer <your-key>`.
+
+| Agent | `--agent` | MCP config file | Entry |
+| --- | --- | --- | --- |
+| Claude Code | `claude-code` | `~/.claude.json` | `mcpServers.lurq`: `{ "type": "http", "url", "headers" }` |
+| Cursor | `cursor` | `~/.cursor/mcp.json` | `mcpServers.lurq`: `{ "url", "headers" }` |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` | `mcpServers.lurq`: `{ "serverUrl", "headers" }` |
+| VS Code / Copilot | `copilot` | `<VS Code user dir>/mcp.json` | `servers.lurq`: `{ "type": "http", "url", "headers" }` |
+| Codex CLI | `codex` | `~/.codex/config.toml` | `[mcp_servers.lurq]` with `url` and `http_headers` |
+| Gemini CLI | `gemini-cli` | `~/.gemini/settings.json` | `mcpServers.lurq`: `{ "httpUrl", "headers" }` |
+| Antigravity | `antigravity` | `~/.gemini/config/mcp_config.json` | `mcpServers.lurq`: `{ "serverUrl", "headers" }` |
+| Kiro | `kiro` | `~/.kiro/settings/mcp.json` | `mcpServers.lurq`: `{ "url", "headers" }` |
+
+The VS Code user directory is `~/Library/Application Support/Code/User` on macOS,
+`%APPDATA%\Code\User` on Windows, and `~/.config/Code/User` on Linux (or
+`$XDG_CONFIG_HOME/Code/User`).
+
+Standing instructions, written alongside the MCP entry:
+
+| Agent | Instructions |
+| --- | --- |
+| Claude Code | `~/.claude/skills/lurq/SKILL.md`, the full guide as a skill |
+| Kiro | `~/.kiro/steering/lurq.md`, the full guide as a steering file |
+| Windsurf | a marked block in `~/.codeium/windsurf/memories/global_rules.md` |
+| Codex CLI | a marked block in `~/.codex/AGENTS.md` |
+| Gemini CLI, Antigravity | a marked block in `~/.gemini/GEMINI.md` |
+| Cursor, VS Code / Copilot | none: neither has a machine-wide instructions file, so the tool descriptions carry the guidance |
+
+Every install also copies the full guide to `~/.lurq/skill-instructions.md`, as
+a readable reference. Shared files are merged, never overwritten: the block sits
+between `<!-- lurq:start -->` and `<!-- lurq:end -->`, and re-running setup
+replaces that block and leaves everything you wrote alone.
+
+### Installing by hand
+
+If you'd rather not run the wizard, create a key on
+[Dashboard → API keys](https://www.lurq.run/dashboard/keys) and add the entry to
+your agent's config file yourself, merged with any servers already there.
+
+For Claude Code, in `~/.claude.json` (and VS Code, under `servers` in its
+`mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "lurq": {
+      "type": "http",
+      "url": "https://api.lurq.run/mcp",
+      "headers": { "Authorization": "Bearer <your-key>" }
+    }
+  }
+}
+```
+
+For Cursor or Kiro, drop `type`. For Windsurf or Antigravity, use `serverUrl`
+instead of `url`. For Gemini CLI, use `httpUrl`: a plain `url` there means an SSE
+server, and the connection never completes.
+
+```json
+{
+  "mcpServers": {
+    "lurq": {
+      "httpUrl": "https://api.lurq.run/mcp",
+      "headers": { "Authorization": "Bearer <your-key>" }
+    }
+  }
+}
+```
+
+For Codex, append to `~/.codex/config.toml`. The headers must be the inline
+`http_headers` table, not a `[mcp_servers.lurq.headers]` section, which Codex
+rejects:
+
+```toml
+[mcp_servers.lurq]
+url = "https://api.lurq.run/mcp"
+http_headers = { Authorization = "Bearer <your-key>" }
+```
+
+For the CLI, `export LURQ_API_KEY=<your-key>` is enough. Restart the agent once
+the entry is in place.
 
 ## Pointing at your own server
 
 The hosted service at `api.lurq.run` is the default, not the only option. If you
-run your own `lurq serve-http` (see [Self-hosting](/docs/self-hosting)), point
+run your own `lurq serve-http` (see [Self-hosting](/self-hosting)), point
 setup at it:
 
 ```bash
@@ -100,10 +188,10 @@ lurq setup --url https://lurq.internal/mcp
 
 Setup then issues its instructions for your server instead of ours: it won't open
 our dashboard, because a key from there is one your server has never issued.
-Create the key on the machine running the service:
+Issue the key from the operator plane of your own deployment:
 
 ```bash
-lurq keys create --label my-laptop
+npm run operator -- keys create --label my-laptop
 ```
 
 The endpoint is stored alongside the key, so a later bare `lurq setup` (to wire
@@ -121,23 +209,62 @@ If you'd rather your agent talk to a local `lurq serve` over stdio against your
 own Postgres, with no HTTP service at all, use `lurq install-skill --local`
 instead. That path needs `DATABASE_URL` and no API key.
 
-## Where things get written
+## What lurq sends and stores
 
-| Path | What |
-| --- | --- |
-| `~/.lurq/config.json` | Your API key, for the CLI (mode `0600`) |
-| `~/.lurq/skill-instructions.md` | The full guide, as a readable reference |
-| `~/.claude.json` &c. | The MCP server entry, one per assistant |
-| `~/.claude/skills/lurq/SKILL.md` | Claude Code skill |
-| `~/.kiro/steering/lurq.md` | Kiro steering file |
-| `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md` | A marked `<!-- lurq:start -->` block, merged into your own rules |
+- **Package names and versions** you ask about, and for `audit`, the dependency
+  names, declared ranges and installed versions from your manifest and lockfile.
+  Never source code.
+- **The `need` text**, if your agent passes one to `report_outcome`, plus whether
+  it went with the package and whether it built.
+- **MCP scans.** With a key configured, `lurq mcp-scan` records each server's
+  contract (tools, parameters, annotations, prompts, instructions) to your
+  account. Credentials from `env` and `headers` are scrubbed first, and resource
+  URIs are counted, not kept. `--no-upload` keeps a scan on your machine;
+  `--no-contribute` stops published servers' contracts being offered to the
+  public index. See [Scanning your MCP servers](/mcp-scan).
+- **`check-upgrade --report`** sends that report to your dashboard. Without the
+  flag, `check-upgrade` sends nothing to lurq.
+- **Usage counts.** Each hosted call is counted against your account, by tool
+  name and whether it succeeded, never with its arguments.
 
-Shared files are merged, never overwritten: re-running setup replaces our block
-and leaves everything you wrote alone.
+Details are in the [privacy policy](https://www.lurq.run/privacy).
 
-To remove the stored key from a machine, run `lurq logout`.
+## Uninstall
+
+<Callout type="info">
+  `lurq uninstall` ships with the next `lurqrun` release. On an older version,
+  use the manual steps below.
+</Callout>
+
+```bash
+lurq uninstall                      # asks, then removes lurq from this machine
+lurq uninstall --agent cursor       # just one assistant
+lurq uninstall --yes                # no prompt
+```
+
+It removes the `lurq` MCP entry from each agent's config, the marked instruction
+blocks and skill files setup wrote, and `~/.lurq/config.json`. Everything else in
+those files stays. Then `npm uninstall -g lurqrun` removes the command itself.
+
+`lurq logout` is not an uninstall: it only removes the key stored in
+`~/.lurq/config.json`. Your agents' MCP entries still hold the key and keep
+working until you remove them.
+
+To do it by hand:
+
+1. Delete the `lurq` entry from each agent's MCP config in
+   [the table above](#per-agent-configuration): `mcpServers.lurq`,
+   `servers.lurq` for VS Code, or the `[mcp_servers.lurq]` table in
+   `~/.codex/config.toml`.
+2. Delete `~/.claude/skills/lurq/` and `~/.kiro/steering/lurq.md`.
+3. Delete the `<!-- lurq:start -->` … `<!-- lurq:end -->` block from
+   `~/.gemini/GEMINI.md`, `~/.codex/AGENTS.md` and
+   `~/.codeium/windsurf/memories/global_rules.md`.
+4. Delete `~/.lurq/`.
+5. Revoke the key on [Dashboard → API keys](https://www.lurq.run/dashboard/keys).
 
 ## Next steps
 
-- Learn what each tool does in the [MCP tools reference](/docs/mcp-tools).
-- Curious how scores are derived? Read [How it works](/docs/how-it-works).
+- Learn what each tool does in the [MCP tools reference](/mcp-tools).
+- Hit an error? See [Plans, limits & troubleshooting](/plans-and-troubleshooting).
+- Curious how scores are derived? Read [How it works](/how-it-works).

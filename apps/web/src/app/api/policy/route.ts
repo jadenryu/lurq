@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { ADMIN_ONLY, currentOwner } from "@/lib/owner";
 import { isDemoUser } from "@/lib/demo-data";
 import {
   fetchSelectionPolicy,
@@ -161,21 +161,28 @@ function failure(err: unknown): NextResponse {
 }
 
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  const owner = await currentOwner();
+  if (!owner) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   try {
-    return NextResponse.json({ policy: await fetchSelectionPolicy(userId) });
+    return NextResponse.json({ policy: await fetchSelectionPolicy(owner.ownerId) });
   } catch (err) {
     return failure(err);
   }
 }
 
 export async function PUT(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
-  if (await isDemoUser(userId)) {
+  const owner = await currentOwner();
+  if (!owner) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  if (await isDemoUser(owner.userId)) {
     return NextResponse.json({ error: "Not available on demo data." }, { status: 409 });
   }
+
+  if (!owner.canManage) {
+
+    return NextResponse.json({ error: ADMIN_ONLY }, { status: 403 });
+
+  }
+
 
   const body = (await req.json().catch(() => null)) as { policy?: unknown } | null;
   const policy = parsePolicy(body?.policy);
@@ -184,7 +191,7 @@ export async function PUT(req: Request) {
   }
 
   try {
-    await updateSelectionPolicy(userId, policy);
+    await updateSelectionPolicy(owner.ownerId, policy);
     return NextResponse.json({ policy });
   } catch (err) {
     return failure(err);
