@@ -4,6 +4,11 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  ListPromptsRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListResourcesRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import semver from 'semver';
 import { SERVER_NAME, VERSION } from '../core/constants';
@@ -450,6 +455,20 @@ export function buildMcpServer(
     async (args) =>
       reply(await run('report_outcome', () => handleReportOutcome(db, args, ctx.ownerId ?? null))),
   );
+
+  // lurq has tools and nothing else, and the SDK answers resources/list,
+  // resources/templates/list and prompts/list for a server that registered none
+  // with "Method not found". Directory scanners call all three whatever the
+  // capabilities say, and Smithery reports each as a failed scan step, so the
+  // honest answer, "none", is declared instead.
+  //
+  // ponytail: empty lists. The first real resource or prompt must delete the
+  // matching handler here: McpServer installs its own on registration and
+  // refuses if one already exists.
+  server.server.registerCapabilities({ resources: {}, prompts: {} });
+  server.server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: [] }));
+  server.server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates: [] }));
+  server.server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts: [] }));
 
   return server;
 }
