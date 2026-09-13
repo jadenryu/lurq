@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   ANNUAL_DISCOUNT,
   GRACE_CALLS_PER_DAY,
+  OVERAGE_CAP_MULTIPLE,
   PLANS,
   PLAN_LIST,
   annualPriceCents,
@@ -402,7 +403,7 @@ export function BillingPanel({
       "What happens at the limit",
       `Calls slow to ${GRACE_CALLS_PER_DAY} a day instead of stopping, until the allowance resets on the 1st (UTC).${
         PLANS.team.overageCentsPer1k
-          ? ` Monthly Team bills ${dollars(PLANS.team.overageCentsPer1k)} per 1,000 calls past its pool instead.`
+          ? ` Monthly Team bills ${dollars(PLANS.team.overageCentsPer1k)} per 1,000 calls past its pool instead, up to ${OVERAGE_CAP_MULTIPLE}x the pool, then the daily grace applies. Yearly Team has no overage.`
           : ""
       }`,
     ],
