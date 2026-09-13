@@ -2,10 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { extractSurface } from '../src/surface/extract';
+import { extractSurface, usesTopLevelAwait } from '../src/surface/extract';
 import { diffSurfaces } from '../src/surface/diff';
 import { runtimeSymbols, type ExtractedSurface } from '../src/surface/types';
-import { resolveEntry, resolvesInsidePackage } from '../src/surface/resolve';
+import { requireFormat, resolveEntry, resolvesInsidePackage, subpathWithdrawn } from '../src/surface/resolve';
 
 let root: string;
 const pkgs: Record<string, string> = {};
@@ -148,6 +148,82 @@ beforeAll(() => {
     'v1.js': `export default function v1(a) {}; export function updateV1State(x) {}`,
     'util.js': `export function helper() {}; export function alsoInternal() {}`,
   });
+
+  // cookie 1.x exported `parse` and `parseCookie` from one function, then 2.0
+  // dropped `parse`. `unrelated` is removed too, and has no survivor.
+  pkg('alias-v1', {
+    'index.js': `
+      function parseCookie(str, opts) {}
+      exports.parseCookie = parseCookie;
+      exports.parse = parseCookie;
+      exports.unrelated = function (a) {};
+    `,
+  });
+  pkg('alias-v2', {
+    'index.js': `
+      function parseCookie(str, opts) {}
+      exports.parseCookie = parseCookie;
+    `,
+  });
+
+  // The argument range a call must land in, beyond `fn.length`.
+  pkg('param-ranges', {
+    'index.js': `
+      exports.optional = function (a, b = 1) {};
+      exports.rest = function (a, ...more) {};
+      exports.dynamic = function () { return arguments.length; };
+      exports.nested = function (a) { return function () { return arguments; }; };
+    `,
+  });
+  pkg('optional-v1', { 'index.js': `exports.f = function (a, b = 1) {}; exports.g = function (a) {};` });
+  pkg('optional-v2', { 'index.js': `exports.f = function (a) {}; exports.g = function (a, b = 1) {};` });
+
+  // What `require()` is handed, per Node.
+  pkg('fmt-cjs', { 'index.js': `exports.a = 1;` });
+  // Node's condition for an ES module require() can load.
+  pkg('fmt-module-sync', { 'index.mjs': `export const a = 1;` }, { exports: { 'module-sync': './index.mjs', import: './index.mjs' } });
+  pkg('fmt-type-module', { 'index.js': `export const a = 1;` }, { type: 'module' });
+  pkg('fmt-import-only', { 'index.mjs': `export const a = 1;` }, { exports: { '.': { import: './index.mjs' } } });
+  pkg(
+    'fmt-dual',
+    { 'index.mjs': `export const a = 1;`, 'index.cjs': `exports.a = 1;` },
+    { exports: { '.': { import: './index.mjs', require: './index.cjs' } } },
+  );
+  // Node takes the first matching key, so `default` here wins over `require`.
+  pkg(
+    'fmt-key-order',
+    { 'index.js': `export const a = 1;`, 'index.cjs': `exports.a = 1;` },
+    { type: 'module', exports: { default: './index.js', require: './index.cjs' } },
+  );
+  pkg(
+    'fmt-nested-type',
+    { 'dist/cjs/index.js': `exports.a = 1;`, 'dist/cjs/package.json': `{"type":"commonjs"}` },
+    { type: 'module', exports: { require: './dist/cjs/index.js' } },
+  );
+
+  // Subpaths withdrawn, kept, and kept only for types.
+  pkg(
+    'sub-v2',
+    { 'index.js': `exports.a = 1;` },
+    { exports: { '.': './index.js', './types': { types: './t.d.ts' } } },
+  );
+  pkg('sub-wild', { 'lib/a.js': `exports.a = 1;` }, { exports: { './*': './lib/*.js' } });
+
+  // Top-level await one import away from the entry, and await that is not top-level.
+  pkg(
+    'tla',
+    { 'index.js': `import './boot.js';\nexport const a = 1;`, 'boot.js': `const cfg = await Promise.resolve(1);\nexport default cfg;` },
+    { type: 'module' },
+  );
+  pkg(
+    'no-tla',
+    { 'index.js': `export async function load() { return await Promise.resolve(1); }\nexport const each = async () => { for await (const x of []) {} };` },
+    { type: 'module' },
+  );
+
+  // The preact shape: a minified bundle declares every export on line 1.
+  pkg('minified-v1', { 'index.js': `function h(a){}function render(a,b){}export{h,render};` });
+  pkg('minified-v2', { 'index.js': `function h(a){}export{h};` });
 });
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -483,5 +559,92 @@ describe('entry fallback for ESM-first packages', () => {
     const s = extractSurface(p);
     expect(runtimeSymbols(s).map((x) => x.path)).toEqual(['fromCjs']);
     expect(s.entry).toBe('index.cjs');
+  });
+});
+
+describe('renames the package proves', () => {
+  const diff = (a: string, b: string) =>
+    diffSurfaces(
+      { ...extractSurface(pkgs[a]!), version: '1.0.0' },
+      { ...extractSurface(pkgs[b]!), version: '2.0.0' },
+    );
+
+  it('names the surviving export when both names were one declaration', () => {
+    const d = diff('alias-v1', 'alias-v2');
+    expect(d.removed.map((s) => s.path).sort()).toEqual(['parse', 'unrelated']);
+    expect(d.renamed).toEqual([{ path: 'parse', to: ['parseCookie'] }]);
+  });
+
+  // Matching on line would call `render` a rename of `h`: same file, line 1.
+  it('does not treat a shared line as a shared declaration', () => {
+    const d = diff('minified-v1', 'minified-v2');
+    expect(d.removed.map((s) => s.path)).toEqual(['render']);
+    expect(d.renamed).toEqual([]);
+  });
+});
+
+describe('argument ranges', () => {
+  const sym = (path: string) => extractSurface(pkgs['param-ranges']!).symbols.find((s) => s.path === path)!;
+
+  it('measures the most arguments a function reads', () => {
+    expect([sym('optional').arity, sym('optional').maxArity]).toEqual([1, 2]);
+    expect(sym('rest').maxArity).toBeNull();
+    expect(sym('dynamic').maxArity).toBeNull();
+    // The inner function's `arguments` is its own.
+    expect(sym('nested').maxArity).toBe(1);
+  });
+
+  // `f` lost an optional parameter: `fn.length` is 1 on both sides, and a caller
+  // passing two arguments is now passing one the function ignores. `g` gained one,
+  // which breaks nobody and must not read as a major change to check-release.
+  it('reports a shrinking maximum, and ignores a growing one', () => {
+    const d = diffSurfaces(
+      { ...extractSurface(pkgs['optional-v1']!), version: '1.0.0' },
+      { ...extractSurface(pkgs['optional-v2']!), version: '2.0.0' },
+    );
+    expect(d.arityChanged).toEqual([{ path: 'f', from: 1, to: 1, fromMax: 2, toMax: 1 }]);
+  });
+});
+
+describe('what require() is handed', () => {
+  it('follows Node: extension, nearest package.json, and exports key order', () => {
+    expect(requireFormat(pkgs['fmt-cjs']!)).toBe('cjs');
+    expect(requireFormat(pkgs['fmt-type-module']!)).toBe('esm');
+    expect(requireFormat(pkgs['fmt-import-only']!)).toBe('unexported');
+    expect(requireFormat(pkgs['fmt-dual']!)).toBe('cjs');
+    expect(requireFormat(pkgs['fmt-key-order']!)).toBe('esm');
+    expect(requireFormat(pkgs['fmt-nested-type']!)).toBe('cjs');
+    expect(requireFormat(pkgs['fmt-module-sync']!)).toBe('esm');
+  });
+});
+
+describe('withdrawn subpaths', () => {
+  it('calls a subpath the exports map dropped withdrawn', () => {
+    expect(subpathWithdrawn(pkgs['sub-v2']!, null, 'legacy')).toBe(true);
+  });
+
+  // Still offered to TypeScript; tier A just does not read that condition.
+  it('does not call a types-only subpath withdrawn', () => {
+    expect(subpathWithdrawn(pkgs['sub-v2']!, null, 'types')).toBe(false);
+  });
+
+  it('follows patterns to the file they name', () => {
+    expect(subpathWithdrawn(pkgs['sub-wild']!, null, 'a')).toBe(false);
+    expect(subpathWithdrawn(pkgs['sub-wild']!, null, 'gone')).toBe(true);
+  });
+
+  it('reads the legacy layout from the files that exist', () => {
+    expect(subpathWithdrawn(pkgs['subpath-legacy']!, null, 'lib/extra')).toBe(false);
+    expect(subpathWithdrawn(pkgs['subpath-legacy']!, null, 'lib/missing')).toBe(true);
+  });
+});
+
+describe('top-level await', () => {
+  it('finds it anywhere in the package-internal ES module graph', () => {
+    expect(usesTopLevelAwait(pkgs['tla']!, join(pkgs['tla']!, 'index.js'))).toBe(true);
+  });
+
+  it('ignores await inside functions', () => {
+    expect(usesTopLevelAwait(pkgs['no-tla']!, join(pkgs['no-tla']!, 'index.js'))).toBe(false);
   });
 });

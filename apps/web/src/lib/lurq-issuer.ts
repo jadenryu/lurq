@@ -372,6 +372,8 @@ export interface UpgradeBrief {
   deprecated: boolean;
   verdict: UpgradeVerdict;
   removed: string[];
+  /** Removed exports the package still ships under another name. Absent from an older API. */
+  renamed?: { path: string; to: string[] }[];
   arityChanged: { path: string; from: number | null; to: number | null }[];
   typeOnlyRemoved: string[];
   newlyDeprecated: string[];

@@ -43,13 +43,27 @@ export interface SurfaceSymbol {
   kind: SymbolKind;
   /** `fn.length` equivalent; null when not statically determinable. */
   arity: number | null;
+  /**
+   * The most arguments the function reads. `null` when unbounded (a rest
+   * parameter, or a body that reads `arguments`). Absent when not measured,
+   * which is every non-function and every surface read back from storage.
+   * With `arity` it gives the range a call has to land in: `(a, b = 1)` has
+   * arity 1 and accepts 1–2.
+   */
+  maxArity?: number | null;
   origin: SymbolOrigin;
   deprecated: boolean;
   tier: ExtractionTier;
   /** Full declaration text. Tier C only — tier A cannot see types, and an
    *  overload set collapses to one symbol whose signature lists each overload. */
   signature?: string;
-  sourceRef?: { file: string; line: number };
+  /**
+   * Where the exported value is declared. `offset` is the declaration's
+   * character position: two exports with the same file and offset are one value
+   * under two names. The line cannot say that, because a minified bundle
+   * declares everything on line 1.
+   */
+  sourceRef?: { file: string; line: number; offset?: number };
 }
 
 export interface ExtractedSurface {
@@ -69,4 +83,18 @@ export interface ExtractedSurface {
 /** Runtime-existence symbols only: `type_only` never counts (§6.4.4). */
 export function runtimeSymbols(surface: ExtractedSurface): SurfaceSymbol[] {
   return surface.symbols.filter((s) => s.kind !== 'type_only' && s.origin === 'local');
+}
+
+/**
+ * Other packages this surface re-exports wholesale (`export * from 'core'`).
+ *
+ * Their names are not in `symbols`, so a name missing from this surface may
+ * still be exported through one of them, and its absence cannot be proven. A
+ * spec with at least one named symbol recorded against it was a named
+ * re-export, whose names are all present.
+ */
+export function starReExports(surface: ExtractedSurface): string[] {
+  return surface.externalReExports.filter(
+    (spec) => !surface.symbols.some((s) => s.origin === `external:${spec}`),
+  );
 }

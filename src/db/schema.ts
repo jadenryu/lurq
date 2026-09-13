@@ -749,6 +749,13 @@ export const entities = pgTable(
  *   - `tier` (§6.4.3): surfaces extracted at different tiers are NOT comparable,
  *     so the tier has to travel with every symbol or diffs go wrong quietly.
  */
+/**
+ * `max_arity` for a function that reads any number of arguments.
+ * ponytail: a sentinel rather than a second column. One nullable integer already
+ * carries the IR's three states (not measured, unbounded, a count).
+ */
+export const UNBOUNDED_ARITY = -1;
+
 export const symbols = pgTable(
   'symbols',
   {
@@ -770,6 +777,13 @@ export const symbols = pgTable(
     signature: text('signature'),
     sourceFile: text('source_file'),
     sourceLine: integer('source_line'),
+    /** Character offset of the declaration. Two exports sharing file and offset
+     *  are one value under two names, which is how a diff read from storage finds
+     *  a proven rename. Null on rows extracted before it was recorded. */
+    sourceOffset: integer('source_offset'),
+    /** Most arguments the function reads: null when not measured, UNBOUNDED_ARITY
+     *  for a rest parameter or `arguments`. See SurfaceSymbol.maxArity. */
+    maxArity: integer('max_arity'),
   },
   // Keyed by TIER as well as path: a package version has one surface per tier and
   // they are not interchangeable (§6.4.3). Without the tier in the key, storing a

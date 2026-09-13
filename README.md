@@ -185,10 +185,12 @@ and resolve with what calls your code references.
 **The gate needs no tests at all.**
 
 ```
-blocking   a referenced symbol disappears      → the code will throw
-warning    a referenced symbol changed arity   → it may silently misbehave
+blocking   a referenced symbol or deep import disappears,
+           or require() of a now-ESM package breaks         → the code will throw
+warning    a call's argument count no longer fits, a new type
+           error, or a Node / peer version the repo lacks   → it may misbehave or not build
 ok         nothing referenced is affected
-unverified could not be established            → never counted as safe
+unverified could not be established                         → never counted as safe
 ```
 
 ### The loop
