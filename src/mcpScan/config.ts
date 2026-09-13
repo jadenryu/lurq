@@ -27,6 +27,7 @@ import { homedir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { classifyServer, mcpConfigPaths, splitSpec } from '../audit/inventory';
 import type { ItemSource, McpKind } from '../audit/types';
+import { looksLikeSecret } from './redact';
 
 /** Where a server's contract can be looked up publicly, if anywhere. */
 export type Registry = 'npm' | 'pypi' | 'docker' | 'remote' | 'local';
@@ -116,10 +117,6 @@ const SECRET_FLAG = /^--?(?:api[-_]?key|token|access[-_]?token|auth|password|sec
 
 /** Env / header names whose value is a credential. */
 const SECRET_NAME = /(key|token|secret|password|passwd|auth|cookie|credential|session|pat)\b/i;
-
-/** Credential shapes worth scrubbing wherever they appear. */
-const SECRET_SHAPE =
-  /^(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abpors]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|lurq_(?:live|test)_[A-Za-z0-9_-]{16,})$/;
 
 const strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((a): a is string => typeof a === 'string') : [];
@@ -284,11 +281,11 @@ export function collectSecrets(
     const bearer = /^(?:bearer|token|basic)\s+(.+)$/i.exec(v);
     if (bearer?.[1] && bearer[1].length >= MIN_SECRET_LENGTH) found.add(bearer[1]);
   };
-  for (const [k, v] of Object.entries(env)) if (SECRET_NAME.test(k) || SECRET_SHAPE.test(v)) add(v);
+  for (const [k, v] of Object.entries(env)) if (SECRET_NAME.test(k) || looksLikeSecret(v)) add(v);
   // Every header value: remote servers authenticate there, whatever the name.
   for (const v of Object.values(headers)) add(v);
   args.forEach((a, i) => {
-    if (SECRET_SHAPE.test(a)) add(a);
+    if (looksLikeSecret(a)) add(a);
     const eq = /^(--?[A-Za-z-_]+)=(.+)$/.exec(a);
     if (eq && SECRET_FLAG.test(eq[1]!)) add(eq[2]);
     if (SECRET_FLAG.test(a)) add(args[i + 1]);
