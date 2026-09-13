@@ -13,7 +13,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { searchCapabilities } from '../src/core/capabilities';
-import { resetConfigCache } from '../src/core/config';
+import { loadEnv, resetConfigCache } from '../src/core/config';
 import { buildMcpServer, SERVE_NEEDS_DATABASE, startMcpServer } from '../src/mcp/server';
 
 const REMOVED = /\b(recommend|plan)\b/i;
@@ -61,6 +61,7 @@ describe('the tool contract an agent receives', () => {
 
 describe('lurq serve without a database', () => {
   it('fails before the handshake with a way forward, not a bare missing-variable error', async () => {
+    loadEnv(); // load .env now, or getConfig() loads it after the delete and a local DATABASE_URL comes back
     const saved = process.env.DATABASE_URL;
     delete process.env.DATABASE_URL;
     resetConfigCache();
