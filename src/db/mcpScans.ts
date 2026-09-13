@@ -374,3 +374,43 @@ export async function acknowledgeEvent(db: Database, ownerId: string, eventId: n
     .returning({ id: mcpChangeEvents.id });
   return rows.length > 0;
 }
+
+export interface AccountDeployment {
+  serverKey: string;
+  alias: string;
+  lastStatus: ScanStatus;
+  lastError: string | null;
+  lastContentHash: string | null;
+  lastScannedAt: Date;
+  analysis: import('../mcpScan/analyze').ServerAnalysis | null;
+  openEvents: number;
+  openWorst: Severity | null;
+}
+
+/**
+ * The owner's deployments with the full analysis of each one's latest contract,
+ * for answering `audit` from the account's own scans. Two queries: the summary
+ * (which already counts open changes) and the analyses by content hash.
+ */
+export async function listAccountDeployments(db: Database, ownerId: string): Promise<AccountDeployment[]> {
+  const summaries = await listDeployments(db, ownerId);
+  const hashes = [...new Set(summaries.map((s) => s.lastContentHash).filter((h): h is string => !!h))];
+  const analyses = hashes.length
+    ? await db
+        .select({ hash: mcpContracts.contentHash, analysis: mcpContracts.analysis })
+        .from(mcpContracts)
+        .where(inArray(mcpContracts.contentHash, hashes))
+    : [];
+  const byHash = new Map(analyses.map((a) => [a.hash, a.analysis]));
+  return summaries.map((s) => ({
+    serverKey: s.serverKey,
+    alias: s.alias,
+    lastStatus: s.lastStatus,
+    lastError: s.lastError,
+    lastContentHash: s.lastContentHash,
+    lastScannedAt: s.lastScannedAt,
+    analysis: s.lastContentHash ? (byHash.get(s.lastContentHash) ?? null) : null,
+    openEvents: s.openEvents,
+    openWorst: s.openWorst,
+  }));
+}

@@ -375,7 +375,7 @@ export function buildMcpServer(
           .describe('MCP servers read from .mcp.json / agent configs'),
       },
     },
-    async (args) => json(await run('audit', () => handleAudit(db, args))),
+    async (args) => json(await run('audit', () => handleAudit(db, args, ctx.ownerId ?? null))),
   );
 
   // Self-description, and the only tool that reads nothing. An agent holding

@@ -11,6 +11,7 @@
  * it one indexed read plus one OSV post regardless of size.
  */
 import type { Database } from '../db/client';
+import { withAccountScans } from '../audit/accountScans';
 import { assessInventory, queueUnknown } from '../audit/assess';
 import type { AuditReport, Inventory } from '../audit/types';
 
@@ -30,7 +31,11 @@ export interface AuditInput {
 /** Guard against a caller shipping an unbounded inventory. */
 const MAX = 600;
 
-export async function handleAudit(db: Database, input: AuditInput): Promise<AuditReport> {
+export async function handleAudit(
+  db: Database,
+  input: AuditInput,
+  ownerId: string | null = null,
+): Promise<AuditReport> {
   const notes = [...(input.notes ?? [])];
   const pkgs = (input.packages ?? []).slice(0, MAX);
   const servers = (input.mcpServers ?? []).slice(0, Math.max(0, MAX - pkgs.length));
@@ -72,7 +77,8 @@ export async function handleAudit(db: Database, input: AuditInput): Promise<Audi
     notes,
   };
 
-  const report = await assessInventory(db, inv);
+  // The account's own live scans answer servers the index cannot read at all.
+  const report = await withAccountScans(db, ownerId, await assessInventory(db, inv), inv.mcpServers);
   await queueUnknown(db, report);
   // `root` is the caller's path and is not ours to echo back.
   return { ...report, root: null };
