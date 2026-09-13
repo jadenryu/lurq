@@ -104,7 +104,7 @@ function BuyButton({ plan, interval }: { plan: Plan; interval: BillingInterval }
   // come back, rather than opening Stripe for an account that does not exist.
   if (!isSignedIn) {
     return (
-      <Link href={`/sign-up?next=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
+      <Link href={`/sign-up?redirect_url=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
         {`Start ${plan.name}`}
       </Link>
     );
