@@ -131,6 +131,51 @@ describe('reference scanner', () => {
     }
   });
 
+  // Each of these used to be invisible, and an invisible use of a removed
+  // export is an upgrade reported safe that throws on load.
+  it('follows re-exports, import-equals, inline and dynamic loads, and namespace destructuring', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-forms-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/forms.ts'),
+        [
+          `import legacy = require('cookie-eq');`,
+          `export { parse, serialize as ser } from 'cookie';`,
+          `export type { Options } from 'cookie';`,
+          `const out = require('qs').stringify(obj, 1);`,
+          `export async function load() {`,
+          `  const m = await import('pino');`,
+          `  m.destination();`,
+          `  const { format } = await import('date-fns');`,
+          `  format(d, 'yyyy');`,
+          `}`,
+          `import * as ns from 'semver';`,
+          `const { valid, clean: tidy } = ns;`,
+          `valid('1.0.0');`,
+          `legacy.parse('a');`,
+          `const pending = import('not-awaited');`,
+        ].join('\n'),
+      );
+      const refs = scanReferences(dir);
+      const get = (pkg: string, sym: string) => refs.find((r) => r.package === pkg)?.symbols.get(sym) ?? [];
+
+      expect(get('cookie', 'parse')[0]).toMatchObject({ via: 'named', line: 2 });
+      expect(get('cookie', 'serialize')[0]!.via).toBe('named');
+      expect(get('cookie', 'Options')[0]!.via).toBe('type-only');
+      expect(get('cookie-eq', 'parse')[0]).toMatchObject({ via: 'namespace', line: 14 });
+      expect(get('qs', 'stringify')[0]).toMatchObject({ via: 'namespace', calls: [{ line: 4, args: 2 }] });
+      expect(get('pino', 'destination')[0]!.via).toBe('namespace');
+      expect(get('date-fns', 'format')[0]).toMatchObject({ via: 'destructured', calls: [{ line: 9, args: 2 }] });
+      expect(get('semver', 'valid')[0]).toMatchObject({ via: 'namespace', calls: [{ line: 13, args: 1 }] });
+      expect(get('semver', 'clean')[0]!.via).toBe('namespace');
+      // An un-awaited import() is a promise, not the module.
+      expect(refs.some((r) => r.package === 'not-awaited')).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   // Stopping silently at the limit would report on files nobody opened.
   it('says when it stopped before the end of the codebase', () => {
     const stats = { files: 0, truncated: false };

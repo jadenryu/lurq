@@ -205,6 +205,24 @@ function gitSourceFiles(dir: string, limit: number): SourceListing | null {
   return { files: out, truncated: false };
 }
 
+/**
+ * The module a loading expression names: `require('x')`, `await import('x')`,
+ * or either wrapped in parentheses. Null for anything else, including an
+ * un-awaited `import('x')`, whose value is a promise rather than the module.
+ */
+function loadedModule(expr: ts.Expression): string | null {
+  let e: ts.Expression = expr;
+  while (ts.isParenthesizedExpression(e)) e = e.expression;
+  const awaited = ts.isAwaitExpression(e);
+  if (awaited) e = (e as ts.AwaitExpression).expression;
+  if (!ts.isCallExpression(e) || e.arguments.length !== 1) return null;
+  const arg = e.arguments[0]!;
+  if (!ts.isStringLiteralLike(arg)) return null;
+  if (e.expression.kind === ts.SyntaxKind.ImportKeyword) return awaited ? arg.text : null;
+  if (ts.isIdentifier(e.expression) && e.expression.text === 'require') return arg.text;
+  return null;
+}
+
 /** What the use at `node` is: a call and its argument count, or anything else. */
 function callSiteOf(sf: ts.SourceFile, node: ts.Node): CallSite {
   const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
@@ -438,17 +456,67 @@ export function scanReferences(
         }
       }
 
-      // ── CJS require ──
+      // ── re-exports: `export { a, b as c } from 'pkg'` ──
+      // In ESM a missing export fails the re-exporting module at load, so each
+      // name is a claim on the surface. Uncountable as calls: the uses are in
+      // whoever imports this file.
+      if (
+        ts.isExportDeclaration(node) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.exportClause &&
+        ts.isNamedExports(node.exportClause)
+      ) {
+        const spec = node.moduleSpecifier.text;
+        const pkg = packageOfSpecifier(spec);
+        if (pkg) {
+          for (const el of node.exportClause.elements) {
+            const exported = el.propertyName?.text ?? el.name.text;
+            const line = lineOf(el);
+            if (node.isTypeOnly || el.isTypeOnly) record(pkg, exported, 'type-only', spec, rel, line);
+            else record(pkg, exported, 'named', spec, rel, line, undefined, { line, args: null });
+          }
+        }
+      }
+
+      // ── TypeScript `import x = require('pkg')` ──
+      if (
+        ts.isImportEqualsDeclaration(node) &&
+        !node.isTypeOnly &&
+        ts.isExternalModuleReference(node.moduleReference) &&
+        ts.isStringLiteral(node.moduleReference.expression)
+      ) {
+        const spec = node.moduleReference.expression.text;
+        const pkg = packageOfSpecifier(spec);
+        if (pkg) {
+          nsBindings.set(node.name.text, { pkg, spec });
+          record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+        }
+      }
+
+      // ── destructuring a namespace binding: `const { a } = ns` ──
       if (
         ts.isVariableDeclaration(node) &&
         node.initializer &&
-        ts.isCallExpression(node.initializer) &&
-        ts.isIdentifier(node.initializer.expression) &&
-        node.initializer.expression.text === 'require' &&
-        node.initializer.arguments.length === 1 &&
-        ts.isStringLiteral(node.initializer.arguments[0]!)
+        ts.isIdentifier(node.initializer) &&
+        ts.isObjectBindingPattern(node.name)
       ) {
-        const spec = (node.initializer.arguments[0] as ts.StringLiteral).text;
+        const ns = nsBindings.get(node.initializer.text);
+        if (ns) {
+          for (const el of node.name.elements) {
+            const name = el.propertyName ?? el.name;
+            if (!ts.isIdentifier(name)) continue;
+            const ref = record(ns.pkg, name.text, 'namespace', ns.spec, rel, lineOf(el));
+            if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
+          }
+        }
+      }
+
+      // ── require('pkg'), and `await import('pkg')`, bound to a name ──
+      const loaded =
+        ts.isVariableDeclaration(node) && node.initializer ? loadedModule(node.initializer) : null;
+      if (ts.isVariableDeclaration(node) && loaded) {
+        const spec = loaded;
         const pkg = packageOfSpecifier(spec);
         if (pkg) {
           if (ts.isIdentifier(node.name)) {
@@ -465,6 +533,15 @@ export function scanReferences(
               if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
             }
           }
+        }
+      }
+
+      // ── a member read straight off a load: `require('pkg').x`, `(await import('pkg')).x` ──
+      if (ts.isPropertyAccessExpression(node)) {
+        const spec = loadedModule(node.expression);
+        const pkg = spec ? packageOfSpecifier(spec) : null;
+        if (spec && pkg) {
+          record(pkg, node.name.text, 'namespace', spec, rel, lineOf(node), undefined, callSiteOf(sf, node));
         }
       }
 
