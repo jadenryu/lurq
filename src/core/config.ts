@@ -105,6 +105,10 @@ const EnvSchema = z.object({
    *  tool called) that join the web app's identified visitors. Unset → nothing
    *  is sent, which is every local and stdio install. */
   LURQ_POSTHOG_KEY: z.string().min(1).optional(),
+  /** Slack- or Discord-compatible incoming webhook URL for operator alerts
+   *  (core/alert.ts): webhook processing failures and 5xx responses, rate
+   *  limited. Unset → nothing is sent. */
+  LURQ_ALERT_WEBHOOK_URL: z.string().url().optional(),
   /** Resend API key for account email: urgent alerts and the opt-in weekly
    *  summary. Unset → nothing is sent; the dashboard and CLI still show all of it. */
   RESEND_API_KEY: z.string().min(1).optional(),

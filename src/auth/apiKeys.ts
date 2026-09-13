@@ -94,9 +94,13 @@ export async function createKey(
  * uncached lookup means a SELECT (plus a lastUsedAt UPDATE) per call — pure load
  * on the DB, which is the scaling bottleneck. We cache only *valid* keys (the
  * hot path); unknown tokens always hit the DB so a flood of garbage tokens can't
- * bloat the map, and the per-IP limiter blunts that anyway. Trade-off: a revoked
- * key keeps working for up to AUTH_TTL_MS. Process-local; each instance caches
- * independently, which is fine for a bearer check.
+ * bloat the map, and the per-IP limiter blunts that anyway.
+ *
+ * Revocation: `revokeKey` and `rotateKey` evict the key here, so on the instance
+ * that handled the revoke it stops working at once. Any other instance keeps
+ * serving it until its own entry ages out, so AUTH_TTL_MS is the worst case for
+ * a revoked key with more than one replica. 15s keeps that window short for a
+ * leaked key while still collapsing an agent's burst of calls into one SELECT.
  */
 interface AuthEntry {
   row: ApiKeyRow;
@@ -104,13 +108,25 @@ interface AuthEntry {
   lastStampAt: number;
 }
 const authCache = new Map<string, AuthEntry>();
-const AUTH_TTL_MS = 60_000;
+const AUTH_TTL_MS = 15_000;
 /** lastUsedAt is analytics, not correctness — stamp at most this often per key. */
 const STAMP_INTERVAL_MS = 60_000;
 
 /** Test-only: clear the auth cache so a fresh lookup re-reads the DB. */
 export function resetAuthCache(): void {
   authCache.clear();
+}
+
+/**
+ * Drop cached entries for these key ids. By id, not hash: revocation starts from
+ * a prefix or id and never has the plaintext. A scan, but revocation is rare and
+ * the map holds only keys seen within the last AUTH_TTL_MS.
+ */
+function evictKeys(ids: readonly number[]): void {
+  if (ids.length === 0) return;
+  for (const [hash, entry] of authCache) {
+    if (ids.includes(entry.row.id)) authCache.delete(hash);
+  }
 }
 
 /** Fire-and-forget usage stamp, throttled per key. Never blocks the request. */
@@ -227,6 +243,7 @@ export async function revokeKey(db: Database, prefixOrId: string): Promise<numbe
     .set({ revokedAt: new Date() })
     .where(and(matchByPrefixOrId(prefixOrId), isNull(apiKeys.revokedAt)))
     .returning({ id: apiKeys.id });
+  evictKeys(rows.map((r) => r.id));
   return rows.length;
 }
 
@@ -261,5 +278,6 @@ export async function rotateKey(
     scopes: parseScopes(previous.scopes) ?? [],
   });
   await db.update(apiKeys).set({ revokedAt: new Date() }).where(eq(apiKeys.id, previous.id));
+  evictKeys([previous.id]);
   return { key, row, previous };
 }
