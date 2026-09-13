@@ -49,6 +49,7 @@ const diff = (over: Record<string, unknown> = {}) => ({
   arityChanged: [],
   typeOnlyRemoved: [],
   deprecated: [],
+  renamed: [],
   ...over,
 });
 
@@ -60,6 +61,18 @@ beforeEach(() => {
 });
 
 describe('briefRepo', () => {
+  it('carries a proven rename alongside the removal', async () => {
+    handleDiffSurface.mockResolvedValue(
+      diff({
+        removed: [{ path: 'parse', kind: 'function', arity: 1 }],
+        renamed: [{ path: 'parse', to: ['parseCookie'] }],
+      }),
+    );
+    const brief = await briefRepo(db, drift([dep({ name: 'cookie' })]));
+    expect(brief.upgrades[0]!.removed).toEqual(['parse']);
+    expect(brief.upgrades[0]!.renamed).toEqual([{ path: 'parse', to: ['parseCookie'] }]);
+  });
+
   it('returns an empty brief when the repo has never been scanned', async () => {
     expect(await briefRepo(db, null)).toEqual({ upgrades: [], omitted: 0, pending: 0 });
     expect(handleDiffSurface).not.toHaveBeenCalled();
