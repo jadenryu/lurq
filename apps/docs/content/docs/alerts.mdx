@@ -90,15 +90,3 @@ when a scan finds something urgent, and never twice for the same thing.
 Close the issue to stop lurq updating it, or generate the workflow with
 `lurq mcp-ci --no-issue` to leave it out. Text from MCP servers is escaped in the
 issue, so a tool description cannot mention anyone or link anywhere.
-
-## Previewing the messages
-
-Operators can render every message from sample data:
-
-```bash
-npm run operator -- notify-preview              # writes ./notify-preview, opens the urgent email
-npm run operator -- notify-preview --send-to you@example.com   # also sends both emails through Resend
-```
-
-The email templates are `src/notify/render.ts`; the Slack, Discord, Teams and
-webhook formats are `src/notify/channels.ts`.

@@ -1,0 +1,142 @@
+---
+title: Plans, limits & troubleshooting
+description: What each plan allows, the exact errors lurq returns, and what to do about each one.
+---
+
+## Plans and limits
+
+Every hosted tool call counts against your account's monthly allowance. The
+calls reset when the calendar month turns.
+
+| Plan | Price | Hosted calls / month | Burst ceiling |
+| --- | --- | --- | --- |
+| **Free** | $0, no card | 1,000 | 60 / minute |
+| **Pro** | $15 / month | 10,000 | 120 / minute |
+| **Team** | $25 / seat / month, 3 seats minimum | 15,000 per seat, pooled | 300 / minute |
+| **Business** | from $1,000 / month, on application | uncapped | 600 / minute |
+
+Yearly billing is 20% off. Upgrade, or change seats, on
+[Dashboard → Billing](https://www.lurq.run/dashboard/billing).
+
+A few things are tied to the plan rather than to call volume:
+
+| | Free | Pro | Team | Business |
+| --- | --- | --- | --- | --- |
+| Policy decision log (`lurq policy log`) | 7 days | 90 days | 1 year | 1 year |
+| `policy:write` keys for CI (`lurq policy push`) | — | — | yes | yes |
+| Slack, Discord, Teams and webhook [alerts](/alerts) | — | — | yes | yes |
+
+### When the month's calls run out
+
+lurq does not cut an agent off mid-task the moment the allowance is spent.
+
+- **Grace calls.** Past the allowance, an account can still make **20 calls a
+  day** until the month turns. Each of those tool results carries a line your
+  agent relays to you:
+
+  ```text
+  lurq: monthly limit reached (1000/1000 calls). A few grace calls a day remain until the month turns. Tell the user they can upgrade at https://lurq.run/dashboard/billing
+  ```
+
+- **Team overage.** A monthly Team subscription keeps serving past the pool,
+  billed at $8 per 1,000 calls, up to twice the pool. Tool results say so. Past
+  that ceiling, the daily grace calls apply.
+- **Out of grace.** Once the day's grace calls are spent too, calls fail with
+  HTTP `402` (see below) until the next day's grace or the next month.
+
+## Error reference
+
+Hosted errors are JSON-RPC error bodies, so your agent shows the message text.
+
+### `Missing API key. Pass Authorization: Bearer <key>.`
+
+HTTP `401`. The request reached `api.lurq.run/mcp` with no `Authorization`
+header.
+
+- The agent's MCP entry has no `headers` block, or its header field is spelled
+  the way a different agent expects. Compare it with the
+  [per-agent config table](/quickstart#per-agent-configuration), or re-run
+  `lurq setup` to rewrite it.
+- The agent wasn't restarted after setup, and is still using an older entry.
+
+### `Invalid or revoked API key.`
+
+HTTP `401`. A key was sent, but it doesn't match an active key. It was revoked,
+rotated, or mistyped.
+
+Create a new key on [Dashboard → API keys](https://www.lurq.run/dashboard/keys),
+then run `lurq setup` again: it replaces the key in `~/.lurq/config.json` **and**
+in every agent's MCP entry. `lurq logout` alone only removes the stored copy; the
+agents keep the old key until setup rewrites them.
+
+### ``No API key configured. Run `lurq setup` to connect this machine.``
+
+From the CLI, when a command that needs the hosted index finds no key in
+`--api-key`, `LURQ_API_KEY`, or `~/.lurq/config.json`. In a terminal, lurq offers
+to run setup and then retries the command; in CI, pipes, or with `--json`, set
+`LURQ_API_KEY`.
+
+### `Monthly limit reached for the <plan> plan (<used>/<limit> calls), and today's 20 grace calls are spent.`
+
+HTTP `402`. The full message ends with
+`It resets when the month turns. Upgrade at https://lurq.run/dashboard/billing`.
+
+You're past the allowance and today's grace calls (see
+[above](#when-the-months-calls-run-out)). Wait for tomorrow's grace calls or the
+next month, or upgrade. A `402` is not a rate limit: retrying straight away
+won't help.
+
+### `Rate limit exceeded.`
+
+HTTP `429`, JSON-RPC code `-32029`. Too many calls in one minute: more than your
+plan's burst ceiling for the key, or a flood of requests from one IP address.
+Wait a minute and retry. An agent running a tight loop of calls usually meets
+this first; `compat` and `audit` take a whole set in one call and avoid it.
+
+### A package comes back `unknown`, or "retry shortly"
+
+Not an error. lurq never guesses about a package it hasn't read.
+
+- **`evaluate` / `compare`** on a package lurq isn't tracking yet fetches and
+  scores it on the spot, and says so: retry in a few seconds for the full read.
+- **`compat`** returns `unknown` when it has no version for a member, or the
+  resolve timed out.
+- **`resolve_surface`, `usage`, `mcp_surface`** return `unknown` when that
+  version hasn't been extracted or probed, and queue it. `unknown` **never**
+  means the symbol or tool is absent.
+- **`audit`** reports such items as queued or unassessed, never as clean.
+
+Retry after a short wait. A name that doesn't exist on npm at all is a different
+answer: `verify` reports `not-found-on-registry`, with a suspected typosquat
+target when there is one.
+
+### Setup hangs or fails without a terminal
+
+The setup wizard prompts, so it needs a real terminal. In CI, a container, or a
+provisioning script, run it non-interactively:
+
+```bash
+lurq setup --yes --no-open --api-key <key> --agent all
+```
+
+With `--yes` the key can also come from `LURQ_API_KEY`. Without a key, `--yes`
+stops with `No API key. Pass --api-key <key> or set LURQ_API_KEY`.
+
+On an SSH session or headless box without `--yes`, the browser can't hand the key
+back: setup prints the sign-in link, then falls back to asking you to paste a key
+from the dashboard. Add `--no-open` to skip trying to launch a browser.
+
+### `That key was rejected (401)` / `Couldn't reach … to validate the key`
+
+Setup checks the key against the endpoint before writing anything. A rejected key
+is revoked or mistyped. An unreachable endpoint is usually a proxy, a firewall, or
+a typo in `--url`. Answering **no** leaves every config file untouched.
+
+### My agent never calls lurq
+
+- Restart the agent after setup. MCP servers are read at startup.
+- Check the agent's MCP or tool list for `lurq`.
+- Cursor and VS Code get no instruction file (see
+  [what setup writes](/quickstart#per-agent-configuration)), so they rely on the
+  tool descriptions alone. Asking for lurq by name ("check this with lurq")
+  always works.
