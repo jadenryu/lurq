@@ -39,9 +39,13 @@ interface WalkCtx {
 }
 
 /** Classify an expression into the IR's kind + arity. */
-function classify(node: ts.Node): { kind: SymbolKind; arity: number | null } {
+function classify(node: ts.Node): {
+  kind: SymbolKind;
+  arity: number | null;
+  maxArity?: number | null;
+} {
   if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isFunctionDeclaration(node)) {
-    return { kind: 'function', arity: arityOf(node) };
+    return { kind: 'function', arity: arityOf(node), maxArity: maxArityOf(node) };
   }
   if (ts.isClassExpression(node) || ts.isClassDeclaration(node)) return { kind: 'class', arity: null };
   if (ts.isObjectLiteralExpression(node)) return { kind: 'object', arity: null };
@@ -69,6 +73,23 @@ function arityOf(fn: ts.SignatureDeclarationBase): number {
     n++;
   }
   return n;
+}
+
+/**
+ * Every declared parameter, or null when the function can read any number of
+ * arguments: a rest parameter, or a body that touches `arguments`. A nested
+ * non-arrow function has its own `arguments`, so the walk stops at one.
+ */
+function maxArityOf(fn: ts.FunctionLikeDeclaration): number | null {
+  if (fn.parameters.some((p) => p.dotDotDotToken)) return null;
+  let readsArguments = false;
+  const visit = (n: ts.Node): void => {
+    if (readsArguments) return;
+    if (ts.isIdentifier(n) && n.text === 'arguments') readsArguments = true;
+    else if (!(ts.isFunctionLike(n) && !ts.isArrowFunction(n))) ts.forEachChild(n, visit);
+  };
+  if (fn.body) visit(fn.body);
+  return readsArguments ? null : fn.parameters.length;
 }
 
 function lineOf(sf: ts.SourceFile, node: ts.Node): number {
@@ -177,15 +198,16 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
   const rel = relative(ctx.pkgDir, file);
 
   const add = (path: string, node: ts.Node, over: Partial<SurfaceSymbol> = {}) => {
-    const { kind, arity } = classify(node);
+    const { kind, arity, maxArity } = classify(node);
     put(out, {
       path,
       kind,
       arity,
+      ...(maxArity !== undefined ? { maxArity } : {}),
       origin: 'local',
       deprecated: hasDeprecatedTag(sf, node),
       tier: TIER,
-      sourceRef: { file: rel, line: lineOf(sf, node) },
+      sourceRef: { file: rel, line: lineOf(sf, node), offset: node.getStart(sf) },
       ...over,
     });
   };
@@ -383,7 +405,8 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
             else if (ts.isObjectLiteralExpression(arg)) {
               for (const p of arg.properties) {
                 if (p.name && ts.isIdentifier(p.name)) {
-                  add(p.name.text, ts.isPropertyAssignment(p) ? p.initializer : p);
+                  const value = ts.isPropertyAssignment(p) ? p.initializer : p;
+                  add(p.name.text, isExportStar ? throughGetter(sf, value) : value);
                 }
               }
             } else if (ts.isIdentifier(arg)) {
@@ -462,6 +485,27 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
       }
     }
   }
+}
+
+/**
+ * What a bundler's export helper actually exports.
+ *
+ * esbuild emits `__export(target, { parse: () => parse })` and swc
+ * `_export(exports, { parse: function () { return parse; } })`. The function in
+ * the object is a GETTER: its arity, 0, says nothing about `parse`, and
+ * recording it made every export of a tsup-built package look like it lost all
+ * its parameters. A getter returning a local binding is followed to it; one
+ * returning anything else (`() => import_x.default`) is a value of unknown shape.
+ */
+function throughGetter(sf: ts.SourceFile, value: ts.Node): ts.Node {
+  if (!(ts.isArrowFunction(value) || ts.isFunctionExpression(value)) || value.parameters.length) return value;
+  let returned: ts.Expression | undefined;
+  if (!ts.isBlock(value.body)) returned = value.body;
+  else if (value.body.statements.length === 1 && ts.isReturnStatement(value.body.statements[0]!)) {
+    returned = (value.body.statements[0] as ts.ReturnStatement).expression;
+  }
+  if (!returned) return value;
+  return ts.isIdentifier(returned) ? (localBinding(sf, returned.text) ?? returned) : returned;
 }
 
 /** `require('x')` → 'x', including `require('x').y`. Null otherwise. */
@@ -567,4 +611,46 @@ export function extractSurface(
       ? { undeclaredReason: 'entry resolved but no exports found' }
       : {}),
   };
+}
+
+/**
+ * Does the ES module graph reachable from `entry`, inside the package, use
+ * top-level await?
+ *
+ * `require()` of such a module throws ERR_REQUIRE_ASYNC_MODULE on every Node
+ * version, including the ones that otherwise load ES modules through require.
+ * Only the package's own files are walked: an await in a dependency is that
+ * dependency's upgrade to report.
+ */
+export function usesTopLevelAwait(pkgDir: string, entry: string): boolean {
+  const seen = new Set<string>();
+  const queue = [entry];
+  while (queue.length && seen.size < MAX_FILES) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    let text: string;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
+    for (const stmt of sf.statements) {
+      if (awaitsAtTopLevel(stmt)) return true;
+      const spec = ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt) ? stmt.moduleSpecifier : undefined;
+      if (spec && ts.isStringLiteral(spec) && resolvesInsidePackage(spec.text)) {
+        const next = resolveInternal(file, spec.text, pkgDir);
+        if (next) queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+/** An `await` or `for await` that is not inside a function or class. */
+function awaitsAtTopLevel(node: ts.Node): boolean {
+  if (ts.isFunctionLike(node) || ts.isClassLike(node)) return false;
+  if (ts.isAwaitExpression(node) || (ts.isForOfStatement(node) && node.awaitModifier)) return true;
+  return ts.forEachChild(node, awaitsAtTopLevel) ?? false;
 }

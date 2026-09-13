@@ -1,11 +1,12 @@
 import { SegmentedLinks } from "@/components/dashboard/segmented";
 
 /**
- * Time-range selector for the usage view.
+ * Time-range selector, rendered in the header of the chart it scopes.
  *
- * It lives in a filter row *above* the cards it scopes rather than inside a
- * chart header: one control row governs everything below it, so the charts can
- * never disagree about which window they're showing.
+ * In the chart rather than in a page header or a preferences page, because
+ * that is where the reader is looking when they want a different window. It is
+ * still a URL param, so every card on the page reads the same `?days=` and none
+ * of them can disagree about which window they are showing.
  *
  * The control itself is `SegmentedLinks` — shared with the audit log's range and
  * styled once in segmented.tsx, so the two can't drift apart.

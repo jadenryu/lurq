@@ -5,13 +5,13 @@ import { GettingStarted } from "@/components/dashboard/getting-started";
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
+import { parseDays } from "@/components/dashboard/range-tabs";
 import { loadOverview, loadRepos } from "@/lib/dashboard-data";
 import { installUrl } from "@/lib/github-connect";
 
-const WINDOW_DAYS = 30;
-
 /**
- * Twice the window is read, and only the recent half is charted.
+ * Twice the window is read, and only the recent half is charted. The window
+ * itself is `?days=`, picked from the control in the requests chart header.
  *
  * Every headline number on this page carries a change figure, and a change
  * figure needs a baseline. Splitting the reported window in half would be the
@@ -19,14 +19,13 @@ const WINDOW_DAYS = 30;
  * 30-day trend anybody thinks they are reading. One request for 60 days, sliced
  * in the panel, makes the comparison the one it claims to be.
  */
-const BASELINE_DAYS = WINDOW_DAYS * 2;
-
-export default async function DashboardOverviewPage() {
+export default async function DashboardOverviewPage(props: PageProps<"/dashboard">) {
+  const days = parseDays((await props.searchParams).days);
   // Repos are read for the setup checklist's fourth step. In parallel, and it
   // already degrades to an empty list on failure, so a repo-service outage
   // costs this page a row rather than the whole render.
   const [{ data, demo, failed }, owner, repos] = await Promise.all([
-    loadOverview(BASELINE_DAYS),
+    loadOverview(days * 2),
     currentOwner(),
     loadRepos(),
   ]);
@@ -76,7 +75,7 @@ export default async function DashboardOverviewPage() {
                 <OnboardingPanel />
               </div>
             )}
-            <OverviewPanel data={data} days={WINDOW_DAYS} />
+            <OverviewPanel data={data} days={days} />
           </>
         )}
       </PageBody>

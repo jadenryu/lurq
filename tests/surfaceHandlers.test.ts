@@ -72,6 +72,7 @@ describe('diff_surface — miss path', () => {
     });
     expect(res.verdict).toBe('unknown');
     expect(res.removed).toEqual([]);
+    expect(res.renamed).toEqual([]);
     expect(res.inconclusive).toMatch(/NOT evidence that symbols were removed/i);
   });
 

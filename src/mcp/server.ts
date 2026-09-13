@@ -250,7 +250,7 @@ export function buildMcpServer(
     {
       title: 'Surface diff between two versions',
       description:
-        'What changed in a package\'s runtime surface between two versions: symbols removed, added, and arity changes. Removals break `node`; type-only removals are returned separately because they break `tsc` instead. Answers "when did this stop working" from static comparison, with no install required. Use before an upgrade, and to explain a break after one.',
+        'What changed in a package\'s runtime surface between two versions: symbols removed, added, and arity changes, plus renames the package itself proves (a removed name that shared one declaration with a name the new version still exports). Removals break `node`; type-only removals are returned separately because they break `tsc` instead. Answers "when did this stop working" from static comparison, with no install required. Use before an upgrade, and to explain a break after one.',
       inputSchema: {
         package: npmName.describe('npm package name'),
         fromVersion: z.string().describe('Version you are on'),

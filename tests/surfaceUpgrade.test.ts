@@ -11,8 +11,10 @@ import {
   type SymbolReference,
 } from '../src/surface/references';
 import {
+  checkUpgradeOne,
   formatUpgradeReport,
   isNamespaceMemberClaim,
+  judgeCalls,
   type UpgradeReport,
 } from '../src/surface/upgrade';
 
@@ -88,6 +90,124 @@ describe('reference scanner', () => {
     const names = [...lodash.symbols.keys()];
     expect(names).toContain('debounce'); // destructured
     expect(names).toContain('throttle'); // member read on the binding
+  });
+
+  it('records each use of an imported binding with its argument count', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-calls-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/c.ts'),
+        [
+          `import { parse } from 'cookie';`,
+          `import * as qs from 'qs';`,
+          `const { debounce } = require('lodash');`,
+          `parse('a');`,
+          `parse('a', { decode });`,
+          `parse(...args);`,
+          `export const handlers = [parse];`,
+          `qs.stringify(obj, opts); qs.stringify(obj);`,
+          `debounce(fn, 10);`,
+        ].join('\n'),
+      );
+      const refs = scanReferences(dir);
+      const calls = (pkg: string, sym: string) =>
+        refs.find((r) => r.package === pkg)!.symbols.get(sym)!.flatMap((r) => r.calls ?? []);
+      expect(calls('cookie', 'parse').slice(0, 4)).toEqual([
+        { line: 4, args: 1 },
+        { line: 5, args: 2 },
+        { line: 6, args: null },
+        { line: 7, args: null },
+      ]);
+      // Two calls on one line stay two call sites.
+      expect(calls('qs', 'stringify')).toEqual([
+        { line: 8, args: 2 },
+        { line: 8, args: 1 },
+      ]);
+      expect(calls('lodash', 'debounce')).toEqual([{ line: 9, args: 2 }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Any one of these calls may be the parameter rather than the import.
+  it('keeps the uses of a shadowed name but stops counting their arguments', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-shadow-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/s.ts'),
+        [`import { parse } from 'cookie';`, `parse('a');`, `function local(parse: (s: string) => void) { parse('b', 1); }`].join('\n'),
+      );
+      const ref = scanReferences(dir).find((r) => r.package === 'cookie')!.symbols.get('parse')![0]!;
+      expect(ref.calls).toEqual([
+        { line: 2, args: null },
+        { line: 3, args: null },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Each of these used to be invisible, and an invisible use of a removed
+  // export is an upgrade reported safe that throws on load.
+  it('follows re-exports, import-equals, inline and dynamic loads, and namespace destructuring', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-forms-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/forms.ts'),
+        [
+          `import legacy = require('cookie-eq');`,
+          `export { parse, serialize as ser } from 'cookie';`,
+          `export type { Options } from 'cookie';`,
+          `const out = require('qs').stringify(obj, 1);`,
+          `export async function load() {`,
+          `  const m = await import('pino');`,
+          `  m.destination();`,
+          `  const { format } = await import('date-fns');`,
+          `  format(d, 'yyyy');`,
+          `}`,
+          `import * as ns from 'semver';`,
+          `const { valid, clean: tidy } = ns;`,
+          `valid('1.0.0');`,
+          `legacy.parse('a');`,
+          `const pending = import('not-awaited');`,
+        ].join('\n'),
+      );
+      const refs = scanReferences(dir);
+      const get = (pkg: string, sym: string) => refs.find((r) => r.package === pkg)?.symbols.get(sym) ?? [];
+
+      expect(get('cookie', 'parse')[0]).toMatchObject({ via: 'named', line: 2 });
+      expect(get('cookie', 'serialize')[0]!.via).toBe('named');
+      expect(get('cookie', 'Options')[0]!.via).toBe('type-only');
+      expect(get('cookie-eq', 'parse')[0]).toMatchObject({ via: 'namespace', line: 14 });
+      expect(get('qs', 'stringify')[0]).toMatchObject({ via: 'namespace', calls: [{ line: 4, args: 2 }] });
+      expect(get('pino', 'destination')[0]!.via).toBe('namespace');
+      expect(get('date-fns', 'format')[0]).toMatchObject({ via: 'destructured', calls: [{ line: 9, args: 2 }] });
+      expect(get('semver', 'valid')[0]).toMatchObject({ via: 'namespace', calls: [{ line: 13, args: 1 }] });
+      expect(get('semver', 'clean')[0]!.via).toBe('namespace');
+      // An un-awaited import() is a promise, not the module.
+      expect(refs.some((r) => r.package === 'not-awaited')).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Stopping silently at the limit would report on files nobody opened.
+  it('says when it stopped before the end of the codebase', () => {
+    const stats = { files: 0, truncated: false };
+    scanReferences(root, { limit: 1, stats });
+    expect(stats).toEqual({ files: 1, truncated: true });
+    const full = { files: 0, truncated: false };
+    scanReferences(root, { stats: full });
+    expect(full.truncated).toBe(false);
+  });
+
+  it('refuses a version range before touching the registry', async () => {
+    const refs = scanReferences(root).find((r) => r.package === 'fast-glob');
+    const res = await checkUpgradeOne({ package: 'fast-glob', fromVersion: '^3.2.0', toVersion: '3.3.3' }, refs);
+    expect(res).toEqual({ unverified: 'expected exact versions, got ^3.2.0..3.3.3' });
   });
 
   it('ignores relative imports, builtins, and node_modules', () => {
@@ -204,6 +324,151 @@ describe('reference kind classification (miss-rate correction, 2026-08-06)', () 
   });
 });
 
+describe('arity changes judged at the call site', () => {
+  const ref = (calls?: { line: number; args: number | null }[]): SymbolReference => ({
+    symbol: 'parse',
+    via: 'named',
+    specifier: 'cookie',
+    file: 'src/a.ts',
+    line: 1,
+    ...(calls ? { calls } : {}),
+  });
+
+  it('breaks a call that no longer passes enough arguments', () => {
+    const judged = judgeCalls({ path: 'parse', from: 1, to: 2, fromMax: 2, toMax: 2 }, [
+      ref([
+        { line: 4, args: 1 },
+        { line: 5, args: 2 },
+      ]),
+    ]);
+    expect(judged).toEqual({ broken: [{ file: 'src/a.ts', line: 4, args: 1 }], unmeasured: [] });
+  });
+
+  it('breaks a call that passes an argument the new version dropped', () => {
+    const judged = judgeCalls({ path: 'parse', from: 1, to: 1, fromMax: 2, toMax: 1 }, [
+      ref([
+        { line: 3, args: 2 },
+        { line: 4, args: 1 },
+      ]),
+    ]);
+    expect(judged!.broken).toEqual([{ file: 'src/a.ts', line: 3, args: 2 }]);
+  });
+
+  it('does not blame the upgrade for a call that was already wrong', () => {
+    const judged = judgeCalls({ path: 'parse', from: 2, to: 3 }, [ref([{ line: 3, args: 1 }])]);
+    expect(judged!.broken).toEqual([]);
+  });
+
+  // A spread or a callback is a use nobody counted. Calling it safe is the
+  // failure `unverified` exists to prevent.
+  it('keeps uncountable uses as unmeasured', () => {
+    const judged = judgeCalls({ path: 'parse', from: 1, to: 2 }, [ref([{ line: 6, args: null }])]);
+    expect(judged).toEqual({ broken: [], unmeasured: [{ file: 'src/a.ts', line: 6 }] });
+  });
+
+  it('declines to judge when a use was never followed', () => {
+    expect(judgeCalls({ path: 'parse', from: 1, to: 2 }, [ref()])).toBeNull();
+  });
+
+  it('prints introduced type errors, and which packages were not type-checked', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'cookie',
+          fromVersion: '1.1.1',
+          toVersion: '2.0.1',
+          severity: 'warning',
+          symbolsRemoved: [],
+          arityChanged: [],
+          newExports: [],
+          typeErrors: [
+            {
+              file: 'src/session.ts',
+              line: 12,
+              code: 2353,
+              message: "Object literal may only specify known properties, and 'decode' does not exist in type 'ParseOptions'.",
+            },
+          ],
+        },
+      ],
+      ok: [],
+      unverified: [],
+      types: [
+        { package: 'cookie', checked: true, files: 3 },
+        { package: 'left-pad', checked: false, reason: 'the new version ships no type definitions of its own' },
+      ],
+    });
+    expect(out).toContain('src/session.ts:12  TS2353');
+    expect(out).toContain('TYPES     checked 1 package(s)');
+    expect(out).toContain('left-pad: the new version ships no type definitions of its own');
+  });
+
+  it('prints withdrawn entry points and require() breaks', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'chalk',
+          fromVersion: '4.1.2',
+          toVersion: '5.4.1',
+          severity: 'blocking',
+          symbolsRemoved: [],
+          arityChanged: [],
+          newExports: [],
+          entriesRemoved: [
+            { specifier: 'chalk/source/util', refs: [{ symbol: 'x', via: 'named' as const, specifier: 'chalk/source/util', file: 'src/a.js', line: 2 }] },
+          ],
+          moduleFormat: {
+            from: 'cjs',
+            to: 'esm',
+            broken: [{ file: 'src/log.js', line: 3, why: '`red` is not an export of the ES module, so it reads as undefined' }],
+            olderNode: [{ file: 'src/log.js', line: 1 }],
+          },
+          requirements: [{ kind: 'engines', name: 'node', needs: '>=18', has: '>=14 (package.json engines)' }],
+        },
+      ],
+      ok: [],
+      unverified: [],
+    });
+    expect(out).toContain('Removes entry point chalk/source/util');
+    expect(out).toContain("require('chalk') now loads an ES module (was CommonJS)");
+    expect(out).toContain('src/log.js:3  `red` is not an export');
+    expect(out).toContain('ERR_REQUIRE_ESM on Node before 20.19 / 22.12: src/log.js:1');
+    expect(out).toContain('Requires node >=18; this project has >=14 (package.json engines)');
+  });
+
+  it('prints the broken calls and their argument counts', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'pino',
+          fromVersion: '8.0.0',
+          toVersion: '9.0.0',
+          severity: 'warning',
+          symbolsRemoved: [],
+          arityChanged: [
+            {
+              symbol: 'child',
+              from: 1,
+              to: 2,
+              refs: [ref([{ line: 31, args: 1 }])],
+              callsBroken: [{ file: 'src/log.ts', line: 31, args: 1 }],
+              unmeasured: [{ file: 'src/log.ts', line: 40 }],
+            },
+          ],
+          newExports: [],
+        },
+      ],
+      ok: [],
+      unverified: [],
+    });
+    expect(out).toContain('src/log.ts:31 passes 1');
+    expect(out).toContain('not countable (spread, or passed as a value): src/log.ts:40');
+  });
+});
+
 // The money path: a wrong `true` here is a BLOCKING result on correct code.
 describe('namespace-member claims', () => {
   const ref = (over: Partial<SymbolReference> = {}): SymbolReference => ({
@@ -300,6 +565,34 @@ describe('upgrade report formatting', () => {
     // listing unrelated new exports there would read as a suggested edit.
     const out = formatUpgradeReport(report);
     expect(out).not.toContain('multistream');
+  });
+
+  // The report's reason to exist: "you call x at line 239, and it is now y".
+  it('prints a proven rename at the call site instead of a candidate list', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'cookie',
+          fromVersion: '1.1.1',
+          toVersion: '2.0.1',
+          severity: 'blocking',
+          symbolsRemoved: [
+            {
+              symbol: 'parse',
+              renamedTo: ['parseCookie'],
+              refs: [{ symbol: 'parse', via: 'named' as const, specifier: 'cookie', file: 'src/session.ts', line: 239 }],
+            },
+          ],
+          arityChanged: [],
+          newExports: [{ symbol: 'parseSetCookie', kind: 'function' as const, arity: 2 }],
+        },
+      ],
+      ok: [],
+      unverified: [],
+    });
+    expect(out).toMatch(/cookie\.parse → parseCookie\s+src\/session\.ts:239/);
+    expect(out).not.toContain('candidate replacements');
   });
 
   // A check that says "safe" when it simply did not look is worse than no check.

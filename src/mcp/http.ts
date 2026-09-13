@@ -694,14 +694,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   /** What the dashboard renders: the plan, its state, and the month so far. */
   /**
-   * Daily Ask ceiling per account, in micro-dollars. Env-overridable because
-   * the right number is a product decision that will move with pricing, and
-   * moving it should not need a deploy of the web app too.
+   * Daily Ask ceiling for one account, in micro-dollars: the plan's
+   * `askDailyUsd` (core/plans.ts), so asking more is a reason to upgrade rather
+   * than a cost absorbed on every free account. plans.ts is the only place the
+   * number lives; to turn Ask off everywhere, unset the web app's Anthropic key.
+   *
+   * Floored at one micro-dollar because the web route reads a zero limit as
+   * "no limit".
    */
-  const ASK_DAILY_LIMIT_MICROS = Math.max(
-    0,
-    Math.round(Number(process.env.LURQ_ASK_DAILY_USD ?? '3') * 1_000_000),
-  );
+  const askLimit = async (ownerId: string): Promise<{ micros: number; tier: string }> => {
+    const { plan } = await resolveEntitlement(ownerId);
+    return { micros: Math.max(1, Math.round(plan.askDailyUsd * 1_000_000)), tier: plan.tier };
+  };
+
+  /** One call may not move the ledger by more than this, so a caller bug is a
+   *  wrong number rather than a bottomless credit. Four times a question's reserve. */
+  const ASK_DELTA_MAX_MICROS = 1_000_000;
 
   /**
    * The Ask budget, read and written by the dashboard's /api/ask.
@@ -721,8 +729,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const spentMicros = await getAskSpendToday(db, ownerId);
-      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+      const [spentMicros, limit] = await Promise.all([
+        getAskSpendToday(db, ownerId),
+        askLimit(ownerId),
+      ]);
+      res.status(200).json({ spentMicros, limitMicros: limit.micros });
     } catch (err) {
       // Deliberately a 500, not a zero. A caller that cannot read the ledger
       // must fail closed, and it can only do that if this says "unknown"
@@ -733,7 +744,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   app.post('/ask-budget', requireIssuerSecret, async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { ownerId?: unknown; usdMicros?: unknown };
+    const body = (req.body ?? {}) as { ownerId?: unknown; usdMicros?: unknown; answered?: unknown };
     const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
     const micros = Number(body.usdMicros);
     if (!ownerId) {
@@ -741,17 +752,37 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     // Signed: a caller reserves its worst case up front and refunds the unused
-    // part after, so a refund is a legitimate negative. Bounded either way — a
-    // single call may not move the ledger by more than a whole day's ceiling,
-    // which turns a bug in the caller into a wrong number rather than a
-    // bottomless credit.
-    if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DAILY_LIMIT_MICROS) {
-      res.status(400).json({ error: "usdMicros must be a finite delta within one day's limit." });
+    // part after, so a refund is a legitimate negative. Bounded either way.
+    if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DELTA_MAX_MICROS) {
+      res.status(400).json({ error: 'usdMicros must be a finite delta of at most $1.' });
       return;
     }
     try {
-      const spentMicros = await addAskSpend(db, ownerId, Math.round(micros));
-      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+      const [spentMicros, limit] = await Promise.all([
+        addAskSpend(db, ownerId, Math.round(micros)),
+        askLimit(ownerId),
+      ]);
+      res.status(200).json({ spentMicros, limitMicros: limit.micros });
+
+      // Product analytics: numbers and a model id only, never the question, so
+      // the privacy page's promise holds. Picked field by field — the caller is
+      // trusted (issuer secret) but its body is not shaped.
+      const a = body.answered;
+      if (a && typeof a === 'object') {
+        const r = a as Record<string, unknown>;
+        capture(ownerId, 'ask_answered', {
+          tier: limit.tier,
+          model: typeof r.model === 'string' ? r.model.slice(0, 64) : null,
+          turns: Number(r.turns) || 0,
+          usd: Number(r.usd) || 0,
+          cacheReadTokens: Number(r.cacheReadTokens) || 0,
+        });
+      }
+      // The conversion signal: a reserve that crossed the plan's ceiling is
+      // exactly the question the web route is about to refuse.
+      if (micros > 0 && spentMicros > limit.micros) {
+        capture(ownerId, 'ask_limit_hit', { tier: limit.tier });
+      }
     } catch (err) {
       logger.error('ask budget write failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not record Ask spend.' });

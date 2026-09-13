@@ -372,6 +372,8 @@ export interface UpgradeBrief {
   deprecated: boolean;
   verdict: UpgradeVerdict;
   removed: string[];
+  /** Removed exports the package still ships under another name. Absent from an older API. */
+  renamed?: { path: string; to: string[] }[];
   arityChanged: { path: string; from: number | null; to: number | null }[];
   typeOnlyRemoved: string[];
   newlyDeprecated: string[];
@@ -643,11 +645,23 @@ export interface AskBudget {
   limitMicros: number;
 }
 
-export async function recordAskSpend(ownerId: string, usdMicros: number): Promise<AskBudget> {
+/** What one answered question looked like, for product analytics. Never its text. */
+export interface AskAnswered {
+  model: string;
+  turns: number;
+  usd: number;
+  cacheReadTokens: number;
+}
+
+export async function recordAskSpend(
+  ownerId: string,
+  usdMicros: number,
+  answered?: AskAnswered,
+): Promise<AskBudget> {
   const res = await issuerFetch("/ask-budget", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ownerId, usdMicros }),
+    body: JSON.stringify({ ownerId, usdMicros, answered }),
   });
   if (!res.ok) throw new LurqIssuerError("Could not record Ask spend.", res.status);
   return (await res.json()) as AskBudget;

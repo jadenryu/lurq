@@ -55,6 +55,12 @@ export interface UpgradeBrief {
   verdict: UpgradeVerdict;
   /** Runtime exports present in `from` and gone in `to`. */
   removed: string[];
+  /**
+   * The subset of `removed` with a replacement the package proves: at `from`,
+   * the removed name and each `to` name were exported from one declaration.
+   * A fact about the packages, like everything else in the brief.
+   */
+  renamed: { path: string; to: string[] }[];
   /** Exports whose parameter count changed — silent misbehaviour, not a crash. */
   arityChanged: { path: string; from: number | null; to: number | null }[];
   /** Removed type-only exports. Breaks `tsc`, never `node` — separated on purpose. */
@@ -146,6 +152,7 @@ export async function briefUpgrade(
     ...base,
     verdict: verdictOf(removed, diff.arityChanged, inconclusive),
     removed,
+    renamed: diff.renamed ?? [],
     arityChanged: diff.arityChanged,
     typeOnlyRemoved: diff.typeOnlyRemoved,
     newlyDeprecated: diff.deprecated ?? [],

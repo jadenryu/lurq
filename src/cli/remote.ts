@@ -225,6 +225,8 @@ export interface RemoteUpgrade {
   deprecated: boolean;
   verdict: 'removes-exports' | 'arity-changed' | 'clean' | 'unknown';
   removed: string[];
+  /** Absent from a server older than rename detection. */
+  renamed?: { path: string; to: string[] }[];
   arityChanged: { path: string; from: number | null; to: number | null }[];
   typeOnlyRemoved: string[];
   newlyDeprecated: string[];
