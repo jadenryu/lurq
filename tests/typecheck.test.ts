@@ -38,6 +38,7 @@ let v1: string;
 let v2: string;
 let untyped: string;
 let garbled: string;
+let widened: string;
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'lurq-types-'));
@@ -56,6 +57,16 @@ beforeAll(() => {
   );
   untyped = version('untyped', null);
   garbled = version('garbled', `export declare function parse(str: string: number;`);
+  // v1's call shape with a wider return type: the wrapper still compiles, and
+  // the code that uses the wrapper does not.
+  widened = version(
+    'widened',
+    `export interface Options { decode?: (s: string) => string }
+     export declare function parse(str: string, options?: Options): Record<string, string | undefined>;`,
+  );
+  write('hop/tsconfig.json', JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }));
+  write('hop/src/cookies.ts', `import { parse } from 'cookie';\nexport const read = (header: string) => parse(header);`);
+  write('hop/src/session.ts', `import { read } from './cookies';\nexport const id: string = read('id=1')['id'];`);
 
   // No node_modules anywhere: the check has to work on a fresh checkout.
   write('project/tsconfig.json', JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }));
@@ -125,6 +136,14 @@ describe('type check across an upgrade', () => {
     const check = typeChecker(ts, join(root, 'vite'))('cookie', v1, v2, ['src/main.ts']);
     expect(check.checked).toBe(true);
     expect(check.checked && check.introduced.map((e) => e.code)).toContain(2554);
+  });
+
+  it('checks the files that import an importer, where a widened type lands', () => {
+    const check = typeChecker(ts, join(root, 'hop'))('cookie', v1, widened, ['src/cookies.ts']);
+    expect(check.checked && check.files).toBe(2);
+    expect(check.checked && check.introduced.map((e) => `${e.file}:${e.line}:${e.code}`)).toEqual([
+      'src/session.ts:2:2322',
+    ]);
   });
 
   it('stops once the budget is spent', () => {

@@ -15,9 +15,10 @@
  * badly produces the same noise on both sides, and it cancels.
  *
  * Narrow on purpose, in three ways that each trade coverage for truth:
- *   - Only files that import the package are checked. An error that surfaces a
- *     module further out, through your own wrapper's inferred type, is missed.
- *     ponytail: widen by one import hop if that miss shows up in practice.
+ *   - Files that import the package are checked, and files that import those:
+ *     an upgrade's type change often lands in the code that uses your own
+ *     wrapper, not in the wrapper. ponytail: one hop, capped at HOP_CAP files;
+ *     a type that travels further than that is missed.
  *   - The new version must ship its own type definitions. Types from `@types/*`
  *     do not move with the upgrade, so comparing them says nothing.
  *   - Definitions this compiler cannot parse make the run unchecked, never
@@ -55,6 +56,8 @@ export type TypeCheckFn = (
  */
 const DEFAULT_BUDGET_MS = 180_000;
 const MESSAGE_CAP = 300;
+/** Importers of importers checked per project, on top of the direct importers. */
+const HOP_CAP = 300;
 
 /**
  * The project's own compiler when it has one, since the errors that matter are
@@ -125,14 +128,19 @@ export function typeChecker(
       if (!cache) caches.set(configPath, (cache = new Map()));
       const shared = shareSourceFiles ? cache : new Map<string, TSApi.SourceFile>();
 
-      const before = diagnose(ts, group.parsed, pkg, fromDir, group.files, shared, false);
+      const before = build(ts, group.parsed, pkg, fromDir, shared, false);
       if ('reason' in before) return { checked: false, reason: `old version: ${before.reason}` };
+      // Found once, on the old program, and checked identically on both sides.
+      const files = [...group.files, ...importersOf(ts, before.program, group.files)];
+      const beforeDiagnostics = semanticDiagnostics(before.program, files);
       if (Date.now() > expiresAt) return { checked: false, reason: 'type check ran out of time' };
-      const after = diagnose(ts, group.parsed, pkg, toDir, group.files, shared, true);
+      const after = build(ts, group.parsed, pkg, toDir, shared, true);
       if ('reason' in after) return { checked: false, reason: after.reason };
 
-      introduced.push(...newDiagnostics(ts, root, before.diagnostics, after.diagnostics));
-      covered += group.files.length;
+      introduced.push(
+        ...newDiagnostics(ts, root, beforeDiagnostics, semanticDiagnostics(after.program, files)),
+      );
+      covered += files.length;
     }
     return { checked: true, files: covered, introduced };
   };
@@ -198,19 +206,18 @@ function projectFor(
 }
 
 /**
- * One program with `pkgDir` standing in for the package, and the semantic
- * errors in `files`. `ownTypes` demands the package's declarations came from
- * the overlay, which is the new-version requirement described up top.
+ * One program with `pkgDir` standing in for the package. `ownTypes` demands the
+ * package's declarations came from the overlay, which is the new-version
+ * requirement described up top.
  */
-function diagnose(
+function build(
   ts: Compiler,
   parsed: TSApi.ParsedCommandLine,
   pkg: string,
   pkgDir: string,
-  files: string[],
   cache: Map<string, TSApi.SourceFile>,
   ownTypes: boolean,
-): { diagnostics: TSApi.Diagnostic[] } | { reason: string } {
+): { program: TSApi.Program } | { reason: string } {
   const options: TSApi.CompilerOptions = { ...parsed.options, noEmit: true, incremental: false };
   const { host, overlaid } = overlayHost(ts, options, pkg, pkgDir, cache);
   // No `projectReferences`: those point imports at a referenced project's built
@@ -228,11 +235,37 @@ function diagnose(
     return { reason: `its type definitions do not parse with TypeScript ${ts.version}` };
   }
 
-  const diagnostics = files.flatMap((f) => {
+  return { program };
+}
+
+function semanticDiagnostics(program: TSApi.Program, files: string[]): TSApi.Diagnostic[] {
+  return files.flatMap((f) => {
     const sf = program.getSourceFile(f);
     return sf ? [...program.getSemanticDiagnostics(sf)] : [];
   });
-  return { diagnostics };
+}
+
+/**
+ * Project files that import one of `targets`, resolved the way the compiler
+ * resolves them, so relative paths and `paths` aliases both count.
+ */
+function importersOf(ts: Compiler, program: TSApi.Program, targets: string[]): string[] {
+  const key = (p: string) => (ts.sys.useCaseSensitiveFileNames ? resolve(p) : resolve(p).toLowerCase());
+  const wanted = new Set(targets.map(key));
+  const options = program.getCompilerOptions();
+  const cache = ts.createModuleResolutionCache(program.getCurrentDirectory(), (f) => key(f), options);
+  const out: string[] = [];
+  for (const sf of program.getSourceFiles()) {
+    if (out.length >= HOP_CAP) break;
+    if (sf.isDeclarationFile || sf.fileName.includes('/node_modules/') || wanted.has(key(sf.fileName))) continue;
+    const { importedFiles } = ts.preProcessFile(sf.text, true, true);
+    const imports = importedFiles.some(({ fileName: spec }) => {
+      const hit = ts.resolveModuleName(spec, sf.fileName, options, ts.sys, cache).resolvedModule;
+      return hit !== undefined && wanted.has(key(hit.resolvedFileName));
+    });
+    if (imports) out.push(sf.fileName);
+  }
+  return out;
 }
 
 /**
