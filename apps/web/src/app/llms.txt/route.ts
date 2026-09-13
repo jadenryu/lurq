@@ -82,7 +82,7 @@ ${TOOLS.map((t) => `- \`${t.slug}\`: ${t.whenToCall}`).join("\n")}
 
 ## What it costs
 
-${PLAN_LIST.map((p) => `- ${p.name}, ${money(p.priceCents)}: ${p.monthlyCalls === null ? "uncapped" : `${fmt(p.monthlyCalls)}`} hosted calls a month.`).join("\n")}
+${PLAN_LIST.map((p) => `- ${p.name}, ${p.priceFrom ? "from " : ""}${money(p.priceCents)}${p.perSeat ? ` per seat (${p.minSeats ?? 1} minimum)` : ""}: ${p.monthlyCalls === null ? "uncapped" : `${fmt(p.monthlyCalls)}${p.perSeat ? " per seat, pooled," : ""}`} hosted calls a month.`).join("\n")}
 
 The free tier is usable without a card and without talking to anyone.
 

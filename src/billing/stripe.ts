@@ -55,6 +55,7 @@ export function billingEnabled(): boolean {
 export function priceIdFor(tier: Tier): string | null {
   const config = getConfig();
   if (tier === 'pro') return config.STRIPE_PRICE_PRO ?? null;
+  if (tier === 'team') return config.STRIPE_PRICE_TEAM ?? null;
   if (tier === 'enterprise') return config.STRIPE_PRICE_ENTERPRISE ?? null;
   return null;
 }
@@ -71,6 +72,7 @@ export function priceIdFor(tier: Tier): string | null {
 export function tierForPrice(priceId: string | null, metadataTier?: string | null): Tier {
   const config = getConfig();
   if (priceId && priceId === config.STRIPE_PRICE_PRO) return 'pro';
+  if (priceId && priceId === config.STRIPE_PRICE_TEAM) return 'team';
   if (priceId && priceId === config.STRIPE_PRICE_ENTERPRISE) return 'enterprise';
   if (metadataTier && metadataTier in PLANS) return metadataTier as Tier;
   if (priceId) {
@@ -135,10 +137,21 @@ export async function createCheckoutSession(
 
   const config = getConfig();
   const base = config.LURQ_WEB_URL.replace(/\/$/, '');
+  const plan = PLANS[req.tier];
+  // Per-seat plans let the buyer pick the seat count on Stripe's own form, with
+  // the plan minimum enforced there. The webhook reads the final quantity, so
+  // there is no seat picker to build or keep in step with Stripe.
+  const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = plan.perSeat
+    ? {
+        price,
+        quantity: plan.minSeats ?? 1,
+        adjustable_quantity: { enabled: true, minimum: plan.minSeats ?? 1, maximum: 500 },
+      }
+    : { price, quantity: 1 };
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: 'subscription',
     customer,
-    line_items: [{ price, quantity: 1 }],
+    line_items: [lineItem],
     // Stripe substitutes the real id. The dashboard reads it to poll for the
     // webhook having landed, so the page after payment can say "active" rather
     // than "we think so".
@@ -249,7 +262,9 @@ export async function handleEvent(db: Database, event: Stripe.Event): Promise<st
     typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
   if (!customerId) return 'event carried no customer';
 
-  const priceId = subscription.items?.data?.[0]?.price?.id ?? null;
+  const item = subscription.items?.data?.[0];
+  const priceId = item?.price?.id ?? null;
+  const seats = Math.max(1, item?.quantity ?? 1);
   // A deleted subscription grants nothing regardless of which Price it held.
   const tier: Tier =
     event.type === 'customer.subscription.deleted'
@@ -262,6 +277,7 @@ export async function handleEvent(db: Database, event: Stripe.Event): Promise<st
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: periodEnd(subscription),
     cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+    seats,
     eventAt: new Date(event.created * 1000),
   });
 

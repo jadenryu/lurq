@@ -1,5 +1,5 @@
 {
-  "id": "113afabb-3692-43d1-87bf-1133e39190b6",
+  "id": "0873a89f-bb09-4939-af08-2214ecebc6d2",
   "prevId": "904f9c03-ae0a-411d-bb12-f34891018c6b",
   "version": "7",
   "dialect": "postgresql",
@@ -2196,6 +2196,13 @@
           "notNull": true,
           "default": false
         },
+        "seats": {
+          "name": "seats",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "last_event_at": {
           "name": "last_event_at",
           "type": "timestamp with time zone",
@@ -2412,18 +2419,6 @@
         },
         "source_line": {
           "name": "source_line",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source_offset": {
-          "name": "source_offset",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "max_arity": {
-          "name": "max_arity",
           "type": "integer",
           "primaryKey": false,
           "notNull": false

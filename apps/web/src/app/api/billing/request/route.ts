@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { tier?: string };
     if (typeof body.tier === 'string') tier = body.tier as Tier;
   } catch {
-    // Pro is the only self-serve plan, so it is the sane default.
+    // Pro is the cheapest self-serve plan, so it is the sane default.
   }
 
   const plan = PLANS[tier];
@@ -75,11 +75,11 @@ export async function POST(request: Request) {
     // Plain text on purpose. This goes to us, not to a customer, and its whole
     // job is to be pasteable into a terminal.
     text: [
-      `${name} <${email}> wants ${plan.name} ($${Math.round(plan.priceCents / 100)}/mo).`,
+      `${name} <${email}> wants ${plan.name} ($${Math.round(plan.priceCents / 100)}${plan.perSeat ? '/seat' : ''}/mo).`,
       '',
       'Invoice them, then grant it:',
       '',
-      `  npm run operator -- billing grant ${userId} --tier ${tier} --months 12`,
+      `  npm run operator -- billing grant ${userId} --tier ${tier} --months 12${plan.perSeat ? ` --seats ${plan.minSeats ?? 1}` : ''}`,
       '',
       `account: ${userId}`,
       `requested: ${new Date().toISOString()}`,

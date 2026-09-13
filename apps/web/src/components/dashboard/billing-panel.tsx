@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import type { BillingSummary } from "@/lib/lurq-issuer";
-import { PLANS, PLAN_LIST, type Tier } from "@lurq/core/plans";
+import { GRACE_CALLS_PER_DAY, PLANS, PLAN_LIST, type Plan, type Tier } from "@lurq/core/plans";
+
+/** "$15/mo" or "$25/seat/mo". */
+function perMonth(plan: Plan): string {
+  return `$${Math.round(plan.priceCents / 100).toLocaleString("en-US")}${plan.perSeat ? "/seat" : ""}/mo`;
+}
 
 /**
  * The plan, the month's allowance, and one button out to Stripe.
@@ -96,7 +101,8 @@ function Allowance({ used, limit }: { used: number; limit: number | null }) {
       </div>
       {pct >= 100 ? (
         <p className="mt-2 text-[12px] leading-[1.5] text-ink-2">
-          Calls are returning 402 until the month turns. Upgrading lifts the limit immediately.
+          Calls are limited to {GRACE_CALLS_PER_DAY} a day until the month turns. Upgrading lifts
+          the limit immediately.
         </p>
       ) : null}
     </div>
@@ -152,7 +158,8 @@ export function BillingPanel({
 
   const plan = PLANS[billing.tier as Tier] ?? PLANS.free;
   const status = statusLine(billing);
-  const upgrade = PLAN_LIST.find((p) => p.paid && !p.contactOnly && p.tier !== billing.tier);
+  // The next self-serve plan up, so Pro is offered Team rather than nothing.
+  const upgrade = PLAN_LIST.slice(PLAN_LIST.indexOf(plan) + 1).find((p) => p.paid && !p.contactOnly);
 
   return (
     <div className="space-y-6">
@@ -186,6 +193,11 @@ export function BillingPanel({
             {plan.name}
           </p>
           <p className="mt-1 text-[13px] leading-[1.6] text-ink-2">{plan.tagline}</p>
+          {plan.perSeat ? (
+            <p className="mt-1 text-[13px] text-ink-3">
+              {billing.seats} seats. Change the count in Manage billing.
+            </p>
+          ) : null}
           {status ? <p className={`mt-3 text-[13px] ${status.tone}`}>{status.text}</p> : null}
         </div>
 
@@ -203,14 +215,16 @@ export function BillingPanel({
 
       {/* Only shown when there is somewhere to go. An upgrade card on the top
           plan is an advert for something the reader already bought. */}
-      {upgrade && billing.tier !== "enterprise" ? (
+      {upgrade ? (
         <Panel>
           <PanelHeader title={`upgrade to ${upgrade.name.toLowerCase()}`} />
           <p className="mt-3 max-w-[60ch] text-[13px] leading-[1.6] text-ink-2">
             {upgrade.tagline}{" "}
             {upgrade.monthlyCalls === null
               ? "Uncapped hosted calls."
-              : `${upgrade.monthlyCalls.toLocaleString()} hosted calls a month.`}
+              : upgrade.perSeat
+                ? `${upgrade.monthlyCalls.toLocaleString()} calls a month per seat, pooled, from ${upgrade.minSeats ?? 1} seats.`
+                : `${upgrade.monthlyCalls.toLocaleString()} hosted calls a month.`}
           </p>
           <ul className="mt-4 space-y-2">
             {upgrade.features.slice(0, 4).map((f) => (
@@ -231,7 +245,7 @@ export function BillingPanel({
             >
               {pending === "checkout"
                 ? "Opening checkout…"
-                : `Upgrade for $${Math.round(upgrade.priceCents / 100)}/mo`}
+                : `Upgrade for ${perMonth(upgrade)}`}
             </button>
             {!billing.billingEnabled ? (
               <p className="mt-2 text-[12px] text-ink-3">
