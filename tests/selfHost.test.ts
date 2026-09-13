@@ -24,7 +24,7 @@ describe('selfHostHint', () => {
 });
 
 describe('scripts/publish-manifest.mjs', () => {
-  it('moves self-host deps to optional peers, and restores the original byte for byte', () => {
+  it('leaves self-host and inlined deps out of the packed manifest, and restores it byte for byte', () => {
     const dir = mkdtempSync(join(tmpdir(), 'lurq-manifest-'));
     const root = join(import.meta.dirname, '..');
     cpSync(join(root, 'package.json'), join(dir, 'package.json'));
@@ -33,13 +33,14 @@ describe('scripts/publish-manifest.mjs', () => {
 
     execFileSync('node', [script, 'strip'], { cwd: dir });
     const stripped = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-    for (const name of SELF_HOST_DEPENDENCIES) {
+    const pkg = JSON.parse(original);
+    for (const name of [...SELF_HOST_DEPENDENCIES, ...pkg.lurq.inlinedDependencies]) {
       expect(stripped.dependencies[name]).toBeUndefined();
-      expect(stripped.peerDependencies[name]).toBeTruthy();
-      expect(stripped.peerDependenciesMeta[name]).toEqual({ optional: true });
     }
-    // The CLI's own runtime deps stay.
-    expect(stripped.dependencies.commander).toBeTruthy();
+    // Optional peers would still cost a registry round trip each at install.
+    expect(stripped.peerDependencies).toBeUndefined();
+    // What the bundle leaves external stays a real dependency.
+    expect(stripped.dependencies.typescript).toBeTruthy();
     // A second strip before restore would back up the stripped copy.
     expect(() => execFileSync('node', [script, 'strip'], { cwd: dir, stdio: 'pipe' })).toThrow();
 

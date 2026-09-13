@@ -11,9 +11,14 @@
  *
  * Moving them to devDependencies would fix the tarball and bet production on
  * the builder never pruning dev dependencies. Instead the repo keeps them as
- * dependencies, and only the manifest inside the tarball lists them as optional
- * peerDependencies: not installed by default, still versioned for a self-hoster
- * who adds them (`lurq serve` names the exact install command, core/selfHost.ts).
+ * dependencies, and only the manifest inside the tarball leaves them out, along
+ * with the small pure-JS dependencies tsup compiles into dist. A self-hoster who
+ * runs `lurq serve` is told the exact install command, with versions
+ * (core/selfHost.ts).
+ *
+ * Not optional peerDependencies, which look like the textbook answer: npm still
+ * fetches every optional peer's registry metadata to check its range, and
+ * stripe's alone made a cold install of a two-package tree take 11s instead of 1s.
  *
  * npm re-reads package.json after `prepack`, so `npm pack` and `npm publish`
  * both ship the stripped copy, and `postpack` puts the original back.
@@ -49,19 +54,17 @@ if (existsSync(BACKUP)) {
 
 const raw = readFileSync(MANIFEST, 'utf8');
 const pkg = JSON.parse(raw);
-const selfHost = pkg.lurq?.selfHostDependencies ?? [];
+// Self-host server stack, and what tsup compiles into dist (tsup.config.ts).
+const omitted = [...(pkg.lurq?.selfHostDependencies ?? []), ...(pkg.lurq?.inlinedDependencies ?? [])];
 
-pkg.peerDependencies ??= {};
-pkg.peerDependenciesMeta ??= {};
-for (const name of selfHost) {
-  const range = pkg.dependencies?.[name];
-  if (!range) {
-    console.error(`✖ lurq.selfHostDependencies lists "${name}", which is not in dependencies.`);
+for (const name of omitted) {
+  // A stale name means the list and the dependencies have drifted apart, and a
+  // silent no-op would publish whatever the drift left behind.
+  if (!pkg.dependencies?.[name]) {
+    console.error(`✖ package.json "lurq" lists "${name}", which is not in dependencies.`);
     process.exit(1);
   }
   delete pkg.dependencies[name];
-  pkg.peerDependencies[name] = range;
-  pkg.peerDependenciesMeta[name] = { optional: true };
 }
 
 writeFileSync(BACKUP, raw);

@@ -47,6 +47,15 @@
     "node": ">=20.17.0"
   },
   "lurq": {
+    "inlinedDependencies": [
+      "@inquirer/prompts",
+      "@modelcontextprotocol/sdk",
+      "commander",
+      "dotenv",
+      "semver",
+      "yaml",
+      "zod"
+    ],
     "selfHostDependencies": [
       "drizzle-orm",
       "express",
@@ -98,7 +107,6 @@
     "semver": "^7.8.5",
     "stripe": "^22.6.0",
     "typescript": "^5.5.4",
-    "update-notifier": "^7.3.1",
     "yaml": "^2.9.0",
     "zod": "^3.23.8"
   },

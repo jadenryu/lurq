@@ -1,4 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
+
+// Pure-JS dependencies compiled into the public bundle instead of installed.
+// Resolving them at install time is most of what a cold `npx lurqrun` spent
+// its time on: the MCP SDK alone drags in 94 packages (express, hono, ajv…) for
+// a client that is a few hundred kB once bundled. scripts/publish-manifest.mjs
+// drops the same list from the published dependencies, so they are one list.
+const INLINED: string[] = JSON.parse(readFileSync('package.json', 'utf8')).lurq.inlinedDependencies;
+// The package itself and any subpath (`@modelcontextprotocol/sdk/client/index.js`).
+const inlined = INLINED.map((name) => new RegExp(`^${name.replace(/[/.]/g, (c) => `\\${c}`)}(/|$)`));
 
 // Heavy CJS packages that MUST NOT be bundled into the ESM output: esbuild turns
 // their internal `require("fs")` etc. into a shim that throws "Dynamic require of
@@ -42,6 +52,13 @@ export default defineConfig([
     // (core/selfHost.ts, scripts/publish-manifest.mjs).
     splitting: true,
     external: NO_BUNDLE,
+    noExternal: inlined,
+    // Bundled CommonJS (cross-spawn, ajv…) calls `require("child_process")`,
+    // which esbuild's ESM output can only honour when a real `require` exists
+    // in scope; without one it throws "Dynamic require of X is not supported".
+    banner: {
+      js: "import { createRequire as __lurqCreateRequire } from 'node:module'; const require = __lurqCreateRequire(import.meta.url);",
+    },
     // Preserves the `#!/usr/bin/env node` shebang on the bin entry.
     shims: true,
   },
