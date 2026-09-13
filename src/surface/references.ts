@@ -270,22 +270,72 @@ function isValueUse(id: ts.Identifier): boolean {
     ts.isMethodDeclaration(p) ||
     ts.isGetAccessor(p) ||
     ts.isSetAccessor(p) ||
-    ts.isEnumMember(p);
+    ts.isEnumMember(p) ||
+    ts.isJsxAttribute(p) ||
+    ts.isMethodSignature(p) ||
+    ts.isInterfaceDeclaration(p) ||
+    ts.isTypeAliasDeclaration(p) ||
+    ts.isModuleDeclaration(p) ||
+    ts.isEnumDeclaration(p) ||
+    ts.isTypeParameterDeclaration(p);
   return !(declares && (p as { name?: ts.Node }).name === id);
+}
+
+/**
+ * A type position, except a class's `extends` clause: `class Bus extends
+ * Emitter` evaluates `Emitter` at runtime, and treating it as a type reported a
+ * removed base class as safe.
+ */
+function isTypePosition(node: ts.Node): boolean {
+  if (
+    ts.isExpressionWithTypeArguments(node) &&
+    ts.isHeritageClause(node.parent) &&
+    node.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+    ts.isClassLike(node.parent.parent)
+  ) {
+    return false;
+  }
+  return ts.isTypeNode(node);
+}
+
+/** Does this identifier introduce a binding of its name? */
+function bindsName(id: ts.Identifier): boolean {
+  const p = id.parent;
+  if (!p) return false;
+  if (ts.isImportClause(p) || ts.isNamespaceImport(p) || ts.isImportEqualsDeclaration(p)) return true;
+  if (
+    ts.isImportSpecifier(p) ||
+    ts.isBindingElement(p) ||
+    ts.isVariableDeclaration(p) ||
+    ts.isParameter(p) ||
+    ts.isFunctionDeclaration(p) ||
+    ts.isFunctionExpression(p) ||
+    ts.isClassDeclaration(p) ||
+    ts.isClassExpression(p)
+  ) {
+    return p.name === id;
+  }
+  return false;
 }
 
 /**
  * Every value use of the given local names in a file.
  *
- * ponytail: scope-blind. A parameter that shadows an import is counted as a use
- * of the import, which can add a call to judge (at worst a spurious warning) but
- * never removes one. A scope-aware pass means a binder; the type check already
- * judges TypeScript files exactly, so this only has to be good for plain JS.
+ * ponytail: scope-blind, so a name bound more than once in the file (a parameter
+ * that shadows the import, say) keeps its uses but loses their argument counts.
+ * Any one of those calls may be a different variable, and counting it would let
+ * `function paint(chalk) { chalk('x') }` read as calling what `require('chalk')`
+ * returned, which is a BLOCKING claim. A scope-aware pass means a binder; the
+ * type check already judges TypeScript files exactly.
  */
 function valueUses(sf: ts.SourceFile, locals: Set<string>): Map<string, CallSite[]> {
   const out = new Map<string, CallSite[]>();
+  const bindings = new Map<string, number>();
   const visit = (node: ts.Node, inType: boolean): void => {
-    const nowInType = inType || ts.isTypeNode(node);
+    if (ts.isIdentifier(node) && locals.has(node.text) && bindsName(node)) {
+      bindings.set(node.text, (bindings.get(node.text) ?? 0) + 1);
+    }
+    const nowInType = inType || isTypePosition(node);
     if (!nowInType && ts.isIdentifier(node) && locals.has(node.text) && isValueUse(node)) {
       const list = out.get(node.text);
       if (list) list.push(callSiteOf(sf, node));
@@ -294,6 +344,10 @@ function valueUses(sf: ts.SourceFile, locals: Set<string>): Map<string, CallSite
     ts.forEachChild(node, (c) => visit(c, nowInType));
   };
   visit(sf, false);
+  for (const [name, count] of bindings) {
+    const uses = out.get(name);
+    if (count > 1 && uses) out.set(name, uses.map((u) => ({ line: u.line, args: null })));
+  }
   return out;
 }
 
@@ -317,7 +371,7 @@ function valueUses(sf: ts.SourceFile, locals: Set<string>): Map<string, CallSite
 function collectValueIdentifiers(sf: ts.SourceFile): Set<string> {
   const out = new Set<string>();
   const visit = (node: ts.Node, inType: boolean): void => {
-    const nowInType = inType || ts.isTypeNode(node) || ts.isTypeQueryNode(node);
+    const nowInType = inType || isTypePosition(node);
     if (
       !nowInType &&
       ts.isIdentifier(node) &&

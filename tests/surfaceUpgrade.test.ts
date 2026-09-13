@@ -108,7 +108,6 @@ describe('reference scanner', () => {
           `export const handlers = [parse];`,
           `qs.stringify(obj, opts); qs.stringify(obj);`,
           `debounce(fn, 10);`,
-          `function local(parse: string) { return parse; }`,
         ].join('\n'),
       );
       const refs = scanReferences(dir);
@@ -126,6 +125,25 @@ describe('reference scanner', () => {
         { line: 8, args: 1 },
       ]);
       expect(calls('lodash', 'debounce')).toEqual([{ line: 9, args: 2 }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Any one of these calls may be the parameter rather than the import.
+  it('keeps the uses of a shadowed name but stops counting their arguments', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-shadow-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/s.ts'),
+        [`import { parse } from 'cookie';`, `parse('a');`, `function local(parse: (s: string) => void) { parse('b', 1); }`].join('\n'),
+      );
+      const ref = scanReferences(dir).find((r) => r.package === 'cookie')!.symbols.get('parse')![0]!;
+      expect(ref.calls).toEqual([
+        { line: 2, args: null },
+        { line: 3, args: null },
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
