@@ -3,7 +3,13 @@ import { auth } from "@clerk/nextjs/server";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
-import { callAskTool, fetchAskTools, recordAskSpend, type AskTool } from "@/lib/lurq-issuer";
+import {
+  callAskTool,
+  fetchAskTools,
+  recordAskSpend,
+  type AskAnswered,
+  type AskTool,
+} from "@/lib/lurq-issuer";
 import { costOf, reserveFor } from "@lurq/core/modelPricing";
 
 /**
@@ -33,7 +39,9 @@ import { costOf, reserveFor } from "@lurq/core/modelPricing";
 /** Streaming answers, so a multi-tool question doesn't sit on a blank box. */
 export const dynamic = "force-dynamic";
 
-const MODEL = "claude-opus-5";
+// Sonnet, not Opus: the work is picking a tool and summarising its JSON, which
+// does not repay Opus pricing ($2/$10 vs $5/$25 per MTok, ~2.5x cheaper).
+const MODEL = "claude-sonnet-5";
 const MAX_TOKENS = 2048;
 
 /** Ceiling on one account's spend per rolling hour. */
@@ -322,11 +330,13 @@ export async function POST(req: Request) {
     );
   }
 
-  /** Hand the reserve back. Used on every exit path, including the refusal. */
-  const settle = async (actualUsd: number) => {
+  /** Hand the reserve back. Used on every exit path, including the refusal.
+   *  The final settle also carries the question's shape for product analytics:
+   *  numbers and the model id only, never the question text. */
+  const settle = async (actualUsd: number, answered?: AskAnswered) => {
     const delta = Math.round(actualUsd * 1_000_000) - reserveMicros;
-    if (delta === 0) return;
-    await recordAskSpend(userId, delta).catch((err) => {
+    if (delta === 0 && !answered) return;
+    await recordAskSpend(userId, delta, answered).catch((err) => {
       console.error(
         "[lurq] ask spend NOT settled — today's budget is now wrong for this account:",
         err instanceof Error ? err.message : String(err),
@@ -341,7 +351,9 @@ export async function POST(req: Request) {
     // what a client assumes when the header is missing — is wrong by hours.
     const d = new Date();
     const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
-    return new Response("You have reached today's Ask limit. It resets at midnight UTC.", {
+    return new Response(
+      "You have reached today's Ask limit. It resets at midnight UTC, and paid plans get a higher one: /dashboard/billing",
+      {
       status: 429,
       headers: { "Retry-After": String(Math.max(1, Math.ceil((midnight - Date.now()) / 1000))) },
     });
@@ -473,7 +485,12 @@ export async function POST(req: Request) {
         // response closes. A failure here is logged, not swallowed silently:
         // an unrecorded charge is spend the next question will not see.
         // Refund the slice of the reserve this question did not use.
-        await settle(turnCost);
+        await settle(turnCost, {
+          model: MODEL,
+          turns: turnsUsed,
+          usd: Number(turnCost.toFixed(5)),
+          cacheReadTokens: cacheRead,
+        });
         // One structured line per question. Without it a bad answer is
         // unreproducible: you cannot tell whether a prompt change helped, and
         // you cannot see caching working or silently not working. Deliberately

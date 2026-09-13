@@ -53,6 +53,7 @@ import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
 import {
   entitlementFor,
+  isAllowed,
   getSubscription,
   getSubscriptionByCustomer,
   type Entitlement,
@@ -64,7 +65,7 @@ import {
   createPortalSession,
   handleEvent,
 } from '../billing/stripe';
-import { PLANS, type Tier } from '../core/plans';
+import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -555,19 +556,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     try {
       const ent = await resolveEntitlement(ownerId);
       authed.entitlement = ent;
-      if (!ent.withinQuota) {
+      if (!isAllowed(ent)) {
         res
           .status(402)
           .json(
             rpcError(
               -32002,
               `Monthly limit reached for the ${ent.plan.name} plan ` +
-                `(${ent.used}/${ent.plan.monthlyCalls} calls). ` +
-                `It resets when the month turns. Upgrade at ${config.LURQ_WEB_URL}/#pricing`,
+                `(${ent.used}/${ent.limit} calls), and today's ${GRACE_CALLS_PER_DAY} grace calls are spent. ` +
+                `It resets when the month turns. Upgrade at ${config.LURQ_WEB_URL}/dashboard/billing`,
             ),
           );
         return;
       }
+      // Over the allowance but inside the daily grace: served, and marked so a
+      // client reading headers can say why it is about to stop.
+      if (ent.inGrace) res.setHeader('X-Lurq-Quota', 'grace');
       next();
     } catch (err) {
       logger.error(
@@ -676,14 +680,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   /** What the dashboard renders: the plan, its state, and the month so far. */
   /**
-   * Daily Ask ceiling per account, in micro-dollars. Env-overridable because
-   * the right number is a product decision that will move with pricing, and
-   * moving it should not need a deploy of the web app too.
+   * Daily Ask ceiling for one account, in micro-dollars: the plan's
+   * `askDailyUsd` (core/plans.ts), so asking more is a reason to upgrade rather
+   * than a cost absorbed on every free account. plans.ts is the only place the
+   * number lives; to turn Ask off everywhere, unset the web app's Anthropic key.
+   *
+   * Floored at one micro-dollar because the web route reads a zero limit as
+   * "no limit".
    */
-  const ASK_DAILY_LIMIT_MICROS = Math.max(
-    0,
-    Math.round(Number(process.env.LURQ_ASK_DAILY_USD ?? '3') * 1_000_000),
-  );
+  const askLimit = async (ownerId: string): Promise<{ micros: number; tier: string }> => {
+    const { plan } = await resolveEntitlement(ownerId);
+    return { micros: Math.max(1, Math.round(plan.askDailyUsd * 1_000_000)), tier: plan.tier };
+  };
+
+  /** One call may not move the ledger by more than this, so a caller bug is a
+   *  wrong number rather than a bottomless credit. Four times a question's reserve. */
+  const ASK_DELTA_MAX_MICROS = 1_000_000;
 
   /**
    * The Ask budget, read and written by the dashboard's /api/ask.
@@ -703,8 +715,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const spentMicros = await getAskSpendToday(db, ownerId);
-      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+      const [spentMicros, limit] = await Promise.all([
+        getAskSpendToday(db, ownerId),
+        askLimit(ownerId),
+      ]);
+      res.status(200).json({ spentMicros, limitMicros: limit.micros });
     } catch (err) {
       // Deliberately a 500, not a zero. A caller that cannot read the ledger
       // must fail closed, and it can only do that if this says "unknown"
@@ -715,7 +730,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   app.post('/ask-budget', requireIssuerSecret, async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { ownerId?: unknown; usdMicros?: unknown };
+    const body = (req.body ?? {}) as { ownerId?: unknown; usdMicros?: unknown; answered?: unknown };
     const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
     const micros = Number(body.usdMicros);
     if (!ownerId) {
@@ -723,17 +738,37 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     // Signed: a caller reserves its worst case up front and refunds the unused
-    // part after, so a refund is a legitimate negative. Bounded either way — a
-    // single call may not move the ledger by more than a whole day's ceiling,
-    // which turns a bug in the caller into a wrong number rather than a
-    // bottomless credit.
-    if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DAILY_LIMIT_MICROS) {
-      res.status(400).json({ error: "usdMicros must be a finite delta within one day's limit." });
+    // part after, so a refund is a legitimate negative. Bounded either way.
+    if (!Number.isFinite(micros) || Math.abs(micros) > ASK_DELTA_MAX_MICROS) {
+      res.status(400).json({ error: 'usdMicros must be a finite delta of at most $1.' });
       return;
     }
     try {
-      const spentMicros = await addAskSpend(db, ownerId, Math.round(micros));
-      res.status(200).json({ spentMicros, limitMicros: ASK_DAILY_LIMIT_MICROS });
+      const [spentMicros, limit] = await Promise.all([
+        addAskSpend(db, ownerId, Math.round(micros)),
+        askLimit(ownerId),
+      ]);
+      res.status(200).json({ spentMicros, limitMicros: limit.micros });
+
+      // Product analytics: numbers and a model id only, never the question, so
+      // the privacy page's promise holds. Picked field by field — the caller is
+      // trusted (issuer secret) but its body is not shaped.
+      const a = body.answered;
+      if (a && typeof a === 'object') {
+        const r = a as Record<string, unknown>;
+        capture(ownerId, 'ask_answered', {
+          tier: limit.tier,
+          model: typeof r.model === 'string' ? r.model.slice(0, 64) : null,
+          turns: Number(r.turns) || 0,
+          usd: Number(r.usd) || 0,
+          cacheReadTokens: Number(r.cacheReadTokens) || 0,
+        });
+      }
+      // The conversion signal: a reserve that crossed the plan's ceiling is
+      // exactly the question the web route is about to refuse.
+      if (micros > 0 && spentMicros > limit.micros) {
+        capture(ownerId, 'ask_limit_hit', { tier: limit.tier });
+      }
     } catch (err) {
       logger.error('ask budget write failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not record Ask spend.' });
@@ -758,7 +793,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
         cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
         used: ent.used,
-        limit: ent.plan.monthlyCalls,
+        limit: ent.limit,
+        seats: ent.seats,
         billingEnabled: billingEnabled(),
         manageable: Boolean(sub?.stripeCustomerId),
       });
@@ -832,6 +868,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
+    // CI policy keys are the Team line. Keys already issued keep working; this
+    // only stops new ones. Fails open on a lookup error, like `quota`.
+    if (scopes.includes('policy:write')) {
+      const ent = await resolveEntitlement(ownerId).catch(() => null);
+      if (ent && !ent.plan.ciPolicyKeys) {
+        res.status(403).json({
+          error: `Keys that change policy from CI come with the Team plan. You are on ${ent.plan.name}.`,
+        });
+        return;
+      }
+    }
     try {
       const { key, row } = await createKey(db, { ownerId, label, tier: 'free', scopes });
       capture(ownerId, 'api_key_created', { tier: row.tier });
@@ -1480,9 +1527,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         : {};
     try {
       const ent = await resolveEntitlement(ownerId);
-      if (!ent.withinQuota) {
+      if (!isAllowed(ent)) {
         res.status(402).json({
-          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.plan.monthlyCalls} calls).`,
+          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.limit} calls).`,
         });
         return;
       }
@@ -1528,8 +1575,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       res.status(400).json({ error: 'days must be a whole number from 1 to 365.' });
       return;
     }
+    // Clamped to the plan's window rather than refused, and the served window is
+    // echoed back so the caller can tell a quiet week from a short plan.
+    const ent = await resolveEntitlement(ownerId).catch(() => null);
+    const maxDays = ent?.plan.decisionLogDays ?? 365;
+    const served = Math.min(days, maxDays);
     try {
-      res.status(200).json({ days, decisions: await summarizeDecisions(db, ownerId, days) });
+      res
+        .status(200)
+        .json({ days: served, maxDays, decisions: await summarizeDecisions(db, ownerId, served) });
     } catch (err) {
       logger.error('policy decisions read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read policy decisions.' });

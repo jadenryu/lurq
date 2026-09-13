@@ -264,15 +264,29 @@
     {
       "idx": 37,
       "version": "7",
-      "when": 1789316246674,
-      "tag": "0037_mcp_runtime_scans",
+      "when": 1789311921905,
+      "tag": "0037_subscription_seats",
       "breakpoints": true
     },
     {
       "idx": 38,
       "version": "7",
-      "when": 1789321596348,
-      "tag": "0038_account_email",
+      "when": 1789319618728,
+      "tag": "0038_symbol_offsets",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789319677465,
+      "tag": "0039_mcp_runtime_scans",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1789321880698,
+      "tag": "0040_account_email",
       "breakpoints": true
     }
   ]

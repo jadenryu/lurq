@@ -286,6 +286,7 @@ export function buildProgram(): Command {
     .option('--report', 'send the result to your lurq dashboard (CI; needs an API key)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .option('--no-types', 'skip the type check (runtime surface only; faster)')
     .action(
       async (
         dir: string,
@@ -297,6 +298,7 @@ export function buildProgram(): Command {
           report?: boolean;
           url?: string;
           apiKey?: string;
+          types?: boolean;
         },
       ) => {
         const { runCheckUpgrade } = await import('./checkUpgrade');

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { EmptyState } from "@/components/dashboard/panel";
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
-import { DigestPrompt } from "@/components/dashboard/notifications-form";
+import { NotificationsForm } from "@/components/dashboard/notifications-form";
 import { loadAlerts, loadNotificationPreferences } from "@/lib/dashboard-data";
 
 export const metadata: Metadata = {
@@ -14,10 +14,9 @@ export const metadata: Metadata = {
 /**
  * The alert feed, given a page of its own.
  *
- * Delivery settings live on the preferences page, added in the same change as the
- * sender (src/notify). This page asks one question in context — the weekly
- * summary opt-in — because the moment someone is reading alerts is the moment the
- * offer makes sense; urgent alerts are on by default and need no prompt.
+ * Email settings live here, under the feed they govern, added in the same change
+ * as the sender (src/notify). Urgent alerts are on by default; the weekly summary
+ * is opt-in, and is also offered in context on the MCP servers page.
  *
  * The overview shows this same panel, and deliberately: there it is one card
  * among several and renders nothing when the feed is empty, because a permanent
@@ -36,8 +35,6 @@ export default async function DashboardNotificationsPage() {
       />
 
       <PageBody>
-        {email.emailConfigured && !email.weeklyDigest && <DigestPrompt demo={demo} />}
-
         {alerts.length === 0 ? (
           <EmptyState
             title="nothing to report"
@@ -53,6 +50,8 @@ export default async function DashboardNotificationsPage() {
         ) : (
           <AlertsPanel alerts={alerts} />
         )}
+
+        <NotificationsForm {...email} demo={demo} />
       </PageBody>
     </div>
   );

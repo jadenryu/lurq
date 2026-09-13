@@ -1,5 +1,6 @@
 import { BarList, ChartValues, ColumnChart, Sparkline } from "@/components/dashboard/charts";
 import { EmptyState, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
+import { RangeTabs } from "@/components/dashboard/range-tabs";
 import { HeroFigure, RailStat } from "@/components/dashboard/stat-tile";
 import { TOOLS } from "@/content/guide";
 import { compact, fmtDay } from "@/lib/format";
@@ -21,9 +22,13 @@ export function UsagePanel({ usage, days }: { usage: DashboardUsage; days: numbe
   // the quiet days too, otherwise it overstates steady-state volume.
   const perDay = usage.series.length > 0 ? total / usage.series.length : 0;
 
+  const range = <RangeTabs active={days} basePath="/dashboard/usage" />;
+
   if (total === 0) {
+    // The control stays reachable here: an empty 7d window is exactly when
+    // someone wants to widen it.
     return (
-      <EmptyState title={`No calls in the last ${days} days`}>
+      <EmptyState title={`No calls in the last ${days} days`} action={range}>
         Counted per day and per tool, once your agent starts calling.
       </EmptyState>
     );
@@ -40,6 +45,7 @@ export function UsagePanel({ usage, days }: { usage: DashboardUsage; days: numbe
               value={total}
               hint={`${usage.today.toLocaleString()} today · ${activeDays} of ${usage.series.length} days active`}
             />
+            {range}
           </div>
           <div className="mt-6">
             <ColumnChart data={usage.series} height={168} />

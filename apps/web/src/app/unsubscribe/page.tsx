@@ -36,8 +36,8 @@ export default async function UnsubscribePage({
       <PageFrame eyebrow="Email" title="You're unsubscribed" lead={`lurq won't send you ${LABEL[kind]} any more.`}>
         <p className="text-ink-2">
           Everything is still in your dashboard. You can turn email back on in{" "}
-          <Link href="/dashboard/preferences" className="underline underline-offset-4">
-            preferences
+          <Link href="/dashboard/notifications" className="underline underline-offset-4">
+            notification settings
           </Link>
           .
         </p>
@@ -50,8 +50,8 @@ export default async function UnsubscribePage({
       <PageFrame eyebrow="Email" title="This link is incomplete" lead="It may have been cut off by your mail client.">
         <p className="text-ink-2">
           Manage every email lurq sends you in{" "}
-          <Link href="/dashboard/preferences" className="underline underline-offset-4">
-            preferences
+          <Link href="/dashboard/notifications" className="underline underline-offset-4">
+            notification settings
           </Link>
           .
         </p>

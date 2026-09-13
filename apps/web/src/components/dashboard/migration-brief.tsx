@@ -92,6 +92,12 @@ function HopPath({ from, hops }: { from: string; hops: UpgradeHop[] }) {
 
 function BriefCard({ upgrade }: { upgrade: UpgradeBrief }) {
   const verdict = VERDICTS[upgrade.verdict];
+  // A removal the package proves a replacement for is shown with it: "parse →
+  // parseCookie" is the next edit, where a bare "parse" is only the bad news.
+  const renamed = new Map((upgrade.renamed ?? []).map((r) => [r.path, r.to]));
+  const removed = upgrade.removed.map((path) =>
+    renamed.has(path) ? `${path} → ${renamed.get(path)!.join(" | ")}` : path,
+  );
   const detailed =
     upgrade.removed.length > 0 ||
     upgrade.arityChanged.length > 0 ||
@@ -144,7 +150,7 @@ function BriefCard({ upgrade }: { upgrade: UpgradeBrief }) {
           {upgrade.hops?.length > 0 && (
             <HopPath from={upgrade.fromVersion} hops={upgrade.hops} />
           )}
-          <SymbolList label="removed at runtime" symbols={upgrade.removed} tone="bad" />
+          <SymbolList label="removed at runtime" symbols={removed} tone="bad" />
           {upgrade.arityChanged.length > 0 && (
             <div>
               <p className={eyebrow}>parameter count changed · {upgrade.arityChanged.length}</p>

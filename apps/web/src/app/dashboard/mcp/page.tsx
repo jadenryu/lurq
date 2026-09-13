@@ -5,7 +5,8 @@ import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { ChangeFeed, SeverityChip, StatusChip, capabilityList } from "@/components/dashboard/mcp-parts";
 import { CopyButton } from "@/components/dashboard/copy-button";
-import { loadMcpServers } from "@/lib/dashboard-data";
+import { DigestPrompt } from "@/components/dashboard/notifications-form";
+import { loadMcpServers, loadNotificationPreferences } from "@/lib/dashboard-data";
 import { relativeTime } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ const CI = "npx lurqrun mcp-ci";
  * so this is the contract their agents actually receive.
  */
 export default async function McpServersPage() {
-  const { data, demo, failed } = await loadMcpServers();
+  const [{ data, demo, failed }, { data: email }] = await Promise.all([loadMcpServers(), loadNotificationPreferences()]);
   const { servers, events } = data;
 
   const tools = servers.reduce((n, s) => n + (s.toolCount ?? 0), 0);
@@ -63,6 +64,8 @@ export default async function McpServersPage() {
             </StatRow>
 
             <ChangeFeed events={events} demo={demo} />
+
+            {email.emailConfigured && !email.weeklyDigest && <DigestPrompt demo={demo} />}
 
             <Panel padding="none">
               <div className="p-[var(--panel-px)] pb-0" style={{ "--panel-px": "1.125rem" } as React.CSSProperties}>

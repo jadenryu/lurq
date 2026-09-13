@@ -146,6 +146,7 @@ export function CreateKeyDialog() {
                 <span className="block text-muted-foreground">
                   For <code className="font-mono">lurq policy push</code> in CI. Never paste this
                   key into a coding agent: it could loosen the rules that agent runs under.
+                  Available on Team and Business.
                 </span>
               </span>
             </label>

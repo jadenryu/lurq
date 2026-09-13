@@ -36,11 +36,15 @@ export interface RunContext {
   runUrl: string;
 }
 
-/** Every reference behind a finding, across removed symbols and arity changes. */
-function findingRefs(finding: UpgradeReport['breaking'][number]) {
+/** Every site behind a finding: removed symbols, arity changes, and type errors. */
+function findingRefs(finding: UpgradeReport['breaking'][number]): { file: string }[] {
   return [
     ...finding.symbolsRemoved.flatMap((s) => s.refs),
     ...finding.arityChanged.flatMap((a) => a.refs),
+    ...(finding.typeErrors ?? []),
+    ...(finding.entriesRemoved ?? []).flatMap((e) => e.refs),
+    ...(finding.moduleFormat?.broken ?? []),
+    ...(finding.moduleFormat?.olderNode ?? []),
   ];
 }
 
@@ -83,6 +87,7 @@ export function buildRunReports(
       symbolsAffected: [
         ...finding.symbolsRemoved.map((s) => s.symbol),
         ...finding.arityChanged.map((a) => a.symbol),
+        ...(finding.entriesRemoved ?? []).map((e) => e.specifier),
       ],
       callSites: refs.length,
       callSiteFiles: [...new Set(refs.map((r) => r.file))],

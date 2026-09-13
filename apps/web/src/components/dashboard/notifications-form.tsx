@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setNotificationPreference } from "@/app/dashboard/preferences/actions";
+import { setNotificationPreference } from "@/app/dashboard/notifications/actions";
 import { Panel, PanelHeader } from "@/components/dashboard/panel";
 import { cn } from "@/lib/utils";
 
@@ -96,7 +96,7 @@ export function DigestPrompt({ demo }: { demo: boolean }) {
   if (state === "on") {
     return (
       <Panel padding="tight">
-        <p className="text-sm text-ink-2">You&rsquo;ll get a summary on Mondays. Change it in preferences.</p>
+        <p className="text-sm text-ink-2">You&rsquo;ll get a summary on Mondays. Change it on the notifications page.</p>
       </Panel>
     );
   }

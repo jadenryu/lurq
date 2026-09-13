@@ -145,6 +145,8 @@ const EnvSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
   STRIPE_PRICE_PRO: z.string().min(1).optional(),
+  /** Per-seat Price id backing Team. The subscription quantity is the seat count. */
+  STRIPE_PRICE_TEAM: z.string().min(1).optional(),
   /** Price id backing Enterprise. Normally unset: Enterprise is sold by
    *  conversation, and `contactOnly` in core/plans.ts is what the page reads. */
   STRIPE_PRICE_ENTERPRISE: z.string().min(1).optional(),

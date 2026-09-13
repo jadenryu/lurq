@@ -14,6 +14,13 @@
 import { readFileSync } from 'node:fs';
 import type { UpgradeTarget } from '../surface/upgrade';
 
+/**
+ * Source files read before the scan stops. Well above the scanner's default:
+ * this is the gate, and a monorepo past the default is exactly the codebase
+ * where an unread file hides a call site. Past it, the report says so.
+ */
+const SCAN_LIMIT = 20_000;
+
 /** `pkg@from..to`, the repeatable `--upgrade` form. */
 export function parseUpgradeSpec(spec: string): UpgradeTarget {
   const at = spec.lastIndexOf('@');
@@ -80,6 +87,8 @@ export interface CheckUpgradeOpts {
   report?: boolean;
   url?: string;
   apiKey?: string;
+  /** `--no-types` sets this false. */
+  types?: boolean;
 }
 
 /**
@@ -148,8 +157,25 @@ export async function runCheckUpgrade(dir: string, opts: CheckUpgradeOpts): Prom
     throw new Error('give --plan <file> or at least one --upgrade pkg@from..to');
   }
 
-  const refs = scanReferences(dir);
-  const report = await checkUpgrade(targets, refs);
+  const scan = { files: 0, truncated: false };
+  const refs = scanReferences(dir, { limit: SCAN_LIMIT, stats: scan });
+  // On unless switched off. It is the only part that sees a renamed option or a
+  // narrowed parameter, and on a project with no tsconfig it reports itself as
+  // not checked rather than failing anything.
+  const typeCheck =
+    opts.types === false
+      ? undefined
+      : await (await import('../surface/typecheck')).createTypeChecker(dir);
+  const report = await checkUpgrade(targets, refs, { typeCheck, rootDir: dir });
+  // A reference past the scan limit is one nobody checked, so "safe" would be a
+  // claim about files that were never opened.
+  if (scan.truncated) {
+    report.unverified.push({
+      package: '(source scan)',
+      reason: `stopped after ${scan.files} source files; references in the rest were not checked`,
+    });
+    report.safe = false;
+  }
 
   console.log(
     opts.json

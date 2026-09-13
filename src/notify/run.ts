@@ -80,7 +80,7 @@ function links(webUrl: string, prefs: NotificationPreferencesRow, kind: Notifica
     // URL in a message cannot turn someone's alerts off.
     unsubscribeUrl: `${webUrl}/unsubscribe?${q}`,
     oneClickUrl: `${webUrl}/api/unsubscribe?${q}`,
-    settingsUrl: `${webUrl}/dashboard/preferences`,
+    settingsUrl: `${webUrl}/dashboard/notifications`,
   };
 }
 

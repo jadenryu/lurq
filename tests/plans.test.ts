@@ -1,9 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { PLANS, PLAN_LIST, isServed, planFor, type Tier } from '../src/core/plans';
+import {
+  PLANS,
+  PLAN_LIST,
+  billedSeats,
+  isServed,
+  monthlyAllowance,
+  planFor,
+  type Tier,
+} from '../src/core/plans';
+
+describe('seats and the pooled allowance', () => {
+  it('bills a per-seat plan at no fewer than its minimum', () => {
+    expect(billedSeats(PLANS.team, 1)).toBe(3);
+    expect(billedSeats(PLANS.team, null)).toBe(3);
+    expect(billedSeats(PLANS.team, 8)).toBe(8);
+  });
+
+  it('ignores seats on flat plans', () => {
+    // A Pro row carrying a stray quantity must not multiply its allowance.
+    expect(billedSeats(PLANS.pro, 12)).toBe(1);
+    expect(monthlyAllowance(PLANS.pro, 12)).toBe(PLANS.pro.monthlyCalls);
+  });
+
+  it('pools calls across seats and leaves uncapped uncapped', () => {
+    expect(monthlyAllowance(PLANS.team, 8)).toBe(8 * PLANS.team.monthlyCalls!);
+    expect(monthlyAllowance(PLANS.enterprise, 50)).toBeNull();
+  });
+
+  it('keeps CI policy keys and the long decision log off the individual plans', () => {
+    expect(PLANS.free.ciPolicyKeys).toBe(false);
+    expect(PLANS.pro.ciPolicyKeys).toBe(false);
+    expect(PLANS.team.ciPolicyKeys).toBe(true);
+    const days = PLAN_LIST.map((p) => p.decisionLogDays);
+    expect(days).toEqual([...days].sort((a, b) => a - b));
+  });
+});
 
 describe('planFor (entitlement resolution)', () => {
   it('resolves each known tier', () => {
-    for (const tier of ['free', 'pro', 'enterprise'] as Tier[]) {
+    for (const tier of ['free', 'pro', 'team', 'enterprise'] as Tier[]) {
       expect(planFor(tier).tier).toBe(tier);
     }
   });
@@ -53,12 +88,18 @@ describe('the plan table itself', () => {
 
     const rates = PLAN_LIST.map((p) => p.ratePerMinute);
     for (let i = 1; i < rates.length; i++) expect(rates[i]!).toBeGreaterThan(rates[i - 1]!);
+
+    // Zero would read as "no limit" in the web route, so free must be positive.
+    const ask = PLAN_LIST.map((p) => p.askDailyUsd);
+    expect(ask[0]!).toBeGreaterThan(0);
+    for (let i = 1; i < ask.length; i++) expect(ask[i]!).toBeGreaterThan(ask[i - 1]!);
   });
 
   it('keeps free free and paid paid', () => {
     expect(PLANS.free.paid).toBe(false);
     expect(PLANS.free.priceCents).toBe(0);
     expect(PLANS.pro.paid).toBe(true);
+    expect(PLANS.team.paid).toBe(true);
     expect(PLANS.enterprise.paid).toBe(true);
   });
 
