@@ -7,11 +7,16 @@ export const metadata: Metadata = {
   description: "How lurq handles your data.",
 };
 
+/**
+ * Every claim on this page is meant to be checkable against the code, and the
+ * comments below say where. If you change what a flow collects, sends, or keeps,
+ * change the matching paragraph in the same commit.
+ */
 export default function PrivacyPage() {
   return (
     <PageShell eyebrow="Legal" title="Privacy Policy">
       <p className="mb-8 text-sm text-muted-foreground/70">
-        Last updated: September 12, 2026
+        Last updated: September 13, 2026
       </p>
 
       <div className="mb-10 rounded-lg border border-dashed border-border bg-card/40 p-4 text-sm text-muted-foreground">
@@ -28,8 +33,8 @@ export default function PrivacyPage() {
           &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;), collects,
           uses, and shares information about you when you use the lurq website at{" "}
           <a href="https://lurq.run">lurq.run</a>, the lurq command-line
-          interface (&ldquo;CLI&rdquo;), the lurq MCP server, and any related
-          services (together, the &ldquo;Services&rdquo;).
+          interface (&ldquo;CLI&rdquo;), the lurq MCP server, the lurq GitHub App,
+          and any related services (together, the &ldquo;Services&rdquo;).
         </p>
         <p>
           We built lurq as a tool for developers and collect as little personal
@@ -41,16 +46,31 @@ export default function PrivacyPage() {
 
         <h3>Information you provide to us</h3>
         <ul>
+          {/* apps/web/src/app/api/contact/route.ts */}
           <li>
-            <strong>Waitlist and contact details.</strong> If you join our
-            waitlist, request a demo, or contact us, we collect the email address
-            and any message contents you provide.
+            <strong>Contact messages.</strong> If you use the contact form, we
+            collect the name, email address, and message you enter, along with
+            your IP address, approximate country, and browser user agent, which
+            are included in the email we receive. The form is protected by
+            Cloudflare Turnstile. If you email us directly, we receive whatever
+            your email contains.
           </li>
           <li>
             <strong>Account information.</strong> If you create an account, our
             authentication provider (Clerk) collects the email address and
             credentials needed to create and secure it. API keys you generate are
-            associated with your account.
+            associated with your account; we store only a one-way hash of each
+            key, never the key itself.
+          </li>
+          {/* src/billing/stripe.ts, apps/web/src/app/api/billing/request/route.ts */}
+          <li>
+            <strong>Billing.</strong> If you buy a paid plan, Stripe collects your
+            payment details and billing address on its own checkout page; we
+            never see or store your card number. We store your Stripe customer
+            and subscription identifiers, your plan, its status, seat count, and
+            renewal date. If you ask to buy a plan while self-serve checkout is
+            unavailable, we receive an email with your account identifier and
+            the plan you chose.
           </li>
           <li>
             <strong>Account email.</strong> We email your account&rsquo;s verified
@@ -58,7 +78,9 @@ export default function PrivacyPage() {
             connect, which is on by default, and a weekly summary only if you turn
             it on. Every email has a link to turn it off. We read the address from
             Clerk when an email is sent and do not keep our own copy, and we record
-            which alerts were sent so the same one is never sent twice.
+            which alerts were sent so the same one is never sent twice. If you add
+            a Slack, Discord, Teams, or webhook alert channel, we store its URL
+            encrypted.
           </li>
         </ul>
 
@@ -66,52 +88,117 @@ export default function PrivacyPage() {
         <ul>
           <li>
             <strong>Website and server logs.</strong> When you access lurq.run or
-            our hosted API/MCP endpoints, our infrastructure records standard
+            our hosted API/MCP endpoints, our hosting providers record standard
             technical information such as your IP address, client type and
             version, request timestamps, and the resources you request. We use
             this to operate, secure, debug, and rate-limit the Services.
           </li>
+          {/* instrumentation-client.ts, components/site/repo-scan.tsx,
+              components/dashboard/builder-report.tsx, src/core/analytics.ts */}
           <li>
             <strong>Product analytics.</strong> Our website uses PostHog to
-            capture usage such as page views and navigation, so we can understand
-            how the site is used and improve it. When you are signed in, those
-            events are linked to your account. Our hosted service also records
-            account-level product events in PostHog, such as creating an API key
-            and which lurq tool was called and whether it succeeded, but never
-            the contents of your queries. We do not use this to build advertising
-            profiles.
+            capture usage such as page views, navigation, and page performance,
+            and uses Vercel Web Analytics and Speed Insights for aggregate traffic
+            and performance. When you are signed in, PostHog events are linked to
+            your account. If you scan a GitHub profile or repository from the
+            website, the name you typed and the resulting report&rsquo;s summary
+            (the GitHub login and its profile type) are recorded in PostHog. Our
+            hosted service also records account-level product events in PostHog,
+            such as creating an API key, which lurq tool was called and whether it
+            succeeded, and the size and cost of dashboard Ask answers, but never
+            the contents of your queries or questions. We do not use this to build
+            advertising profiles.
           </li>
+          {/* src/mcp/handlers.ts, src/search/recommend.ts, src/mcp/plan.ts */}
           <li>
-            <strong>Query data.</strong> When you request a recommendation
-            through the website, CLI, or MCP server, we receive the search terms
-            or package context you submit and the recommendations returned. We use
-            this to return your results and to improve the quality and relevance
-            of recommendations. The CLI and MCP server do not send us any separate
-            analytics or telemetry beyond the queries needed to serve your
-            request.
+            <strong>Query data.</strong> When you call a lurq tool through the
+            CLI or MCP server, we receive the search terms, package names, or
+            package context you submit, and return results. To answer a search,
+            its text is sent to our embedding model provider; if you pass a
+            document to the <code>plan</code> tool, it may be sent to our language
+            model provider to break it into components. Search results are cached
+            without being tied to your account. Linked to your account we keep
+            daily counts of which tools you called, the packages your selection
+            policy blocked or warned about, and any outcomes you report back
+            (including the need you described). The CLI and MCP server do not send
+            us any separate analytics or telemetry beyond the requests needed to
+            serve you.
           </li>
         </ul>
 
-        <h3>What we do not collect</h3>
+        {/* src/github/manifests.ts, src/github/webhook.ts */}
+        <h3>GitHub repositories you connect</h3>
         <p>
-          lurq operates on public package metadata. We do not read your source
-          code, and the index itself is built entirely from public signals.
+          If you install the lurq GitHub App, it has read-only access to the
+          repositories you choose, including private ones. Our servers read the
+          list of those repositories (name, default branch, and whether each is
+          private), the repository&rsquo;s file names (to find manifests and
+          detect the package manager), and the dependency sections of its{" "}
+          <code>package.json</code> files. We store those dependency lists and
+          the scan results. Our servers do not read your source files, lockfiles,
+          or commit history. When you remove a repository from the App or
+          uninstall it, we delete the data we stored for those repositories.
+        </p>
+        <p>
+          Scanning a public GitHub profile or repository from the website reads
+          the same kind of public dependency information through GitHub&rsquo;s
+          API.
+        </p>
+
+        {/* src/cli/reportRuns.ts, src/cli/mcpScan.ts */}
+        <h3>What runs on your machine, and what it sends</h3>
+        <ul>
+          <li>
+            <strong>
+              <code>lurq check-upgrade</code>
+            </strong>{" "}
+            reads your code on your own machine or CI runner to find call sites an
+            upgrade would break. Your code is not uploaded. Only if you pass{" "}
+            <code>--report</code> does it send us the results: package names and
+            versions, severity, the names of affected symbols, the number of call
+            sites and the file paths they are in, and the CI run link. File
+            contents are never sent.
+          </li>
+          <li>
+            <strong>
+              <code>lurq mcp-scan</code>
+            </strong>{" "}
+            connects, from your machine, to the MCP servers configured in your
+            coding agents and reads what each one declares. When an API key is
+            configured it uploads that to your account unless you pass{" "}
+            <code>--no-upload</code>: each server&rsquo;s name, package name or
+            remote address, version, transport, and status, the tool, prompt, and
+            resource definitions and instructions the server publishes, and a
+            one-way fingerprint of its configuration. The configuration itself,
+            including any credentials in it, is not uploaded.
+          </li>
+        </ul>
+
+        {/* apps/web/src/app/api/ask/route.ts */}
+        <h3>Dashboard Ask</h3>
+        <p>
+          If you use Ask in the dashboard, your question and the data from your
+          own account needed to answer it (such as your connected repositories,
+          their dependencies, alerts, and usage) are sent to Anthropic to generate
+          the answer. We record what each day&rsquo;s questions cost, not the
+          questions themselves.
         </p>
 
         <h2>How we use information</h2>
         <ul>
           <li>
             Provide, operate, and maintain the Services, including returning the
-            package recommendations you request;
+            results you request;
           </li>
           <li>
             Improve and develop the Services, including the quality and relevance
             of recommendations;
           </li>
           <li>
-            Communicate with you: responding to your messages and, if you opted
-            in, sending occasional updates about news, products, and services;
+            Communicate with you: responding to your messages and sending the
+            account emails described above;
           </li>
+          <li>Process payments and manage subscriptions;</li>
           <li>
             Protect the Services, our users, and the public: detecting and
             preventing abuse, spam, fraud, and security incidents, and enforcing
@@ -124,10 +211,10 @@ export default function PrivacyPage() {
         <p>
           If you are in the European Economic Area, the United Kingdom, or
           Switzerland, we process your personal information under these legal
-          bases: <strong>consent</strong> (for update emails you sign up for);{" "}
+          bases: <strong>consent</strong> (for the optional weekly summary email);{" "}
           <strong>legitimate interests</strong> (operating, securing, debugging,
           and improving the Services); <strong>performance of a contract</strong>{" "}
-          (providing the Services you request); and{" "}
+          (providing the Services you request, including paid plans); and{" "}
           <strong>legal obligation</strong> (complying with the law). You can
           withdraw consent at any time.
         </p>
@@ -139,14 +226,19 @@ export default function PrivacyPage() {
         </p>
         <ul>
           <li>
-            <strong>Service providers (sub-processors).</strong> We rely on
-            trusted third parties to run lurq, including{" "}
-            <strong>Clerk</strong> (authentication), <strong>Neon</strong>{" "}
-            (database), <strong>Railway</strong> (application hosting),{" "}
-            <strong>Resend</strong> (transactional and update email),{" "}
-            <strong>Cloudflare</strong> (DNS, email routing, and Turnstile bot
-            protection), and <strong>PostHog</strong> (product analytics). They
-            process information on our behalf and are bound to protect it.
+            <strong>Service providers (sub-processors).</strong> We rely on third
+            parties to run lurq: <strong>Clerk</strong> (authentication),{" "}
+            <strong>Stripe</strong> (payments and subscription billing),{" "}
+            <strong>Neon</strong> (database), <strong>Railway</strong> (API
+            hosting), <strong>Vercel</strong> (website and documentation hosting,
+            Web Analytics, and Speed Insights), <strong>GitHub</strong> (the lurq
+            GitHub App and repository scans), <strong>Anthropic</strong>{" "}
+            (dashboard Ask), our embedding and language model provider (search
+            queries and <code>plan</code> documents, as described above),{" "}
+            <strong>Resend</strong> (email), <strong>Cloudflare</strong> (DNS,
+            email routing, and Turnstile bot protection), and{" "}
+            <strong>PostHog</strong> (product analytics). They process information
+            on our behalf.
           </li>
           <li>
             <strong>Legal and safety.</strong> We may disclose information if
@@ -162,14 +254,20 @@ export default function PrivacyPage() {
           </li>
         </ul>
 
+        {/* No scheduled deletion job exists. `usage-prune` is a manual operator
+            command. Keep this section honest if that changes. */}
         <h2>Data retention</h2>
         <p>
-          We keep personal information only as long as we have a reason to: to
-          provide the Services, comply with legal obligations, resolve disputes,
-          and enforce our agreements. Server logs and query data are retained for
-          a limited period and then deleted or aggregated. Waitlist and contact
-          information is kept until you ask us to delete it or it is no longer
-          needed.
+          We do not currently delete account data on a schedule. The information
+          linked to your account (API keys, usage counts, reported outcomes,
+          policy decisions, connected-repository data, upgrade reports, MCP scan
+          history, and billing records) is kept while your account exists and
+          until you ask us to delete it. Some of it expires or is removed sooner:
+          cached search results expire automatically, and data for a GitHub
+          repository is deleted when you remove it from the lurq GitHub App.
+          Server and website logs are kept by our hosting providers under their
+          own retention periods. Contact messages stay in our email until
+          deleted. Stripe keeps payment records as the law requires.
         </p>
 
         <h2>Your rights and choices</h2>
@@ -185,9 +283,9 @@ export default function PrivacyPage() {
           local data protection authority.
         </p>
         <p>
-          To exercise any of these rights, email{" "}
-          <a href="mailto:contact@lurq.run">contact@lurq.run</a>. You can also
-          unsubscribe from update emails at any time using the link in the email.
+          To exercise any of these rights, including deleting your account data,
+          email <a href="mailto:contact@lurq.run">contact@lurq.run</a>. You can
+          turn off account emails at any time using the link in each email.
         </p>
 
         <h2>International data transfers</h2>

@@ -56,8 +56,14 @@ describe('rowToEvaluate', () => {
   it('caps advisories at 5, ordered by severity', () => {
     const out = rowToEvaluate(makeRow());
     expect(out.advisories).toHaveLength(5);
-    expect(out.advisories[0]!.severity).toBe('critical');
-    expect(out.advisories.map((a) => a.severity)).not.toContain('info'); // lowest dropped
+    expect(out.advisories![0]!.severity).toBe('critical');
+    expect(out.advisories!.map((a) => a.severity)).not.toContain('info'); // lowest dropped
+  });
+
+  // `[]` would tell an agent "no advisories" about a package nobody has checked.
+  it('keeps never-checked advisories null rather than an empty list', () => {
+    expect(rowToEvaluate(makeRow({ advisories: null })).advisories).toBeNull();
+    expect(rowToEvaluate(makeRow({ advisories: [] })).advisories).toEqual([]);
   });
 
   it('flags stale data older than the threshold', () => {

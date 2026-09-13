@@ -221,16 +221,29 @@ export function buildProgram(): Command {
     // only one spelling is advertised.
     .addOption(new Option('--version <v>', 'alias for --target').hideHelp())
     .option('--known <v>', 'a version you know; shows the API delta to the target')
+    .option('--query <text>', 'only symbols whose name contains this')
+    .option('--offset <n>', 'first symbol to show, to page past the first 80', (v) =>
+      Math.max(0, parseInt(v, 10) || 0),
+    )
     .option('--json', 'output JSON')
     .action(
       async (
         pkg: string,
-        opts: { target?: string; version?: string; known?: string; json?: boolean },
+        opts: {
+          target?: string;
+          version?: string;
+          known?: string;
+          query?: string;
+          offset?: number;
+          json?: boolean;
+        },
       ) => {
         const { runUsage } = await import('./commands');
         await runUsage(pkg, {
           version: opts.target ?? opts.version,
           known: opts.known,
+          query: opts.query,
+          offset: opts.offset,
           json: opts.json,
         });
       },

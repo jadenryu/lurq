@@ -14,9 +14,14 @@
 import type Stripe from 'stripe';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
-import { PLANS, type BillingInterval, type Tier } from '../core/plans';
+import { PLANS, SERVED_STATUSES, type BillingInterval, type Tier } from '../core/plans';
 import type { Database } from '../db/client';
-import { applySubscriptionEvent, getSubscription, linkCustomer } from '../db/subscriptions';
+import {
+  applySubscriptionEvent,
+  getSubscription,
+  isManualGrant,
+  linkCustomer,
+} from '../db/subscriptions';
 
 /**
  * Pinned deliberately. Stripe's API is versioned per-account, and letting the
@@ -158,6 +163,12 @@ export interface CheckoutRequest {
  * is not even created until payment completes, so the success redirect proves
  * only that the customer reached the end of a form. Entitlement is written by
  * the webhook and nowhere else.
+ *
+ * An account that already has a live Stripe subscription gets the billing
+ * portal instead. A second Checkout would create a second subscription on the
+ * same customer: two charges a month, and the webhook's one-row-per-customer
+ * mirror flapping between them. Changing plan, seats or interval is what the
+ * portal is for, and both callers simply redirect to whatever URL comes back.
  */
 export async function createCheckoutSession(
   db: Database,
@@ -165,6 +176,16 @@ export async function createCheckoutSession(
 ): Promise<string | null> {
   const stripe = await stripeClient();
   if (!stripe) return null;
+
+  const existing = await getSubscription(db, req.ownerId);
+  if (
+    existing?.stripeSubscriptionId &&
+    !isManualGrant(existing) &&
+    existing.status != null &&
+    SERVED_STATUSES.has(existing.status)
+  ) {
+    return createPortalSession(db, req.ownerId);
+  }
 
   const interval = req.interval ?? 'month';
   const price = priceIdFor(req.tier, interval);

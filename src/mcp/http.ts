@@ -55,16 +55,13 @@ import {
   entitlementFor,
   isAllowed,
   getSubscription,
-  getSubscriptionByCustomer,
   type Entitlement,
 } from '../db/subscriptions';
 import {
   billingEnabled,
-  constructEvent,
   createCheckoutSession,
   isCheckoutOrigin,
   createPortalSession,
-  handleEvent,
 } from '../billing/stripe';
 import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
 import { registerPublicPackageRoutes } from './publicPackages';
@@ -99,6 +96,8 @@ import { secretKey } from '../core/secretBox';
 import { channelsAllowed } from '../notify/channelRun';
 import { postJson } from '../notify/safeHttp';
 import { renderPrometheus } from './metrics';
+import { alert, errorKind } from '../core/alert';
+import { processStripeWebhook } from '../billing/webhook';
 
 interface AuthedRequest extends Request {
   lurqKey?: ApiKeyRow;
@@ -114,6 +113,10 @@ interface RawBodyRequest extends Request {
 function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
 }
+
+/** The next step for a caller with no working key, appended to both 401s. */
+export const GET_A_KEY =
+  'Get a key at https://www.lurq.run/dashboard/keys, or run `npx lurqrun` to set one up.';
 
 /** One cached public scan: the answer, when it was taken, and how long it holds. */
 export interface ScanCacheEntry {
@@ -323,6 +326,20 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   const app = express();
   app.set('trust proxy', 1); // Railway terminates TLS at the edge.
   app.use(helmet());
+  // Operator alert on any 5xx, whichever route produced it: most routes catch
+  // their own failures and answer 500 themselves, so the terminal error handler
+  // alone would miss nearly all of them. On `finish`, so it runs after the
+  // response is out and cannot slow or fail it. The route pattern rather than
+  // the path keeps ids out of the message. The two webhooks alert with their own
+  // detail, so they are skipped here rather than reported twice.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.on('finish', () => {
+      if (res.statusCode < 500 || req.path === '/billing/webhook') return;
+      const route = (req.route as { path?: unknown } | undefined)?.path;
+      alert('server-error', `${req.method} ${typeof route === 'string' ? route : req.path} answered ${res.statusCode}`);
+    });
+    next();
+  });
   // `verify` keeps the bytes the parser already had in hand. GitHub signs the raw
   // body, and a re-serialized parse result is not byte-identical, so the webhook
   // signature is uncheckable without this. Costs a reference, not a copy.
@@ -511,17 +528,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   // Bearer API-key auth: resolve and attach the key, or 401.
+  //
+  // The 401 text is usually the first thing a new user sees, pasted from their
+  // agent's MCP log, so it says where a key comes from. Deliberately no
+  // WWW-Authenticate header: lurq has no OAuth, and MCP clients that see one
+  // start OAuth discovery and bury this message under a failed sign-in flow.
   const auth = async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
     const header = req.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token) {
-      res.status(401).json(rpcError(-32001, 'Missing API key. Pass Authorization: Bearer <key>.'));
+      res.status(401).json(rpcError(-32001, `Missing API key. Pass Authorization: Bearer <key>. ${GET_A_KEY}`));
       return;
     }
     try {
       const row = await lookupActiveKey(db, token);
       if (!row) {
-        res.status(401).json(rpcError(-32001, 'Invalid or revoked API key.'));
+        res.status(401).json(rpcError(-32001, `Invalid or revoked API key. ${GET_A_KEY}`));
         return;
       }
       req.lurqKey = row;
@@ -877,48 +899,19 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * requireIssuerSecret or the IP limiter: Stripe calls it from its own ranges
    * and a burst of retries must not be throttled into looking like an outage.
    *
-   * Answers 200 for anything it managed to verify, including events it does not
-   * act on. A non-2xx makes Stripe retry for three days, so reserving failure
-   * for "we could not verify this at all" is what keeps the retry queue honest.
+   * Processes before answering, and answers 5xx when processing fails so Stripe
+   * retries. The status contract lives in billing/webhook.ts.
    */
   app.post('/billing/webhook', async (req: Request, res: Response) => {
-    const raw = (req as RawBodyRequest).rawBody;
     const signature = req.headers['stripe-signature'];
-    let event;
-    try {
-      event = await constructEvent(
-        raw ?? '',
-        typeof signature === 'string' ? signature : undefined,
-      );
-    } catch (err) {
-      logger.warn(
-        `billing webhook: bad signature: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      res.status(400).json({ error: 'Invalid signature.' });
-      return;
-    }
-    if (!event) {
-      res.status(404).end();
-      return;
-    }
-
-    // Acknowledge before doing the work. Stripe times out at 20 seconds and a
-    // retry of an already-applied event is wasted round trips on both sides.
-    res.status(200).json({ received: true });
-    try {
-      const outcome = await handleEvent(db, event);
-      logger.info(`billing webhook: ${outcome}`);
-      // The plan just moved. Drop the cached entitlement so the next call sees
-      // it immediately rather than up to a minute later — the one moment the
-      // staleness would be felt is the moment someone has just paid.
-      const object = event.data.object as { customer?: unknown };
-      if (typeof object.customer === 'string') {
-        const row = await getSubscriptionByCustomer(db, object.customer);
-        if (row) invalidateEntitlement(row.ownerId);
-      }
-    } catch (err) {
-      logger.error('billing webhook failed:', formatError(err));
-    }
+    const reply = await processStripeWebhook(
+      db,
+      (req as RawBodyRequest).rawBody,
+      typeof signature === 'string' ? signature : undefined,
+      invalidateEntitlement,
+    );
+    if (reply.body === undefined) res.status(reply.status).end();
+    else res.status(reply.status).json(reply.body);
   });
 
   app.post('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
@@ -1301,10 +1294,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       await syncInstallation(ownerId, action.installationId, action.added);
     } catch (err) {
       // The ack already went out; GitHub will not retry. Logged rather than
-      // thrown, and the next nightly scan reconciles anything missed.
+      // thrown, and the next nightly scan reconciles anything missed — but
+      // alerted, because until then the repo is missing from someone's dashboard.
       logger.error(
         `webhook handling failed for installation ${action.installationId}:`,
         err instanceof Error ? err.message : String(err),
+      );
+      alert(
+        'github-webhook',
+        `${action.kind} for installation ${action.installationId} failed (${errorKind(err)})`,
       );
     }
   });
