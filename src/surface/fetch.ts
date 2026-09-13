@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { encodeNpmName } from '../ingestion/sources/npmRegistry';
+import type { PackageManifest } from './resolve';
 import type { ExtractedSurface } from './types';
 
 const execFileP = promisify(execFile);
@@ -93,15 +94,10 @@ export async function resolveTarball(
   version: string | null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<DistInfo | null> {
-  const spec = version ?? 'latest';
-  const url = `https://registry.npmjs.org/${encodeNpmName(name)}/${encodeURIComponent(spec)}`;
-  const res = await fetchWithRetry(fetchImpl, url, { headers: { accept: 'application/json' } });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`registry answered ${res.status} for ${name}@${spec}`);
-  const body = (await res.json()) as {
+  const body = (await registryVersion(name, version, fetchImpl)) as {
     version?: string;
     dist?: { tarball?: string; integrity?: string; shasum?: string };
-  };
+  } | null;
   if (!body?.dist?.tarball || !body.version) return null;
   return {
     tarball: body.dist.tarball,
@@ -109,6 +105,29 @@ export async function resolveTarball(
     ...(body.dist.integrity ? { integrity: body.dist.integrity } : {}),
     ...(body.dist.shasum ? { shasum: body.dist.shasum } : {}),
   };
+}
+
+/** One version's registry document, or null when it is not published. */
+async function registryVersion(name: string, version: string | null, fetchImpl: typeof fetch): Promise<unknown> {
+  const spec = version ?? 'latest';
+  const url = `https://registry.npmjs.org/${encodeNpmName(name)}/${encodeURIComponent(spec)}`;
+  const res = await fetchWithRetry(fetchImpl, url, { headers: { accept: 'application/json' } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`registry answered ${res.status} for ${name}@${spec}`);
+  return res.json();
+}
+
+/**
+ * A version's manifest as the registry serves it: `engines`, peers, and the rest
+ * of package.json, with no tarball downloaded. Null when not published.
+ */
+export async function fetchManifest(
+  name: string,
+  version: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<PackageManifest | null> {
+  const body = await registryVersion(name, version, fetchImpl);
+  return body && typeof body === 'object' ? (body as PackageManifest) : null;
 }
 
 /**

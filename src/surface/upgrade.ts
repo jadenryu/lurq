@@ -19,7 +19,7 @@
  * is how a CI gate loses its credibility in one incident.
  */
 import semver from 'semver';
-import { extractUnpacked, unpackPackage, type Unpacked } from './fetch';
+import { extractUnpacked, fetchManifest, unpackPackage, type Unpacked } from './fetch';
 import { diffSurfaces, type ArityChange } from './diff';
 import { SURFACE_CLAIM_KINDS } from './references';
 import type { PackageReferences, SymbolReference } from './references';
@@ -33,7 +33,7 @@ import {
 } from './requirements';
 import { readManifest, requireTarget, resolveEntryCandidates, subpathWithdrawn } from './resolve';
 import type { TypeCheck, TypeCheckFn, TypeDiagnostic } from './typecheck';
-import { runtimeSymbols, type ExtractedSurface, type SymbolKind } from './types';
+import { runtimeSymbols, starReExports, type ExtractedSurface, type SymbolKind } from './types';
 
 export interface UpgradeTarget {
   package: string;
@@ -298,13 +298,23 @@ function compareEntry(
   // exactly as they did before this change.
   const tag = isRoot ? {} : { specifier };
   const renames = new Map(diff.renamed.map((r) => [r.path, r.to]));
+  const symbolsRemoved = diff.removed
+    .filter((s) => referenced.has(s.path) && !toSurface.has(s.path))
+    .map((s) => {
+      const renamedTo = renames.get(s.path);
+      return { symbol: s.path, ...tag, ...(renamedTo ? { renamedTo } : {}), refs: symbols.get(s.path) ?? [] };
+    });
+  // `export * from 'core'` may still provide every one of those names. Tier A
+  // cannot see through another package, so the honest answer is "could not
+  // tell", never BLOCKING on code that may well load.
+  const stars = starReExports(to);
+  if (symbolsRemoved.length && stars.length) {
+    return {
+      unverified: `re-exports everything from ${stars.join(', ')}, which may still export ${symbolsRemoved.map((s) => s.symbol).join(', ')}`,
+    };
+  }
   return {
-    symbolsRemoved: diff.removed
-      .filter((s) => referenced.has(s.path) && !toSurface.has(s.path))
-      .map((s) => {
-        const renamedTo = renames.get(s.path);
-        return { symbol: s.path, ...tag, ...(renamedTo ? { renamedTo } : {}), refs: symbols.get(s.path) ?? [] };
-      }),
+    symbolsRemoved,
     arityChanged: diff.arityChanged
       .filter((a) => referenced.has(a.path))
       .flatMap((a) => {
@@ -352,10 +362,10 @@ export async function checkUpgradeOne(
   refs: PackageReferences | undefined,
   opts: CheckOptions = {},
 ): Promise<UpgradeCheck> {
-  if (!refs || refs.symbols.size === 0) return {};
+  if (!refs || refs.symbols.size === 0) return requirementsOnly(target, opts.runtime);
 
   const byEntry = groupByEntry(refs, target.package);
-  if (byEntry.size === 0) return {};
+  if (byEntry.size === 0) return requirementsOnly(target, opts.runtime);
 
   // A range is not a version. The registry answers `^2.0.0` with a 404, which
   // would read as "not published" and send someone looking for a missing
@@ -385,6 +395,42 @@ export async function checkUpgradeOne(
     await Promise.all(
       settled.map((s) => (s.status === 'fulfilled' && s.value ? s.value.cleanup() : undefined)),
     );
+  }
+}
+
+/**
+ * An upgrade nothing imports can still break the project: a CLI or build tool
+ * that now needs a newer Node, a plugin whose peer range moved. Those facts are
+ * in the registry manifests, so no tarball is downloaded to find them.
+ *
+ * Best effort by design. A registry failure here leaves the package OK, as it
+ * was before this check existed, because nothing the code references is in
+ * question; turning a network blip into "unverified" for every devDependency
+ * in a plan would bury the findings that matter.
+ */
+async function requirementsOnly(target: UpgradeTarget, runtime: RepoRuntime | undefined): Promise<UpgradeCheck> {
+  if (!runtime?.root) return {};
+  try {
+    const [from, to] = await Promise.all([
+      fetchManifest(target.package, target.fromVersion),
+      fetchManifest(target.package, target.toVersion),
+    ]);
+    const requirements = judgeRequirements(from, to, runtime);
+    if (!requirements.length) return {};
+    return {
+      finding: {
+        package: target.package,
+        fromVersion: target.fromVersion,
+        toVersion: target.toVersion,
+        severity: 'warning',
+        symbolsRemoved: [],
+        arityChanged: [],
+        newExports: [],
+        requirements,
+      },
+    };
+  } catch {
+    return {};
   }
 }
 
@@ -483,8 +529,13 @@ async function compareVersions(
     for (const k of res.lostKinds) lostKinds.add(k);
   }
 
+  // Every name the module exports, re-exports from other packages included. Null
+  // when a wholesale re-export hides some of them: a name that looks missing may
+  // arrive through it.
   const exportNames = (s: ExtractedSurface) =>
-    s.undeclaredReason ? null : new Set(runtimeSymbols(s).map((x) => x.path));
+    s.undeclaredReason || starReExports(s).length
+      ? null
+      : new Set(s.symbols.filter((x) => x.kind !== 'type_only').map((x) => x.path));
   const fromTarget = requireTarget(fromPkg.pkgDir);
   const toTarget = requireTarget(toPkg.pkgDir);
   // The graph walk is only worth it when require() is about to be handed an ES module.

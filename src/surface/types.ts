@@ -84,3 +84,17 @@ export interface ExtractedSurface {
 export function runtimeSymbols(surface: ExtractedSurface): SurfaceSymbol[] {
   return surface.symbols.filter((s) => s.kind !== 'type_only' && s.origin === 'local');
 }
+
+/**
+ * Other packages this surface re-exports wholesale (`export * from 'core'`).
+ *
+ * Their names are not in `symbols`, so a name missing from this surface may
+ * still be exported through one of them, and its absence cannot be proven. A
+ * spec with at least one named symbol recorded against it was a named
+ * re-export, whose names are all present.
+ */
+export function starReExports(surface: ExtractedSurface): string[] {
+  return surface.externalReExports.filter(
+    (spec) => !surface.symbols.some((s) => s.origin === `external:${spec}`),
+  );
+}

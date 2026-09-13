@@ -103,7 +103,12 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
   const fromRuntime = new Map(runtimeSymbols(from).map((s) => [s.path, s]));
   const toRuntime = new Map(runtimeSymbols(to).map((s) => [s.path, s]));
 
-  const removed = [...fromRuntime.values()].filter((s) => !toRuntime.has(s.path));
+  // Present in `to` means exported by it, from anywhere: a name the new version
+  // re-exports from another package is still importable. Only the FROM side
+  // excludes external names, so this package is never charged with removing
+  // what it never owned (§6.4.1).
+  const toPresent = new Set(to.symbols.filter((s) => s.kind !== 'type_only').map((s) => s.path));
+  const removed = [...fromRuntime.values()].filter((s) => !toPresent.has(s.path));
   const added = [...toRuntime.values()].filter((s) => !fromRuntime.has(s.path));
 
   const arityChanged: ArityChange[] = [];
