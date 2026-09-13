@@ -42,7 +42,7 @@ function fmt(n: number): string {
 }
 
 function money(cents: number): string {
-  return cents === 0 ? "free" : `$${(cents / 100).toFixed(0)}/month`;
+  return cents === 0 ? "$0" : `$${(cents / 100).toFixed(0)}/month`;
 }
 
 export async function GET(): Promise<Response> {
@@ -97,6 +97,9 @@ ${faqs
 
 - [Site](${SITE_ORIGIN})
 - [Docs](${SITE_ORIGIN}/docs)
+- [Docs as one markdown file](${SITE_ORIGIN}/docs/llms-full.txt)
+- [Package summaries](${SITE_ORIGIN}/npm/react): lurq's score, verdict and alternatives for popular npm packages, at ${SITE_ORIGIN}/npm/<package-name>
+- [MCP Registry entry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.jadenryu/lurq)
 - [npm](https://www.npmjs.com/package/lurqrun)
 `;
 

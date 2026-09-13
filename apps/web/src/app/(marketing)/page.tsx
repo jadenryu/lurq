@@ -10,6 +10,7 @@ import { Pricing } from "@/components/site/pricing";
 import { SiteFooter } from "@/components/site/footer";
 import { Faq } from "@/components/site/faq";
 import { Contact } from "@/components/site/contact";
+import { StructuredData } from "@/components/site/structured-data";
 
 /**
  * ORDER. Claim, compatibility, demonstration, problem, surface, schema,
@@ -69,6 +70,7 @@ import { Contact } from "@/components/site/contact";
 export default function Home() {
   return (
     <>
+      <StructuredData />
       <SiteNav />
       <main id="content" tabIndex={-1} className="flex-1">
         <Hero />

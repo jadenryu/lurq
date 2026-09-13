@@ -9,7 +9,8 @@ export default function robots(): MetadataRoute.Robots {
       // Keep the app/auth surfaces out of the index.
       disallow: ["/dashboard", "/sign-in", "/sign-up", "/api/"],
     },
-    sitemap: `${SITE_ORIGIN}/sitemap.xml`,
+    // The package pages carry their own sitemap (app/npm/sitemap.ts).
+    sitemap: [`${SITE_ORIGIN}/sitemap.xml`, `${SITE_ORIGIN}/npm/sitemap.xml`],
     host: SITE_ORIGIN,
   };
 }

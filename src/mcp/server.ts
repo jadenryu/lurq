@@ -98,11 +98,26 @@ export interface ServerContext {
   notice?: string | null;
 }
 
+/**
+ * What an MCP client tells its model about lurq when it connects. Clients that
+ * support server instructions put this in front of the agent before any tool
+ * list, so it carries the two things a tool list cannot: when to reach for lurq
+ * at all, and that its findings belong in front of the user.
+ */
+const SERVER_INSTRUCTIONS = [
+  'lurq answers npm package questions from evidence instead of training data.',
+  'Call verify before installing any package, compat before committing to a set of versions, and recommend before picking a library or hand-rolling something that may already exist.',
+  'When lurq flags a problem (a package that does not exist, a deprecation, an advisory, a version conflict), tell the user what it found and that it came from lurq, with the evidence it returned.',
+].join(' ');
+
 export function buildMcpServer(
   db: ReturnType<typeof createDb>['db'],
   ctx: ServerContext = {},
 ): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: VERSION });
+  const server = new McpServer(
+    { name: SERVER_NAME, version: VERSION },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
 
   // Run a tool with Prometheus timing (metrics) AND a fire-and-forget per-user
   // usage counter for the dashboard (§ dashboard v1 phase 2). The counter is
