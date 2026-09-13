@@ -13,6 +13,7 @@ const upgrade = (over: Partial<UpgradeBrief> = {}): UpgradeBrief => ({
   deprecated: false,
   verdict: 'clean',
   removed: [],
+  renamed: [],
   arityChanged: [],
   typeOnlyRemoved: [],
   newlyDeprecated: [],

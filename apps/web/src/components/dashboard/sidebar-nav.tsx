@@ -39,6 +39,9 @@ const REPORT = "/dashboard/report";
  */
 const WORKSPACE: NavItem[] = [
   { href: "/dashboard", label: "overview" },
+  // Questions about the account, answered by an agent reading it. The ⌘K
+  // palette hands typed questions here.
+  { href: "/dashboard/ask", label: "ask" },
   // Where the landing page's scan box lands, so it is also the first page many
   // people ever see in here.
   { href: REPORT, label: "builder report" },
@@ -69,7 +72,6 @@ const ACCOUNT: NavItem[] = [
   // processor requires you to provide.
   { href: "/dashboard/billing", label: "billing" },
   { href: "/dashboard/notifications", label: "notifications" },
-  { href: "/dashboard/preferences", label: "preferences" },
   // Sixth row, and the one place a reader can get back to a key they closed the
   // tab on. `lurq setup` opens this URL and the docs quickstart links straight
   // to it, so it has to be findable from inside the product too.

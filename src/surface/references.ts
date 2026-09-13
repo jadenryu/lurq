@@ -55,7 +55,20 @@ export type ReferenceVia =
    */
   | 'named-member'
   /** Erased by TypeScript before runtime — never a runtime-surface claim. */
-  | 'type-only';
+  | 'type-only'
+  /**
+   * `import 'pkg/register'` or a bare `require('pkg/setup')`: loads the module
+   * and claims none of its exports. Still a break site when the entry point is
+   * withdrawn, or when `require()` can no longer load it.
+   */
+  | 'side-effect';
+
+export interface CallSite {
+  line: number;
+  /** Arguments passed, or null when they cannot be counted: a spread argument,
+   *  or a use that is not a call at all (passed as a callback, stored, exported). */
+  args: number | null;
+}
 
 export interface SymbolReference {
   /** Exported name used from the package. 'default' for a default import. */
@@ -71,6 +84,16 @@ export interface SymbolReference {
   specifier: string;
   file: string;
   line: number;
+  /**
+   * The uses this reference leads to. A named import or destructured require
+   * gets every use of its local name in the file; a member read gets itself.
+   * Absent means the scanner did not follow it, which an arity check must
+   * treat as unmeasured rather than as unused.
+   */
+  calls?: CallSite[];
+  /** Set when the module was loaded with `require()`, TypeScript's
+   *  `import x = require()` included. That is what an ESM-only release breaks. */
+  loader?: 'require';
 }
 
 /** Kinds that assert something about the module's own export surface. */
@@ -120,13 +143,14 @@ export function packageOfSpecifier(spec: string): string | null {
  * The walk stays as the fallback, because a directory that is not a git
  * checkout still has to be scannable.
  */
-function listSourceFiles(dir: string, limit = 5000): string[] {
+function listSourceFiles(dir: string, limit = 5000): SourceListing {
   const tracked = gitSourceFiles(dir, limit);
   if (tracked) return tracked;
 
   const out: string[] = [];
+  let truncated = false;
   const walk = (d: string) => {
-    if (out.length >= limit) return;
+    if (truncated) return;
     let entries: string[];
     try {
       entries = readdirSync(d);
@@ -134,7 +158,7 @@ function listSourceFiles(dir: string, limit = 5000): string[] {
       return;
     }
     for (const e of entries) {
-      if (out.length >= limit) return;
+      if (truncated) return;
       if (SKIP_DIRS.has(e) || e.startsWith('.')) continue;
       const full = join(d, e);
       let st;
@@ -144,15 +168,28 @@ function listSourceFiles(dir: string, limit = 5000): string[] {
         continue;
       }
       if (st.isDirectory()) walk(full);
-      else if (SOURCE_EXT.has(extname(e)) && !e.endsWith('.d.ts')) out.push(full);
+      else if (SOURCE_EXT.has(extname(e)) && !e.endsWith('.d.ts')) {
+        if (out.length >= limit) truncated = true;
+        else out.push(full);
+      }
     }
   };
   walk(dir);
-  return out;
+  return { files: out, truncated };
+}
+
+/**
+ * `truncated` means a source file exists past the limit. A caller that ignores
+ * it reports on files it never opened, so a check that must not claim "safe"
+ * without looking has to surface it.
+ */
+interface SourceListing {
+  files: string[];
+  truncated: boolean;
 }
 
 /** Source files per git, or null when `dir` is not a usable checkout. */
-function gitSourceFiles(dir: string, limit: number): string[] | null {
+function gitSourceFiles(dir: string, limit: number): SourceListing | null {
   let stdout: string;
   try {
     stdout = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
@@ -167,11 +204,149 @@ function gitSourceFiles(dir: string, limit: number): string[] | null {
 
   const out: string[] = [];
   for (const rel of stdout.split('\n')) {
-    if (!rel || out.length >= limit) break;
+    if (!rel) continue;
     if (!SOURCE_EXT.has(extname(rel)) || rel.endsWith('.d.ts')) continue;
     // node_modules can be committed; it is never the project's own source.
     if (rel.split('/').includes('node_modules')) continue;
+    if (out.length >= limit) return { files: out, truncated: true };
     out.push(join(dir, rel));
+  }
+  return { files: out, truncated: false };
+}
+
+/**
+ * The module a loading expression names: `require('x')`, `await import('x')`,
+ * or either wrapped in parentheses. Null for anything else, including an
+ * un-awaited `import('x')`, whose value is a promise rather than the module.
+ */
+function loadedModule(expr: ts.Expression): { spec: string; loader: 'require' | 'import' } | null {
+  let e: ts.Expression = expr;
+  while (ts.isParenthesizedExpression(e)) e = e.expression;
+  const awaited = ts.isAwaitExpression(e);
+  if (awaited) e = (e as ts.AwaitExpression).expression;
+  if (!ts.isCallExpression(e) || e.arguments.length !== 1) return null;
+  const arg = e.arguments[0]!;
+  if (!ts.isStringLiteralLike(arg)) return null;
+  if (e.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    return awaited ? { spec: arg.text, loader: 'import' } : null;
+  }
+  if (ts.isIdentifier(e.expression) && e.expression.text === 'require') {
+    return { spec: arg.text, loader: 'require' };
+  }
+  return null;
+}
+
+/** What the use at `node` is: a call and its argument count, or anything else. */
+function callSiteOf(sf: ts.SourceFile, node: ts.Node): CallSite {
+  const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+  const p = node.parent;
+  if (p && (ts.isCallExpression(p) || ts.isNewExpression(p)) && p.expression === node) {
+    const args = p.arguments ?? [];
+    return { line, args: args.some(ts.isSpreadElement) ? null : args.length };
+  }
+  return { line, args: null };
+}
+
+/** Is this identifier a read of a binding, rather than a name being declared? */
+function isValueUse(id: ts.Identifier): boolean {
+  const p = id.parent;
+  if (!p) return false;
+  if (ts.isImportSpecifier(p) || ts.isImportClause(p) || ts.isNamespaceImport(p)) return false;
+  if (ts.isImportEqualsDeclaration(p) || ts.isLabeledStatement(p) || ts.isBreakOrContinueStatement(p)) return false;
+  if (ts.isPropertyAccessExpression(p) && p.name === id) return false;
+  if (ts.isQualifiedName(p) && p.right === id) return false;
+  if (ts.isBindingElement(p) && (p.name === id || p.propertyName === id)) return false;
+  if (ts.isExportSpecifier(p) && p.name === id && p.propertyName) return false;
+  const declares =
+    ts.isVariableDeclaration(p) ||
+    ts.isParameter(p) ||
+    ts.isFunctionDeclaration(p) ||
+    ts.isFunctionExpression(p) ||
+    ts.isClassDeclaration(p) ||
+    ts.isClassExpression(p) ||
+    ts.isPropertyAssignment(p) ||
+    ts.isPropertyDeclaration(p) ||
+    ts.isPropertySignature(p) ||
+    ts.isMethodDeclaration(p) ||
+    ts.isGetAccessor(p) ||
+    ts.isSetAccessor(p) ||
+    ts.isEnumMember(p) ||
+    ts.isJsxAttribute(p) ||
+    ts.isMethodSignature(p) ||
+    ts.isInterfaceDeclaration(p) ||
+    ts.isTypeAliasDeclaration(p) ||
+    ts.isModuleDeclaration(p) ||
+    ts.isEnumDeclaration(p) ||
+    ts.isTypeParameterDeclaration(p);
+  return !(declares && (p as { name?: ts.Node }).name === id);
+}
+
+/**
+ * A type position, except a class's `extends` clause: `class Bus extends
+ * Emitter` evaluates `Emitter` at runtime, and treating it as a type reported a
+ * removed base class as safe.
+ */
+function isTypePosition(node: ts.Node): boolean {
+  if (
+    ts.isExpressionWithTypeArguments(node) &&
+    ts.isHeritageClause(node.parent) &&
+    node.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+    ts.isClassLike(node.parent.parent)
+  ) {
+    return false;
+  }
+  return ts.isTypeNode(node);
+}
+
+/** Does this identifier introduce a binding of its name? */
+function bindsName(id: ts.Identifier): boolean {
+  const p = id.parent;
+  if (!p) return false;
+  if (ts.isImportClause(p) || ts.isNamespaceImport(p) || ts.isImportEqualsDeclaration(p)) return true;
+  if (
+    ts.isImportSpecifier(p) ||
+    ts.isBindingElement(p) ||
+    ts.isVariableDeclaration(p) ||
+    ts.isParameter(p) ||
+    ts.isFunctionDeclaration(p) ||
+    ts.isFunctionExpression(p) ||
+    ts.isClassDeclaration(p) ||
+    ts.isClassExpression(p)
+  ) {
+    return p.name === id;
+  }
+  return false;
+}
+
+/**
+ * Every value use of the given local names in a file.
+ *
+ * ponytail: scope-blind, so a name bound more than once in the file (a parameter
+ * that shadows the import, say) keeps its uses but loses their argument counts.
+ * Any one of those calls may be a different variable, and counting it would let
+ * `function paint(chalk) { chalk('x') }` read as calling what `require('chalk')`
+ * returned, which is a BLOCKING claim. A scope-aware pass means a binder; the
+ * type check already judges TypeScript files exactly.
+ */
+function valueUses(sf: ts.SourceFile, locals: Set<string>): Map<string, CallSite[]> {
+  const out = new Map<string, CallSite[]>();
+  const bindings = new Map<string, number>();
+  const visit = (node: ts.Node, inType: boolean): void => {
+    if (ts.isIdentifier(node) && locals.has(node.text) && bindsName(node)) {
+      bindings.set(node.text, (bindings.get(node.text) ?? 0) + 1);
+    }
+    const nowInType = inType || isTypePosition(node);
+    if (!nowInType && ts.isIdentifier(node) && locals.has(node.text) && isValueUse(node)) {
+      const list = out.get(node.text);
+      if (list) list.push(callSiteOf(sf, node));
+      else out.set(node.text, [callSiteOf(sf, node)]);
+    }
+    ts.forEachChild(node, (c) => visit(c, nowInType));
+  };
+  visit(sf, false);
+  for (const [name, count] of bindings) {
+    const uses = out.get(name);
+    if (count > 1 && uses) out.set(name, uses.map((u) => ({ line: u.line, args: null })));
   }
   return out;
 }
@@ -196,7 +371,7 @@ function gitSourceFiles(dir: string, limit: number): string[] | null {
 function collectValueIdentifiers(sf: ts.SourceFile): Set<string> {
   const out = new Set<string>();
   const visit = (node: ts.Node, inType: boolean): void => {
-    const nowInType = inType || ts.isTypeNode(node) || ts.isTypeQueryNode(node);
+    const nowInType = inType || isTypePosition(node);
     if (
       !nowInType &&
       ts.isIdentifier(node) &&
@@ -218,7 +393,14 @@ function collectValueIdentifiers(sf: ts.SourceFile): Set<string> {
   return out;
 }
 
-export function scanReferences(rootDir: string, opts: { limit?: number } = {}): PackageReferences[] {
+export function scanReferences(
+  rootDir: string,
+  opts: {
+    limit?: number;
+    /** Filled in with how much was read. `truncated` is set when files past `limit` were skipped. */
+    stats?: { files: number; truncated: boolean };
+  } = {},
+): PackageReferences[] {
   const byPackage = new Map<string, Map<string, SymbolReference[]>>();
 
   const record = (
@@ -229,22 +411,43 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     file: string,
     line: number,
     parent?: string,
-  ) => {
+    call?: CallSite,
+  ): SymbolReference => {
     let syms = byPackage.get(pkg);
     if (!syms) byPackage.set(pkg, (syms = new Map()));
     const list = syms.get(symbol);
-    const ref: SymbolReference = { symbol, via, specifier, file, line, ...(parent ? { parent } : {}) };
-    if (list) {
-      // Same file:line can legitimately carry two different claims (`z` as a
-      // named import, `z.string` as a member read off it), so the dedupe key
-      // has to include how the symbol was reached.
-      if (!list.some((r) => r.file === file && r.line === line && r.via === via)) list.push(ref);
-    } else {
+    const ref: SymbolReference = {
+      symbol,
+      via,
+      specifier,
+      file,
+      line,
+      ...(parent ? { parent } : {}),
+      ...(call ? { calls: [call] } : {}),
+    };
+    if (!list) {
       syms.set(symbol, [ref]);
+      return ref;
     }
+    // Same file:line can legitimately carry two different claims (`z` as a
+    // named import, `z.string` as a member read off it), so the dedupe key
+    // has to include how the symbol was reached. Two calls on one line are one
+    // reference with two call sites, not one call dropped.
+    const same = list.find((r) => r.file === file && r.line === line && r.via === via);
+    if (!same) {
+      list.push(ref);
+      return ref;
+    }
+    if (call) (same.calls ??= []).push(call);
+    return same;
   };
 
-  for (const file of listSourceFiles(rootDir, opts.limit)) {
+  const listing = listSourceFiles(rootDir, opts.limit);
+  if (opts.stats) {
+    opts.stats.files = listing.files.length;
+    opts.stats.truncated = listing.truncated;
+  }
+  for (const file of listing.files) {
     let text: string;
     try {
       text = readFileSync(file, 'utf8');
@@ -258,7 +461,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     // Two binding maps, because member reads mean different things:
     // a namespace/CJS binding IS the module's exports; a default binding is a
     // VALUE that happens to have properties.
-    const nsBindings = new Map<string, { pkg: string; spec: string }>();
+    const nsBindings = new Map<string, { pkg: string; spec: string; loader?: 'require' }>();
     const defaultBindings = new Map<string, { pkg: string; spec: string }>();
     // Named imports whose properties get read: `import { z } from 'zod'` then
     // `z.string()`. Tracked separately from the other two because whether the
@@ -272,6 +475,13 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     // `import express, { Request, Response } from 'express'` is correct code;
     // counting Request/Response as runtime symbols reports a miss on it.
     const valueUsed = collectValueIdentifiers(sf);
+    // References whose local name is followed to its uses once the file is read.
+    const followed = new Map<string, SymbolReference[]>();
+    const follow = (local: string, ref: SymbolReference) => {
+      const list = followed.get(local);
+      if (list) list.push(ref);
+      else followed.set(local, [ref]);
+    };
 
     const visit = (node: ts.Node): void => {
       // ── ESM imports ──
@@ -279,6 +489,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         const pkg = packageOfSpecifier(node.moduleSpecifier.text);
         if (pkg) {
           const clause = node.importClause;
+          if (!clause) record(pkg, 'default', 'side-effect', node.moduleSpecifier.text, rel, lineOf(node));
           if (clause?.name) {
             record(pkg, 'default', 'default', node.moduleSpecifier.text, rel, lineOf(clause.name));
             defaultBindings.set(clause.name.text, { pkg, spec: node.moduleSpecifier.text });
@@ -291,7 +502,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
                 const local = el.name.text;
                 const exported = el.propertyName?.text ?? local;
                 const typeOnly = clause.isTypeOnly || el.isTypeOnly || !valueUsed.has(local);
-                record(
+                const ref = record(
                   pkg,
                   exported,
                   typeOnly ? 'type-only' : 'named',
@@ -300,6 +511,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
                   lineOf(el),
                 );
                 if (!typeOnly) {
+                  follow(local, ref);
                   namedBindings.set(local, {
                     pkg,
                     spec: node.moduleSpecifier.text,
@@ -312,31 +524,112 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         }
       }
 
-      // ── CJS require ──
+      // ── re-exports: `export { a, b as c } from 'pkg'` ──
+      // In ESM a missing export fails the re-exporting module at load, so each
+      // name is a claim on the surface. Uncountable as calls: the uses are in
+      // whoever imports this file.
+      if (
+        ts.isExportDeclaration(node) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.exportClause &&
+        ts.isNamedExports(node.exportClause)
+      ) {
+        const spec = node.moduleSpecifier.text;
+        const pkg = packageOfSpecifier(spec);
+        if (pkg) {
+          for (const el of node.exportClause.elements) {
+            const exported = el.propertyName?.text ?? el.name.text;
+            const line = lineOf(el);
+            if (node.isTypeOnly || el.isTypeOnly) record(pkg, exported, 'type-only', spec, rel, line);
+            else record(pkg, exported, 'named', spec, rel, line, undefined, { line, args: null });
+          }
+        }
+      }
+
+      // ── TypeScript `import x = require('pkg')` ──
+      if (
+        ts.isImportEqualsDeclaration(node) &&
+        !node.isTypeOnly &&
+        ts.isExternalModuleReference(node.moduleReference) &&
+        ts.isStringLiteral(node.moduleReference.expression)
+      ) {
+        const spec = node.moduleReference.expression.text;
+        const pkg = packageOfSpecifier(spec);
+        if (pkg) {
+          nsBindings.set(node.name.text, { pkg, spec, loader: 'require' });
+          const ref = record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+          ref.loader = 'require';
+          follow(node.name.text, ref);
+        }
+      }
+
+      // ── destructuring a namespace binding: `const { a } = ns` ──
       if (
         ts.isVariableDeclaration(node) &&
         node.initializer &&
-        ts.isCallExpression(node.initializer) &&
-        ts.isIdentifier(node.initializer.expression) &&
-        node.initializer.expression.text === 'require' &&
-        node.initializer.arguments.length === 1 &&
-        ts.isStringLiteral(node.initializer.arguments[0]!)
+        ts.isIdentifier(node.initializer) &&
+        ts.isObjectBindingPattern(node.name)
       ) {
-        const spec = (node.initializer.arguments[0] as ts.StringLiteral).text;
+        const ns = nsBindings.get(node.initializer.text);
+        if (ns) {
+          for (const el of node.name.elements) {
+            const name = el.propertyName ?? el.name;
+            if (!ts.isIdentifier(name)) continue;
+            const ref = record(ns.pkg, name.text, 'namespace', ns.spec, rel, lineOf(el));
+            if (ns.loader) ref.loader = ns.loader;
+            if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
+          }
+        }
+      }
+
+      // ── require('pkg'), and `await import('pkg')`, bound to a name ──
+      const loaded =
+        ts.isVariableDeclaration(node) && node.initializer ? loadedModule(node.initializer) : null;
+      if (ts.isVariableDeclaration(node) && loaded) {
+        const spec = loaded.spec;
+        const viaRequire = loaded.loader === 'require';
         const pkg = packageOfSpecifier(spec);
         if (pkg) {
           if (ts.isIdentifier(node.name)) {
             // In CJS the binding IS module.exports, so member reads are export
             // claims — unless module.exports is a bare value, which the scorer
             // detects from the surface shape rather than guessing here.
-            nsBindings.set(node.name.text, { pkg, spec });
-            record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+            nsBindings.set(node.name.text, { pkg, spec, ...(viaRequire ? { loader: 'require' as const } : {}) });
+            const ref = record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+            if (viaRequire) ref.loader = 'require';
+            // Followed so a direct call of what `require` returned is visible:
+            // that is the use an ESM-only release breaks on every Node version.
+            follow(node.name.text, ref);
           } else if (ts.isObjectBindingPattern(node.name)) {
             for (const el of node.name.elements) {
               const name = el.propertyName ?? el.name;
-              if (ts.isIdentifier(name)) record(pkg, name.text, 'destructured', spec, rel, lineOf(el));
+              if (!ts.isIdentifier(name)) continue;
+              const ref = record(pkg, name.text, 'destructured', spec, rel, lineOf(el));
+              if (viaRequire) ref.loader = 'require';
+              if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
             }
           }
+        }
+      }
+
+      // ── a load whose value is unused: `require('pkg/setup')`, `await import('pkg')` ──
+      if (ts.isExpressionStatement(node)) {
+        const load = loadedModule(node.expression);
+        const pkg = load ? packageOfSpecifier(load.spec) : null;
+        if (load && pkg) {
+          const ref = record(pkg, 'default', 'side-effect', load.spec, rel, lineOf(node));
+          if (load.loader === 'require') ref.loader = 'require';
+        }
+      }
+
+      // ── a member read straight off a load: `require('pkg').x`, `(await import('pkg')).x` ──
+      if (ts.isPropertyAccessExpression(node)) {
+        const load = loadedModule(node.expression);
+        const pkg = load ? packageOfSpecifier(load.spec) : null;
+        if (load && pkg) {
+          const ref = record(pkg, node.name.text, 'namespace', load.spec, rel, lineOf(node), undefined, callSiteOf(sf, node));
+          if (load.loader === 'require') ref.loader = 'require';
         }
       }
 
@@ -346,9 +639,13 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         const ns = nsBindings.get(local);
         const def = defaultBindings.get(local);
         const named = namedBindings.get(local);
-        if (ns) record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node));
-        else if (def) record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node));
-        else if (named) {
+        const call = callSiteOf(sf, node);
+        if (ns) {
+          const ref = record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node), undefined, call);
+          if (ns.loader) ref.loader = ns.loader;
+        } else if (def) {
+          record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node), undefined, call);
+        } else if (named) {
           record(
             named.pkg,
             node.name.text,
@@ -357,6 +654,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
             rel,
             lineOf(node),
             named.exported,
+            call,
           );
         }
       }
@@ -364,6 +662,13 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
       ts.forEachChild(node, visit);
     };
     visit(sf);
+
+    if (followed.size) {
+      const uses = valueUses(sf, new Set(followed.keys()));
+      for (const [local, refs] of followed) {
+        for (const ref of refs) ref.calls = [...(ref.calls ?? []), ...(uses.get(local) ?? [])];
+      }
+    }
   }
 
   return [...byPackage.entries()]

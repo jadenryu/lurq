@@ -73,6 +73,39 @@ no network to lurq, and **no test suite** — which is the point: it catches
 breakage in code no test covers. `--exit-code` exits 1 when the report is not
 safe, for use as a CI gate.
 
+When the package itself proves a rename (the old version exported both names
+from the same function), the replacement is printed next to the call site:
+
+```text
+BLOCKING  cookie  1.1.1 → 2.0.1
+  Removes 1 symbol(s) your code references:
+    · cookie.parse → parseCookie    src/session.ts:239
+```
+
+It also type-checks the files that import each package, twice: once against the
+old version's type definitions and once against the new one's, straight from the
+tarballs, with nothing installed. Only errors the upgrade introduces are
+reported, so a renamed option or a narrowed parameter shows up at `file:line`
+even though the runtime exports never changed. It uses your project's own
+`typescript` when it has one, needs a `tsconfig.json`, and skips packages that
+ship no type definitions of their own. `--no-types` turns it off.
+
+What it reports:
+
+| Severity | What changed | Real example |
+| --- | --- | --- |
+| **blocking** | a symbol your code uses is gone | `cookie.parse`, removed in cookie 2 |
+| **blocking** | a deep import is no longer offered | `require('uuid/v4')` on uuid 8 |
+| **blocking** | the package went ESM-only, and your code calls what `require()` returned or reads a property it no longer exports | `fetch(url)` on node-fetch 3, `chalk.red` on chalk 5 |
+| **warning** | a call passes an argument count the new version no longer accepts. Calls that still fit are not reported | `src/log.ts:31 passes 1` |
+| **warning** | the type check finds a new compiler error | `TS2554 Expected 2-3 arguments` on zod 4 |
+| **warning** | `require()` of a now-ESM package, which throws on Node before 20.19 / 22.12. Skipped when your `engines.node` rules those out | execa 9 |
+| **warning** | a new `engines.node` or peer range this project does not meet | react-dom 19 with react 18 installed |
+
+Downloads are retried on registry errors and checked against the integrity hash
+the registry publishes. A version range (`^2.0.0`) is refused rather than
+guessed at, and a scan that stops at its file limit says so.
+
 An upgrade it could not establish is reported as `unverified` and is **never**
 counted as safe.
 

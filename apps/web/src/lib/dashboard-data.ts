@@ -20,6 +20,7 @@
 import { cache } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
+import { PLANS } from "@lurq/core/plans";
 import {
   demoAlerts,
   demoConformance,
@@ -132,7 +133,8 @@ const EMPTY_BILLING: BillingSummary = {
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
   used: 0,
-  limit: 200,
+  limit: PLANS.free.monthlyCalls,
+  seats: 1,
   billingEnabled: false,
   manageable: false,
 };

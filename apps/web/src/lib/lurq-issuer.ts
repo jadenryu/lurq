@@ -76,6 +76,11 @@ export async function issueKey(args: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
   });
+  // 403 is a plan gate with a message worth showing; anything else is ours.
+  if (res.status === 403) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new LurqIssuerError(data.error ?? "Your plan cannot issue that key.", 403);
+  }
   if (!res.ok) throw new LurqIssuerError("Could not issue a key. Try again.", 502);
   const data = (await res.json()) as { key?: string; prefix?: string };
   if (!data.key) throw new LurqIssuerError("Issuer returned no key.", 502);
@@ -367,6 +372,8 @@ export interface UpgradeBrief {
   deprecated: boolean;
   verdict: UpgradeVerdict;
   removed: string[];
+  /** Removed exports the package still ships under another name. Absent from an older API. */
+  renamed?: { path: string; to: string[] }[];
   arityChanged: { path: string; from: number | null; to: number | null }[];
   typeOnlyRemoved: string[];
   newlyDeprecated: string[];
@@ -567,8 +574,10 @@ export async function updateSelectionPolicy(
 // URL and redirects to it, so nothing that faces the browser holds a key.
 
 export interface BillingSummary {
-  tier: "free" | "pro" | "enterprise";
+  tier: "free" | "pro" | "team" | "enterprise";
   planName: string;
+  /** Seats billed. 1 for flat plans. */
+  seats: number;
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -635,11 +644,23 @@ export interface AskBudget {
   limitMicros: number;
 }
 
-export async function recordAskSpend(ownerId: string, usdMicros: number): Promise<AskBudget> {
+/** What one answered question looked like, for product analytics. Never its text. */
+export interface AskAnswered {
+  model: string;
+  turns: number;
+  usd: number;
+  cacheReadTokens: number;
+}
+
+export async function recordAskSpend(
+  ownerId: string,
+  usdMicros: number,
+  answered?: AskAnswered,
+): Promise<AskBudget> {
   const res = await issuerFetch("/ask-budget", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ownerId, usdMicros }),
+    body: JSON.stringify({ ownerId, usdMicros, answered }),
   });
   if (!res.ok) throw new LurqIssuerError("Could not record Ask spend.", res.status);
   return (await res.json()) as AskBudget;

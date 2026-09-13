@@ -52,6 +52,8 @@ function stubSurfaces(byServer: Record<string, McpTool[] | null>) {
           signature: s.signature ?? null,
           sourceFile: null,
           sourceLine: null,
+          sourceOffset: null,
+          maxArity: null,
         };
       }),
       verdict: 'verified_true' as const,

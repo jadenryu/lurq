@@ -21,12 +21,22 @@ export interface ArityChange {
   path: string;
   from: number | null;
   to: number | null;
+  /** Most arguments accepted on each side, when both were measured. */
+  fromMax?: number | null;
+  toMax?: number | null;
 }
 
 export interface SignatureChange {
   path: string;
   from: string;
   to: string;
+}
+
+export interface Rename {
+  path: string;
+  /** Names the same declaration was also exported under at `from`, and that
+   *  `to` still exports. */
+  to: string[];
 }
 
 export interface SurfaceDiff {
@@ -44,6 +54,16 @@ export interface SurfaceDiff {
   /** Type-level removals — break `tsc`, NOT `node`. Reported separately (§8.1). */
   typeOnlyRemoved: SurfaceSymbol[];
   deprecated: SurfaceSymbol[];
+  /**
+   * Removed symbols whose implementation survives under another name.
+   *
+   * Not a guess from similar names. At `from`, both names were exported from the
+   * same declaration, and `to` still exports the other one. cookie 1 → 2
+   * (`parse` → `parseCookie`) and zod 3 → 4 (`ZodSchema` → `ZodType`) are this
+   * shape. Empty means "no proof", not "no rename": a rename that shipped in a
+   * single release leaves no alias behind to find.
+   */
+  renamed: Rename[];
   /** Set when no comparison could be made; callers must not read the arrays. */
   inconclusive?: string;
 }
@@ -63,6 +83,7 @@ const empty = (
   signatureChanged: [],
   typeOnlyRemoved: [],
   deprecated: [],
+  renamed: [],
   inconclusive: reason,
 });
 
@@ -82,15 +103,33 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
   const fromRuntime = new Map(runtimeSymbols(from).map((s) => [s.path, s]));
   const toRuntime = new Map(runtimeSymbols(to).map((s) => [s.path, s]));
 
-  const removed = [...fromRuntime.values()].filter((s) => !toRuntime.has(s.path));
+  // Present in `to` means exported by it, from anywhere: a name the new version
+  // re-exports from another package is still importable. Only the FROM side
+  // excludes external names, so this package is never charged with removing
+  // what it never owned (§6.4.1).
+  const toPresent = new Set(to.symbols.filter((s) => s.kind !== 'type_only').map((s) => s.path));
+  const removed = [...fromRuntime.values()].filter((s) => !toPresent.has(s.path));
   const added = [...toRuntime.values()].filter((s) => !fromRuntime.has(s.path));
 
   const arityChanged: ArityChange[] = [];
   for (const [path, a] of fromRuntime) {
     const b = toRuntime.get(path);
     if (!b) continue;
-    if (a.arity !== null && b.arity !== null && a.arity !== b.arity) {
-      arityChanged.push({ path, from: a.arity, to: b.arity });
+    const requiredChanged = a.arity !== null && b.arity !== null && a.arity !== b.arity;
+    // Dropping a trailing optional parameter leaves `fn.length` alone and still
+    // breaks every caller that passes it. Gaining one breaks nobody, and neither
+    // does trading `arguments` for named parameters, so only a numeric maximum
+    // that shrank counts. `check-release` reads this list as "needs a major".
+    const measured = a.maxArity !== undefined && b.maxArity !== undefined;
+    const maxShrank =
+      typeof a.maxArity === 'number' && typeof b.maxArity === 'number' && b.maxArity < a.maxArity;
+    if (requiredChanged || maxShrank) {
+      arityChanged.push({
+        path,
+        from: a.arity,
+        to: b.arity,
+        ...(measured ? { fromMax: a.maxArity, toMax: b.maxArity } : {}),
+      });
     }
   }
 
@@ -117,6 +156,20 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
     (s) => s.deprecated && !fromRuntime.get(s.path)?.deprecated,
   );
 
+  // Keyed on offset, never line: preact's minified bundle declares twelve
+  // exports on line 1, and matching by line would call `render` a rename of `h`.
+  const declKey = (s: SurfaceSymbol) =>
+    s.sourceRef?.offset === undefined ? null : `${s.sourceRef.file}#${s.sourceRef.offset}`;
+  const renamed: Rename[] = [];
+  for (const r of removed) {
+    const key = declKey(r);
+    if (key === null) continue;
+    const survivors = [...fromRuntime.values()]
+      .filter((s) => s.path !== r.path && toRuntime.has(s.path) && declKey(s) === key)
+      .map((s) => s.path);
+    if (survivors.length) renamed.push({ path: r.path, to: survivors });
+  }
+
   return {
     package: from.package,
     fromVersion: from.version,
@@ -128,5 +181,6 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
     signatureChanged,
     typeOnlyRemoved,
     deprecated,
+    renamed,
   };
 }

@@ -37,7 +37,8 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { tier?: string };
     if (typeof body.tier === "string") tier = body.tier as Tier;
   } catch {
-    // No body is fine: Pro is the only self-serve plan, so it is the default.
+    // No body is fine: Pro is the cheapest self-serve plan, so it is the default.
+    // Seats are not taken here; Stripe's form collects them for per-seat plans.
   }
 
   const plan = PLANS[tier];

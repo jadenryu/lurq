@@ -203,7 +203,20 @@ jobs:
             2. Run \`${install.split(' ')[0]} install\` so node_modules holds the
                TARGET version. Until you do, the package on disk is the old one
                and anything you read from it describes the API you are leaving.
-            3. Rewrite every listed call site. "newExports" on each entry names
+            3. Rewrite every listed call site. A removed symbol carrying
+               "renamedTo" has a replacement the package itself proves: at the
+               old version both names were exported from the same function, so
+               rename the call. Under "arityChanged", "callsBroken" names each
+               call whose argument count the new version no longer accepts, and
+               "unmeasured" names uses to read by hand. "typeErrors" lists the
+               compiler errors the new version introduces, at file and line;
+               after installing, \`tsc\` should report none of them.
+               "entriesRemoved" names deep imports the new version no longer
+               offers, and "moduleFormat" names require() uses that break
+               because the package is now an ES module. "requirements" names a
+               Node or peer version the new release needs and this repository
+               lacks: do not bump past it. For removed symbols
+               without "renamedTo", "newExports" on each entry names
                the exports the target version ADDED, extracted from its shipped
                JavaScript: that is where the replacement for a removed symbol
                comes from. Confirm each one against the freshly installed package

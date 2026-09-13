@@ -755,6 +755,13 @@ export const entities = pgTable(
  *   - `tier` (§6.4.3): surfaces extracted at different tiers are NOT comparable,
  *     so the tier has to travel with every symbol or diffs go wrong quietly.
  */
+/**
+ * `max_arity` for a function that reads any number of arguments.
+ * ponytail: a sentinel rather than a second column. One nullable integer already
+ * carries the IR's three states (not measured, unbounded, a count).
+ */
+export const UNBOUNDED_ARITY = -1;
+
 export const symbols = pgTable(
   'symbols',
   {
@@ -776,6 +783,13 @@ export const symbols = pgTable(
     signature: text('signature'),
     sourceFile: text('source_file'),
     sourceLine: integer('source_line'),
+    /** Character offset of the declaration. Two exports sharing file and offset
+     *  are one value under two names, which is how a diff read from storage finds
+     *  a proven rename. Null on rows extracted before it was recorded. */
+    sourceOffset: integer('source_offset'),
+    /** Most arguments the function reads: null when not measured, UNBOUNDED_ARITY
+     *  for a rest parameter or `arguments`. See SurfaceSymbol.maxArity. */
+    maxArity: integer('max_arity'),
   },
   // Keyed by TIER as well as path: a package version has one surface per tier and
   // they are not interchangeable (§6.4.3). Without the tier in the key, storing a
@@ -988,6 +1002,12 @@ export const subscriptions = pgTable(
     currentPeriodEnd: ts('current_period_end'),
     /** Set when the user cancels but has paid through the period. */
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+    /**
+     * Seats bought, from the Stripe subscription quantity. Only per-seat plans
+     * read it, and `billedSeats` floors it at the plan's minimum, so a flat plan
+     * or a pre-seat row carrying the default 1 resolves correctly either way.
+     */
+    seats: integer('seats').notNull().default(1),
     /**
      * Stripe delivers out of order and retries, so a late duplicate of an older
      * event must not overwrite newer state. The webhook drops any event whose
