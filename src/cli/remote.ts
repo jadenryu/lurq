@@ -336,3 +336,40 @@ export async function getPolicyDecisions(
   const path = `/policy/decisions?days=${encodeURIComponent(days)}`;
   return (await request<{ decisions: RemoteDecision[] }>('GET', path, undefined, opts)).decisions;
 }
+
+/** One server's scan as the CLI uploads it. Mirrors mcpScan/ingest's schema. */
+export interface UploadedServer {
+  alias: string;
+  serverKey: string;
+  configFingerprint: string;
+  registry: string;
+  packageName: string | null;
+  pinnedVersion: string | null;
+  transport: string;
+  status: string;
+  error: string | null;
+  snapshot: unknown | null;
+}
+
+export interface McpScanUploadResult {
+  servers: {
+    alias: string;
+    serverKey: string;
+    deploymentId: number;
+    change: 'first' | 'unchanged' | 'changed' | 'status_changed';
+    worstSeverity: string | null;
+    since: { at: string; severity: string; summary: string; rugPull: string[] } | null;
+  }[];
+  rejected: { index: number; alias: string | null; reason: string }[];
+}
+
+/**
+ * Record a scan under the key's account. Private to that account; published
+ * servers are offered as corroboration unless `contribute` is false.
+ */
+export function uploadMcpScan(
+  body: { source: 'cli' | 'ci'; clientVersion: string; contribute: boolean; servers: UploadedServer[] },
+  opts: RemoteOptions = {},
+): Promise<McpScanUploadResult> {
+  return post<McpScanUploadResult>('/mcp-scans', body, { timeoutMs: 120_000, ...opts });
+}

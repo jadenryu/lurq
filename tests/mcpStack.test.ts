@@ -145,3 +145,55 @@ describe('context cost', () => {
     expect(r.members[0]).toMatchObject({ writes: 1, destroys: 1 });
   });
 });
+
+describe('tools read live by the caller', () => {
+  // The only way to cover a remote, PyPI, Docker or private server: the client
+  // already holds the list, so the index is never consulted.
+  it('analyses inline tools without touching the index', async () => {
+    const spy = vi.spyOn(handlers, 'loadStored');
+    spy.mockClear();
+    const r = await checkMcpStack(dbWith({}), [
+      { server: 'github (remote)', version: null, tools: [{ name: 'search' }] },
+      { server: 'linear', version: null, tools: [{ name: 'search', annotations: { readOnlyHint: true } }] },
+    ]);
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.overall).toBe('conflict');
+    // The unannotated one is assumed to write, so the collision is a write.
+    expect(r.collisions[0]).toMatchObject({ tool: 'search', writes: true });
+  });
+
+  it('mixes inline and indexed members in one stack', async () => {
+    stubSurfaces({ a: [tool('fetch')] });
+    const r = await checkMcpStack(dbWith({}), [ref('a'), { server: 'b', version: null, tools: [] }]);
+    expect(r.overall).toBe('compatible');
+    expect(r.totalTools).toBe(1);
+  });
+});
+
+describe('an unread server is queued, so the answer improves', () => {
+  it('enqueues a never-probed npm server', async () => {
+    const surface = await import('../src/db/surface');
+    const enqueue = vi.spyOn(surface, 'enqueueSurface').mockResolvedValue();
+    stubSurfaces({ a: null });
+    await checkMcpStack(dbWith({}), [{ server: '@scope/server', version: '1.2.3' }]);
+    expect(enqueue).toHaveBeenCalledWith(expect.anything(), '@scope/server', '1.2.3', 'mcp_server');
+    enqueue.mockRestore();
+  });
+
+  it('does not re-queue a server already probed and found broken', async () => {
+    const surface = await import('../src/db/surface');
+    const enqueue = vi.spyOn(surface, 'enqueueSurface').mockResolvedValue();
+    vi.spyOn(handlers, 'loadStored').mockResolvedValue({
+      entityId: 1,
+      rows: [],
+      verdict: 'verified_false',
+      class: 'executed',
+      tier: 'mcp_tools_list',
+      observedAt: null,
+    } as never);
+    const r = await checkMcpStack(dbWith({}), [ref('broken')]);
+    expect(r.unread).toEqual(['broken']);
+    expect(enqueue).not.toHaveBeenCalled();
+    enqueue.mockRestore();
+  });
+});

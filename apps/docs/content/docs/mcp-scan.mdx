@@ -1,0 +1,91 @@
+---
+title: Scanning your MCP servers
+description: Read what every MCP server your agents use really exposes, catch what it tells the model, and know when it changes.
+---
+
+`lurq mcp-scan` connects to every MCP server you have configured, with your own
+configuration, and reads its whole contract: tools, parameters, annotations,
+prompts and server instructions. It works for any server your agent can reach:
+npm, PyPI, Docker, remote, or private.
+
+```bash
+npx lurqrun mcp-scan
+```
+
+It reads the same config files your agents do: `.mcp.json`, `.cursor/mcp.json`,
+`.vscode/mcp.json`, `.windsurf/mcp.json`, `~/.claude.json` (including Claude
+Code's per-project servers), `~/.cursor/mcp.json`, Windsurf and Gemini.
+
+## What it reports
+
+- **What each tool does.** Capability labels like `shell.exec`,
+  `filesystem.write` or `messaging.send`, read from tool names, parameters and
+  descriptions, independently of the server's own annotations. A tool that
+  declares itself read-only and reads as `delete_file` is flagged.
+- **What the server tells your agent.** Every description, parameter doc,
+  prompt and instruction is checked for the known attack shapes: hidden Unicode
+  (decoded), instructions to ignore other instructions or keep things from you,
+  credential paths paired with instructions, capture hosts, and one server
+  describing another server's tools.
+- **Name collisions.** Two servers exposing the same tool name leave your agent
+  unable to say which one it means.
+- **What changed since the last scan.** A tool removed, a parameter made
+  required, a tool that stopped being read-only, and a description rewritten
+  after you approved the server. A rewrite that now instructs the model is
+  reported as critical.
+
+## Safety
+
+- **Servers committed to a repository are not launched without approval.** A
+  `.mcp.json` in a repo you just cloned is someone else's command line. lurq
+  honours the approvals you gave in Claude Code, asks before launching anything
+  else, and never launches a server you declined. `--trust-project` skips the
+  question.
+- **Credentials never leave your machine.** Values from `env` and `headers` are
+  used to launch the server and are scrubbed from everything stored, printed or
+  uploaded.
+- **Resource URIs are counted, never kept.** A filesystem server lists your files
+  there.
+
+## History
+
+The last snapshot of each server is kept on your machine, owner-only, so change
+detection works with no account. With a key configured (`lurq setup`), each scan
+is also recorded to your account, private to you. The dashboard then shows every
+server's contract, findings and change history across your machines and CI.
+
+Scans of published npm and PyPI servers are offered as corroboration for the
+public index: a version's contract is promoted only when several accounts read
+the same one. `--no-contribute` opts out; `--no-upload` keeps a scan local.
+
+## In CI
+
+```bash
+npx lurqrun mcp-ci
+```
+
+This writes `.github/workflows/lurq-mcp-scan.yml`, which rescans the servers
+committed to the repository every day and on any pull request that changes their
+config. It prints the repository secrets to add: your `LURQ_API_KEY` and every
+credential the committed servers reference. The workflow has read-only
+permissions, and fails if a scan could not be recorded, so a green run always
+means the dashboard has that day's scan.
+
+## Options
+
+| Flag | |
+| --- | --- |
+| `--fail-on <severity>` | Exit 1 at `critical`, `high`, `moderate` or `low`. Default `none`. |
+| `--only <names>` | Scan only these servers, comma-separated. |
+| `--project-only` | Read only config files inside the project. |
+| `--trust-project` | Launch repository-committed servers without asking. |
+| `--timeout <seconds>` | Per-server connect deadline. Default 60; first runs of `npx`/`uvx` download. |
+| `--concurrency <n>` | Servers scanned at once. Default 4. |
+| `--no-history` | Do not compare with, or record, the previous scan. |
+| `--no-upload` | Keep the scan on this machine. |
+| `--require-upload` | Exit 1 if the scan could not be recorded to your account. The generated CI workflow sets it. |
+| `--no-contribute` | Do not offer public corroboration. |
+| `--json` | Machine-readable output. |
+
+`lurq mcp-stack` answers just the collision question, live, with the same
+config reading.

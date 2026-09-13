@@ -1,8 +1,7 @@
 /**
  * Lazy, update-only backfill of declaration offsets and argument limits.
  *
- * Migration 0039 added `symbols.source_offset` and `symbols.max_arity` (they were
- * first written as a 0037 that a migration-number collision dropped from main). Rows
+ * Migration 0038 added `symbols.source_offset` and `symbols.max_arity`. Rows
  * stored before it have neither, so a diff read from the index cannot prove a
  * rename or a dropped trailing parameter for those versions. Re-extracting the
  * whole store would put every row through `storeSurface`, which deletes and

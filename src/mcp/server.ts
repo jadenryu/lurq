@@ -265,14 +265,33 @@ export function buildMcpServer(
     {
       title: 'Do these MCP servers coexist?',
       description:
-        "Check whether a set of MCP servers can be wired into one agent together. The npm question does not apply — servers are separate processes with nothing to resolve between them. They clash in the single flat TOOL NAMESPACE the agent assembles from all of them: two servers exposing the same tool name leave the agent unable to express which it means, and nothing errors, one simply shadows the other. Also reports the standing context cost, since every tool's schema rides in every request. A server that has not been probed makes the answer UNKNOWN, never clean.",
+        "Check whether a set of MCP servers can be wired into one agent together. The npm question does not apply — servers are separate processes with nothing to resolve between them. They clash in the single flat TOOL NAMESPACE the agent assembles from all of them: two servers exposing the same tool name leave the agent unable to express which it means, and nothing errors, one simply shadows the other. Also reports the standing context cost, since every tool's schema rides in every request. Pass `tools` for a server when you already hold its tool list (any server: remote, PyPI, Docker, private) and it is analysed as-is; otherwise the npm server's probed surface is used, and one that has not been probed makes the answer UNKNOWN, never clean.",
       inputSchema: {
         servers: z
           .array(
-            z.object({
-              server: npmName.describe('npm package name of the MCP server'),
-              version: z.string().nullable().optional(),
-            }),
+            z
+              .object({
+                server: z
+                  .string()
+                  .trim()
+                  .min(1)
+                  .max(300)
+                  .describe('npm package name of the MCP server, or any label when `tools` is given'),
+                version: z.string().max(100).nullable().optional(),
+                tools: z
+                  .array(
+                    z.object({
+                      name: z.string().min(1).max(256),
+                      annotations: z.record(z.unknown()).optional(),
+                    }),
+                  )
+                  .max(2000)
+                  .optional()
+                  .describe('The tool list as the agent received it; names and annotations are enough'),
+              })
+              .refine((s) => s.tools !== undefined || npmName.safeParse(s.server).success, {
+                message: 'server must be an npm package name unless tools are given',
+              }),
           )
           .min(1)
           .max(50)
@@ -285,7 +304,11 @@ export function buildMcpServer(
           const { checkMcpStack } = await import('../compat/mcpStack');
           return checkMcpStack(
             db,
-            args.servers.map((s) => ({ server: s.server, version: s.version ?? null })),
+            args.servers.map((s) => ({
+              server: s.server,
+              version: s.version ?? null,
+              tools: s.tools,
+            })),
           );
         }),
       ),
@@ -362,7 +385,7 @@ export function buildMcpServer(
           .describe('MCP servers read from .mcp.json / agent configs'),
       },
     },
-    async (args) => reply(await run('audit', () => handleAudit(db, args))),
+    async (args) => reply(await run('audit', () => handleAudit(db, args, ctx.ownerId ?? null))),
   );
 
   // Self-description, and the only tool that reads nothing. An agent holding
