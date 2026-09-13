@@ -19,9 +19,9 @@ export const PACKAGE_NAME = 'lurqrun';
  * The import is resolved at build time — esbuild inlines the JSON, so there is
  * no file read at runtime and no dependence on where the bundle sits on disk.
  * That last part is why this is an import and not a `readFileSync` of a path
- * relative to `import.meta.url`: the public bin lands at dist/bin/lurq.js and
- * the library entry at dist/index.js, so any relative path correct for one is
- * wrong for the other.
+ * relative to `import.meta.url`: the public bin is split into chunks that sit at
+ * different depths under dist/, so no one relative path is correct for all of
+ * them.
  */
 export const VERSION: string = pkg.version;
 
@@ -29,6 +29,10 @@ export const VERSION: string = pkg.version;
  *  marketing site is `lurq.run`; the MCP service lives on the `api.` subdomain.
  *  Overridable per-invocation with `lurq install --url …` or `LURQ_ENDPOINT`. */
 export const DEFAULT_ENDPOINT = 'https://api.lurq.run/mcp';
+
+/** Where a signed-in user creates (and revokes) API keys. The www host directly:
+ *  the apex only redirects there. */
+export const KEYS_URL = 'https://www.lurq.run/dashboard/keys';
 
 /** Prefix for issued API keys (the rest is high-entropy random). */
 export const API_KEY_PREFIX = 'lurq_live_';

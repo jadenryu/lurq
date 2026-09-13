@@ -13,7 +13,7 @@
  * SSH session, a headless box, a self-hosted endpoint our dashboard has never
  * issued a key for — it falls back to the old paste prompt, which still works.
  * Either way it validates the key against the endpoint and writes:
- *   - `~/.lurq/config.json`: so `lurq recommend` &c. work in any directory
+ *   - `~/.lurq/config.json`: so `lurq verify` &c. work in any directory
  *   - each agent's MCP config: a keyed HTTP entry, no DATABASE_URL anywhere
  *   - each agent's skill / rules file: so it reaches for lurq unprompted
  *
@@ -21,7 +21,7 @@
  */
 import { spawnSync } from 'node:child_process';
 
-import { DEFAULT_ENDPOINT, PACKAGE_NAME } from '../core/constants';
+import { DEFAULT_ENDPOINT, KEYS_URL, PACKAGE_NAME } from '../core/constants';
 import { openInBrowser } from '../core/open';
 import {
   readUserConfig,
@@ -84,11 +84,15 @@ export interface WizardOptions {
   noOpen?: boolean;
 }
 
-/** Where a signed-in user creates a key. */
-const KEYS_URL = 'https://lurq.run/dashboard/keys';
-
 /**
- * Lightweight MCP `tools/list` ping to confirm the key authenticates.
+ * Lightweight MCP `tools/list` call to confirm the key authenticates.
+ *
+ * `tools/list` is served without any key now, so registries can show lurq's
+ * tools, which makes a bare ping pass for every key. The Authorization header is
+ * what keeps this a real check: the server sends any request carrying one down
+ * the authenticated path (`isAnonymousDiscovery` in mcp/http.ts), where a key it
+ * does not know is a 401. Never drop the header from this request.
+ *
  * Distinguishes a rejected key (401/403) from an unreachable endpoint so the
  * wizard can tell the user which one happened instead of blaming the key on a
  * flaky network.
@@ -105,6 +109,8 @@ async function validateKey(url: string, apiKey: string): Promise<KeyCheck> {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      // A black-holed endpoint must not hang setup; it reads as unreachable.
+      signal: AbortSignal.timeout(15_000),
     });
     if (res.ok) return 'valid';
     if (res.status === 401 || res.status === 403) return 'invalid';
@@ -135,7 +141,9 @@ export function runningFromNpx(moduleUrl: string = import.meta.url): boolean {
  * than a dead setup: the user can keep using `npx lurqrun` in the meantime.
  */
 function installGlobally(): void {
-  process.stdout.write(`  Installing ${PACKAGE_NAME} globally… `);
+  // spawnSync blocks, so there is no spinner to show: say what is running and
+  // roughly how long, rather than a line that looks hung.
+  process.stdout.write(`  Installing ${PACKAGE_NAME} globally (npm install -g, a few seconds)… `);
   const res = spawnSync('npm', ['install', '--global', `${PACKAGE_NAME}@latest`], {
     stdio: ['ignore', 'ignore', 'pipe'],
     encoding: 'utf8',
@@ -157,6 +165,16 @@ function installGlobally(): void {
 
 export async function runSetup(opts: WizardOptions): Promise<void> {
   const interactive = !opts.yes;
+  if (interactive && !(process.stdin.isTTY && process.stdout.isTTY)) {
+    // The prompts need a terminal. Without one (CI, a pipe, an agent's shell)
+    // this printed raw escape codes and died with "User force closed the prompt
+    // with 0 null". Say what works there instead, before writing a single byte.
+    throw new Error(
+      'lurq setup asks questions, and this is not an interactive terminal (CI, a pipe, or an agent shell).\n' +
+        `Run it non-interactively:  npx ${PACKAGE_NAME} setup --yes --api-key <key>\n` +
+        `Get a key at ${KEYS_URL}`,
+    );
+  }
   // Both of these fall back to what an earlier run stored, so re-running setup
   // to add a newly-installed editor neither asks for the key again nor quietly
   // moves a self-hoster off their own endpoint and back onto ours.
@@ -201,17 +219,28 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
       const { keyViaBrowser } = await import('./browserAuth');
       console.log('  Sign in and this machine gets its key. Nothing to copy.\n');
       process.stdout.write('  Waiting for the browser… ');
+      // Enter skips the wait. The listener holds its port for up to three
+      // minutes, and someone whose browser never opened, or who already has a
+      // key copied, should not have to sit through that or kill the process.
+      const skip = new AbortController();
+      const onEnter = () => skip.abort();
+      process.stdin.once('data', onEnter);
       const handoff = await keyViaBrowser({
         noOpen: opts.noOpen,
+        signal: skip.signal,
         // Printed rather than only opened: the browser may not have launched,
         // and a spinner pointing at a URL nobody can see is a hung flow.
-        onUrl: (link) => console.log(`\n\n  ${dim(link)}\n`),
+        onUrl: (link) =>
+          console.log(`\n\n  ${dim(link)}\n  ${dim('Press Enter to paste a key instead.')}\n`),
       });
+      process.stdin.off('data', onEnter);
+      // The listener put stdin in flowing mode; hand it back paused for the prompts.
+      process.stdin.pause();
       if (handoff) {
         apiKey = handoff.key;
         console.log(green(`  ✓ key received${handoff.label ? dim(` (${handoff.label})`) : ''}\n`));
       } else {
-        console.log(yellow('  no response'));
+        console.log(yellow(skip.signal.aborted ? '  skipped' : '  no response'));
         console.log(dim('  Falling back to pasting it in.\n'));
       }
     }
@@ -317,7 +346,25 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
   // Non-interactive (--yes): require a key, use flags/env + detected agents.
   if (!apiKey) {
     throw new Error(
-      'No API key. Pass --api-key <key> or set LURQ_API_KEY (or drop --yes to be prompted).',
+      `No API key. Pass --api-key <key> or set LURQ_API_KEY (or drop --yes to be prompted). Get a key at ${KEYS_URL}`,
+    );
+  }
+  // Checked before anything is written. `--yes` used to store whatever string
+  // it was handed, put it in every agent config and report ✓, so a typo showed
+  // up days later as agents that quietly could not call lurq.
+  const check = await validateKey(url, apiKey);
+  if (check === 'invalid') {
+    throw new Error(
+      `${url} rejected that API key (401). Nothing was written. ` +
+        (selfHosted
+          ? `Issue one on the server with \`lurq keys create\`.`
+          : `Check it, or create a new one at ${KEYS_URL}`),
+    );
+  }
+  if (check === 'unreachable') {
+    throw new Error(
+      `Could not reach ${url} to validate the API key. Nothing was written. ` +
+        'Check the URL and your connection, then re-run.',
     );
   }
   const selected = opts.agent
@@ -355,7 +402,7 @@ async function finish(
   // success and the very next thing they type does not exist.
   const { command } = lurqInvocation();
   console.log(
-    dim(`  \`${command} recommend\`, \`evaluate\`, \`compare\`, \`verify\`, \`usage\` now work anywhere.`),
+    dim(`  \`${command} verify <package>\`, \`evaluate\`, \`compare\`, \`usage\` now work anywhere.`),
   );
 
   if (selected.length === 0) {

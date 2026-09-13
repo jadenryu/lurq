@@ -6,7 +6,7 @@
  * Every command supports `--json` for machine-readable output.
  */
 import { Command, Option } from 'commander';
-import { SERVER_NAME, VERSION } from '../core/constants';
+import { KEYS_URL, SERVER_NAME, VERSION } from '../core/constants';
 import { SUPPORTED_AGENTS } from './installSkill';
 
 /**
@@ -33,7 +33,7 @@ export function buildProgram(): Command {
     .addHelpText(
       'after',
       '\nNew here? Run `lurq setup` once: it stores your API key and connects every\n' +
-        'coding agent on this machine. Get a key at https://lurq.run/dashboard/keys\n',
+        `coding agent on this machine. Get a key at ${KEYS_URL}\n`,
     );
 
   // Bare `npx lurqrun` (or a bare `lurq`) on an unconfigured machine runs setup.
@@ -41,7 +41,16 @@ export function buildProgram(): Command {
   // ends up with the command on their PATH, a stored key, and every agent wired.
   // Once a key exists, a bare `lurq` means "what can this do?" instead, so it
   // prints help rather than re-running a wizard nobody asked for.
-  program.action(async () => {
+  program.action(async (_opts: unknown, cmd: Command) => {
+    // A root action makes commander pass anything it does not recognise here as
+    // operands, so `lurq evalute zod` started setup (no key) or printed help and
+    // exited 0 (with one): a typo that looked like success. Anything after the
+    // bare command is an unknown command; report it the way commander would
+    // without a root action, with its "did you mean" and a non-zero exit.
+    // `unknownCommand` is public in commander's source but missing from its types.
+    if (cmd.args.length > 0) {
+      (program as Command & { unknownCommand(): never }).unknownCommand();
+    }
     const { resolveApiKey } = await import('../core/userConfig');
     if (resolveApiKey()) {
       program.outputHelp();
@@ -85,9 +94,19 @@ export function buildProgram(): Command {
       const path = userConfigPath();
       console.log(
         clearUserConfig()
-          ? `Removed ${path}. Agent MCP configs still hold the key; re-run \`lurq setup\` to change them.`
-          : 'No stored API key on this machine.',
+          ? `Removed ${path}. Your agents' MCP configs still hold the key: \`lurq uninstall\` removes those too.`
+          : 'No stored API key on this machine. To remove lurq from your agents, run `lurq uninstall`.',
       );
+    });
+
+  program
+    .command('uninstall')
+    .description("undo setup: remove lurq's MCP entries, agent instructions and the stored key")
+    .option('--agent <agent>', `only this agent: ${AGENT_CHOICES}`)
+    .option('--yes', 'remove without asking')
+    .action(async (opts: { agent?: string; yes?: boolean }) => {
+      const { runUninstall } = await import('./uninstall');
+      await runUninstall(opts);
     });
 
   // Selection policy as a file in the repo: pull it, review changes in a PR,
@@ -372,7 +391,7 @@ export function buildProgram(): Command {
     .option('--project-only', 'ignore user-level agent configs; read only files in the project')
     .option(
       '--probe',
-      'probe your MCP servers now instead of waiting for the worker (needs DATABASE_URL)',
+      'probe your MCP servers now instead of waiting for the worker (self-hosted index only)',
     )
     .option('--probe-budget <seconds>', 'wall-clock ceiling for probing (default 90)')
     .option('--json', 'output JSON instead of a table')
