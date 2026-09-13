@@ -76,6 +76,11 @@ export async function issueKey(args: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
   });
+  // 403 is a plan gate with a message worth showing; anything else is ours.
+  if (res.status === 403) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new LurqIssuerError(data.error ?? "Your plan cannot issue that key.", 403);
+  }
   if (!res.ok) throw new LurqIssuerError("Could not issue a key. Try again.", 502);
   const data = (await res.json()) as { key?: string; prefix?: string };
   if (!data.key) throw new LurqIssuerError("Issuer returned no key.", 502);
@@ -567,8 +572,10 @@ export async function updateSelectionPolicy(
 // URL and redirects to it, so nothing that faces the browser holds a key.
 
 export interface BillingSummary {
-  tier: "free" | "pro" | "enterprise";
+  tier: "free" | "pro" | "team" | "enterprise";
   planName: string;
+  /** Seats billed. 1 for flat plans. */
+  seats: number;
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;

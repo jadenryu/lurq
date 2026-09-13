@@ -25,11 +25,18 @@ const isoDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '-');
 
 export async function runBillingGrant(
   ownerId: string,
-  opts: { tier: string; months: string },
+  opts: { tier: string; months: string; seats?: string },
 ): Promise<void> {
   const tier = opts.tier as Tier;
   if (!PLANS[tier]?.paid) {
-    console.error(`Not a paid tier: ${opts.tier}. Try one of: pro, enterprise.`);
+    console.error(`Not a paid tier: ${opts.tier}. Try one of: pro, team, enterprise.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const seats = opts.seats === undefined ? undefined : Number(opts.seats);
+  if (seats !== undefined && (!Number.isInteger(seats) || seats < 1)) {
+    console.error('--seats must be a whole number of at least 1.');
     process.exitCode = 1;
     return;
   }
@@ -43,7 +50,7 @@ export async function runBillingGrant(
 
   const { db, close } = createDb({ max: 1 });
   try {
-    const result = await grantPlan(db, { ownerId, tier, months });
+    const result = await grantPlan(db, { ownerId, tier, months, seats });
     if (!result.granted) {
       console.error(`Refused: ${result.reason}.`);
       process.exitCode = 1;
