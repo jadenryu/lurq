@@ -115,6 +115,10 @@ function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
 }
 
+/** The next step for a caller with no working key, appended to both 401s. */
+export const GET_A_KEY =
+  'Get a key at https://www.lurq.run/dashboard/keys, or run `npx lurqrun` to set one up.';
+
 /** One cached public scan: the answer, when it was taken, and how long it holds. */
 export interface ScanCacheEntry {
   at: number;
@@ -511,17 +515,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   // Bearer API-key auth: resolve and attach the key, or 401.
+  //
+  // The 401 text is usually the first thing a new user sees, pasted from their
+  // agent's MCP log, so it says where a key comes from. Deliberately no
+  // WWW-Authenticate header: lurq has no OAuth, and MCP clients that see one
+  // start OAuth discovery and bury this message under a failed sign-in flow.
   const auth = async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
     const header = req.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token) {
-      res.status(401).json(rpcError(-32001, 'Missing API key. Pass Authorization: Bearer <key>.'));
+      res.status(401).json(rpcError(-32001, `Missing API key. Pass Authorization: Bearer <key>. ${GET_A_KEY}`));
       return;
     }
     try {
       const row = await lookupActiveKey(db, token);
       if (!row) {
-        res.status(401).json(rpcError(-32001, 'Invalid or revoked API key.'));
+        res.status(401).json(rpcError(-32001, `Invalid or revoked API key. ${GET_A_KEY}`));
         return;
       }
       req.lurqKey = row;
