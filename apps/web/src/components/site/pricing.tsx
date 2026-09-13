@@ -339,7 +339,7 @@ export function Pricing() {
 
         <div
           ref={ref}
-          data-playing={played ? 'true' : 'false'}
+          data-playing={played === undefined ? undefined : String(played)}
           className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-2 min-[1080px]:grid-cols-4"
         >
           {PLAN_LIST.map((plan, i) => (
