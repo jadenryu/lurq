@@ -16,12 +16,10 @@ reads like a guess.
 
 ## Call lurq when you are about to:
 
-- **Pick a library for a need** → `recommend` with a natural-language description
-  (e.g. "a form library for React", "an ORM for Postgres"). Returns up to 5 scored
-  candidates. Do this *before* settling on a dependency from memory.
-- **Hand-roll something that might already exist** → `recommend` first
-  (e.g. "debounce a function", "deep clone an object", "parse dates"). Don't rebuild a
-  well-maintained, proven package.
+- **Pick a library for a need** → name the candidates you know and `compare` them, then
+  `verify` the one you choose. lurq checks candidates against evidence; it does not
+  search for them, so the list is yours to bring. The same applies before hand-rolling
+  something a well-maintained package may already do.
 - **Install a specific package** → `verify` with the exact name *before* adding it.
   This catches hallucinated, deprecated, and typosquatted names (e.g. `lodahs` vs
   `lodash`) and packages with known advisories. Cheap, and the highest-value call here.
@@ -31,17 +29,21 @@ reads like a guess.
   and a usage guide (what it is, when to use it, how it fits).
 - **Adding dependencies in a team codebase** → `policy` once, before choosing. It lists
   the packages and thresholds the team's policy refuses, so you pick an allowed package
-  first instead of being refused after. `recommend` and `evaluate` enforce it either way.
+  first instead of being refused after. `evaluate` enforces it either way.
 - **Commit to a multi-package stack** → `compat` with the whole set. Individually healthy
   packages can still refuse to install together; this returns the exact clashing peer or
-  engine constraints, plus any conflicts already proven in a sandbox. Read-only and
-  instant — it does not run an install.
+  engine constraints, plus any conflicts already proven in a sandbox. Read-only — it never
+  runs an install. A set checked before answers immediately; a new one is resolved live
+  from registry metadata and can take up to ~25 seconds.
 - **Write code against a package whose API may have moved** → `usage` with the package
   and, if you know it, `knownVersion`. Returns the real exported symbols and signatures
   extracted from that version's shipped `.d.ts`, plus the precise delta from the version
   you remember: what was added, removed, renamed, or changed. None of this is in your
   training data, and it is the difference between calling a function that exists and one
-  that used to.
+  that used to. Large surfaces are paged 80 symbols at a time: pass `query` with part of a
+  name to go straight to a symbol, or `offset` for the next page. `shallow: true` means the
+  API lives on an interface's members that are not listed (DefinitelyTyped's `export =`
+  shape, e.g. lodash); read its type declarations or use `resolve_surface`.
 - **Check whether a symbol actually exists at runtime** → `resolve_surface` with the
   package (and version, if you have one). `usage` reads the shipped `.d.ts`; this reads
   the shipped JavaScript, and the difference matters: a removed *type* breaks `tsc`, a
@@ -82,16 +84,13 @@ reads like a guess.
   can catch it, and the symptom is a malformed call that looks like a model mistake.
   **Privilege widening** is a tool that stopped being read-only or started being
   destructive; nothing breaks, which is what makes it worse than a break.
-- **Build a whole project from a spec** → `plan` with the program description. Returns a
-  scored package per component plus a Mermaid roadmap. It recommends building blocks
-  slot-by-slot from the index; it does not invent an architecture from a bare prompt.
 - **Visualize a stack you have already chosen** → `diagram` with the package names. A
   labeled starting point by layer — not a validated architecture.
 - **Unsure whether lurq covers the situation** → `capabilities` with what you are trying
   to do, in plain words. Returns the matching tools and commands rather than prose, so a
   capability you did not know about becomes a call you can make. Cheaper than guessing,
   and far cheaper than skipping a check that exists.
-- **After you act on a recommendation** → `report_outcome` (optional) with whether you
+- **After you act on lurq's evidence about a package** → `report_outcome` (optional) with whether you
   used the package and whether it built. No source code, just the coarse decision and a
   build signal. It is how lurq learns which packages agents actually succeed with.
 
