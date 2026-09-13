@@ -78,8 +78,8 @@ export function indexSource(): 'hosted' | 'local' {
  * wraps every handler result as a single JSON text block), so both paths hand
  * back the same shape and the caller renders it once. The one difference is
  * that the hosted path has been through `compact`, which drops null fields
- * (so absent = unknown, render with `== null`). Servers before 0.1.7 also
- * dropped empty arrays and objects, and those servers are still out there,
+ * (so absent = unknown, render with `== null`). Servers deployed before that was
+ * fixed also dropped empty arrays and objects, and old servers stay out there,
  * hence the `?? []` guards on every container in the renderers below.
  */
 async function fromIndex<T>(
