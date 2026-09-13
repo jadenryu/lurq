@@ -13,7 +13,6 @@ import { z } from 'zod';
 import semver from 'semver';
 import { getConfig } from '../core/config';
 import { SERVER_NAME, VERSION } from '../core/constants';
-import { CATEGORIES, type Category } from '../core/types';
 import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
@@ -41,8 +40,6 @@ import {
 } from './toolDescriptions';
 import { recordUsage } from '../db/usage';
 import { capture } from '../core/analytics';
-
-const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
 // Validate package names at the trust boundary. A name flows straight into a
 // registry URL (`registry.npmjs.org/${name}`) and the response cache key, so
@@ -73,17 +70,6 @@ export const exactVersion = z
   .max(256)
   .refine((v) => semver.valid(v) !== null, 'Must be an exact semver version, e.g. "19.0.0"');
 
-// No `runtime` filter: lurq stores no per-package runtime signal, so the field
-// was accepted and silently ignored — an agent asking for browser-only packages
-// got the unfiltered list back. Restore it when ingestion records the manifest's
-// `browser` field / `exports` browser condition, not before.
-const constraintsSchema = z
-  .object({
-    license: z.string().optional(),
-    maxBundleKb: z.number().positive().optional(),
-    minConfidence: confidenceEnum.optional(),
-  })
-  .optional();
 
 /** Wrap any result object as a compact MCP text response. `compact` strips
  *  null/empty fields so the agent's context only carries signal (§12.4). */

@@ -41,7 +41,6 @@ import {
 } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
-import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
 import { applyPolicy, describeRules, hasRules, check as checkPolicy } from '../policy/enforce';
 import { getEnforcedPolicy, loadPolicyFacts, recordDecisions } from '../db/selectionPolicy';
