@@ -1,4 +1,6 @@
-import type { AuditEvent } from "@/lib/audit";
+// Relative, and types only: tests/llmExport.test.ts imports this file from the
+// repo root, where `@/` does not resolve and the root tsc would fail.
+import type { AuditEvent } from "./audit-types";
 import type {
   ConformanceReport,
   DashboardDep,
@@ -7,7 +9,7 @@ import type {
   SelectionPolicy,
   StackConflict,
   TransitiveRisk,
-} from "@/lib/lurq-issuer";
+} from "./lurq-issuer";
 
 /**
  * The dashboard's findings, as a brief you can paste into a coding agent.

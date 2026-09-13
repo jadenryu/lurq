@@ -22,18 +22,9 @@ import { loadAlerts, loadKeys, loadRepos } from "@/lib/dashboard-data";
  * user landing here from the overview pays for at most one of them again.
  */
 
-export type AuditKind = "key" | "scan" | "alert";
+import type { AuditEvent } from "@/lib/audit-types";
 
-export interface AuditEvent {
-  /** Stable within a render: used as the React key. */
-  id: string;
-  kind: AuditKind;
-  at: string;
-  summary: string;
-  detail: string | null;
-  /** Set when the event is something the reader should look at. */
-  tone: "neutral" | "warn" | "bad";
-}
+export type { AuditEvent, AuditKind } from "@/lib/audit-types";
 
 /**
  * `readAt` is the clock, resolved here rather than in a component.
