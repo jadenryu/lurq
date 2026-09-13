@@ -24,6 +24,7 @@ import {
   MCP_TIER,
   type AnnotationHint,
   type McpDrift,
+  summarizeDrift,
 } from '../surface/mcp';
 import {
   configRequestLine,
@@ -259,59 +260,8 @@ export async function handleMcpDrift(
   );
 }
 
-/**
- * Human-readable verdict line.
- *
- * Ordered by what costs the reader most, and privilege widening is listed FIRST
- * even though it is not a breaking change. A tool that quietly stopped being
- * read-only is a worse thing to miss than one that gained a required parameter:
- * the second fails loudly on the next call, the first succeeds and writes.
- */
-export function summarize(d: McpDrift): string {
-  const alarming: string[] = [];
-  const benign: string[] = [];
-
-  const widened = d.annotationFlips.filter((f) => f.widensPrivilege);
-  if (widened.length) {
-    alarming.push(
-      `${widened.length} privilege widening(s): ` +
-        widened.map((f) => `${f.tool}.${f.hint} ${f.from}→${f.to}`).join(', '),
-    );
-  }
-  if (d.removedTools.length) alarming.push(`${d.removedTools.length} tool(s) removed`);
-  if (d.requiredAdded.length) {
-    alarming.push(`${d.requiredAdded.length} tool(s) gained required params`);
-  }
-  if (d.paramsRemoved.length) alarming.push(`${d.paramsRemoved.length} tool(s) dropped params`);
-  const narrowed = d.typeChanged.filter((c) => !c.widened);
-  if (narrowed.length) alarming.push(`${narrowed.length} param type(s) narrowed`);
-  if (d.silentDrift.length) {
-    alarming.push(
-      `${d.silentDrift.length} SILENT change(s) (contract moved, description unchanged): ${d.silentDrift.join(', ')}`,
-    );
-  }
-
-  // Compatible movement still has to be NAMED. Reporting only the breaking half
-  // made a release that reshaped five parameters and nine output schemas print
-  // "no contract change" — true about breakage, and false about the contract,
-  // which is the word in the sentence.
-  if (d.addedTools.length) benign.push(`${d.addedTools.length} tool(s) added`);
-  const relaxed = d.typeChanged.length - narrowed.length;
-  if (relaxed) benign.push(`${relaxed} param type(s) relaxed`);
-  if (d.requiredRelaxed.length) {
-    benign.push(`${d.requiredRelaxed.length} tool(s) made params optional`);
-  }
-  if (d.paramsAdded.length) benign.push(`${d.paramsAdded.length} tool(s) gained optional params`);
-  if (d.outputChanged.length) benign.push(`${d.outputChanged.length} output schema(s) changed`);
-  const safeFlips = d.annotationFlips.length - widened.length;
-  if (safeFlips) benign.push(`${safeFlips} annotation(s) narrowed`);
-  if (d.deprecated.length) benign.push(`${d.deprecated.length} tool(s) newly deprecated`);
-  if (d.prosePolished.length) benign.push(`${d.prosePolished.length} description(s) edited`);
-
-  if (alarming.length) return alarming.join('; ');
-  if (benign.length) return `compatible: ${benign.join(', ')}`;
-  return 'no contract change';
-}
+// Pure, so the CLI scan can use it without the database layer.
+export { summarizeDrift as summarize };
 
 async function mcpDriftUncached(db: Database, input: McpDriftInput): Promise<McpDriftResponse> {
   const [a, b] = await Promise.all([
@@ -366,7 +316,7 @@ async function mcpDriftUncached(db: Database, input: McpDriftInput): Promise<Mcp
     ...drift,
     verdict: (drift.inconclusive ? 'unknown' : 'verified_true') as Verdict,
     class: drift.inconclusive ? null : ('derived' as const),
-    summary: drift.inconclusive ?? summarize(drift),
+    summary: drift.inconclusive ?? summarizeDrift(drift),
     observedAt: b!.observedAt,
   };
 }

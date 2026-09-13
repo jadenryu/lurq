@@ -11,7 +11,7 @@
  * install wizard never pull server-only deps into their startup path.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
-import type { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
@@ -90,6 +90,7 @@ import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
+import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
 import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
@@ -280,14 +281,16 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // `verify` keeps the bytes the parser already had in hand. GitHub signs the raw
   // body, and a re-serialized parse result is not byte-identical, so the webhook
   // signature is uncheckable without this. Costs a reference, not a copy.
-  app.use(
-    express.json({
-      limit: '1mb',
-      verify: (req, _res, buf) => {
-        (req as RawBodyRequest).rawBody = buf;
-      },
-    }),
-  );
+  const jsonBody = express.json({
+    limit: '1mb',
+    verify: (req, _res, buf) => {
+      (req as RawBodyRequest).rawBody = buf;
+    },
+  });
+  // Scan uploads carry whole tool contracts and parse their own body, with a
+  // larger ceiling and only after auth (see mcpScanRoutes). Every other route
+  // keeps the 1mb limit.
+  app.use((req, res, next) => (req.path === MCP_SCAN_UPLOAD_PATH ? next() : jsonBody(req, res, next)));
 
   // Unauthenticated, no DB hit — for Railway's healthcheck. Intentionally not
   // rate-limited: it's a static response with no backend cost, and limiting it
@@ -1655,6 +1658,19 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   app.get('/policy/decisions', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     const ownerId = keyOwner(req, res);
     if (ownerId) await sendPolicyDecisions(ownerId, req.query.days, res);
+  });
+
+  // ── Live MCP scans: CLI upload (API key) and dashboard reads (issuer) ──────
+  registerMcpScanRoutes(app, {
+    db,
+    ipLimiter,
+    auth: auth as unknown as RequestHandler,
+    keyLimiter,
+    quota,
+    bigJson: express.json({ limit: MCP_SCAN_BODY_LIMIT }),
+    requireIssuerSecret,
+    ownerFrom,
+    keyOwner,
   });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────

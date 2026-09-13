@@ -117,7 +117,15 @@ export type SkipReason =
   | 'truncated';
 
 export interface Finding {
-  kind: 'outdated' | 'deprecated' | 'vulnerable' | 'contract-drift' | 'privilege' | 'needs-config';
+  kind:
+    | 'outdated'
+    | 'deprecated'
+    | 'vulnerable'
+    | 'contract-drift'
+    | 'privilege'
+    | 'needs-config'
+    /** What a server's tools tell the model: poisoning, shadowing, false annotations. */
+    | 'tool-safety';
   severity: Severity;
   /** One line, specific enough to act on without opening anything else. */
   detail: string;

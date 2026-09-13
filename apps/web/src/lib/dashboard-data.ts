@@ -35,6 +35,9 @@ import {
   demoPolicyHistory,
   demoSelectionPolicy,
   demoUsage,
+  demoMcpEvents,
+  demoMcpServerDetail,
+  demoMcpServers,
   isDemoUser,
 } from "@/lib/demo-data";
 import {
@@ -70,6 +73,10 @@ import {
   type PolicyChange,
   type PolicyDecision,
   type BillingSummary,
+  fetchMcpServer,
+  fetchMcpServers,
+  type McpServerDetail,
+  type McpServersPayload,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -380,4 +387,18 @@ export async function loadOverview(days = 30): Promise<Loaded<OverviewData>> {
     demo: keys.demo,
     failed: keys.failed && usage.failed && outcomes.failed && contributions.failed,
   };
+}
+
+/** Every MCP server the account has scanned, and the change feed across them. */
+export function loadMcpServers(): Promise<Loaded<McpServersPayload>> {
+  return load(
+    (userId) => fetchMcpServers(userId),
+    () => ({ servers: demoMcpServers(), events: demoMcpEvents() }),
+    { servers: [], events: [] },
+  );
+}
+
+/** One server's contract, findings and history. Null when it is not this account's. */
+export function loadMcpServer(id: number): Promise<Loaded<McpServerDetail | null>> {
+  return load((userId) => fetchMcpServer(userId, id), () => demoMcpServerDetail(id), null);
 }
