@@ -56,16 +56,16 @@ A package's composite score blends two axes:
 - **Quality**: a complementary axis so a brand-new but well-built package
   isn't penalized purely for being young.
 
-The two are combined with a tunable weight (`composite.lambda`). Operators can
-inspect the model with `lurqrun weights` and adjust it with
-`lurqrun edit-weights`, see the [CLI reference](/docs/cli#scoring-controls).
+The two are combined with a tunable weight (`composite.lambda`). You can
+inspect the model with `lurq weights` and adjust it locally with
+`lurq edit-weights`, see the [CLI reference](/cli#scoring-controls).
 
 ## Confidence
 
 Confidence labels (`proven`, `emerging`, `promising`, `unproven`) reflect the
 **strength of the discovered evidence**, not popularity alone. This matters for
 newer dependencies: a package can be young and lightly used yet still be a sound
-recommendation, and lurq surfaces it with an honest confidence label rather than
+choice, and lurq surfaces it with an honest confidence label rather than
 hiding it.
 
 ## Search
@@ -82,12 +82,12 @@ an exact-name hit the vector search ranks poorly still surfaces. The fused
 relevance is then blended with the composite score, so results are both relevant
 and good.
 
-**No model sits in the ranking path.** That's why `recommend` is fast, cheap, and
-gives the same answer for the same question.
+**No model sits in the ranking path.** That's why answers are fast, cheap, and
+the same for the same question.
 
 ## Freshness
 
-The index is refreshed on a schedule (`lurqrun sync`), and operators can
-proactively pull in new candidates with `lurqrun discover`. Every response
-includes a `dataAsOf` timestamp so your agent can reason about how current the
-evidence is.
+The index is refreshed on a schedule, and a package nobody has asked about yet
+is fetched and scored the first time someone does. Every response includes a `dataAsOf` timestamp so your
+agent can reason about how current the evidence is. (Self-hosters run the refresh
+themselves, see [Self-hosting](/self-hosting).)
