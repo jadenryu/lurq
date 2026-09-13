@@ -892,3 +892,87 @@ export async function unsubscribeWithToken(token: string, kind: "urgent" | "dige
   });
   return res.ok;
 }
+
+// ── Alert channels ───────────────────────────────────────────────────────────
+
+export type ChannelKind = "slack" | "discord" | "teams" | "webhook";
+export type ChannelSeverity = "critical" | "high" | "moderate" | "low";
+
+export interface AlertChannel {
+  id: number;
+  kind: ChannelKind;
+  label: string | null;
+  urlHint: string;
+  minSeverity: ChannelSeverity;
+  enabled: boolean;
+  disabledReason: string | null;
+  lastDeliveredAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+}
+
+export interface ChannelsPayload {
+  channels: AlertChannel[];
+  /** The plan includes channels. */
+  allowed: boolean;
+  /** The deployment can store channel URLs. */
+  configured: boolean;
+}
+
+/** An error the API meant for the person at the form, passed through as-is. */
+async function apiError(res: Response, fallback: string): Promise<LurqIssuerError> {
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  return new LurqIssuerError(body?.error ?? fallback, res.status);
+}
+
+export async function fetchChannels(ownerId: string): Promise<ChannelsPayload> {
+  const res = await issuerFetch(`/notification-channels?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw await apiError(res, "Could not read alert channels.");
+  return (await res.json()) as ChannelsPayload;
+}
+
+export async function createChannel(
+  ownerId: string,
+  input: { kind: ChannelKind; url: string; label?: string; minSeverity: ChannelSeverity },
+): Promise<{ channel: AlertChannel; signingSecret?: string }> {
+  const res = await issuerFetch("/notification-channels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ...input }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not add the channel.");
+  return (await res.json()) as { channel: AlertChannel; signingSecret?: string };
+}
+
+export async function updateChannel(
+  ownerId: string,
+  id: number,
+  patch: Partial<Pick<AlertChannel, "enabled" | "minSeverity" | "label">>,
+): Promise<AlertChannel> {
+  const res = await issuerFetch(`/notification-channels/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ...patch }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not update the channel.");
+  return ((await res.json()) as { channel: AlertChannel }).channel;
+}
+
+export async function testChannel(ownerId: string, id: number): Promise<{ ok: boolean; error: string | null }> {
+  const res = await issuerFetch(`/notification-channels/${id}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not test the channel.");
+  return (await res.json()) as { ok: boolean; error: string | null };
+}
+
+export async function removeChannel(ownerId: string, id: number): Promise<void> {
+  const res = await issuerFetch(`/notification-channels/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (!res.ok) throw await apiError(res, "Could not remove the channel.");
+}
