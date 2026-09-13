@@ -94,6 +94,8 @@ export interface SubscriptionUpdate {
   seats: number;
   /** The subscription carries a metered overage item. */
   overageEnabled: boolean;
+  /** The plan item's billing interval, as Stripe reports it. */
+  interval: string | null;
   eventAt: Date;
 }
 
@@ -132,6 +134,7 @@ export async function applySubscriptionEvent(
       cancelAtPeriodEnd: update.cancelAtPeriodEnd,
       seats: update.seats,
       overageEnabled: update.overageEnabled,
+      billingInterval: update.interval,
       lastEventAt: update.eventAt,
       updatedAt: new Date(),
     })
@@ -145,6 +148,7 @@ export async function applySubscriptionEvent(
         cancelAtPeriodEnd: update.cancelAtPeriodEnd,
         seats: update.seats,
         overageEnabled: update.overageEnabled,
+        billingInterval: update.interval,
         lastEventAt: update.eventAt,
         updatedAt: new Date(),
       },

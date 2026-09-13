@@ -128,6 +128,7 @@ const EMPTY_BILLING: BillingSummary = {
   used: 0,
   limit: PLANS.free.monthlyCalls,
   seats: 1,
+  interval: null,
   billingEnabled: false,
   manageable: false,
 };

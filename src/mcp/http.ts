@@ -809,6 +809,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         used: ent.used,
         limit: ent.limit,
         seats: ent.seats,
+        interval: sub?.billingInterval ?? null,
         billingEnabled: billingEnabled(),
         manageable: Boolean(sub?.stripeCustomerId),
       });

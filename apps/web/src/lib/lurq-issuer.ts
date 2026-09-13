@@ -578,6 +578,8 @@ export interface BillingSummary {
   planName: string;
   /** Seats billed. 1 for flat plans. */
   seats: number;
+  /** Null before a Stripe subscription exists, and for hand-granted plans. */
+  interval: "month" | "year" | null;
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;

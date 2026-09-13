@@ -1008,6 +1008,8 @@ export const subscriptions = pgTable(
     overageMonth: text('overage_month'),
     /** Overage calls already sent to Stripe for `overageMonth`. */
     overageReported: integer('overage_reported').notNull().default(0),
+    /** The plan item's Stripe interval ('month' | 'year'). Null for manual grants. */
+    billingInterval: text('billing_interval'),
     /**
      * Stripe delivers out of order and retries, so a late duplicate of an older
      * event must not overwrite newer state. The webhook drops any event whose

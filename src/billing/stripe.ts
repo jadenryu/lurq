@@ -314,6 +314,7 @@ export async function handleEvent(db: Database, event: Stripe.Event): Promise<st
     cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
     seats,
     overageEnabled,
+    interval: item?.price?.recurring?.interval ?? null,
     eventAt: new Date(event.created * 1000),
   });
 
