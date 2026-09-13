@@ -11,7 +11,7 @@
  */
 import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from './client';
-import { claims, entities, observations, packages, surfaceQueue, symbols } from './schema';
+import { UNBOUNDED_ARITY, claims, entities, observations, packages, surfaceQueue, symbols } from './schema';
 import type { SurfaceQueueRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
 import { canonicalKey, type EntityKind, type EntityRef } from '../graph/types';
@@ -161,6 +161,8 @@ export async function storeSurface(
     signature: s.signature ?? null,
     sourceFile: s.sourceRef?.file ?? null,
     sourceLine: s.sourceRef?.line ?? null,
+    sourceOffset: s.sourceRef?.offset ?? null,
+    maxArity: s.maxArity === undefined ? null : (s.maxArity ?? UNBOUNDED_ARITY),
   }));
   for (let i = 0; i < rows.length; i += 500) {
     await db

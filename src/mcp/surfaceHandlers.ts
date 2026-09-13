@@ -16,7 +16,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { cached } from '../core/cache';
 import type { Database } from '../db/client';
 import { claims, entities, observations, symbols } from '../db/schema';
-import type { SymbolRow } from '../db/schema';
+import { UNBOUNDED_ARITY, type SymbolRow } from '../db/schema';
 import { enqueueSurface, mcpSurfaceRef, surfaceRef } from '../db/surface';
 import { canonicalKey, type EntityKind, type Verdict } from '../graph/types';
 import { diffSurfaces } from '../surface/diff';
@@ -59,7 +59,19 @@ export function rowsToSurface(
     // only thing that tier can report, and for the MCP tier, where the entire
     // tool contract is serialized into this field.
     ...(r.signature !== null ? { signature: r.signature } : {}),
-    ...(r.sourceFile ? { sourceRef: { file: r.sourceFile, line: r.sourceLine ?? 0 } } : {}),
+    // Offset and maximum arity come back too. Without them a diff computed from
+    // stored rows could never find a proven rename or a dropped trailing
+    // parameter, and every consumer of the index would see less than the CLI.
+    ...(r.sourceFile
+      ? {
+          sourceRef: {
+            file: r.sourceFile,
+            line: r.sourceLine ?? 0,
+            ...(r.sourceOffset !== null ? { offset: r.sourceOffset } : {}),
+          },
+        }
+      : {}),
+    ...(r.maxArity !== null ? { maxArity: r.maxArity === UNBOUNDED_ARITY ? null : r.maxArity } : {}),
   }));
   return {
     package: pkg,
@@ -300,6 +312,7 @@ async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
       // Present-but-empty like every other list above, so a miss and a hit have
       // the same shape and callers never have to branch on which one they got.
       deprecated: [],
+      renamed: [],
       observedAt: null,
     };
   }
@@ -324,6 +337,9 @@ async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
     /** Breaks `tsc`, NOT `node` — returned separately on purpose (§8.1). */
     typeOnlyRemoved: diff.typeOnlyRemoved.map((s) => s.path),
     deprecated: diff.deprecated.map((s) => s.path),
+    /** Removed names whose implementation the package still exports under another
+     *  name. Empty for surfaces stored before declaration offsets were recorded. */
+    renamed: diff.renamed,
     observedAt: b!.observedAt,
   };
 }

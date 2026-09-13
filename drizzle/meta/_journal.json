@@ -260,6 +260,13 @@
       "when": 1789256793967,
       "tag": "0036_policy_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789316950453,
+      "tag": "0037_symbol_offsets",
+      "breakpoints": true
     }
   ]
 }
