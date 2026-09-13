@@ -534,6 +534,17 @@ export function registerOperatorCommands(program: Command): void {
     );
 
   program
+    .command('notify-preview')
+    .description('render account email and channel alerts from sample data, to preview and edit the templates in src/notify')
+    .option('--out <dir>', 'where to write the files', 'notify-preview')
+    .option('--send-to <email>', 'also send both emails to this address through Resend (needs RESEND_API_KEY)')
+    .option('--no-open', 'do not open the urgent email in a browser')
+    .action(async (opts: { out?: string; sendTo?: string; open?: boolean }) => {
+      const { runNotifyPreview } = await import('../notify/preview');
+      await runNotifyPreview(opts);
+    });
+
+  program
     .command('rescore')
     .description(
       're-derive health scores from cached breakdowns using current weights (no re-ingest)',

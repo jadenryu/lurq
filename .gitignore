@@ -278,3 +278,4 @@ DEPLOY.md
 # is the one Next writes when it is run from the repo root, and nothing here was
 # ignoring it, which is how .next/trace ended up tracked.
 /.next/
+notify-preview/
