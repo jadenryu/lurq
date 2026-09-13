@@ -8,9 +8,12 @@
  * at a migrated database: `docker compose up -d`, migrate, then set it.
  */
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import * as analytics from '../src/core/analytics';
+
+vi.mock('../src/core/analytics', () => ({ capture: vi.fn(), flush: vi.fn() }));
 import { contentHash } from '../src/mcpScan/snapshot';
-import { MAX_SERVERS_PER_UPLOAD, parseUpload, PUBLIC_QUORUM } from '../src/mcpScan/ingest';
+import { failureProps, MAX_SERVERS_PER_UPLOAD, parseUpload, PUBLIC_QUORUM } from '../src/mcpScan/ingest';
 
 const add = (description = 'Adds two numbers.') => ({
   name: 'add',
@@ -97,6 +100,13 @@ describe('parseUpload', () => {
   it('keeps failure statuses, without a contract', () => {
     const r = parseUpload({ servers: [server({ status: 'auth_required', error: 'HTTP 401', snapshot: null })] });
     expect(r.servers[0]).toMatchObject({ status: 'auth_required', contract: null, error: 'HTTP 401' });
+  });
+});
+
+describe('failureProps', () => {
+  it('keeps the class and code of a failure, never its message', () => {
+    expect(failureProps(Object.assign(new TypeError('row (tools)=(secret)'), { code: '23505' }))).toEqual({ error: 'TypeError', code: '23505' });
+    expect(failureProps('boom')).toEqual({ error: 'string', code: null });
   });
 });
 
@@ -215,6 +225,31 @@ describe.skipIf(!TEST_DB)('ingestScan against Postgres', () => {
     await ingest(owner(`q${PUBLIC_QUORUM}`), [pub]);
     const stored = await loadStored(db, pkg, '1.0.0', 0, 'mcp_server');
     expect(stored?.rows.map((r) => r.path)).toEqual(['add']);
+  });
+
+  it('reports what each upload recorded, for product analytics', async () => {
+    vi.mocked(analytics.capture).mockClear();
+    const o = owner('ev');
+    await ingest(o, [server()]);
+    expect(analytics.capture).toHaveBeenCalledWith(
+      o,
+      'mcp_scan_uploaded',
+      expect.objectContaining({ recorded: 1, first: 1, changed: 0, rejected: 0, registries: ['local'] }),
+    );
+  });
+
+  it('reports a server that could not be recorded, without its error text', async () => {
+    const mod = await import('../src/db/mcpScans');
+    const spy = vi
+      .spyOn(mod, 'recordScan')
+      .mockRejectedValueOnce(Object.assign(new Error('duplicate key (owner_id)=(secret_value)'), { code: '23505' }));
+    vi.mocked(analytics.capture).mockClear();
+    const r = await ingest(owner('evfail'), [server()]);
+    expect(r.rejected).toEqual([expect.objectContaining({ reason: 'could not be recorded; try again' })]);
+    const failed = vi.mocked(analytics.capture).mock.calls.find((c) => c[1] === 'mcp_scan_ingest_failed')!;
+    expect(failed[2]).toEqual({ stage: 'record', registry: 'local', error: 'Error', code: '23505' });
+    expect(JSON.stringify(vi.mocked(analytics.capture).mock.calls)).not.toContain('secret_value');
+    spy.mockRestore();
   });
 
   it('does not contribute when the client opts out', async () => {

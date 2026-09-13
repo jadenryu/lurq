@@ -11,6 +11,8 @@
  */
 import semver from 'semver';
 import { z } from 'zod';
+import type { Severity } from '../audit/types';
+import { capture } from '../core/analytics';
 import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
@@ -364,8 +366,35 @@ export async function ingestScan(
       });
     } catch (err) {
       logger.error({ server: s.serverKey, err: formatError(err) }, 'mcp: scan ingest failed');
+      capture(ownerId, 'mcp_scan_ingest_failed', { stage: 'record', registry: s.registry, ...failureProps(err) });
       out.rejected.push({ index: i, alias: s.alias, reason: 'could not be recorded; try again' });
     }
   }
+
+  // The client already reports a failed upload to the user; this is how WE see
+  // it. Without it a broken ingest looks like every account going quiet at once.
+  capture(ownerId, 'mcp_scan_uploaded', {
+    source: parsed.source,
+    servers: parsed.servers.length + parsed.rejected.length,
+    recorded: out.servers.length,
+    rejected: out.rejected.length,
+    first: out.servers.filter((s) => s.change === 'first').length,
+    changed: out.servers.filter((s) => s.change === 'changed').length,
+    worstChange: worst(out.servers.flatMap((s) => (s.since ? [{ severity: s.since.severity as Severity }] : []))),
+    registries: [...new Set(parsed.servers.map((s) => s.registry))].sort(),
+  });
   return out;
+}
+
+/**
+ * What an analytics event may say about a failure: its class and code, never
+ * its message. A Postgres error message quotes the row it failed on, and that
+ * row holds a customer's tool descriptions.
+ */
+export function failureProps(err: unknown): { error: string; code: string | null } {
+  const code = (err as { code?: unknown } | null)?.code;
+  return {
+    error: err instanceof Error ? err.name : typeof err,
+    code: typeof code === 'string' || typeof code === 'number' ? String(code) : null,
+  };
 }

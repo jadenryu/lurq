@@ -9,6 +9,7 @@ import type { Server } from 'node:http';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../src/core/analytics', () => ({ capture: vi.fn() }));
 vi.mock('../src/db/usage', () => ({ recordUsage: vi.fn(async () => {}) }));
 vi.mock('../src/db/mcpScans', () => ({
   listDeployments: vi.fn(async () => [{ id: 1, alias: 'calc' }]),
@@ -23,6 +24,7 @@ vi.mock('../src/mcpScan/ingest', async (importOriginal) => {
 
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from '../src/mcp/mcpScanRoutes';
 import * as ingest from '../src/mcpScan/ingest';
+import * as analytics from '../src/core/analytics';
 
 const pass = (_req: Request, _res: Response, next: NextFunction) => next();
 
@@ -59,7 +61,10 @@ beforeAll(async () => {
 });
 
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
-beforeEach(() => vi.mocked(ingest.ingestScan).mockClear());
+beforeEach(() => {
+  vi.mocked(ingest.ingestScan).mockClear();
+  vi.mocked(analytics.capture).mockClear();
+});
 
 const tool = (i: number) => ({ name: `tool_${i}`, description: 'x'.repeat(1500), inputSchema: { type: 'object' } });
 
@@ -115,6 +120,24 @@ describe('POST /mcp-scans', () => {
     expect(JSON.stringify(body).length).toBeGreaterThan(2_000_000);
     const res = await upload(body);
     expect(res.status).toBe(200);
+  });
+});
+
+describe('upload failures reach analytics', () => {
+  it('counts a rejected body without describing it', async () => {
+    await upload({ servers: 'no' });
+    expect(analytics.capture).toHaveBeenCalledWith('user_1', 'mcp_scan_upload_rejected', { reason: 'invalid_body' });
+  });
+
+  it('reports an ingest that threw, by code and never by message', async () => {
+    vi.mocked(ingest.ingestScan).mockRejectedValueOnce(
+      Object.assign(new Error('insert failed: (description)=(internal roadmap tool)'), { code: '08006' }),
+    );
+    const res = await upload({ servers: [serverPayload()] });
+    expect(res.status).toBe(500);
+    const call = vi.mocked(analytics.capture).mock.calls.find((c) => c[1] === 'mcp_scan_ingest_failed')!;
+    expect(call[2]).toEqual({ stage: 'request', error: 'Error', code: '08006' });
+    expect(JSON.stringify(call)).not.toContain('roadmap');
   });
 });
 

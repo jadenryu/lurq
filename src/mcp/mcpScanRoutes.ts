@@ -9,12 +9,13 @@
  * tests with the real guards swapped for fakes.
  */
 import type { Express, Request, RequestHandler, Response } from 'express';
+import { capture } from '../core/analytics';
 import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { acknowledgeEvent, getDeploymentDetail, listChangeEvents, listDeployments } from '../db/mcpScans';
 import { recordUsage } from '../db/usage';
-import { ingestScan, parseUpload } from '../mcpScan/ingest';
+import { failureProps, ingestScan, parseUpload } from '../mcpScan/ingest';
 
 export const MCP_SCAN_UPLOAD_PATH = '/mcp-scans';
 
@@ -56,11 +57,15 @@ export function registerMcpScanRoutes(app: Express, d: McpScanRouteDeps): void {
       const ownerId = d.keyOwner(req, res);
       if (!ownerId) return;
       const parsed = parseUpload(req.body);
+      // Rejections are counted, not described: reason text can echo what the
+      // client sent, and the point is to see a spike, not to read the body.
       if (parsed.error) {
+        capture(ownerId, 'mcp_scan_upload_rejected', { reason: 'invalid_body' });
         res.status(400).json({ error: parsed.error });
         return;
       }
       if (parsed.servers.length === 0) {
+        capture(ownerId, 'mcp_scan_upload_rejected', { reason: 'no_server_accepted', rejected: parsed.rejected.length });
         res.status(400).json({ error: 'No server in this upload could be accepted.', rejected: parsed.rejected });
         return;
       }
@@ -68,6 +73,7 @@ export function registerMcpScanRoutes(app: Express, d: McpScanRouteDeps): void {
         res.status(200).json(await ingestScan(d.db, ownerId, parsed));
         void recordUsage(d.db, ownerId, 'mcp-scans');
       } catch (err) {
+        capture(ownerId, 'mcp_scan_ingest_failed', { stage: 'request', ...failureProps(err) });
         fail(res, 'record the scan', err);
       }
     },
