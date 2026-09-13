@@ -63,8 +63,9 @@ export const STATUS_OK_LABEL = "api.lurq.run responding";
  * a version here at all.
  *
  * generated/releases.json is written by scripts/gen-releases.ts straight from
- * `GET registry.npmjs.org/lurqrun`, so its `latest` is npm's own dist-tag and
- * cannot lag a publish.
+ * `GET registry.npmjs.org/lurqrun`, so its `latest` is npm's own dist-tag. It
+ * is a committed file, not a live read: the daily refresh-landing workflow
+ * regenerates it, so the chip trails a publish by at most a day.
  */
 export const EYEBROW_VERSION = `v${releases.latest ?? stats.npm.latestVersion}`;
 export const EYEBROW_NPM = "live on npm";
