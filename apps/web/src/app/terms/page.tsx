@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageShell } from "@/components/common/page-shell";
 import { Prose } from "@/components/common/prose";
 
@@ -167,7 +168,7 @@ export default function TermsPage() {
         <p>
           Some plans (currently Pro and Team) are paid subscriptions. The plans,
           their prices and their limits are described on our{" "}
-          <a href="/#pricing">pricing page</a>. By starting a paid plan you
+          <Link href="/#pricing">pricing page</Link>. By starting a paid plan you
           agree to the following.
         </p>
         <ul>
