@@ -37,7 +37,14 @@ export interface BreakingFinding {
   severity: 'blocking' | 'warning';
   /** Referenced symbols removed at the target version. `specifier` names the
    *  entry point they were imported from. Absent means the package root. */
-  symbolsRemoved: { symbol: string; specifier?: string; refs: SymbolReference[] }[];
+  symbolsRemoved: {
+    symbol: string;
+    specifier?: string;
+    /** The replacement, when the package proves one: at `fromVersion` the removed
+     *  name and these were exported from the same declaration. See `diff.renamed`. */
+    renamedTo?: string[];
+    refs: SymbolReference[];
+  }[];
   arityChanged: {
     symbol: string;
     specifier?: string;
@@ -193,10 +200,14 @@ function compareEntry(
   // `specifier` rides along only for subpaths, so root findings serialize
   // exactly as they did before this change.
   const tag = isRoot ? {} : { specifier };
+  const renames = new Map(diff.renamed.map((r) => [r.path, r.to]));
   return {
     symbolsRemoved: diff.removed
       .filter((s) => referenced.has(s.path) && !toSurface.has(s.path))
-      .map((s) => ({ symbol: s.path, ...tag, refs: symbols.get(s.path) ?? [] })),
+      .map((s) => {
+        const renamedTo = renames.get(s.path);
+        return { symbol: s.path, ...tag, ...(renamedTo ? { renamedTo } : {}), refs: symbols.get(s.path) ?? [] };
+      }),
     arityChanged: diff.arityChanged
       .filter((a) => referenced.has(a.path))
       .map((a) => ({
@@ -292,6 +303,10 @@ export async function checkUpgradeOne(
   // here, because `parse(str, options?)` → `parseCookie(str, options?)` is not
   // a problem that needs one.
   //
+  // `renamedTo` is not that matcher. It is set only when the package itself
+  // exported both names from one declaration, which is a fact, not a judgement;
+  // cookie is exactly that case, and for it the candidate list is no longer needed.
+  //
   // Ranking survives as a retrieval filter rather than an answer. Surfaces run
   // to 129 exports for react-router and 240 for zod, so the cap is real and
   // what it keeps matters: symbols whose kind matches something this codebase
@@ -369,7 +384,11 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
       out.push(`  Removes ${b.symbolsRemoved.length} symbol(s) your code references:`);
       for (const s of b.symbolsRemoved) {
         const where = s.refs.map((r) => `${r.file}:${r.line}`).join(', ') || '(no location)';
-        out.push(`    · ${s.specifier ?? b.package}.${s.symbol}    ${where}`);
+        const rename = s.renamedTo ? ` → ${s.renamedTo.join(' | ')}` : '';
+        out.push(`    · ${s.specifier ?? b.package}.${s.symbol}${rename}    ${where}`);
+      }
+      if (b.symbolsRemoved.some((s) => s.renamedTo)) {
+        out.push(`  → is a proven rename: both names were the same function at ${b.fromVersion}.`);
       }
     }
     for (const a of b.arityChanged) {
@@ -381,7 +400,7 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
     // rather than making them open the JSON. Named as candidates, not as a
     // mapping: these are the exports the target version gained, and which one
     // replaces which is a judgement this diff cannot make.
-    if (b.symbolsRemoved.length && b.newExports.length) {
+    if (b.symbolsRemoved.some((s) => !s.renamedTo) && b.newExports.length) {
       const shown = b.newExports.slice(0, REPORT_CANDIDATE_CAP);
       const more = b.newExports.length - shown.length;
       out.push(

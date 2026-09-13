@@ -73,6 +73,15 @@ no network to lurq, and **no test suite** — which is the point: it catches
 breakage in code no test covers. `--exit-code` exits 1 when the report is not
 safe, for use as a CI gate.
 
+When the package itself proves a rename (the old version exported both names
+from the same function), the replacement is printed next to the call site:
+
+```text
+BLOCKING  cookie  1.1.1 → 2.0.1
+  Removes 1 symbol(s) your code references:
+    · cookie.parse → parseCookie    src/session.ts:239
+```
+
 An upgrade it could not establish is reported as `unverified` and is **never**
 counted as safe.
 

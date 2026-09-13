@@ -302,6 +302,34 @@ describe('upgrade report formatting', () => {
     expect(out).not.toContain('multistream');
   });
 
+  // The report's reason to exist: "you call x at line 239, and it is now y".
+  it('prints a proven rename at the call site instead of a candidate list', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'cookie',
+          fromVersion: '1.1.1',
+          toVersion: '2.0.1',
+          severity: 'blocking',
+          symbolsRemoved: [
+            {
+              symbol: 'parse',
+              renamedTo: ['parseCookie'],
+              refs: [{ symbol: 'parse', via: 'named' as const, specifier: 'cookie', file: 'src/session.ts', line: 239 }],
+            },
+          ],
+          arityChanged: [],
+          newExports: [{ symbol: 'parseSetCookie', kind: 'function' as const, arity: 2 }],
+        },
+      ],
+      ok: [],
+      unverified: [],
+    });
+    expect(out).toMatch(/cookie\.parse → parseCookie\s+src\/session\.ts:239/);
+    expect(out).not.toContain('candidate replacements');
+  });
+
   // A check that says "safe" when it simply did not look is worse than no check.
   it('never folds unverified packages into OK', () => {
     const out = formatUpgradeReport(report);

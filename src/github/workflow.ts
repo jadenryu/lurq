@@ -203,7 +203,10 @@ jobs:
             2. Run \`${install.split(' ')[0]} install\` so node_modules holds the
                TARGET version. Until you do, the package on disk is the old one
                and anything you read from it describes the API you are leaving.
-            3. Rewrite every listed call site. "newExports" on each entry names
+            3. Rewrite every listed call site. A removed symbol carrying
+               "renamedTo" has a replacement the package itself proves: at the
+               old version both names were exported from the same function, so
+               rename the call. For the rest, "newExports" on each entry names
                the exports the target version ADDED, extracted from its shipped
                JavaScript: that is where the replacement for a removed symbol
                comes from. Confirm each one against the freshly installed package
