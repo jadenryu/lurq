@@ -3,7 +3,10 @@
  * that setup merges it into the user's settings without disturbing their hooks.
  */
 import { describe, expect, it } from 'vitest';
-import { addedDependencies, decide, installTargets, runTargets, specName } from '../src/cli/hook';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { addedDependencies, applyEdits, decide, installTargets, isJsProject, promptTips, runTargets, specName, unseen } from '../src/cli/hook';
 import { hasClaudeHook, withClaudeHook, withoutClaudeHook } from '../src/cli/installSkill';
 import type { SecurityVerdict } from '../src/security/verdict';
 
@@ -60,13 +63,18 @@ describe('decide', () => {
 describe('Claude Code settings', () => {
   const user = { model: 'opus', hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-guard' }] }], Stop: [] } };
 
-  it('adds one hook next to the user’s, idempotently, and removes it back to the original', () => {
+  it('adds each hook after the user’s, idempotently, and removes them back to the original', () => {
     const once = withClaudeHook(user, 'lurq');
-    const twice = withClaudeHook(once, 'lurq');
-    expect(twice).toEqual(once);
+    expect(withClaudeHook(once, 'lurq')).toEqual(once);
     expect(hasClaudeHook(once)).toBe(true);
     expect(once.hooks.PreToolUse).toHaveLength(2);
-    expect(once.hooks.PreToolUse[1].hooks[0].command).toBe('lurq hook pre-tool-use');
+    expect(once.hooks.PreToolUse[1]).toEqual({
+      matcher: 'Bash|Edit|Write|MultiEdit',
+      hooks: [{ type: 'command', command: 'lurq hook pre-tool-use', timeout: 30 }],
+    });
+    expect(once.hooks.SessionStart[0].hooks[0].command).toBe('lurq hook session-start');
+    expect(once.hooks.UserPromptSubmit[0]).not.toHaveProperty('matcher');
+    expect(once.hooks.Stop).toEqual([]);
     expect(withoutClaudeHook(once)).toEqual(user);
   });
 
@@ -108,5 +116,32 @@ describe('decide for runners', () => {
   it('never denies a missing name, still asks on high risk', () => {
     expect(decide([{ name: 'nope', verdict: verdict('invalid', ['no such package']) }], { deny: false })).toBeNull();
     expect(decide([{ name: 'evil', verdict: verdict('high', ['bad']) }], { deny: false })?.permissionDecision).toBe('ask');
+  });
+});
+
+describe('measured nudges', () => {
+  it('nudges about each thing once per session, and never without a session id', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-hook-state-'));
+    expect(unseen('s1', ['usage:zod', 'usage:hono'], dir)).toEqual(['usage:zod', 'usage:hono']);
+    expect(unseen('s1', ['usage:zod', 'usage:ky'], dir)).toEqual(['usage:ky']);
+    expect(unseen('s2', ['usage:zod'], dir)).toEqual(['usage:zod']);
+    expect(unseen(undefined, ['usage:zod'], dir)).toEqual([]);
+  });
+
+  it('tips only prompts about choosing, adding or upgrading packages', () => {
+    expect(promptTips('which library should I use for dates?').map((t) => t.kind)).toEqual(['choose']);
+    expect(promptTips('upgrade next to 16 and install zod').map((t) => t.kind)).toEqual(['upgrade', 'install']);
+    expect(promptTips('fix the flaky login test')).toEqual([]);
+  });
+
+  it('knows a JS project from a package.json up the tree', () => {
+    expect(isJsProject(join(process.cwd(), 'src', 'cli'))).toBe(true);
+    expect(isJsProject(mkdtempSync(join(tmpdir(), 'lurq-not-js-')))).toBe(false);
+  });
+
+  it('applies Edit replacements the way Claude Code would, or gives up', () => {
+    expect(applyEdits('{"a":1}', [{ old_string: '"a":1', new_string: '"a":1,"b":2' }])).toBe('{"a":1,"b":2}');
+    expect(applyEdits('x x', [{ old_string: 'x', new_string: '$&y', replace_all: true }])).toBe('$&y $&y');
+    expect(applyEdits('{}', [{ old_string: 'missing', new_string: 'y' }])).toBeNull();
   });
 });

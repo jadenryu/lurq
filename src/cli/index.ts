@@ -535,8 +535,8 @@ export function buildProgram(): Command {
 
   program
     .command('hook')
-    .argument('<event>', 'the agent event being handled: pre-tool-use')
-    .description('run as a Claude Code hook: verify packages before an install command runs')
+    .argument('<event>', 'the agent event being handled: session-start, prompt, pre-tool-use')
+    .description('run as a Claude Code hook: verify installs and suggest lurq where it helps (set up by `lurq setup`)')
     .action(async (event: string) => {
       const { runHook } = await import('./hook');
       await runHook(event);

@@ -1,17 +1,25 @@
 /**
- * `lurq hook pre-tool-use`: Claude Code runs this before every Bash command.
+ * `lurq hook <event>`: what Claude Code runs so lurq gets used without the agent
+ * having to remember it. Aggressive where a mistake is expensive, measured
+ * everywhere else:
  *
- * An agent told to call verify before installing still skips it when it is sure
- * of the name, and a hallucinated name is exactly when it is sure. The hook takes
- * the choice away: the install command itself gets checked.
+ *   session-start  open urgent changes, plus a two-line brief in a JS project
+ *   prompt         a tip when the prompt is about choosing, adding or upgrading
+ *                  packages, once per kind per session
+ *   pre-tool-use   installs, runners and package.json edits are verified first:
+ *                  a package that does not exist is denied, a high-risk one asks
+ *                  the user, and a clean one gets a single "call usage" nudge
  *
- * It never gets in the way when lurq cannot answer. No key, a timeout, a command
- * it cannot read: no output, exit 0, and Claude Code carries on as if the hook
- * were not there. Only a verdict speaks:
- *   - not a real package → deny, and the reason goes back to the agent
- *   - high risk          → ask, so the user decides
- * Everything else is silent.
+ * An agent told to call verify still skips it when it is sure of the name, and a
+ * hallucinated name is exactly when it is sure. So the check is not left to it.
+ *
+ * It never gets in the way when lurq cannot answer. No key, no session id, a
+ * timeout, input it cannot read: no output, exit 0, and Claude Code carries on
+ * as if the hook were not there.
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 import { isValidNpmName } from '../benchmark/normalize';
 import type { SecurityVerdict } from '../security/verdict';
 
@@ -150,7 +158,7 @@ export function decide(
       permissionDecision: 'deny',
       permissionDecisionReason:
         `lurq: ${list(invalid)} ${invalid.length === 1 ? 'is not a real npm package' : 'are not real npm packages'}, ` +
-        `so this install was stopped. Check the name for a typo or a package that never existed, and tell the user what lurq found. (${why(invalid)})`,
+        `so this was stopped before it ran. Check the name for a typo or a package that never existed, and tell the user what lurq found. (${why(invalid)})`,
     };
   }
   const high = checked.filter((c) => c.verdict.level === 'high');
@@ -163,34 +171,173 @@ export function decide(
   return null;
 }
 
+// ── Measured: once per thing per session ─────────────────────────────────────
+
+/** Keys from `keys` this session has not been nudged about yet, recorded as seen. Empty without a session id. */
+export function unseen(sessionId: unknown, keys: string[], dir = join(tmpdir(), 'lurq-hooks')): string[] {
+  if (typeof sessionId !== 'string' || !sessionId || keys.length === 0) return [];
+  const path = join(dir, `${sessionId.replace(/[^\w-]/g, '').slice(0, 80)}.json`);
+  let seen: string[] = [];
+  try {
+    seen = JSON.parse(readFileSync(path, 'utf8')).seen ?? [];
+  } catch {
+    // First nudge this session.
+  }
+  const fresh = [...new Set(keys)].filter((k) => !seen.includes(k));
+  if (fresh.length) {
+    // ponytail: one small file per session in the OS temp dir, left for the OS to clean.
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, JSON.stringify({ seen: [...seen, ...fresh] }));
+  }
+  return fresh;
+}
+
+/** A JavaScript project: a package.json here or in a parent directory. */
+export function isJsProject(cwd: unknown): boolean {
+  if (typeof cwd !== 'string' || !cwd) return false;
+  for (let dir = cwd; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, 'package.json'))) return true;
+    if (dirname(dir) === dir) return false;
+  }
+}
+
+// ── prompt ───────────────────────────────────────────────────────────────────
+
+const PROMPT_TIPS = [
+  {
+    kind: 'choose',
+    test: /\b(which|best|recommend\w*|alternatives?|librar(y|ies)|sdks?|frameworks?)\b/i,
+    tip: 'lurq is connected. If this means choosing a library, name the candidates you know and check them with lurq compare (evaluate for one), then verify the pick: your sense of package health is from training, lurq is current.',
+  },
+  {
+    kind: 'upgrade',
+    test: /\b(upgrad\w*|bump\w*|migrat\w*|deprecat\w*|breaking|major version|latest version)\b/i,
+    tip: 'lurq is connected. For an upgrade, call lurq diff_surface with the package and both versions to see what was removed or changed, and compat for the resulting set, before editing code.',
+  },
+  {
+    kind: 'install',
+    test: /\b(install\w*|dependenc(y|ies)|add (a |an |the )?(package|library|dep))\b/i,
+    tip: 'lurq is connected. Call lurq verify before adding a package and usage before writing code against one. Installs in this session are also checked automatically.',
+  },
+] as const;
+
+/** The tips a prompt earns, before the once-per-session cap. */
+export function promptTips(prompt: string): { kind: string; tip: string }[] {
+  return PROMPT_TIPS.filter((t) => t.test.test(prompt)).map(({ kind, tip }) => ({ kind, tip }));
+}
+
+// ── pre-tool-use ─────────────────────────────────────────────────────────────
+
+type Edit = { old_string?: unknown; new_string?: unknown; replace_all?: unknown };
+
+/** The file after Claude Code's Edit/MultiEdit replacements, or null when one would not apply. */
+export function applyEdits(text: string, edits: Edit[]): string | null {
+  let out = text;
+  for (const e of edits) {
+    if (typeof e.old_string !== 'string' || typeof e.new_string !== 'string' || !out.includes(e.old_string)) return null;
+    out = e.replace_all ? out.split(e.old_string).join(e.new_string) : out.replace(e.old_string, () => e.new_string as string);
+  }
+  return out;
+}
+
+interface ToolInput {
+  command?: unknown;
+  file_path?: unknown;
+  content?: unknown;
+  edits?: unknown;
+  old_string?: unknown;
+  new_string?: unknown;
+  replace_all?: unknown;
+}
+
+/** What a tool call would install (deny-able) and run (ask-only). */
+function targets(tool: unknown, input: ToolInput, cwd: string): { installs: string[]; runs: string[] } {
+  if (tool === 'Bash' && typeof input.command === 'string') {
+    return {
+      installs: installTargets(input.command),
+      runs: runTargets(input.command, (n) => existsSync(join(cwd, 'node_modules', '.bin', n))),
+    };
+  }
+  if (typeof input.file_path !== 'string' || basename(input.file_path) !== 'package.json') return { installs: [], runs: [] };
+  const before = existsSync(input.file_path) ? readFileSync(input.file_path, 'utf8') : '';
+  const after =
+    tool === 'Write'
+      ? typeof input.content === 'string' ? input.content : null
+      : tool === 'Edit'
+        ? applyEdits(before, [input])
+        : tool === 'MultiEdit' && Array.isArray(input.edits)
+          ? applyEdits(before, input.edits as Edit[])
+          : null;
+  return { installs: after === null ? [] : (addedDependencies(before, after) ?? []), runs: [] };
+}
+
+async function preToolUse(input: Record<string, any>): Promise<Record<string, unknown> | null> {
+  const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
+  const { installs, runs } = targets(input.tool_name, input.tool_input ?? {}, cwd);
+  const names = [...new Set([...installs, ...runs])].slice(0, MAX_NAMES);
+  if (names.length === 0) return null;
+
+  const { callTool } = await import('./remote');
+  const settled = await Promise.allSettled(
+    names.map((name) =>
+      callTool<{ verdict?: SecurityVerdict }>('verify', { package: name }, { timeoutMs: VERIFY_TIMEOUT_MS }).then(
+        (r) => ({ name, verdict: r.verdict }),
+      ),
+    ),
+  );
+  const checked = settled.flatMap((s) =>
+    s.status === 'fulfilled' && s.value.verdict ? [{ name: s.value.name, verdict: s.value.verdict }] : [],
+  );
+  const installed = checked.filter((c) => installs.includes(c.name));
+  const decision = decide(installed) ?? decide(checked.filter((c) => !installs.includes(c.name)), { deny: false });
+  if (decision) return { hookEventName: 'PreToolUse', ...decision };
+
+  const clean = installed.filter((c) => c.verdict.level !== 'invalid' && c.verdict.level !== 'high').map((c) => c.name);
+  const fresh = unseen(input.session_id, clean.map((n) => `usage:${n}`)).map((k) => k.slice('usage:'.length));
+  if (fresh.length === 0) return null;
+  return {
+    hookEventName: 'PreToolUse',
+    additionalContext: `lurq verified ${fresh.join(', ')} before this ran. Before writing code against ${fresh.length === 1 ? 'it' : 'them'}, call lurq usage with ${fresh.length === 1 ? 'it' : 'each'} (with knownVersion if you remember one): APIs move, and what you remember is from training.`,
+  };
+}
+
+// ── session-start ────────────────────────────────────────────────────────────
+
+const BRIEF =
+  'lurq is connected to this session: package installs and package.json dependency edits are verified automatically. ' +
+  'Call lurq usage before writing code against a package API you know from training, and compare or evaluate when choosing a package.';
+
+async function sessionStart(input: Record<string, any>): Promise<Record<string, unknown> | null> {
+  const { apiKey, getAlerts } = await import('./remote');
+  apiKey(); // No key, no lurq tools: say nothing rather than advertise ones that will fail.
+  const alerts = await getAlerts({ timeoutMs: 3_000 }).catch(() => null);
+  const text = [isJsProject(input.cwd) ? BRIEF : null, alerts].filter(Boolean).join('\n\n');
+  return text ? { hookEventName: 'SessionStart', additionalContext: text } : null;
+}
+
+// ── entry ────────────────────────────────────────────────────────────────────
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export async function runHook(event: string): Promise<void> {
-  if (event !== 'pre-tool-use') return;
-  try {
-    const input = JSON.parse(await readStdin()) as { tool_input?: { command?: unknown } };
-    const command = input.tool_input?.command;
-    if (typeof command !== 'string') return;
-    const names = installTargets(command).slice(0, MAX_NAMES);
-    if (names.length === 0) return;
+export const HOOK_EVENTS = ['session-start', 'prompt', 'pre-tool-use'] as const;
 
-    const { callTool } = await import('./remote');
-    const settled = await Promise.allSettled(
-      names.map((name) =>
-        callTool<{ verdict?: SecurityVerdict }>('verify', { package: name }, { timeoutMs: VERIFY_TIMEOUT_MS }).then(
-          (r) => ({ name, verdict: r.verdict }),
-        ),
-      ),
-    );
-    const checked = settled.flatMap((s) =>
-      s.status === 'fulfilled' && s.value.verdict ? [{ name: s.value.name, verdict: s.value.verdict }] : [],
-    );
-    const decision = decide(checked);
-    if (decision) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', ...decision } }));
+export async function runHook(event: string): Promise<void> {
+  try {
+    const input = JSON.parse(await readStdin()) as Record<string, any>;
+    let output: Record<string, unknown> | null = null;
+    if (event === 'pre-tool-use') output = await preToolUse(input);
+    else if (event === 'session-start') output = await sessionStart(input);
+    else if (event === 'prompt' && typeof input.prompt === 'string' && isJsProject(input.cwd)) {
+      const tips = promptTips(input.prompt);
+      const fresh = new Set(unseen(input.session_id, tips.map((t) => t.kind)));
+      const text = tips.filter((t) => fresh.has(t.kind)).map((t) => t.tip).join('\n');
+      if (text) output = { hookEventName: 'UserPromptSubmit', additionalContext: text };
+    }
+    if (output) process.stdout.write(JSON.stringify({ hookSpecificOutput: output }));
   } catch {
     // Unreadable input or no key: lurq never blocks work it cannot judge.
   }

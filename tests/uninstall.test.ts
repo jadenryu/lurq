@@ -99,7 +99,7 @@ describe('lurq uninstall', () => {
     expect(readUserConfig().apiKey).toBe('lurq_live_x');
   });
 
-  it('takes the install hook out of Claude Code settings and keeps the user’s own', async () => {
+  it('takes the hooks out of Claude Code settings and keeps the user’s own', async () => {
     const settings = { hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'fmt' }] }] } };
     put(claudeSettingsPath(), JSON.stringify(settings));
     expect(installClaudeHook(claudeSettingsPath(), { command: 'lurq', onPath: true })).toBe(claudeSettingsPath());

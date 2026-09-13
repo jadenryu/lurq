@@ -513,40 +513,61 @@ export function installInstructions(spec: AgentSpec): string | null {
 /** Claude Code's user settings, where hooks live (its MCP servers are in ~/.claude.json). */
 export const claudeSettingsPath = (): string => home('.claude', 'settings.json');
 
-const HOOK_ARGS = 'hook pre-tool-use';
-const isLurqHook = (h: any): boolean => typeof h?.command === 'string' && h.command.endsWith(` ${HOOK_ARGS}`);
+/** The hooks setup writes: event → (matcher, `lurq hook` argument, timeout seconds). See hook.ts. */
+const CLAUDE_HOOKS = [
+  { event: 'SessionStart', matcher: 'startup|clear|compact', arg: 'session-start', timeout: 10 },
+  { event: 'UserPromptSubmit', matcher: undefined, arg: 'prompt', timeout: 5 },
+  { event: 'PreToolUse', matcher: 'Bash|Edit|Write|MultiEdit', arg: 'pre-tool-use', timeout: 30 },
+] as const;
+
+const isLurqHook = (h: any): boolean =>
+  typeof h?.command === 'string' && CLAUDE_HOOKS.some((c) => h.command.endsWith(` hook ${c.arg}`));
+
+const lurqGroups = (settings: Record<string, any>) =>
+  Object.values(settings.hooks ?? {}).flatMap((groups) => (Array.isArray(groups) ? groups : []));
 
 export const hasClaudeHook = (settings: Record<string, any>): boolean =>
-  Array.isArray(settings.hooks?.PreToolUse) &&
-  settings.hooks.PreToolUse.some((g: any) => Array.isArray(g?.hooks) && g.hooks.some(isLurqHook));
+  lurqGroups(settings).some((g: any) => Array.isArray(g?.hooks) && g.hooks.some(isLurqHook));
 
-/** `settings` without lurq's hook. A group that held only ours goes, and so does a `hooks` left empty. */
+/** `settings` without lurq's hooks. A group that held only ours goes, and so does an event or `hooks` left empty. */
 export function withoutClaudeHook(settings: Record<string, any>): Record<string, any> {
   if (!hasClaudeHook(settings)) return settings;
-  const PreToolUse = settings.hooks.PreToolUse.flatMap((g: any) => {
-    if (!Array.isArray(g?.hooks) || !g.hooks.some(isLurqHook)) return [g];
-    const rest = g.hooks.filter((h: unknown) => !isLurqHook(h));
-    return rest.length ? [{ ...g, hooks: rest }] : [];
-  });
-  const hooks = { ...settings.hooks, PreToolUse };
-  if (PreToolUse.length === 0) delete hooks.PreToolUse;
-  const next = { ...settings, hooks };
+  const hooks: Record<string, any> = {};
+  for (const [event, groups] of Object.entries(settings.hooks)) {
+    if (!Array.isArray(groups)) {
+      hooks[event] = groups;
+      continue;
+    }
+    const kept = groups.flatMap((g: any) => {
+      if (!Array.isArray(g?.hooks) || !g.hooks.some(isLurqHook)) return [g];
+      const rest = g.hooks.filter((h: unknown) => !isLurqHook(h));
+      return rest.length ? [{ ...g, hooks: rest }] : [];
+    });
+    if (kept.length || groups.length === 0) hooks[event] = kept;
+  }
+  const next: Record<string, any> = { ...settings, hooks };
   if (Object.keys(hooks).length === 0) delete next.hooks;
   return next;
 }
 
-/** `settings` with exactly one lurq hook, next to whatever hooks the user has. */
+/** `settings` with exactly one of each lurq hook, after whatever hooks the user has. */
 export function withClaudeHook(settings: Record<string, any>, lurq: string): Record<string, any> {
   const base = withoutClaudeHook(settings);
-  const groups = Array.isArray(base.hooks?.PreToolUse) ? base.hooks.PreToolUse : [];
-  const ours = { matcher: 'Bash', hooks: [{ type: 'command', command: `${lurq} ${HOOK_ARGS}`, timeout: 30 }] };
-  return { ...base, hooks: { ...base.hooks, PreToolUse: [...groups, ours] } };
+  const hooks: Record<string, any> = { ...base.hooks };
+  for (const c of CLAUDE_HOOKS) {
+    const group = {
+      ...(c.matcher ? { matcher: c.matcher } : {}),
+      hooks: [{ type: 'command', command: `${lurq} hook ${c.arg}`, timeout: c.timeout }],
+    };
+    hooks[c.event] = [...(Array.isArray(hooks[c.event]) ? hooks[c.event] : []), group];
+  }
+  return { ...base, hooks };
 }
 
 /**
- * Have Claude Code run `lurq verify` on every package an install command names
- * (see hook.ts). Null when `lurq` is not on PATH: the hook runs before every Bash
- * command, and resolving `npx` each time would cost more than the check is worth.
+ * Install lurq's Claude Code hooks (see hook.ts). Null when `lurq` is not on PATH:
+ * the hooks run on every prompt and before every Bash or edit, and resolving `npx`
+ * each time would cost more than they are worth.
  */
 export function installClaudeHook(path = claudeSettingsPath(), invocation = lurqInvocation()): string | null {
   if (!invocation.onPath) return null;
@@ -679,7 +700,7 @@ export function printInstallReport(
     }
   }
   const hooked = results.find((r) => r.hookPath);
-  if (hooked) console.log(`\nClaude Code hook: packages are verified before any npm, pnpm, yarn or bun install runs (${short(hooked.hookPath!)})`);
+  if (hooked) console.log(`\nClaude Code hooks: installs and package.json edits are verified first, and lurq is suggested when a prompt is about packages (${short(hooked.hookPath!)})`);
   if (instructionsPath) console.log(`\nFull guide: ${short(instructionsPath)}`);
 
   console.log('\nNext steps:');

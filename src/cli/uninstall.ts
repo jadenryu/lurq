@@ -85,7 +85,7 @@ function claudeHookRemoval(): Removal | null {
   const path = claudeSettingsPath();
   if (!existsSync(path) || !hasClaudeHook(readJsonObject(path))) return null;
   return {
-    label: 'Claude Code install hook',
+    label: 'Claude Code hooks',
     path,
     apply: () => writeJson(path, withoutClaudeHook(readJsonObject(path))),
   };
