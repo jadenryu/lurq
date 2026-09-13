@@ -38,6 +38,7 @@ export default async function DashboardBillingPage(props: PageProps<"/dashboard/
           billing={billing}
           justCheckedOut={justChecked}
           canManage={owner?.canManage ?? true}
+          inOrganization={Boolean(owner?.orgId)}
         />
       </PageBody>
     </div>

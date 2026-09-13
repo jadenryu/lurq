@@ -57,6 +57,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // Team's seats are an organization's members, so a personal account has
+  // nothing to count them against. Refused here rather than sold unenforceable.
+  if (plan.perSeat && !owner.orgId) {
+    return NextResponse.json(
+      {
+        error:
+          "Team is bought for an organization. Create one from the account switcher in the dashboard sidebar, switch to it, then upgrade.",
+      },
+      { status: 400 },
+    );
+  }
+
   try {
     const user = await currentUser();
     const email = user?.primaryEmailAddress?.emailAddress ?? null;

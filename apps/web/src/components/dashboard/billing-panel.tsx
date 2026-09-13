@@ -71,7 +71,9 @@ function statusLine(b: BillingSummary): { text: string; tone: string } | null {
     }
     case "active": {
       const end = fmtDate(b.currentPeriodEnd);
-      return end ? { text: `Renews ${end}.`, tone: "text-ink-3" } : null;
+      const cadence =
+        b.interval === "year" ? " Billed yearly." : b.interval === "month" ? " Billed monthly." : "";
+      return end ? { text: `Renews ${end}.${cadence}`, tone: "text-ink-3" } : null;
     }
     case "canceled":
       return { text: "Cancelled. You are on the free plan.", tone: "text-ink-2" };
@@ -129,11 +131,14 @@ export function BillingPanel({
   billing,
   justCheckedOut,
   canManage = true,
+  inOrganization = false,
 }: {
   billing: BillingSummary;
   justCheckedOut: boolean;
   /** False for an organization member who is not an admin. */
   canManage?: boolean;
+  /** An organization is active. Per-seat plans can only be bought for one. */
+  inOrganization?: boolean;
 }) {
   const [pending, setPending] = useState<"checkout" | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +181,8 @@ export function BillingPanel({
   const status = statusLine(billing);
   // The next self-serve plan up, so Pro is offered Team rather than nothing.
   const upgrade = PLAN_LIST.slice(PLAN_LIST.indexOf(plan) + 1).find((p) => p.paid && !p.contactOnly);
+  // Team's seats are an organization's members; a personal account has none.
+  const needsOrg = Boolean(upgrade?.perSeat) && !inOrganization;
 
   return (
     <div className="space-y-6">
@@ -257,11 +264,17 @@ export function BillingPanel({
               </li>
             ))}
           </ul>
+          {needsOrg ? (
+            <p className="mt-4 max-w-[60ch] text-[13px] leading-[1.6] text-ink-2">
+              Team is bought for an organization, and its seats are the members. Create one from
+              the account switcher in the sidebar, switch to it, then upgrade here.
+            </p>
+          ) : null}
           <div className="mt-5">
             <button
               type="button"
               onClick={() => post("/api/billing/checkout", "checkout", { tier: upgrade.tier })}
-              disabled={pending !== null || !billing.billingEnabled}
+              disabled={pending !== null || !billing.billingEnabled || needsOrg}
               className={`${BTN} bg-ink text-ground hover:bg-white`}
             >
               {pending === "checkout"
@@ -273,7 +286,7 @@ export function BillingPanel({
               onClick={() =>
                 post("/api/billing/checkout", "checkout", { tier: upgrade.tier, interval: "year" })
               }
-              disabled={pending !== null || !billing.billingEnabled}
+              disabled={pending !== null || !billing.billingEnabled || needsOrg}
               className={`${BTN} ml-2 border border-edge text-ink hover:border-ink`}
             >
               {`or ${perYear(upgrade)}, ${Math.round(ANNUAL_DISCOUNT * 100)}% off`}

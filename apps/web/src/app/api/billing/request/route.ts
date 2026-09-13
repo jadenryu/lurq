@@ -58,6 +58,13 @@ export async function POST(request: Request) {
   if (!plan?.paid) {
     return NextResponse.json({ error: "That isn't a paid plan." }, { status: 400 });
   }
+  // Same rule as checkout: Team is granted to an organization, never a person.
+  if (plan.perSeat && !owner.orgId) {
+    return NextResponse.json(
+      { error: 'Team is bought for an organization. Create one and switch to it first.' },
+      { status: 400 },
+    );
+  }
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
