@@ -14,7 +14,7 @@
 import type Stripe from 'stripe';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
-import { PLANS, type Tier } from '../core/plans';
+import { PLANS, type BillingInterval, type Tier } from '../core/plans';
 import type { Database } from '../db/client';
 import { applySubscriptionEvent, getSubscription, linkCustomer } from '../db/subscriptions';
 
@@ -52,8 +52,13 @@ export function billingEnabled(): boolean {
 }
 
 /** The configured Price id for a tier, or null if that tier is not self-serve. */
-export function priceIdFor(tier: Tier): string | null {
+export function priceIdFor(tier: Tier, interval: BillingInterval = 'month'): string | null {
   const config = getConfig();
+  if (interval === 'year') {
+    if (tier === 'pro') return config.STRIPE_PRICE_PRO_ANNUAL ?? null;
+    if (tier === 'team') return config.STRIPE_PRICE_TEAM_ANNUAL ?? null;
+    return null;
+  }
   if (tier === 'pro') return config.STRIPE_PRICE_PRO ?? null;
   if (tier === 'team') return config.STRIPE_PRICE_TEAM ?? null;
   if (tier === 'enterprise') return config.STRIPE_PRICE_ENTERPRISE ?? null;
@@ -73,6 +78,8 @@ export function tierForPrice(priceId: string | null, metadataTier?: string | nul
   const config = getConfig();
   if (priceId && priceId === config.STRIPE_PRICE_PRO) return 'pro';
   if (priceId && priceId === config.STRIPE_PRICE_TEAM) return 'team';
+  if (priceId && priceId === config.STRIPE_PRICE_PRO_ANNUAL) return 'pro';
+  if (priceId && priceId === config.STRIPE_PRICE_TEAM_ANNUAL) return 'team';
   if (priceId && priceId === config.STRIPE_PRICE_ENTERPRISE) return 'enterprise';
   if (metadataTier && metadataTier in PLANS) return metadataTier as Tier;
   if (priceId) {
@@ -110,6 +117,8 @@ export async function customerFor(
 export interface CheckoutRequest {
   ownerId: string;
   tier: Tier;
+  /** Defaults to monthly. */
+  interval?: BillingInterval;
   email?: string | null;
 }
 
@@ -129,7 +138,8 @@ export async function createCheckoutSession(
   const stripe = await stripeClient();
   if (!stripe) return null;
 
-  const price = priceIdFor(req.tier);
+  const interval = req.interval ?? 'month';
+  const price = priceIdFor(req.tier, interval);
   if (!price) return null;
 
   const customer = await customerFor(db, req.ownerId, req.email);
@@ -148,10 +158,19 @@ export async function createCheckoutSession(
         adjustable_quantity: { enabled: true, minimum: plan.minSeats ?? 1, maximum: 500 },
       }
     : { price, quantity: 1 };
+  // Monthly Team also carries the metered overage Price, so calls past the pool
+  // bill instead of stopping. Not on yearly: a monthly metered item on a yearly
+  // subscription needs Stripe's mixed-interval billing (API 2025-07-30+), and
+  // API_VERSION is pinned below that on purpose. Yearly plans get the grace.
+  const overage =
+    interval === 'month' && plan.overageCentsPer1k
+      ? (config.STRIPE_PRICE_TEAM_OVERAGE ?? null)
+      : null;
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: 'subscription',
     customer,
-    line_items: [lineItem],
+    // A metered item takes no quantity; usage arrives later as meter events.
+    line_items: overage ? [lineItem, { price: overage }] : [lineItem],
     // Stripe substitutes the real id. The dashboard reads it to poll for the
     // webhook having landed, so the page after payment can say "active" rather
     // than "we think so".
@@ -233,6 +252,22 @@ function periodEnd(sub: Stripe.Subscription): Date | null {
 }
 
 /**
+ * The plan item, and whether a metered overage item rides along.
+ *
+ * The plan is the licensed item, not simply the first: Stripe does not promise
+ * item order, and reading the metered item as the plan would match no configured
+ * Price and leave a paying team resting on its metadata fallback.
+ */
+export function subscriptionItems(sub: Pick<Stripe.Subscription, 'items'>): {
+  item: Stripe.SubscriptionItem | undefined;
+  overageEnabled: boolean;
+} {
+  const items = sub.items?.data ?? [];
+  const metered = (i: Stripe.SubscriptionItem) => i.price?.recurring?.usage_type === 'metered';
+  return { item: items.find((i) => !metered(i)) ?? items[0], overageEnabled: items.some(metered) };
+}
+
+/**
  * Apply one verified event. Returns what happened, for the log.
  *
  * Deliberately tolerant: an event we cannot attribute is a warning and a 200,
@@ -262,7 +297,7 @@ export async function handleEvent(db: Database, event: Stripe.Event): Promise<st
     typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
   if (!customerId) return 'event carried no customer';
 
-  const item = subscription.items?.data?.[0];
+  const { item, overageEnabled } = subscriptionItems(subscription);
   const priceId = item?.price?.id ?? null;
   const seats = Math.max(1, item?.quantity ?? 1);
   // A deleted subscription grants nothing regardless of which Price it held.
@@ -278,6 +313,7 @@ export async function handleEvent(db: Database, event: Stripe.Event): Promise<st
     currentPeriodEnd: periodEnd(subscription),
     cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
     seats,
+    overageEnabled,
     eventAt: new Date(event.created * 1000),
   });
 

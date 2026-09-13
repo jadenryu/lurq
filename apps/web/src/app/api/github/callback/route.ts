@@ -7,7 +7,7 @@
  * exit is a redirect carrying a status the page turns into a message.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { verifyState } from "@/lib/github-connect";
 import { connectInstallation, LurqIssuerError } from "@/lib/lurq-issuer";
 
@@ -16,8 +16,8 @@ function back(req: NextRequest, status: string): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return NextResponse.redirect(new URL("/sign-in", req.url));
   }
 
@@ -27,11 +27,11 @@ export async function GET(req: NextRequest) {
 
   // A mismatched state is the forged-callback case (see lib/github-connect.ts),
   // not a user error: refuse it rather than connecting anything.
-  if (!verifyState(state, userId)) return back(req, "invalid");
+  if (!verifyState(state, owner.ownerId)) return back(req, "invalid");
   if (!Number.isInteger(installationId) || installationId <= 0) return back(req, "invalid");
 
   try {
-    const connected = await connectInstallation(userId, installationId);
+    const connected = await connectInstallation(owner.ownerId, installationId);
     return back(req, connected > 0 ? "ok" : "empty");
   } catch (err) {
     console.warn(

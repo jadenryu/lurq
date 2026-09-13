@@ -781,6 +781,21 @@ export function registerOperatorCommands(program: Command): void {
       await runBillingRevoke(ownerId);
     });
   billing
+    .command('report-overage')
+    .description('send calls past each Team pool to Stripe as metered usage (hourly cron)')
+    .action(async () => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { reportOverage } = await import('../billing/overage');
+      const { db, close } = createDb({ max: 1 });
+      try {
+        for (const line of await reportOverage(db)) console.log(line);
+      } finally {
+        await close();
+      }
+    });
+  billing
     .command('setup')
     .description('create/reuse the Stripe products, prices and webhook, then print the env vars')
     .option(

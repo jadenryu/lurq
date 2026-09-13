@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { fetchUsage, LurqIssuerError } from "@/lib/lurq-issuer";
 
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return NextResponse.json({ error: "Sign in to view usage." }, { status: 401 });
   }
   try {
-    const usage = await fetchUsage(userId);
+    const usage = await fetchUsage(owner.ownerId);
     return NextResponse.json(usage);
   } catch (err) {
     if (err instanceof LurqIssuerError) {

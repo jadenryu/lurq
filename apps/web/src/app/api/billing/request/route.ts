@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { currentUser } from '@clerk/nextjs/server';
+import { ADMIN_ONLY, currentOwner } from '@/lib/owner';
 import { Resend } from 'resend';
 import { checkRateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import { PLANS, type Tier } from '@lurq/core/plans';
@@ -25,14 +26,19 @@ const TO_EMAIL = process.env.BILLING_TO_EMAIL ?? 'payments@lurq.run';
 const FROM_EMAIL = process.env.BILLING_FROM_EMAIL ?? 'lurq <payments@lurq.run>';
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return NextResponse.json({ error: 'Sign in first.' }, { status: 401 });
+  }
+
+  // The plan belongs to the whole organization, so only an admin may buy or change it.
+  if (!owner.canManage) {
+    return NextResponse.json({ error: ADMIN_ONLY }, { status: 403 });
   }
 
   // Low ceiling: this is a human clicking a button, not a polled endpoint. It
   // also caps how much mail one account can put in the operator's inbox.
-  const limit = checkRateLimit(`billing:request:${userId}`, 3, 3_600_000);
+  const limit = checkRateLimit(`billing:request:${owner.ownerId}`, 3, 3_600_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "We already have your request. We'll be in touch shortly." },
@@ -79,9 +85,9 @@ export async function POST(request: Request) {
       '',
       'Invoice them, then grant it:',
       '',
-      `  npm run operator -- billing grant ${userId} --tier ${tier} --months 12${plan.perSeat ? ` --seats ${plan.minSeats ?? 1}` : ''}`,
+      `  npm run operator -- billing grant ${owner.ownerId} --tier ${tier} --months 12${plan.perSeat ? ` --seats ${plan.minSeats ?? 1}` : ''}`,
       '',
-      `account: ${userId}`,
+      `account: ${owner.ownerId}`,
       `requested: ${new Date().toISOString()}`,
     ].join('\n'),
   });

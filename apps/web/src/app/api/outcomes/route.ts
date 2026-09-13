@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { fetchOutcomes, LurqIssuerError } from "@/lib/lurq-issuer";
 
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return NextResponse.json({ error: "Sign in to view activity." }, { status: 401 });
   }
   try {
-    const outcomes = await fetchOutcomes(userId);
+    const outcomes = await fetchOutcomes(owner.ownerId);
     return NextResponse.json({ outcomes });
   } catch (err) {
     if (err instanceof LurqIssuerError) {

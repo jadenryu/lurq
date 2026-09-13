@@ -1,6 +1,8 @@
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { BillingPanel } from "@/components/dashboard/billing-panel";
 import { loadBilling } from "@/lib/dashboard-data";
+import { currentOwner, syncSeatLimit } from "@/lib/owner";
+import { PLANS, type Tier } from "@lurq/core/plans";
 
 /**
  * Plan, allowance spent, and the way out to Stripe.
@@ -12,11 +14,17 @@ import { loadBilling } from "@/lib/dashboard-data";
  * query string would grant a plan to anyone who typed one.
  */
 export default async function DashboardBillingPage(props: PageProps<"/dashboard/billing">) {
-  const [{ data: billing, demo }, searchParams] = await Promise.all([
+  const [{ data: billing, demo, failed }, searchParams, owner] = await Promise.all([
     loadBilling(),
     props.searchParams,
+    currentOwner(),
   ]);
   const justChecked = typeof searchParams.checkout === "string";
+  // Skipped on a failed read: that renders as Free, and syncing Free would lift a
+  // paying team's seat cap during an outage.
+  if (owner?.orgId && !demo && !failed) {
+    await syncSeatLimit(owner.orgId, PLANS[billing.tier as Tier]?.perSeat ? billing.seats : null);
+  }
 
   return (
     <div>
@@ -26,7 +34,11 @@ export default async function DashboardBillingPage(props: PageProps<"/dashboard/
         demo={demo}
       />
       <PageBody>
-        <BillingPanel billing={billing} justCheckedOut={justChecked} />
+        <BillingPanel
+          billing={billing}
+          justCheckedOut={justChecked}
+          canManage={owner?.canManage ?? true}
+        />
       </PageBody>
     </div>
   );

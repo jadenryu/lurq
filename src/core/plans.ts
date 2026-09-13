@@ -42,6 +42,8 @@ export interface Plan {
   perSeat?: boolean;
   /** Fewest seats a per-seat plan sells. */
   minSeats?: number;
+  /** Price per 1,000 calls past the pool, for monthly subscriptions. Unset = no overage. */
+  overageCentsPer1k?: number;
   /** Hosted tool calls per calendar month, per seat when `perSeat`. null = uncapped. */
   monthlyCalls: number | null;
   /** Per-minute burst ceiling, enforced by the express limiter. */
@@ -67,6 +69,49 @@ export interface Plan {
  * message in front of whoever reads the agent's output.
  */
 export const GRACE_CALLS_PER_DAY = 20;
+
+export type BillingInterval = 'month' | 'year';
+
+/** Yearly prepay discount: "two months free", rounded to the market's 20%. */
+export const ANNUAL_DISCOUNT = 0.2;
+
+/**
+ * How far past its pool a plan with overage billing may run, as a multiple of
+ * the pool. Metered billing with no ceiling is a surprise invoice waiting for a
+ * runaway agent loop; at 2x, the worst month is one extra pool, and the daily
+ * grace takes over after that.
+ */
+export const OVERAGE_CAP_MULTIPLE = 2;
+
+/** Yearly price in cents, per seat when `perSeat`. */
+export function annualPriceCents(plan: Plan): number {
+  return Math.round(plan.priceCents * 12 * (1 - ANNUAL_DISCOUNT));
+}
+
+/**
+ * Where an account stands against its allowance. Pure, so the quota rules are
+ * testable without a database.
+ *
+ * - withinQuota: under the pool (or uncapped).
+ * - inOverage: past the pool, billed per call, still under the overage ceiling.
+ *   Only for subscriptions that carry a metered overage item.
+ */
+export function quotaState(
+  limit: number | null,
+  used: number,
+  overageEnabled: boolean,
+): { withinQuota: boolean; inOverage: boolean } {
+  const withinQuota = limit === null || used < limit;
+  const inOverage =
+    !withinQuota && overageEnabled && used < (limit as number) * OVERAGE_CAP_MULTIPLE;
+  return { withinQuota, inOverage };
+}
+
+/** Billable overage calls: past the pool, never past the ceiling. */
+export function overageCalls(limit: number | null, used: number): number {
+  if (limit === null) return 0;
+  return Math.min(Math.max(0, used - limit), limit * (OVERAGE_CAP_MULTIPLE - 1));
+}
 
 export const PLANS: Record<Tier, Plan> = {
   free: {
@@ -111,6 +156,7 @@ export const PLANS: Record<Tier, Plan> = {
     priceCents: 2_500,
     perSeat: true,
     minSeats: 3,
+    overageCentsPer1k: 800,
     monthlyCalls: 15_000,
     ratePerMinute: 300,
     decisionLogDays: 365,
