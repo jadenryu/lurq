@@ -11,7 +11,7 @@ vi.mock('../src/db/notifications', () => ({
   setPreferences: vi.fn(async (_db: unknown, _o: string, patch: Record<string, boolean>) => ({ urgentEmail: true, weeklyDigest: false, ...patch })),
   unsubscribeByToken: vi.fn(async (_db: unknown, token: string) => token === 'a'.repeat(43)),
 }));
-vi.mock('../src/notify/run', () => ({ emailConfigured: () => false }));
+vi.mock('../src/notify/config', () => ({ emailConfigured: () => false }));
 
 import { registerNotificationRoutes } from '../src/mcp/notificationRoutes';
 import * as store from '../src/db/notifications';

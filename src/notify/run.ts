@@ -90,7 +90,7 @@ async function deliver(
   deps: NotifyDeps,
   delivery: NotificationDeliveryRow,
   prefs: NotificationPreferencesRow,
-  render: (l: ReturnType<typeof links>) => Rendered,
+  render: (l: ReturnType<typeof links>) => Promise<Rendered> | Rendered,
 ): Promise<Outcome> {
   const { db } = deps;
   const attempts = delivery.attempts + 1;
@@ -108,7 +108,7 @@ async function deliver(
   }
 
   const l = links(deps.webUrl, prefs, delivery.kind);
-  const body = render(l);
+  const body = await render(l);
   try {
     const { id } = await deps.send({
       to,
@@ -228,11 +228,7 @@ export async function runNotifications(deps: NotifyDeps): Promise<NotifySummary>
   return s;
 }
 
-/** Is email configured on this deployment? Both keys, or nothing is sent. */
-export function emailConfigured(): boolean {
-  const c = getConfig();
-  return Boolean(c.RESEND_API_KEY && c.CLERK_SECRET_KEY);
-}
+export { emailConfigured } from './config';
 
 /** The worker's entry point: real Resend and Clerk, or null when unconfigured. */
 export async function notifyFromConfig(db: Database): Promise<NotifySummary | null> {

@@ -69,7 +69,8 @@
     "prepublishOnly": "npm test && npm run build",
     "content:drift": "tsx scripts/gen-drift.ts",
     "content:landing": "tsx scripts/build-landing-content.mts",
-    "content:releases": "tsx scripts/gen-releases.ts"
+    "content:releases": "tsx scripts/gen-releases.ts",
+    "email:dev": "email dev --dir src/notify/emails --port 3030"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
@@ -92,8 +93,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@react-email/ui": "^6.9.5",
     "@types/express": "^5.0.6",
     "@types/node": "^22.5.0",
+    "@types/react": "^19.3.0",
     "@types/semver": "^7.7.1",
     "drizzle-kit": "^0.31.10",
     "e2b": "^2.31.0",
@@ -102,6 +105,9 @@
     "pdfjs-dist": "^6.2.108",
     "playwright": "^1.62.1",
     "prettier": "^3.3.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-email": "^6.9.5",
     "tsup": "^8.2.4",
     "tsx": "^4.19.0",
     "typescript-eslint": "^8.3.0",
