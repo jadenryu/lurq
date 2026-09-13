@@ -30,6 +30,10 @@ export const VERSION: string = pkg.version;
  *  Overridable per-invocation with `lurq install --url …` or `LURQ_ENDPOINT`. */
 export const DEFAULT_ENDPOINT = 'https://api.lurq.run/mcp';
 
+/** Where a signed-in user creates (and revokes) API keys. The www host directly:
+ *  the apex only redirects there. */
+export const KEYS_URL = 'https://www.lurq.run/dashboard/keys';
+
 /** Prefix for issued API keys (the rest is high-entropy random). */
 export const API_KEY_PREFIX = 'lurq_live_';
 
