@@ -405,7 +405,8 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
             else if (ts.isObjectLiteralExpression(arg)) {
               for (const p of arg.properties) {
                 if (p.name && ts.isIdentifier(p.name)) {
-                  add(p.name.text, ts.isPropertyAssignment(p) ? p.initializer : p);
+                  const value = ts.isPropertyAssignment(p) ? p.initializer : p;
+                  add(p.name.text, isExportStar ? throughGetter(sf, value) : value);
                 }
               }
             } else if (ts.isIdentifier(arg)) {
@@ -484,6 +485,27 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
       }
     }
   }
+}
+
+/**
+ * What a bundler's export helper actually exports.
+ *
+ * esbuild emits `__export(target, { parse: () => parse })` and swc
+ * `_export(exports, { parse: function () { return parse; } })`. The function in
+ * the object is a GETTER: its arity, 0, says nothing about `parse`, and
+ * recording it made every export of a tsup-built package look like it lost all
+ * its parameters. A getter returning a local binding is followed to it; one
+ * returning anything else (`() => import_x.default`) is a value of unknown shape.
+ */
+function throughGetter(sf: ts.SourceFile, value: ts.Node): ts.Node {
+  if (!(ts.isArrowFunction(value) || ts.isFunctionExpression(value)) || value.parameters.length) return value;
+  let returned: ts.Expression | undefined;
+  if (!ts.isBlock(value.body)) returned = value.body;
+  else if (value.body.statements.length === 1 && ts.isReturnStatement(value.body.statements[0]!)) {
+    returned = (value.body.statements[0] as ts.ReturnStatement).expression;
+  }
+  if (!returned) return value;
+  return ts.isIdentifier(returned) ? (localBinding(sf, returned.text) ?? returned) : returned;
 }
 
 /** `require('x')` → 'x', including `require('x').y`. Null otherwise. */
