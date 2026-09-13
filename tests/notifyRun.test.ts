@@ -165,6 +165,23 @@ describe.skipIf(!TEST_DB)('runNotifications against Postgres', () => {
     expect(send.mock.calls.filter((c) => c[0].to.startsWith(dead))).toHaveLength(1);
   });
 
+  it('never retries into an empty email when the alert is gone', async () => {
+    const o = owner('gone');
+    const a = await alert(o, true);
+    const send = vi.fn(async (m: OutgoingEmail) => {
+      if (m.to.startsWith(o)) throw new SendError('resend 503', true, 503);
+      return { id: 'em_other' };
+    });
+    await runNotifications(deps({ send }));
+    // The repo is disconnected before the retry, which removes its alerts.
+    const { eq } = await import('drizzle-orm');
+    await db.delete(schema.repoAlerts).where(eq(schema.repoAlerts.id, a.id));
+
+    const retrySend = vi.fn(async (m: OutgoingEmail) => ({ id: m.to }));
+    await runNotifications(deps({ send: retrySend }));
+    expect(retrySend.mock.calls.filter((c) => c[0].to.startsWith(o))).toEqual([]);
+  });
+
   it('skips, and does not retry, an account with no verified email', async () => {
     const o = owner('noemail');
     await alert(o, true);

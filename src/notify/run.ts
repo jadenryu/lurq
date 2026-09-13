@@ -154,15 +154,18 @@ export async function runNotifications(deps: NotifyDeps): Promise<NotifySummary>
       s.skipped++;
       continue;
     }
-    const render =
-      d.kind === 'urgent'
-        ? async () => renderUrgent(await loadUrgentItems(db, await itemKeysFor(db, d.id), webUrl), links(webUrl, prefs, 'urgent'))
-        : async () => {
-            const summary = await buildDigest(db, d.ownerId, now, webUrl);
-            return summary ? renderDigest(summary, links(webUrl, prefs, 'digest')) : null;
-          };
+    // Rebuilt from the source rows, which may be gone by now (a disconnected repo
+    // takes its alerts with it). An empty email is never sent: no items, no mail.
+    const render = async () => {
+      if (d.kind === 'urgent') {
+        const items = await loadUrgentItems(db, await itemKeysFor(db, d.id), webUrl);
+        return items.length ? renderUrgent(items, links(webUrl, prefs, 'urgent')) : null;
+      }
+      const summary = await buildDigest(db, d.ownerId, now, webUrl);
+      return summary ? renderDigest(summary, links(webUrl, prefs, 'digest')) : null;
+    };
     const rendered = await render();
-    if (!rendered || (d.kind === 'urgent' && rendered.text.trim() === '')) {
+    if (!rendered) {
       await updateDelivery(db, d.id, { status: 'skipped', error: 'nothing left to send' });
       s.skipped++;
       continue;
