@@ -96,3 +96,36 @@ export const ARCHETYPES: Record<ArchetypeId, { name: string; trait: string; line
     line: "What you build stays current. Your dependencies sit where most people's don't: up to date.",
   },
 };
+
+/** One advisory, as the `evaluate` tool returns it (its five most severe). */
+export interface DepAdvisory {
+  id: string;
+  severity: string;
+  summary: string;
+}
+
+/** What `diff_surface` found between the version a repo resolves and the latest. */
+export interface DepDiff {
+  fromVersion: string;
+  toVersion: string;
+  verdict: string;
+  /** Set when no comparison could be made yet; the lists are then empty and mean nothing. */
+  inconclusive?: string;
+  removed: { path: string; kind: string }[];
+  renamed: { path: string; to: string[] }[];
+  arityChanged: { path: string; from: number | null; to: number | null }[];
+  typeOnlyRemoved: string[];
+  deprecated: string[];
+}
+
+/**
+ * What /api/scan/dep returns for one opened dependency. A side is null when the
+ * row did not need it or it could not be read; `unavailable` then says why.
+ */
+export interface DepDetail {
+  diff: DepDiff | null;
+  advisories: DepAdvisory[] | null;
+  deprecated: boolean | string | null;
+  reasons: string[];
+  unavailable: string[];
+}

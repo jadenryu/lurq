@@ -4,12 +4,24 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
-import { ChevronRight, Download, Lock } from "lucide-react";
+import { ChevronRight, Download, Lock, RefreshCw } from "lucide-react";
 import posthog from "posthog-js";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { INSTALL_COMMAND } from "@/content/copy";
 import { CopyButton, CopyInline } from "@/components/dashboard/copy-button";
-import { repoBrief, reportBrief, summarize, type SummaryPoint } from "@/lib/builder-brief";
+import {
+  conflictBrief,
+  depBrief,
+  namesPackage,
+  packageImpact,
+  repoBrief,
+  reportBrief,
+  sharedPackages,
+  summarize,
+  type PackageImpact,
+  type SummaryPoint,
+} from "@/lib/builder-brief";
 import {
   Chip,
   EmptyState,
@@ -22,6 +34,8 @@ import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import {
   ARCHETYPES,
   type BuilderReport,
+  type DepDetail,
+  type DepDiff,
   type RepoStack,
   type ScanConflict,
   type ScanDep,
@@ -60,11 +74,13 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
   const [target, setTarget] = useState(initialTarget);
   /** The last answer, and which (target, session) it answers. */
   const [settled, setSettled] = useState<{ key: string; outcome: Outcome } | null>(null);
+  /** Bumped by "scan again". Part of the key, so the same target is fetched afresh. */
+  const [run, setRun] = useState(0);
   const wasSignedIn = useRef<boolean | undefined>(undefined);
 
   // `isSignedIn` is part of the key on purpose: the same target is worth
   // refetching the moment the session changes, because the answer changed.
-  const key = `${target}|${isSignedIn ? "in" : "out"}`;
+  const key = `${target}|${isSignedIn ? "in" : "out"}|${run}`;
 
   // Derived, not stored: "running" is just "no answer for this key yet", so
   // there is no loading flag to set in an effect and forget to clear.
@@ -165,7 +181,9 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
       )}
       {state.kind === "running" && <Scanning target={state.target} />}
       {state.kind === "failed" && <InlineError>{state.message}</InlineError>}
-      {state.kind === "done" && <Report report={state.report} target={target} />}
+      {state.kind === "done" && (
+        <Report report={state.report} target={target} onRescan={() => setRun((n) => n + 1)} />
+      )}
     </>
   );
 }
@@ -190,7 +208,15 @@ function Scanning({ target }: { target: string }) {
   );
 }
 
-function Report({ report, target }: { report: BuilderReport; target: string }) {
+function Report({
+  report,
+  target,
+  onRescan,
+}: {
+  report: BuilderReport;
+  target: string;
+  onRescan: () => void;
+}) {
   const type = ARCHETYPES[report.archetype];
   const [first, ...rest] = report.repos;
   // What they typed, not the login: a typed repo is the one they came to see,
@@ -249,7 +275,7 @@ function Report({ report, target }: { report: BuilderReport; target: string }) {
       {first ? (
         <Panel padding="none">
           <StackHead stack={first} hiddenDeps={report.locked?.deps ?? 0} />
-          <StackBody stack={first} />
+          <StackBody stack={first} report={report} />
           {report.locked && (report.locked.deps > 0 || report.locked.conflicts > 0) && (
             <LockedRow>
               {[
@@ -295,7 +321,7 @@ function Report({ report, target }: { report: BuilderReport; target: string }) {
                     <div className="flex justify-end border-b border-edge px-[var(--panel-px)] py-2">
                       <RepoCopy stack={stack} />
                     </div>
-                    <StackBody stack={stack} bare />
+                    <StackBody stack={stack} report={report} bare />
                   </div>
                 </details>
               </li>
@@ -304,22 +330,9 @@ function Report({ report, target }: { report: BuilderReport; target: string }) {
         </Panel>
       )}
 
-      {!report.locked && first && (
-        <EmptyState
-          title="This read root manifests only"
-          action={
-            <Link
-              href={`/dashboard/repos?scan=${encodeURIComponent(first.repo)}`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              Connect {first.repo}
-            </Link>
-          }
-        >
-          Connect a repo and lurq reads every manifest in it, then tells you when an upgrade would
-          break something.
-        </EmptyState>
-      )}
+      <SharedPackages report={report} />
+
+      <KeepItFixed report={report} first={first} onRescan={onRescan} />
     </>
   );
 }
@@ -400,6 +413,7 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
   const items = [
     "The score on all four traits, and the facts behind each",
     "Strengths, what to fix, and a stats card to share",
+    "What changed in each outdated dependency, and the advisories behind every flag",
     locked.repos > 0 && `${plural(locked.repos, "more repo")} on this profile, read against the index`,
     locked.deps > 0 &&
       first &&
@@ -454,7 +468,7 @@ function ReportActions({ report, target, back }: { report: BuilderReport; target
     <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-edge pt-4">
       <CopyButton
         text={reportBrief(report)}
-        label="Copy report for your agent"
+        label="Copy fix prompt for your AI"
         onCopy={() => posthog.capture("builder_report_copy", { scope: "report", login: report.login })}
       />
       {report.locked ? (
@@ -476,7 +490,7 @@ function ReportActions({ report, target, back }: { report: BuilderReport; target
         </a>
       )}
       <p className="text-[11.5px] text-ink-3">
-        The brief ranks your repos worst first, so an agent knows where to start.
+        Paste it into Claude, ChatGPT or Cursor: repos worst first, the steps to fix each, and how to check the fix with lurq.
       </p>
     </div>
   );
@@ -577,7 +591,15 @@ function Counts({ stack }: { stack: RepoStack }) {
   );
 }
 
-function StackBody({ stack, bare = false }: { stack: RepoStack; bare?: boolean }) {
+function StackBody({
+  stack,
+  report,
+  bare = false,
+}: {
+  stack: RepoStack;
+  report: BuilderReport;
+  bare?: boolean;
+}) {
   if (stack.depsTracked === 0) {
     return (
       <p className="px-[var(--panel-px)] py-4 text-[13px] leading-relaxed text-ink-2">
@@ -595,10 +617,12 @@ function StackBody({ stack, bare = false }: { stack: RepoStack; bare?: boolean }
       )}
       <ul className="divide-y divide-edge">
         {stack.deps.map((dep) => (
-          <DepRow key={dep.name} dep={dep} />
+          <DepRow key={dep.name} dep={dep} report={report} />
         ))}
       </ul>
-      {stack.conflictDetail.length > 0 && <Conflicts conflicts={stack.conflictDetail} />}
+      {stack.conflictDetail.length > 0 && (
+        <Conflicts conflicts={stack.conflictDetail} repo={stack.repo} report={report} />
+      )}
     </>
   );
 }
@@ -613,33 +637,561 @@ function verdict(dep: ScanDep): { text: string; tone: string } {
   return { text: "current", tone: "text-ink-3" };
 }
 
-function DepRow({ dep }: { dep: ScanDep }) {
+const ROW_OPEN =
+  "flex cursor-pointer list-none flex-wrap items-baseline gap-x-3 gap-y-0.5 px-[var(--panel-px)] py-2 transition-colors hover:bg-surface-2/70 [&::-webkit-details-marker]:hidden";
+const CHEVRON =
+  "size-3.5 shrink-0 self-center text-ink-3 transition-transform group-open:rotate-90 motion-reduce:transition-none";
+const DRAWER = "space-y-4 border-t border-edge bg-surface-2/40 px-[var(--panel-px)] py-4";
+
+/**
+ * One dependency. A flagged row opens: where else the package is declared, the
+ * conflicts that name it, and (signed in) what actually changed between the
+ * resolved version and the latest, or the advisories behind the flag. A current
+ * row has nothing more to say, so it does not pretend to open.
+ */
+function DepRow({ dep, report }: { dep: ScanDep; report: BuilderReport }) {
   const v = verdict(dep);
-  return (
-    // Wraps rather than overflowing: a canary range plus "→ latest" plus the
-    // verdict is wider than a phone, and shrink-0 on both pushed the page sideways.
-    <li className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-[var(--panel-px)] py-2">
+  const [open, setOpen] = useState(false);
+  const line = (
+    <>
       <span className="min-w-0 max-w-full truncate font-mono text-[12.5px] text-ink">{dep.name}</span>
+      {/* Wraps rather than overflowing: a canary range plus "→ latest" plus the
+          verdict is wider than a phone. */}
       <span className="min-w-0 break-all font-mono text-[11.5px] text-ink-3">
         {dep.resolved ?? dep.range}
         {dep.latest && dep.latest !== dep.resolved ? ` → ${dep.latest}` : ""}
       </span>
       <span className={cn("ml-auto shrink-0 font-mono text-[11px]", v.tone)}>{v.text}</span>
+    </>
+  );
+
+  if (v.text === "current") {
+    return (
+      <li className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-[var(--panel-px)] py-2">
+        <span aria-hidden className="w-3.5 shrink-0" />
+        {line}
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <details
+        className="group"
+        onToggle={(e) => {
+          const isOpen = e.currentTarget.open;
+          setOpen(isOpen);
+          if (isOpen) posthog.capture("builder_dep_open", { package: dep.name, issue: v.text });
+        }}
+      >
+        <summary className={ROW_OPEN}>
+          <ChevronRight aria-hidden className={CHEVRON} />
+          {line}
+        </summary>
+        {open && <DepDrawer dep={dep} report={report} />}
+      </details>
     </li>
   );
 }
 
-function Conflicts({ conflicts }: { conflicts: ScanConflict[] }) {
+type Lookup = { kind: "failed"; message: string } | { kind: "done"; detail: DepDetail };
+
+function DepDrawer({ dep, report }: { dep: ScanDep; report: BuilderReport }) {
+  const signedIn = report.locked === null;
+  const impact = packageImpact(report, dep.name);
+  const from = dep.resolved;
+  const to = dep.latest;
+  const wantDiff = dep.majorsBehind > 0 && Boolean(from && to);
+  const wantEvaluate = dep.advisories > 0 || dep.deprecated;
+  const [attempt, setAttempt] = useState(0);
+  /** The last answer and the attempt it answers; "loading" is derived, like the report's own. */
+  const [settled, setSettled] = useState<{ attempt: number; lookup: Lookup } | null>(null);
+  const lookup = settled?.attempt === attempt ? settled.lookup : null;
+
+  useEffect(() => {
+    if (!signedIn || (!wantDiff && !wantEvaluate)) return;
+    let stale = false;
+    (async () => {
+      let next: Lookup;
+      try {
+        const res = await fetch("/api/scan/dep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            package: dep.name,
+            ...(wantDiff ? { from, to } : {}),
+            evaluate: wantEvaluate,
+          }),
+        });
+        const data = (await res.json()) as DepDetail & { error?: unknown };
+        next = res.ok
+          ? { kind: "done", detail: data }
+          : { kind: "failed", message: typeof data.error === "string" ? data.error : "Could not open that dependency." };
+      } catch {
+        next = { kind: "failed", message: "Could not reach lurq. Try again." };
+      }
+      if (!stale) setSettled({ attempt, lookup: next });
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [attempt, signedIn, wantDiff, wantEvaluate, dep.name, from, to]);
+
+  const detail = lookup?.kind === "done" ? lookup.detail : null;
+  const asks = wantDiff ? `what changed from ${from} to ${to}` : "the advisories behind this flag";
+
+  return (
+    <div className={DRAWER}>
+      <Impact name={dep.name} impact={impact} />
+
+      {(wantDiff || wantEvaluate) &&
+        (!signedIn ? (
+          <p className="text-[12.5px] leading-relaxed text-ink-2">
+            <SignUpButton mode="modal">
+              <button type="button" className="text-signal hover:underline">
+                Sign up free
+              </button>
+            </SignUpButton>{" "}
+            to see {asks}: every export removed, renamed or re-shaped, read from the package itself.
+          </p>
+        ) : !lookup ? (
+          <p aria-live="polite" className="text-[12.5px] text-ink-3">
+            Asking lurq for {asks}…
+          </p>
+        ) : lookup.kind === "failed" ? (
+          <InlineError>{lookup.message}</InlineError>
+        ) : (
+          <>
+            <Advisories detail={lookup.detail} name={dep.name} />
+            {lookup.detail.diff && (
+              <Changes diff={lookup.detail.diff} onRetry={() => setAttempt((n) => n + 1)} />
+            )}
+            {lookup.detail.unavailable.map((u) => (
+              <p key={u} className="text-[12px] leading-snug text-ink-3">
+                {u}
+              </p>
+            ))}
+          </>
+        ))}
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <CopyButton
+          text={depBrief(report, dep.name, detail)}
+          label="Copy fix prompt"
+          onCopy={() => posthog.capture("builder_report_copy", { scope: "dep", package: dep.name })}
+        />
+        <span className="text-[11.5px] text-ink-3">
+          {detail?.diff && !detail.diff.inconclusive
+            ? "Includes what changed, so your agent can search your code for each name."
+            : "Every repo that declares it, and how to check the upgrade with lurq."}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Where the package sits across the repos read, and the conflicts that name it. */
+function Impact({ name, impact }: { name: string; impact: PackageImpact }) {
+  return (
+    <div>
+      <p className={microLabel}>
+        {impact.uses.length > 1 ? `declared in ${impact.uses.length} of these repos` : "declared in"}
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {impact.uses.map(({ repo, dep }) => {
+          const v = verdict(dep);
+          return (
+            <li key={repo} className="flex flex-wrap items-baseline gap-x-3 font-mono text-[12px]">
+              <span className="text-ink-2">{repo}</span>
+              <span className="break-all text-ink-3">
+                {dep.range}
+                {dep.resolved ? ` · resolves ${dep.resolved}` : ""}
+              </span>
+              <span className={cn("ml-auto text-[11px]", v.tone)}>{v.text}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {impact.conflicts.length > 0 && (
+        <>
+          <p className={cn(microLabel, "mt-3")}>conflicts that name {name}</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {impact.conflicts.map(({ repo, conflict }, i) => (
+              <li key={`${repo}-${i}`} className="text-[12.5px] leading-snug text-ink-2">
+                <span className="font-mono text-[12px] text-ink">{conflict.packages.join(" · ")}</span> in{" "}
+                {repo}: {conflict.detail}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Advisories({ detail, name }: { detail: DepDetail; name: string }) {
+  const list = detail.advisories ?? [];
+  if (list.length === 0 && !detail.deprecated) return null;
+  return (
+    <div className="space-y-3">
+      {detail.deprecated && (
+        <p className="flex flex-wrap items-baseline gap-2 text-[12.5px] leading-snug text-ink-2">
+          <Chip tone="warn">deprecated</Chip>
+          {typeof detail.deprecated === "string"
+            ? detail.deprecated
+            : `The maintainers have marked ${name} deprecated.`}
+        </p>
+      )}
+      {list.length > 0 && (
+        <div>
+          <p className={microLabel}>advisories on record for {name} · most severe first</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {list.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12.5px] leading-snug">
+                <Chip tone={a.severity === "critical" || a.severity === "high" ? "bad" : "warn"}>{a.severity}</Chip>
+                <span className="text-ink-2">{a.summary}</span>
+                {a.id.startsWith("GHSA-") ? (
+                  <a
+                    href={`https://github.com/advisories/${a.id}`}
+                    target="_blank"
+                    rel="noopener"
+                    className="font-mono text-[11px] text-ink-3 underline-offset-4 hover:text-ink hover:underline"
+                  >
+                    {a.id}
+                  </a>
+                ) : (
+                  <span className="font-mono text-[11px] text-ink-3">{a.id}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11.5px] text-ink-3">
+            An advisory names the versions it affects. Check that range against the version you resolve.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The package's own change list between two versions. Never "your code breaks": lurq has not read it. */
+function Changes({ diff, onRetry }: { diff: DepDiff; onRetry: () => void }) {
+  const head = (
+    <p className={microLabel}>
+      what changed · {diff.fromVersion} → {diff.toVersion}
+    </p>
+  );
+
+  if (diff.inconclusive) {
+    return (
+      <div>
+        {head}
+        <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
+          lurq has not read one of these versions yet. It is queued, and usually ready within a minute. This is
+          not evidence that anything was removed.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-signal hover:underline"
+        >
+          <RefreshCw aria-hidden className="size-3" />
+          Check again
+        </button>
+      </div>
+    );
+  }
+
+  const renamed = new Map(diff.renamed.map((r) => [r.path, r.to]));
+  const breaking = diff.removed.length + diff.arityChanged.length + diff.typeOnlyRemoved.length;
+  return (
+    <div className="space-y-3">
+      {head}
+      {breaking === 0 ? (
+        <p className="text-[12.5px] leading-snug text-ink-2">
+          No exports were removed or re-shaped between these versions. Behaviour and configuration changes
+          are not covered here, so read the changelog too.
+        </p>
+      ) : (
+        <>
+          <SymbolChips
+            label="removed at runtime · breaks node"
+            tone="bad"
+            items={diff.removed.map((s) =>
+              renamed.has(s.path) ? `${s.path} → ${renamed.get(s.path)!.join(" | ")}` : s.path,
+            )}
+          />
+          <SymbolChips
+            label="parameter count changed"
+            tone="warn"
+            items={diff.arityChanged.map((a) => `${a.path} (${a.from ?? "?"} → ${a.to ?? "?"})`)}
+          />
+          <SymbolChips label="type-only removals · breaks tsc" tone="muted" items={diff.typeOnlyRemoved} />
+        </>
+      )}
+      <SymbolChips label="newly deprecated" tone="warn" items={diff.deprecated} />
+      {breaking > 0 && (
+        <p className="text-[11.5px] leading-snug text-ink-3">
+          These are the package&rsquo;s changes; lurq has not read your code. Copy the fix prompt and your agent
+          searches your repos for each name.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SymbolChips({ label, items, tone }: { label: string; items: string[]; tone: "bad" | "warn" | "muted" }) {
+  const [all, setAll] = useState(false);
+  if (items.length === 0) return null;
+  const shown = all ? items : items.slice(0, 24);
+  return (
+    <div>
+      <p className={microLabel}>
+        {label} · {items.length}
+      </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {shown.map((s) => (
+          <code
+            key={s}
+            className={cn(
+              "break-all rounded-[var(--radius-chip)] border px-1.5 py-0.5 font-mono text-[11.5px]",
+              tone === "bad" && "border-bad/30 text-ink",
+              tone === "warn" && "border-warn/30 text-ink",
+              tone === "muted" && "border-edge text-ink-3",
+            )}
+          >
+            {s}
+          </code>
+        ))}
+        {items.length > shown.length && (
+          <button type="button" onClick={() => setAll(true)} className="text-[12px] text-signal hover:underline">
+            +{items.length - shown.length} more
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** What each kind of conflict means, for someone who has not read the compat tool's source. */
+const CONFLICT_MEANS: Record<ScanConflict["source"], string> = {
+  "peer-deps":
+    "These packages require different versions of a shared peer. npm refuses the install, and --legacy-peer-deps installs a combination one of them was never tested with.",
+  engines: "Their Node engine ranges do not overlap, so no single Node version satisfies all of them.",
+  sandbox: "Installing this set at its latest versions in a clean sandbox failed.",
+  resolve:
+    "npm could not resolve this set at its latest versions. It reports the set, not which two packages are at fault, so treat them together.",
+};
+
+function Conflicts({
+  conflicts,
+  repo,
+  report,
+}: {
+  conflicts: ScanConflict[];
+  repo: string;
+  report: BuilderReport;
+}) {
+  const stack = report.repos.find((s) => s.repo === repo);
   return (
     <ul className="divide-y divide-edge border-t border-edge">
       {conflicts.map((c, i) => (
-        <li key={`${c.source}-${i}`} className="px-[var(--panel-px)] py-3">
-          <p className="font-mono text-[12px] text-ink">{c.packages.join(" · ")}</p>
-          <p className="mt-1 text-[12.5px] leading-normal text-ink-2">{c.detail}</p>
-          <p className={cn(microLabel, "mt-1")}>{c.source}</p>
+        <li key={`${c.source}-${i}`}>
+          <details
+            className="group"
+            onToggle={(e) => {
+              if (e.currentTarget.open) posthog.capture("builder_conflict_open", { repo, source: c.source });
+            }}
+          >
+            <summary className="flex cursor-pointer list-none gap-2.5 px-[var(--panel-px)] py-3 transition-colors hover:bg-surface-2/70 [&::-webkit-details-marker]:hidden">
+              <ChevronRight aria-hidden className={cn(CHEVRON, "mt-0.5 self-start")} />
+              <span className="min-w-0 flex-1">
+                <span className="block font-mono text-[12px] text-ink">{c.packages.join(" · ")}</span>
+                <span className="mt-1 block text-[12.5px] leading-normal text-ink-2">{c.detail}</span>
+              </span>
+              <span className="shrink-0">
+                <Chip tone="bad">{c.source}</Chip>
+              </span>
+            </summary>
+            <div className={DRAWER}>
+              <p className="text-[12.5px] leading-snug text-ink-2">{CONFLICT_MEANS[c.source]}</p>
+              <ul className="space-y-1">
+                {c.packages.map((p) => {
+                  const dep = stack?.deps.find((d) => namesPackage(p, d.name));
+                  const elsewhere = packageImpact(report, dep?.name ?? p).uses.filter((u) => u.repo !== repo);
+                  return (
+                    <li key={p} className="flex flex-wrap items-baseline gap-x-3 font-mono text-[12px]">
+                      <span className="text-ink">{dep?.name ?? p}</span>
+                      <span className="break-all text-ink-3">
+                        {dep
+                          ? `${dep.resolved ?? dep.range}${dep.latest && dep.latest !== dep.resolved ? ` → ${dep.latest}` : ""}`
+                          : "not declared at the root"}
+                      </span>
+                      {elsewhere.length > 0 && (
+                        <span className="font-sans text-[11.5px] text-ink-3">
+                          also in {elsewhere.map((u) => u.repo).join(", ")}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <CopyButton
+                text={conflictBrief(report, repo, c)}
+                label="Copy fix prompt"
+                onCopy={() => posthog.capture("builder_report_copy", { scope: "conflict", repo })}
+              />
+            </div>
+          </details>
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Packages declared in more than one repo: the same dependency drifting to
+ * different versions across a profile is invisible repo by repo. Signed in only,
+ * because a signed-out report carries one repo.
+ */
+function SharedPackages({ report }: { report: BuilderReport }) {
+  const [all, setAll] = useState(false);
+  const shared = report.locked ? [] : sharedPackages(report);
+  if (shared.length === 0) return null;
+  const shown = all ? shared : shared.slice(0, 8);
+
+  return (
+    <Panel padding="none">
+      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-[var(--panel-px)] py-2.5">
+        <p className="text-[13px] font-medium tracking-[-0.01em] text-ink">Across these repos</p>
+        <span className="ml-auto font-mono text-[11px] text-ink-3">
+          {plural(shared.length, "package")} in more than one
+        </span>
+      </div>
+      <ul className="divide-y divide-edge">
+        {shown.map((p) => (
+          <li key={p.name}>
+            <details className="group">
+              <summary className={cn(ROW_OPEN, "items-center py-2.5")}>
+                <ChevronRight aria-hidden className={CHEVRON} />
+                <span className="min-w-0 truncate font-mono text-[12.5px] text-ink">{p.name}</span>
+                <span className="ml-auto flex flex-wrap gap-1.5">
+                  <Chip>{plural(p.uses.length, "repo")}</Chip>
+                  {p.versions.length > 1 && <Chip tone="warn">{p.versions.length} versions</Chip>}
+                  {p.flagged && <Chip tone="bad">needs work</Chip>}
+                </span>
+              </summary>
+              <div className={DRAWER}>
+                <ul className="space-y-1">
+                  {p.uses.map(({ repo, dep }) => {
+                    const v = verdict(dep);
+                    return (
+                      <li key={repo} className="flex flex-wrap items-baseline gap-x-3 font-mono text-[12px]">
+                        <span className="text-ink-2">{repo}</span>
+                        <span className="break-all text-ink-3">{dep.resolved ?? dep.range}</span>
+                        <span className={cn("ml-auto text-[11px]", v.tone)}>{v.text}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <CopyButton
+                  text={depBrief(report, p.name)}
+                  label="Copy fix prompt"
+                  onCopy={() => posthog.capture("builder_report_copy", { scope: "shared", package: p.name })}
+                />
+              </div>
+            </details>
+          </li>
+        ))}
+      </ul>
+      {shared.length > shown.length && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="w-full border-t border-edge px-[var(--panel-px)] py-2.5 text-left text-[12.5px] text-signal hover:underline"
+        >
+          Show {shared.length - shown.length} more
+        </button>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * After the findings, how they stay fixed: lurq in the agent so the next pick is
+ * checked, a connected repo so a breaking release is heard about, and a rescan to
+ * see the fixes land. Every claim here is something the product does today.
+ */
+function KeepItFixed({
+  report,
+  first,
+  onRescan,
+}: {
+  report: BuilderReport;
+  first: RepoStack | undefined;
+  onRescan: () => void;
+}) {
+  const connect = first ? `/dashboard/repos?scan=${encodeURIComponent(first.repo)}` : "/dashboard/repos";
+  return (
+    <Panel>
+      <PanelHeader title="keep it this way" />
+      <ol className="grid gap-6 min-[900px]:grid-cols-3">
+        <Step n={1} title="Check packages as your agent picks them">
+          With lurq in your coding agent, every package and upgrade is checked before it is written, so these
+          findings do not come back.
+          <div className="mt-3">
+            <CopyButton
+              text={INSTALL_COMMAND}
+              label={INSTALL_COMMAND}
+              className="font-mono"
+              onCopy={() => posthog.capture("builder_report_install_copy", { login: report.login })}
+            />
+          </div>
+        </Step>
+        <Step n={2} title={first ? `Watch ${first.repo}` : "Watch a repo"}>
+          A connected repo has every manifest read and rescanned daily, and you hear when a dependency ships a
+          new major. Its autopilot can check which changes your code actually calls.
+          <div className="mt-3">
+            <Link
+              href={connect}
+              onClick={() => posthog.capture("builder_report_connect", { repo: first?.repo ?? null })}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              Connect {first ? first.repo : "a repo"}
+            </Link>
+          </div>
+        </Step>
+        <Step n={3} title="Scan again after you fix">
+          Push the fixes to the default branch, then run this report again to see the counts drop. A repo read
+          in the last 15 minutes shows its earlier result.
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => {
+                posthog.capture("builder_report_rescan", { login: report.login });
+                onRescan();
+              }}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+            >
+              <RefreshCw aria-hidden className="size-3.5" />
+              Scan again
+            </button>
+          </div>
+        </Step>
+      </ol>
+    </Panel>
+  );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <li className="text-[12.5px] leading-relaxed text-ink-2">
+      <p className="flex items-baseline gap-2 text-[13.5px] font-medium text-ink">
+        <span className="font-mono text-[11px] text-ink-3">{n}</span>
+        {title}
+      </p>
+      <div className="mt-1.5">{children}</div>
+    </li>
   );
 }
 

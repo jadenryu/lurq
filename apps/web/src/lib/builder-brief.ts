@@ -4,9 +4,12 @@ import {
   ARCHETYPES,
   type ArchetypeId,
   type BuilderReport,
+  type DepDetail,
   type RepoStack,
+  type ScanConflict,
   type ScanDep,
 } from "./builder-profile";
+import { siteUrl } from "./site";
 
 /**
  * The builder report, turned into three things a person takes away from it:
@@ -37,7 +40,7 @@ function flagged(s: RepoStack): boolean {
 export function rankRepos(repos: RepoStack[]): RepoStack[] {
   return [...repos].sort((a, b) => {
     const [x, y] = [severity(a), severity(b)];
-    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return y[i] - x[i];
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return (y[i] ?? 0) - (x[i] ?? 0);
     return 0;
   });
 }
@@ -192,16 +195,40 @@ function repoSection(s: RepoStack, h: string, hiddenDeps = 0): string[] {
   return out;
 }
 
-const INSTRUCTIONS = [
-  "## What to do",
-  "",
-  "1. Work repo by repo in the order above. Open each repo's package.json before changing anything.",
-  "2. Advisories first: upgrade to a version that is not affected. If the latest shown is still affected, say so rather than guessing a version.",
-  "3. Then conflicts: resolve the packages named together, in one change, and explain the trade-off.",
-  "4. Then deprecated packages, then majors behind. One major upgrade per commit, and read its changelog for breaking changes first.",
-  "5. After each change, install, typecheck and run the tests. Stop and report if anything fails instead of widening the change.",
-  "6. Anything marked unchecked or not indexed has not been looked at. Do not report it as fine.",
-];
+/**
+ * What the agent does with the facts, then how it checks its own work with lurq.
+ *
+ * The lurq half is the point of the export as much as the list is: a model
+ * fixing a major upgrade from memory writes against an API from before its
+ * cutoff, which is the exact failure the findings came from. If lurq is not
+ * connected, the agent tells the user how to get it rather than installing
+ * anything itself. `target` is what a rescan should read (a login or owner/repo).
+ */
+function instructions(target: string): string[] {
+  return [
+    "## What to do",
+    "",
+    "1. Work repo by repo in the order above. Open each repo's package.json before changing anything.",
+    "2. Advisories first: upgrade to a version that is not affected. If the latest shown is still affected, say so rather than guessing a version.",
+    "3. Then conflicts: resolve the packages named together, in one change, and explain the trade-off.",
+    "4. Then deprecated packages, then majors behind. One major upgrade per commit, and read its changelog for breaking changes first.",
+    "5. After each change, install, typecheck and run the tests. Stop and report if anything fails instead of widening the change.",
+    "6. Anything marked unchecked or not indexed has not been looked at. Do not report it as fine.",
+    "",
+    "## Check each change with lurq",
+    "",
+    "Most of these releases are newer than your training data. If the lurq MCP tools are available to you, use them instead of recalling APIs:",
+    "",
+    "- `diff_surface` (package, fromVersion, toVersion) before a major upgrade: the exports removed or renamed. Search this repo for each one.",
+    "- `compat` on every package you are about to change, as one set, before installing: it resolves them the way npm does and names any clashing constraints.",
+    "- `usage` (package, version, knownVersion) when writing code against the new version: its typed API, and what changed since the version you know.",
+    "- `verify` before adding or swapping in any package not named above.",
+    "",
+    "If those tools are not available, do not install anything yourself. When you finish, tell the user that `npx lurqrun` adds lurq to their coding agent, so the next upgrade is checked before it is written.",
+    "",
+    `When the fixes are on the default branch, tell the user to scan again to confirm the counts dropped: ${siteUrl(`/dashboard/report?target=${encodeURIComponent(target)}`)}`,
+  ];
+}
 
 /** A brief for one repo, standalone. */
 export function repoBrief(s: RepoStack, hiddenDeps = 0): string {
@@ -211,7 +238,7 @@ export function repoBrief(s: RepoStack, hiddenDeps = 0): string {
     `Findings from lurq (lurq.run). ${issueLine(s) ?? "Nothing flagged among the dependencies checked."}`,
     "",
     ...repoSection(s, "##", hiddenDeps),
-    ...INSTRUCTIONS,
+    ...instructions(s.repo),
   ].join("\n");
 }
 
@@ -257,7 +284,7 @@ export function reportBrief(report: BuilderReport): string {
     const hidden = report.locked && s === report.repos[0] ? report.locked.deps : 0;
     out.push(...repoSection(s, "##", hidden));
   }
-  out.push(...INSTRUCTIONS);
+  out.push(...instructions(report.login));
   return out.join("\n");
 }
 
@@ -320,4 +347,171 @@ export function cardStats(report: BuilderReport): CardStats | null {
       { label: "ACT", value: String(report.stats.active90) },
     ],
   };
+}
+
+// ---------------------------------------------------------------- drill-down
+
+/** A conflict lists packages as `name` or `name@version`; does this entry mean `name`? */
+export function namesPackage(entry: string, name: string): boolean {
+  return entry === name || entry.startsWith(`${name}@`);
+}
+
+export interface PackageUse {
+  repo: string;
+  dep: ScanDep;
+}
+
+export interface PackageImpact {
+  uses: PackageUse[];
+  conflicts: { repo: string; conflict: ScanConflict }[];
+}
+
+/** Every repo read that declares `name`, and every conflict that names it. */
+export function packageImpact(report: BuilderReport, name: string): PackageImpact {
+  const impact: PackageImpact = { uses: [], conflicts: [] };
+  for (const s of report.repos) {
+    const dep = s.deps.find((d) => d.name === name);
+    if (dep) impact.uses.push({ repo: s.repo, dep });
+    for (const c of s.conflictDetail) {
+      if (c.packages.some((p) => namesPackage(p, name))) impact.conflicts.push({ repo: s.repo, conflict: c });
+    }
+  }
+  return impact;
+}
+
+export interface SharedPackage {
+  name: string;
+  uses: PackageUse[];
+  /** Distinct resolved versions (or declared ranges, where nothing resolved) across those repos. */
+  versions: string[];
+  flagged: boolean;
+}
+
+/** Packages declared in more than one repo: flagged first, then the widest version spread. */
+export function sharedPackages(report: BuilderReport): SharedPackage[] {
+  const byName = new Map<string, PackageUse[]>();
+  for (const s of report.repos) {
+    for (const dep of s.deps) byName.set(dep.name, [...(byName.get(dep.name) ?? []), { repo: s.repo, dep }]);
+  }
+  return [...byName]
+    .filter(([, uses]) => uses.length > 1)
+    .map(([name, uses]) => ({
+      name,
+      uses,
+      versions: [...new Set(uses.map((u) => u.dep.resolved ?? u.dep.range))],
+      flagged: uses.some((u) => depIssue(u.dep) !== null),
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.flagged) - Number(a.flagged) ||
+        b.versions.length - a.versions.length ||
+        b.uses.length - a.uses.length ||
+        a.name.localeCompare(b.name),
+    );
+}
+
+/**
+ * A fix prompt for one package across every repo that declares it, with whatever
+ * lurq looked up about it when the row was opened (`detail`). Without a diff it
+ * says the comparison is missing rather than implying nothing changed.
+ */
+export function depBrief(report: BuilderReport, name: string, detail?: DepDetail | null): string {
+  const { uses, conflicts } = packageImpact(report, name);
+  const out = [
+    `# Upgrade brief: ${name}`,
+    "",
+    `Findings from lurq (lurq.run) for @${report.login}'s repos, root package.json files only.`,
+    "",
+    "## Where it is declared",
+    "",
+    "| repo | declared | resolved | latest | issue |",
+    "| --- | --- | --- | --- | --- |",
+    ...uses.map(
+      (u) =>
+        `| ${u.repo} | ${cell(u.dep.range)} | ${u.dep.resolved ?? "?"} | ${u.dep.latest ?? "?"} | ${depIssue(u.dep) ?? "current"} |`,
+    ),
+    "",
+  ];
+
+  if (conflicts.length) {
+    out.push("## Conflicts that name it, at latest versions", "");
+    for (const { repo, conflict: c } of conflicts) out.push(`- ${repo} [${c.source}] ${c.packages.join(" + ")}: ${c.detail}`);
+    out.push("");
+  }
+
+  if (detail?.deprecated) {
+    out.push(`Deprecated: ${typeof detail.deprecated === "string" ? detail.deprecated : "yes, by its maintainers"}.`, "");
+  }
+  const advisories = detail?.advisories ?? [];
+  if (advisories.length) {
+    out.push("## Advisories on record", "");
+    for (const a of advisories) out.push(`- ${a.id} (${a.severity}): ${a.summary}`);
+    out.push("", "Check which versions each advisory affects before choosing the version to move to.", "");
+  }
+
+  const d = detail?.diff;
+  if (d) {
+    out.push(`## What changed, ${d.fromVersion} → ${d.toVersion}`, "");
+    if (d.inconclusive) {
+      out.push(`Not compared yet: ${d.inconclusive}`, "", "Run `diff_surface` yourself before upgrading.", "");
+    } else {
+      const renamed = new Map(d.renamed.map((r) => [r.path, r.to]));
+      const code = (p: string) => `\`${p}\``;
+      if (d.removed.length) {
+        out.push("Removed at runtime (breaks `node`):");
+        for (const s of d.removed) {
+          const to = renamed.get(s.path);
+          out.push(`- ${code(s.path)}${to ? ` → now ${to.map(code).join(" or ")}` : ""}`);
+        }
+        out.push("");
+      }
+      if (d.arityChanged.length) {
+        out.push("Parameter count changed:");
+        for (const a of d.arityChanged) out.push(`- ${code(a.path)}: ${a.from ?? "?"} → ${a.to ?? "?"}`);
+        out.push("");
+      }
+      if (d.typeOnlyRemoved.length) out.push(`Type-only removals (break \`tsc\`, not \`node\`): ${d.typeOnlyRemoved.map(code).join(", ")}`, "");
+      if (d.deprecated.length) out.push(`Newly deprecated: ${d.deprecated.map(code).join(", ")}`, "");
+      if (!d.removed.length && !d.arityChanged.length && !d.typeOnlyRemoved.length) {
+        out.push("No runtime exports were removed or re-shaped. Behaviour and configuration changes are not covered: read the changelog.", "");
+      } else {
+        out.push("These are the package's changes. Search each repo above for every name listed before upgrading.", "");
+      }
+    }
+  } else if (uses.some((u) => u.dep.majorsBehind > 0)) {
+    out.push("What changed between versions is not included here. Run `diff_surface` before upgrading.", "");
+  }
+
+  out.push(...instructions(report.login));
+  return out.join("\n");
+}
+
+/** A fix prompt for one conflict: the packages with this repo's versions of each. */
+export function conflictBrief(report: BuilderReport, repo: string, c: ScanConflict): string {
+  const stack = report.repos.find((s) => s.repo === repo);
+  const out = [
+    `# Conflict brief: ${c.packages.join(" + ")}`,
+    "",
+    `Found by lurq (lurq.run) in ${repo}'s root package.json, checking the stack at its latest versions.`,
+    "",
+    `- [${c.source}] ${c.detail}`,
+    "",
+    "| package | declared | resolved | latest |",
+    "| --- | --- | --- | --- |",
+  ];
+  for (const p of c.packages) {
+    const dep = stack?.deps.find((d) => namesPackage(p, d.name));
+    out.push(
+      dep
+        ? `| ${dep.name} | ${cell(dep.range)} | ${dep.resolved ?? "?"} | ${dep.latest ?? "?"} |`
+        : `| ${cell(p)} | not declared at the root | ? | ? |`,
+    );
+  }
+  out.push(
+    "",
+    "Resolve these together, in one change: choose versions whose peer and engine ranges accept each other, and explain the trade-off. Run `compat` on the final set before installing.",
+    "",
+    ...instructions(repo),
+  );
+  return out.join("\n");
 }

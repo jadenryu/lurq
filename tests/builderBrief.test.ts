@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { cardStats, rankRepos, repoBrief, reportBrief, summarize } from '../apps/web/src/lib/builder-brief';
+import {
+  cardStats,
+  conflictBrief,
+  depBrief,
+  namesPackage,
+  packageImpact,
+  rankRepos,
+  repoBrief,
+  reportBrief,
+  sharedPackages,
+  summarize,
+} from '../apps/web/src/lib/builder-brief';
 import type { BuilderReport, RepoStack } from '../apps/web/src/lib/builder-profile';
 
 /**
@@ -112,5 +123,68 @@ describe('cardStats', () => {
 
   it('is locked when traits are', () => {
     expect(cardStats({ ...report, traits: null })).toBeNull();
+  });
+});
+
+describe('drill-down', () => {
+  const app = stack('ada/app', {
+    majorDrift: 1,
+    conflicts: 1,
+    deps: [{ name: 'react', range: '^18.0.0', resolved: '18.3.1', latest: '19.1.0', majorsBehind: 1, deprecated: false, advisories: 0 }],
+    conflictDetail: [{ source: 'peer-deps', packages: ['react@19.1.0', 'react-dom'], detail: 'react-dom wants react@^18' }],
+  });
+  const profile: BuilderReport = { ...report, repos: [app, drifted, clean] };
+
+  it('finds every repo declaring a package and the conflicts that name it', () => {
+    const impact = packageImpact(profile, 'react');
+    expect(impact.uses.map((u) => u.repo)).toEqual(['ada/app', 'ada/drifted']);
+    expect(impact.conflicts).toHaveLength(1);
+    expect(namesPackage('react@19.1.0', 'react')).toBe(true);
+    expect(namesPackage('react-dom', 'react')).toBe(false);
+  });
+
+  it('lists packages shared across repos with their version spread', () => {
+    expect(sharedPackages(profile)).toEqual([
+      expect.objectContaining({ name: 'react', versions: ['18.3.1', '17.0.2'], flagged: true }),
+    ]);
+  });
+
+  const diff = {
+    fromVersion: '18.3.1',
+    toVersion: '19.1.0',
+    verdict: 'verified_true',
+    removed: [{ path: 'render', kind: 'function' }],
+    renamed: [{ path: 'render', to: ['createRoot'] }],
+    arityChanged: [],
+    typeOnlyRemoved: [],
+    deprecated: [],
+  };
+  const detail = { diff, advisories: null, deprecated: false, reasons: [], unavailable: [] };
+
+  it('puts what changed into the package brief, with proven renames', () => {
+    const text = depBrief(profile, 'react', detail);
+    expect(text).toContain('| ada/drifted | ^17.0.0 | 17.0.2 | 19.1.0 | 2 majors behind |');
+    expect(text).toContain('- `render` → now `createRoot`');
+    expect(text).toContain('react-dom wants react@^18');
+  });
+
+  it('never reads an uncompared diff, or a missing one, as nothing changed', () => {
+    const pending = depBrief(profile, 'react', { ...detail, diff: { ...diff, verdict: 'unknown', inconclusive: 'queued', removed: [], renamed: [] } });
+    expect(pending).toContain('Not compared yet');
+    expect(pending).not.toContain('No runtime exports');
+    expect(depBrief(profile, 'react')).toContain('is not included here');
+  });
+
+  it("writes a conflict brief with this repo's versions of each package", () => {
+    const text = conflictBrief(profile, 'ada/app', app.conflictDetail[0]!);
+    expect(text).toContain('| react | ^18.0.0 | 18.3.1 | 19.1.0 |');
+    expect(text).toContain('| react-dom | not declared at the root | ? | ? |');
+  });
+
+  it('tells the agent to check its work with lurq, and where to scan again', () => {
+    const text = repoBrief(drifted);
+    expect(text).toContain('`diff_surface`');
+    expect(text).toContain('npx lurqrun');
+    expect(text).toContain('/dashboard/report?target=ada%2Fdrifted');
   });
 });
