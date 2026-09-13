@@ -674,18 +674,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   /**
    * Daily Ask ceiling for one account, in micro-dollars: the plan's
    * `askDailyUsd` (core/plans.ts), so asking more is a reason to upgrade rather
-   * than a cost absorbed on every free account.
+   * than a cost absorbed on every free account. plans.ts is the only place the
+   * number lives; to turn Ask off everywhere, unset the web app's Anthropic key.
    *
-   * LURQ_ASK_DAILY_USD, when set to a positive number, is an operator brake
-   * that caps every plan at once — it can lower a plan's ceiling, never raise
-   * it. The result is floored at one micro-dollar because the web route reads
-   * a zero limit as "no limit".
+   * Floored at one micro-dollar because the web route reads a zero limit as
+   * "no limit".
    */
   const askLimit = async (ownerId: string): Promise<{ micros: number; tier: string }> => {
     const { plan } = await resolveEntitlement(ownerId);
-    const brake = Number(process.env.LURQ_ASK_DAILY_USD);
-    const usd = brake > 0 ? Math.min(plan.askDailyUsd, brake) : plan.askDailyUsd;
-    return { micros: Math.max(1, Math.round(usd * 1_000_000)), tier: plan.tier };
+    return { micros: Math.max(1, Math.round(plan.askDailyUsd * 1_000_000)), tier: plan.tier };
   };
 
   /** One call may not move the ledger by more than this, so a caller bug is a
