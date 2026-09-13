@@ -288,6 +288,13 @@
       "when": 1789320072191,
       "tag": "0040_subscription_overage_and_interval",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1789322256228,
+      "tag": "0041_account_email",
+      "breakpoints": true
     }
   ]
 }

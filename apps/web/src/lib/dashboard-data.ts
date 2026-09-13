@@ -77,6 +77,8 @@ import {
   fetchMcpServers,
   type McpServerDetail,
   type McpServersPayload,
+  fetchNotificationPreferences,
+  type NotificationPreferences,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -402,4 +404,15 @@ export function loadMcpServers(): Promise<Loaded<McpServersPayload>> {
 /** One server's contract, findings and history. Null when it is not this account's. */
 export function loadMcpServer(id: number): Promise<Loaded<McpServerDetail | null>> {
   return load((ownerId) => fetchMcpServer(ownerId, id), () => demoMcpServerDetail(id), null);
+}
+
+const DEFAULT_NOTIFICATIONS: NotificationPreferences = { urgentEmail: true, weeklyDigest: false, emailConfigured: false };
+
+/** The account's email settings. A failed read renders the defaults with `failed` set. */
+export function loadNotificationPreferences(): Promise<Loaded<NotificationPreferences>> {
+  return load(
+    (userId) => fetchNotificationPreferences(userId),
+    () => ({ urgentEmail: true, weeklyDigest: false, emailConfigured: true }),
+    DEFAULT_NOTIFICATIONS,
+  );
 }

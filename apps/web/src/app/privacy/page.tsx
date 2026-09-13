@@ -52,6 +52,14 @@ export default function PrivacyPage() {
             credentials needed to create and secure it. API keys you generate are
             associated with your account.
           </li>
+          <li>
+            <strong>Account email.</strong> We email your account&rsquo;s verified
+            address about urgent changes to the dependencies and MCP servers you
+            connect, which is on by default, and a weekly summary only if you turn
+            it on. Every email has a link to turn it off. We read the address from
+            Clerk when an email is sent and do not keep our own copy, and we record
+            which alerts were sent so the same one is never sent twice.
+          </li>
         </ul>
 
         <h3>Information collected automatically</h3>

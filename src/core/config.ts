@@ -105,6 +105,14 @@ const EnvSchema = z.object({
    *  tool called) that join the web app's identified visitors. Unset → nothing
    *  is sent, which is every local and stdio install. */
   LURQ_POSTHOG_KEY: z.string().min(1).optional(),
+  /** Resend API key for account email: urgent alerts and the opt-in weekly
+   *  summary. Unset → nothing is sent; the dashboard and CLI still show all of it. */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  /** Sender, on a Resend-verified domain. */
+  LURQ_MAIL_FROM: z.string().min(3).default('lurq <alerts@lurq.run>'),
+  /** Clerk secret key, used only to read a recipient's verified primary email at
+   *  send time — lurq stores no email addresses. Unset → nothing is sent. */
+  CLERK_SECRET_KEY: z.string().min(1).optional(),
 
   // Billing (Stripe). Every secret here lives on this service and nowhere else:
   // the web app holds no Stripe credential and reaches checkout through the
