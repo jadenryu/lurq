@@ -505,9 +505,11 @@ function verdict(dep: ScanDep): { text: string; tone: string } {
 function DepRow({ dep }: { dep: ScanDep }) {
   const v = verdict(dep);
   return (
-    <li className="flex items-baseline gap-3 px-[var(--panel-px)] py-2">
-      <span className="truncate font-mono text-[12.5px] text-ink">{dep.name}</span>
-      <span className="shrink-0 font-mono text-[11.5px] text-ink-3">
+    // Wraps rather than overflowing: a canary range plus "→ latest" plus the
+    // verdict is wider than a phone, and shrink-0 on both pushed the page sideways.
+    <li className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-[var(--panel-px)] py-2">
+      <span className="min-w-0 max-w-full truncate font-mono text-[12.5px] text-ink">{dep.name}</span>
+      <span className="min-w-0 break-all font-mono text-[11.5px] text-ink-3">
         {dep.resolved ?? dep.range}
         {dep.latest && dep.latest !== dep.resolved ? ` → ${dep.latest}` : ""}
       </span>
