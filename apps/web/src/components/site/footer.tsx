@@ -50,7 +50,7 @@ const COLUMNS = [
     links: [
       { label: "About", href: "/about" },
       { label: "Partnerships", href: "/partnerships" },
-      { label: "Book a demo", href: "/book-demo" },
+      { label: "Contact", href: "/#contact" },
       { label: "GitHub", href: REPO_URL, external: true },
     ],
   },
