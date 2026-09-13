@@ -14,7 +14,8 @@ if (required && !process.env[required]) {
   process.exit(1);
 }
 if (process.env.FIXTURE_HANG) {
-  setInterval(() => {}, 1000);
+  // Hold the pipe open and never answer: the handshake has to time out.
+  process.stdin.resume();
 } else {
   if (process.env.FIXTURE_NOISE) process.stdout.write('booting fixture server...\n');
   if (process.env.FIXTURE_ECHO) console.error(`using token ${process.env.FIXTURE_ECHO}`);
