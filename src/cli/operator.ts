@@ -504,6 +504,9 @@ export function registerOperatorCommands(program: Command): void {
     .option('--surface <n>', 'demand-driven surface extractions drained per cycle', (v) =>
       parseInt(v, 10),
     )
+    .option('--mcp <n>', 'queued MCP servers probed per cycle (each spawns a sandbox)', (v) =>
+      parseInt(v, 10),
+    )
     .option('--once', 'run exactly one cycle and exit')
     .action(
       async (opts: {
@@ -512,6 +515,7 @@ export function registerOperatorCommands(program: Command): void {
         extract?: number;
         compatVerify?: number;
         surface?: number;
+        mcp?: number;
         once?: boolean;
       }) => {
         const { requireConfig } = await import('../core/config');
@@ -523,6 +527,7 @@ export function registerOperatorCommands(program: Command): void {
           extractPerCycle: opts.extract,
           compatVerifyPerCycle: opts.compatVerify,
           surfacePerCycle: opts.surface,
+          mcpPerCycle: opts.mcp,
           once: opts.once,
         });
       },
