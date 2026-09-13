@@ -166,6 +166,18 @@ beforeAll(() => {
     `,
   });
 
+  // The argument range a call must land in, beyond `fn.length`.
+  pkg('param-ranges', {
+    'index.js': `
+      exports.optional = function (a, b = 1) {};
+      exports.rest = function (a, ...more) {};
+      exports.dynamic = function () { return arguments.length; };
+      exports.nested = function (a) { return function () { return arguments; }; };
+    `,
+  });
+  pkg('optional-v1', { 'index.js': `exports.f = function (a, b = 1) {}; exports.g = function (a) {};` });
+  pkg('optional-v2', { 'index.js': `exports.f = function (a) {}; exports.g = function (a, b = 1) {};` });
+
   // The preact shape: a minified bundle declares every export on line 1.
   pkg('minified-v1', { 'index.js': `function h(a){}function render(a,b){}export{h,render};` });
   pkg('minified-v2', { 'index.js': `function h(a){}export{h};` });
@@ -525,5 +537,28 @@ describe('renames the package proves', () => {
     const d = diff('minified-v1', 'minified-v2');
     expect(d.removed.map((s) => s.path)).toEqual(['render']);
     expect(d.renamed).toEqual([]);
+  });
+});
+
+describe('argument ranges', () => {
+  const sym = (path: string) => extractSurface(pkgs['param-ranges']!).symbols.find((s) => s.path === path)!;
+
+  it('measures the most arguments a function reads', () => {
+    expect([sym('optional').arity, sym('optional').maxArity]).toEqual([1, 2]);
+    expect(sym('rest').maxArity).toBeNull();
+    expect(sym('dynamic').maxArity).toBeNull();
+    // The inner function's `arguments` is its own.
+    expect(sym('nested').maxArity).toBe(1);
+  });
+
+  // `f` lost an optional parameter: `fn.length` is 1 on both sides, and a caller
+  // passing two arguments is now passing one the function ignores. `g` gained one,
+  // which breaks nobody and must not read as a major change to check-release.
+  it('reports a shrinking maximum, and ignores a growing one', () => {
+    const d = diffSurfaces(
+      { ...extractSurface(pkgs['optional-v1']!), version: '1.0.0' },
+      { ...extractSurface(pkgs['optional-v2']!), version: '2.0.0' },
+    );
+    expect(d.arityChanged).toEqual([{ path: 'f', from: 1, to: 1, fromMax: 2, toMax: 1 }]);
   });
 });

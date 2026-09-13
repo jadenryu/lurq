@@ -21,6 +21,9 @@ export interface ArityChange {
   path: string;
   from: number | null;
   to: number | null;
+  /** Most arguments accepted on each side, when both were measured. */
+  fromMax?: number | null;
+  toMax?: number | null;
 }
 
 export interface SignatureChange {
@@ -107,8 +110,21 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
   for (const [path, a] of fromRuntime) {
     const b = toRuntime.get(path);
     if (!b) continue;
-    if (a.arity !== null && b.arity !== null && a.arity !== b.arity) {
-      arityChanged.push({ path, from: a.arity, to: b.arity });
+    const requiredChanged = a.arity !== null && b.arity !== null && a.arity !== b.arity;
+    // Dropping a trailing optional parameter leaves `fn.length` alone and still
+    // breaks every caller that passes it. Gaining one breaks nobody, and neither
+    // does trading `arguments` for named parameters, so only a numeric maximum
+    // that shrank counts. `check-release` reads this list as "needs a major".
+    const measured = a.maxArity !== undefined && b.maxArity !== undefined;
+    const maxShrank =
+      typeof a.maxArity === 'number' && typeof b.maxArity === 'number' && b.maxArity < a.maxArity;
+    if (requiredChanged || maxShrank) {
+      arityChanged.push({
+        path,
+        from: a.arity,
+        to: b.arity,
+        ...(measured ? { fromMax: a.maxArity, toMax: b.maxArity } : {}),
+      });
     }
   }
 

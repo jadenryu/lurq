@@ -39,9 +39,13 @@ interface WalkCtx {
 }
 
 /** Classify an expression into the IR's kind + arity. */
-function classify(node: ts.Node): { kind: SymbolKind; arity: number | null } {
+function classify(node: ts.Node): {
+  kind: SymbolKind;
+  arity: number | null;
+  maxArity?: number | null;
+} {
   if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isFunctionDeclaration(node)) {
-    return { kind: 'function', arity: arityOf(node) };
+    return { kind: 'function', arity: arityOf(node), maxArity: maxArityOf(node) };
   }
   if (ts.isClassExpression(node) || ts.isClassDeclaration(node)) return { kind: 'class', arity: null };
   if (ts.isObjectLiteralExpression(node)) return { kind: 'object', arity: null };
@@ -69,6 +73,23 @@ function arityOf(fn: ts.SignatureDeclarationBase): number {
     n++;
   }
   return n;
+}
+
+/**
+ * Every declared parameter, or null when the function can read any number of
+ * arguments: a rest parameter, or a body that touches `arguments`. A nested
+ * non-arrow function has its own `arguments`, so the walk stops at one.
+ */
+function maxArityOf(fn: ts.FunctionLikeDeclaration): number | null {
+  if (fn.parameters.some((p) => p.dotDotDotToken)) return null;
+  let readsArguments = false;
+  const visit = (n: ts.Node): void => {
+    if (readsArguments) return;
+    if (ts.isIdentifier(n) && n.text === 'arguments') readsArguments = true;
+    else if (!(ts.isFunctionLike(n) && !ts.isArrowFunction(n))) ts.forEachChild(n, visit);
+  };
+  if (fn.body) visit(fn.body);
+  return readsArguments ? null : fn.parameters.length;
 }
 
 function lineOf(sf: ts.SourceFile, node: ts.Node): number {
@@ -177,11 +198,12 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
   const rel = relative(ctx.pkgDir, file);
 
   const add = (path: string, node: ts.Node, over: Partial<SurfaceSymbol> = {}) => {
-    const { kind, arity } = classify(node);
+    const { kind, arity, maxArity } = classify(node);
     put(out, {
       path,
       kind,
       arity,
+      ...(maxArity !== undefined ? { maxArity } : {}),
       origin: 'local',
       deprecated: hasDeprecatedTag(sf, node),
       tier: TIER,

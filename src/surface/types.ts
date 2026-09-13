@@ -43,6 +43,14 @@ export interface SurfaceSymbol {
   kind: SymbolKind;
   /** `fn.length` equivalent; null when not statically determinable. */
   arity: number | null;
+  /**
+   * The most arguments the function reads. `null` when unbounded (a rest
+   * parameter, or a body that reads `arguments`). Absent when not measured,
+   * which is every non-function and every surface read back from storage.
+   * With `arity` it gives the range a call has to land in: `(a, b = 1)` has
+   * arity 1 and accepts 1–2.
+   */
+  maxArity?: number | null;
   origin: SymbolOrigin;
   deprecated: boolean;
   tier: ExtractionTier;
