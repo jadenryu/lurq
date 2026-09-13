@@ -61,6 +61,12 @@ import type {
 } from '../github/types';
 import type { ExtractionTier, SymbolKind } from '../surface/types';
 import type { Tier } from '../core/plans';
+import type { Severity } from '../audit/types';
+import type { McpTool } from '../surface/mcp';
+import type { PromptInfo, ResourceTemplateInfo } from '../mcpScan/snapshot';
+import type { ServerAnalysis, SnapshotDiff } from '../mcpScan/analyze';
+import type { Registry } from '../mcpScan/config';
+import type { ScanStatus } from '../mcpScan/errors';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -1049,3 +1055,163 @@ export const stackResolutions = pgTable(
 
 export type StackResolutionRow = typeof stackResolutions.$inferSelect;
 export type NewStackResolutionRow = typeof stackResolutions.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live MCP scans. Contracts read by the user's own client, with their own
+// configuration, uploaded under their account.
+//
+// Shaped for a daily scan across many accounts without the tables growing at
+// the rate of scans:
+//   - a contract is stored ONCE per content hash, whoever uploaded it
+//   - an observation is a CHANGE POINT: an unchanged daily scan updates
+//     `last_seen_at` and `scan_count` on the current row instead of inserting
+//   - change events are unique per (deployment, from, to), so a server that
+//     flaps between two contracts re-arms one event rather than filling a feed
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Everything the model reads from one server version, content-addressed.
+ *
+ * Immutable and owner-independent: two accounts running the same public server
+ * share one row, and a private server's row is only ever reached through that
+ * owner's deployment. There is deliberately no read by hash from outside.
+ * ponytail: no GC for contracts no deployment points at any more; add a sweep
+ * when the table's size is worth a job.
+ */
+export const mcpContracts = pgTable(
+  'mcp_contracts',
+  {
+    contentHash: text('content_hash').primaryKey(),
+    /** Schema-only hash; equal means calls validate identically. */
+    contractHash: text('contract_hash').notNull(),
+    tools: jsonb('tools').$type<McpTool[]>().notNull(),
+    prompts: jsonb('prompts').$type<PromptInfo[]>().notNull(),
+    resourceTemplates: jsonb('resource_templates').$type<ResourceTemplateInfo[]>().notNull(),
+    instructions: text('instructions'),
+    toolCount: integer('tool_count').notNull(),
+    bytes: integer('bytes').notNull(),
+    /** Computed server-side at insert, never taken from the client. */
+    analysis: jsonb('analysis').$type<ServerAnalysis>().notNull(),
+    analyzerVersion: text('analyzer_version').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('mcp_contracts_contract_idx').on(table.contractHash)],
+);
+
+/**
+ * One server as one account runs it: identity plus configuration fingerprint.
+ *
+ * The same package under two configurations is two deployments, because it
+ * exposes two contracts. Denormalizes the latest state so the dashboard list is
+ * one indexed read.
+ */
+export const mcpDeployments = pgTable(
+  'mcp_deployments',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    serverKey: text('server_key').notNull(),
+    configFingerprint: text('config_fingerprint').notNull(),
+    /** The name the user gave it, as last seen. Display only. */
+    alias: text('alias').notNull(),
+    registry: text('registry').$type<Registry>().notNull(),
+    packageName: text('package_name'),
+    transport: text('transport').notNull(),
+    /** Self-reported by the server in its handshake. */
+    serverName: text('server_name'),
+    serverVersion: text('server_version'),
+    lastStatus: text('last_status').$type<ScanStatus>().notNull(),
+    lastError: text('last_error'),
+    /** The last contract actually read. Kept when a later scan fails. */
+    lastContentHash: text('last_content_hash'),
+    worstSeverity: text('worst_severity').$type<Severity>(),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastScannedAt: ts('last_scanned_at').notNull().defaultNow(),
+    lastChangedAt: ts('last_changed_at'),
+  },
+  (table) => [
+    uniqueIndex('mcp_deployments_identity_idx').on(table.ownerId, table.serverKey, table.configFingerprint),
+    index('mcp_deployments_owner_idx').on(table.ownerId, table.lastScannedAt),
+  ],
+);
+
+/**
+ * What a deployment looked like over an interval: run-length encoded scans.
+ *
+ * A new row only when status, contract or self-reported version moves; every
+ * identical scan in between bumps `scan_count` and `last_seen_at`. The history
+ * is therefore exact to the scan cadence and bounded by how often servers
+ * actually change.
+ */
+export const mcpObservations = pgTable(
+  'mcp_observations',
+  {
+    id: serial('id').primaryKey(),
+    deploymentId: integer('deployment_id')
+      .notNull()
+      .references(() => mcpDeployments.id),
+    ownerId: text('owner_id').notNull(),
+    status: text('status').$type<ScanStatus>().notNull(),
+    contentHash: text('content_hash'),
+    serverVersion: text('server_version'),
+    error: text('error'),
+    /** `cli` or `ci`: who ran the scan that opened this interval. */
+    source: text('source').notNull(),
+    scanCount: integer('scan_count').notNull().default(1),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+  },
+  (table) => [index('mcp_observations_deployment_idx').on(table.deploymentId, table.firstSeenAt)],
+);
+
+/** A contract change worth telling the owner about, with the full diff. */
+export const mcpChangeEvents = pgTable(
+  'mcp_change_events',
+  {
+    id: serial('id').primaryKey(),
+    deploymentId: integer('deployment_id')
+      .notNull()
+      .references(() => mcpDeployments.id),
+    ownerId: text('owner_id').notNull(),
+    fromHash: text('from_hash').notNull(),
+    toHash: text('to_hash').notNull(),
+    severity: text('severity').$type<Severity>().notNull(),
+    summary: text('summary').notNull(),
+    diff: jsonb('diff').$type<SnapshotDiff>().notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    acknowledgedAt: ts('acknowledged_at'),
+  },
+  (table) => [
+    uniqueIndex('mcp_change_events_pair_idx').on(table.deploymentId, table.fromHash, table.toHash),
+    index('mcp_change_events_owner_idx').on(table.ownerId, table.createdAt),
+  ],
+);
+
+/**
+ * An account's scan of a PUBLISHED server, offered as corroboration.
+ *
+ * A client can never write straight into the shared index: a poisoned tool list
+ * would be served to everyone. A version's contract is promoted only when
+ * enough distinct accounts independently read the same content hash, and the
+ * sandbox probe stays the authority that overrides it.
+ */
+export const mcpPublicReports = pgTable(
+  'mcp_public_reports',
+  {
+    registry: text('registry').notNull(),
+    packageName: text('package_name').notNull(),
+    version: text('version').notNull(),
+    contentHash: text('content_hash').notNull(),
+    ownerId: text('owner_id').notNull(),
+    reportedAt: ts('reported_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.registry, table.packageName, table.version, table.contentHash, table.ownerId] }),
+    index('mcp_public_reports_version_idx').on(table.registry, table.packageName, table.version),
+  ],
+);
+
+export type McpContractRow = typeof mcpContracts.$inferSelect;
+export type McpDeploymentRow = typeof mcpDeployments.$inferSelect;
+export type McpObservationRow = typeof mcpObservations.$inferSelect;
+export type McpChangeEventRow = typeof mcpChangeEvents.$inferSelect;
