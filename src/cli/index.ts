@@ -400,6 +400,19 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('mcp-ci')
+    .argument('[dir]', 'repository directory (defaults to the current one)')
+    .description("write a GitHub Actions workflow that rescans this repository's MCP servers daily and when their config changes")
+    .option('--print', 'print the workflow instead of writing it')
+    .option('--force', 'replace an existing workflow file')
+    .option('--cron <expr>', 'schedule (default: daily 06:23 UTC)')
+    .option('--fail-on <severity>', 'fail the job at this severity: critical | high | moderate | low | none', 'high')
+    .action(async (dir: string | undefined, opts: import('./mcpScan').McpCiOpts) => {
+      const { runMcpCi } = await import('./mcpScan');
+      await runMcpCi(dir, opts);
+    });
+
+  program
     .command('mcp-stack')
     .argument('[dir]', 'project directory (defaults to the current one)')
     .description('do your configured MCP servers coexist? checks tool-name collisions and shadowing, live')

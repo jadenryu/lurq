@@ -520,3 +520,52 @@ export async function runMcpStackLive(dir: string | undefined, opts: McpScanCliO
     console.log(yellow(`~${report.stack.estimatedContextTokens!.toLocaleString()} tokens of tool schema ride in every request — worth trimming`));
   }
 }
+
+export interface McpCiOpts {
+  print?: boolean;
+  force?: boolean;
+  cron?: string;
+  failOn?: string;
+}
+
+/**
+ * `lurq mcp-ci`: write the daily scan workflow for this repository.
+ *
+ * Reads the committed configs with an EMPTY environment on purpose: every
+ * `${VAR}` a server needs then shows up unresolved, which is exactly the list of
+ * repository secrets the workflow has to map.
+ */
+export async function runMcpCi(dir: string | undefined, opts: McpCiOpts): Promise<void> {
+  const threshold = parseThreshold(opts.failOn ?? 'high');
+  const root = resolve(dir ?? process.cwd());
+  const cfg = readServerConfigs(root, { projectOnly: true, trustProject: true, env: {} });
+
+  const { MCP_SCAN_WORKFLOW_PATH, renderMcpScanWorkflow, secretNameFor } = await import('../github/mcpScanWorkflow');
+  const secrets = [...new Set(cfg.servers.flatMap((s) => s.unresolved.filter((v) => !v.startsWith('input:'))))];
+  const needsUv = cfg.servers.some((s) => s.registry === 'pypi' || /^(uvx|uv|pipx)$/.test((s.command ?? '').split(/[\\/]/).pop() ?? ''));
+  const yaml = renderMcpScanWorkflow({ cron: opts.cron, failOn: threshold ?? 'none', secrets, needsUv });
+
+  if (opts.print) {
+    process.stdout.write(yaml);
+    return;
+  }
+
+  const { existsSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { dirname, join } = await import('node:path');
+  const target = join(root, MCP_SCAN_WORKFLOW_PATH);
+  if (existsSync(target) && !opts.force) {
+    throw new Error(`${MCP_SCAN_WORKFLOW_PATH} already exists; pass --force to replace it`);
+  }
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, yaml);
+
+  console.log(`wrote ${MCP_SCAN_WORKFLOW_PATH}`);
+  if (cfg.servers.length === 0) {
+    console.log(yellow('no MCP servers are committed to this repository yet; the workflow scans only committed configs (.mcp.json)'));
+  } else {
+    console.log(dim(`scans ${cfg.servers.length} committed server(s): ${cfg.servers.map((s) => s.alias).join(', ')}`));
+  }
+  console.log('add these repository secrets:');
+  console.log(`  ${bold('LURQ_API_KEY')}  ${dim('your lurq key, so scans are recorded to your account')}`);
+  for (const s of secrets.sort()) console.log(`  ${bold(secretNameFor(s))}${secretNameFor(s) !== s ? dim(`  (read by the server as ${s})`) : ''}`);
+}
