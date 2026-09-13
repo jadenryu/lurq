@@ -85,6 +85,9 @@ export interface SymbolReference {
    * treat as unmeasured rather than as unused.
    */
   calls?: CallSite[];
+  /** Set when the module was loaded with `require()`, TypeScript's
+   *  `import x = require()` included. That is what an ESM-only release breaks. */
+  loader?: 'require';
 }
 
 /** Kinds that assert something about the module's own export surface. */
@@ -210,7 +213,7 @@ function gitSourceFiles(dir: string, limit: number): SourceListing | null {
  * or either wrapped in parentheses. Null for anything else, including an
  * un-awaited `import('x')`, whose value is a promise rather than the module.
  */
-function loadedModule(expr: ts.Expression): string | null {
+function loadedModule(expr: ts.Expression): { spec: string; loader: 'require' | 'import' } | null {
   let e: ts.Expression = expr;
   while (ts.isParenthesizedExpression(e)) e = e.expression;
   const awaited = ts.isAwaitExpression(e);
@@ -218,8 +221,12 @@ function loadedModule(expr: ts.Expression): string | null {
   if (!ts.isCallExpression(e) || e.arguments.length !== 1) return null;
   const arg = e.arguments[0]!;
   if (!ts.isStringLiteralLike(arg)) return null;
-  if (e.expression.kind === ts.SyntaxKind.ImportKeyword) return awaited ? arg.text : null;
-  if (ts.isIdentifier(e.expression) && e.expression.text === 'require') return arg.text;
+  if (e.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    return awaited ? { spec: arg.text, loader: 'import' } : null;
+  }
+  if (ts.isIdentifier(e.expression) && e.expression.text === 'require') {
+    return { spec: arg.text, loader: 'require' };
+  }
   return null;
 }
 
@@ -394,7 +401,7 @@ export function scanReferences(
     // Two binding maps, because member reads mean different things:
     // a namespace/CJS binding IS the module's exports; a default binding is a
     // VALUE that happens to have properties.
-    const nsBindings = new Map<string, { pkg: string; spec: string }>();
+    const nsBindings = new Map<string, { pkg: string; spec: string; loader?: 'require' }>();
     const defaultBindings = new Map<string, { pkg: string; spec: string }>();
     // Named imports whose properties get read: `import { z } from 'zod'` then
     // `z.string()`. Tracked separately from the other two because whether the
@@ -489,8 +496,10 @@ export function scanReferences(
         const spec = node.moduleReference.expression.text;
         const pkg = packageOfSpecifier(spec);
         if (pkg) {
-          nsBindings.set(node.name.text, { pkg, spec });
-          record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+          nsBindings.set(node.name.text, { pkg, spec, loader: 'require' });
+          const ref = record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+          ref.loader = 'require';
+          follow(node.name.text, ref);
         }
       }
 
@@ -507,6 +516,7 @@ export function scanReferences(
             const name = el.propertyName ?? el.name;
             if (!ts.isIdentifier(name)) continue;
             const ref = record(ns.pkg, name.text, 'namespace', ns.spec, rel, lineOf(el));
+            if (ns.loader) ref.loader = ns.loader;
             if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
           }
         }
@@ -516,20 +526,26 @@ export function scanReferences(
       const loaded =
         ts.isVariableDeclaration(node) && node.initializer ? loadedModule(node.initializer) : null;
       if (ts.isVariableDeclaration(node) && loaded) {
-        const spec = loaded;
+        const spec = loaded.spec;
+        const viaRequire = loaded.loader === 'require';
         const pkg = packageOfSpecifier(spec);
         if (pkg) {
           if (ts.isIdentifier(node.name)) {
             // In CJS the binding IS module.exports, so member reads are export
             // claims — unless module.exports is a bare value, which the scorer
             // detects from the surface shape rather than guessing here.
-            nsBindings.set(node.name.text, { pkg, spec });
-            record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+            nsBindings.set(node.name.text, { pkg, spec, ...(viaRequire ? { loader: 'require' as const } : {}) });
+            const ref = record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
+            if (viaRequire) ref.loader = 'require';
+            // Followed so a direct call of what `require` returned is visible:
+            // that is the use an ESM-only release breaks on every Node version.
+            follow(node.name.text, ref);
           } else if (ts.isObjectBindingPattern(node.name)) {
             for (const el of node.name.elements) {
               const name = el.propertyName ?? el.name;
               if (!ts.isIdentifier(name)) continue;
               const ref = record(pkg, name.text, 'destructured', spec, rel, lineOf(el));
+              if (viaRequire) ref.loader = 'require';
               if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
             }
           }
@@ -538,10 +554,11 @@ export function scanReferences(
 
       // ── a member read straight off a load: `require('pkg').x`, `(await import('pkg')).x` ──
       if (ts.isPropertyAccessExpression(node)) {
-        const spec = loadedModule(node.expression);
-        const pkg = spec ? packageOfSpecifier(spec) : null;
-        if (spec && pkg) {
-          record(pkg, node.name.text, 'namespace', spec, rel, lineOf(node), undefined, callSiteOf(sf, node));
+        const load = loadedModule(node.expression);
+        const pkg = load ? packageOfSpecifier(load.spec) : null;
+        if (load && pkg) {
+          const ref = record(pkg, node.name.text, 'namespace', load.spec, rel, lineOf(node), undefined, callSiteOf(sf, node));
+          if (load.loader === 'require') ref.loader = 'require';
         }
       }
 
@@ -552,8 +569,10 @@ export function scanReferences(
         const def = defaultBindings.get(local);
         const named = namedBindings.get(local);
         const call = callSiteOf(sf, node);
-        if (ns) record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node), undefined, call);
-        else if (def) {
+        if (ns) {
+          const ref = record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node), undefined, call);
+          if (ns.loader) ref.loader = ns.loader;
+        } else if (def) {
           record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node), undefined, call);
         } else if (named) {
           record(

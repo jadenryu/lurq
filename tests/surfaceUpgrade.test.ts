@@ -386,6 +386,38 @@ describe('arity changes judged at the call site', () => {
     expect(out).toContain('left-pad: the new version ships no type definitions of its own');
   });
 
+  it('prints withdrawn entry points and require() breaks', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'chalk',
+          fromVersion: '4.1.2',
+          toVersion: '5.4.1',
+          severity: 'blocking',
+          symbolsRemoved: [],
+          arityChanged: [],
+          newExports: [],
+          entriesRemoved: [
+            { specifier: 'chalk/source/util', refs: [{ symbol: 'x', via: 'named' as const, specifier: 'chalk/source/util', file: 'src/a.js', line: 2 }] },
+          ],
+          moduleFormat: {
+            from: 'cjs',
+            to: 'esm',
+            broken: [{ file: 'src/log.js', line: 3, why: '`red` is not an export of the ES module, so it reads as undefined' }],
+            olderNode: [{ file: 'src/log.js', line: 1 }],
+          },
+        },
+      ],
+      ok: [],
+      unverified: [],
+    });
+    expect(out).toContain('Removes entry point chalk/source/util');
+    expect(out).toContain("require('chalk') now loads an ES module (was CommonJS)");
+    expect(out).toContain('src/log.js:3  `red` is not an export');
+    expect(out).toContain('ERR_REQUIRE_ESM on Node before 20.19 / 22.12: src/log.js:1');
+  });
+
   it('prints the broken calls and their argument counts', () => {
     const out = formatUpgradeReport({
       safe: false,

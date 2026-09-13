@@ -166,7 +166,7 @@ export async function runCheckUpgrade(dir: string, opts: CheckUpgradeOpts): Prom
     opts.types === false
       ? undefined
       : await (await import('../surface/typecheck')).createTypeChecker(dir);
-  const report = await checkUpgrade(targets, refs, { typeCheck });
+  const report = await checkUpgrade(targets, refs, { typeCheck, rootDir: dir });
   // A reference past the scan limit is one nobody checked, so "safe" would be a
   // claim about files that were never opened.
   if (scan.truncated) {

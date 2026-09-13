@@ -42,6 +42,9 @@ function findingRefs(finding: UpgradeReport['breaking'][number]): { file: string
     ...finding.symbolsRemoved.flatMap((s) => s.refs),
     ...finding.arityChanged.flatMap((a) => a.refs),
     ...(finding.typeErrors ?? []),
+    ...(finding.entriesRemoved ?? []).flatMap((e) => e.refs),
+    ...(finding.moduleFormat?.broken ?? []),
+    ...(finding.moduleFormat?.olderNode ?? []),
   ];
 }
 
@@ -84,6 +87,7 @@ export function buildRunReports(
       symbolsAffected: [
         ...finding.symbolsRemoved.map((s) => s.symbol),
         ...finding.arityChanged.map((a) => a.symbol),
+        ...(finding.entriesRemoved ?? []).map((e) => e.specifier),
       ],
       callSites: refs.length,
       callSiteFiles: [...new Set(refs.map((r) => r.file))],

@@ -23,6 +23,8 @@ import { extractUnpacked, unpackPackage, type Unpacked } from './fetch';
 import { diffSurfaces, type ArityChange } from './diff';
 import { SURFACE_CLAIM_KINDS } from './references';
 import type { PackageReferences, SymbolReference } from './references';
+import { judgeRequires, readRepoRuntime, type RepoRuntime, type RequireBreak } from './requirements';
+import { readManifest, requireFormat, resolveEntryCandidates, subpathWithdrawn } from './resolve';
 import type { TypeCheck, TypeCheckFn, TypeDiagnostic } from './typecheck';
 import { runtimeSymbols, type ExtractedSurface, type SymbolKind } from './types';
 
@@ -87,6 +89,13 @@ export interface BreakingFinding {
    * change the runtime surface, so nothing above can see them. See typecheck.ts.
    */
   typeErrors?: TypeDiagnostic[];
+  /**
+   * Subpath entry points the code imports that the new version no longer offers
+   * at all. The import throws before any symbol is read. BLOCKING.
+   */
+  entriesRemoved?: { specifier: string; refs: SymbolReference[] }[];
+  /** `require()` of a package that stopped being CommonJS. See requirements.ts. */
+  moduleFormat?: RequireBreak;
 }
 
 /** How many candidate replacements travel with one finding. Enough to contain
@@ -112,6 +121,12 @@ export interface UpgradeReport {
 export type TypeCoverage =
   | { package: string; checked: true; files: number }
   | { package: string; checked: false; reason: string };
+
+export interface CheckOptions {
+  typeCheck?: TypeCheckFn;
+  /** The project's declared Node support, for the module-format judgement. */
+  runtime?: RepoRuntime;
+}
 
 export interface UpgradeCheck {
   finding?: BreakingFinding;
@@ -326,7 +341,7 @@ function compareEntry(
 export async function checkUpgradeOne(
   target: UpgradeTarget,
   refs: PackageReferences | undefined,
-  opts: { typeCheck?: TypeCheckFn } = {},
+  opts: CheckOptions = {},
 ): Promise<UpgradeCheck> {
   if (!refs || refs.symbols.size === 0) return {};
 
@@ -356,7 +371,7 @@ export async function checkUpgradeOne(
       const missing = [fromPkg ? null : target.fromVersion, toPkg ? null : target.toVersion].filter(Boolean);
       return { unverified: `not published on npm: ${missing.map((v) => `${target.package}@${v}`).join(', ')}` };
     }
-    return await compareVersions(target, refs, byEntry, fromPkg, toPkg, opts.typeCheck);
+    return await compareVersions(target, refs, byEntry, fromPkg, toPkg, opts);
   } finally {
     await Promise.all(
       settled.map((s) => (s.status === 'fulfilled' && s.value ? s.value.cleanup() : undefined)),
@@ -392,13 +407,20 @@ function runTypeCheck(
   }
 }
 
+/** The old version resolved `sub`, and the new one withdrew it. */
+function withdrawn(fromDir: string, toDir: string, sub: string): boolean {
+  const fromManifest = readManifest(fromDir);
+  if (!fromManifest || !resolveEntryCandidates(fromDir, fromManifest, sub).length) return false;
+  return subpathWithdrawn(toDir, null, sub);
+}
+
 async function compareVersions(
   target: UpgradeTarget,
   refs: PackageReferences,
   byEntry: Map<string, Map<string, SymbolReference[]>>,
   fromPkg: Unpacked,
   toPkg: Unpacked,
-  typeCheck: TypeCheckFn | undefined,
+  opts: CheckOptions,
 ): Promise<UpgradeCheck> {
   const subpaths = [...byEntry.keys()].filter(Boolean);
   const [from, to] = await Promise.all([
@@ -406,7 +428,7 @@ async function compareVersions(
     extractUnpacked(target.package, toPkg, subpaths),
   ]);
   const types = runTypeCheck(
-    typeCheck,
+    opts.typeCheck,
     target.package,
     fromPkg.pkgDir,
     toPkg.pkgDir,
@@ -418,9 +440,19 @@ async function compareVersions(
   const candidates: BreakingFinding['newExports'] = [];
   const lostKinds = new Set<SymbolKind>();
   const blind: string[] = [];
+  const entriesRemoved: NonNullable<BreakingFinding['entriesRemoved']> = [];
 
   for (const [sub, symbols] of byEntry) {
     const specifier = sub ? `${target.package}/${sub}` : target.package;
+    // Before the surface comparison, which can only call an entry point that no
+    // longer exists "unreadable".
+    if (sub && withdrawn(fromPkg.pkgDir, toPkg.pkgDir, sub)) {
+      const runtimeRefs = [...symbols.values()].flat().filter((r) => r.via !== 'type-only');
+      if (runtimeRefs.length) {
+        entriesRemoved.push({ specifier, refs: runtimeRefs });
+        continue;
+      }
+    }
     const res = compareEntry(
       sub ? from.subpathSurfaces?.[sub] : from.surface,
       sub ? to.subpathSurfaces?.[sub] : to.surface,
@@ -438,10 +470,27 @@ async function compareVersions(
     for (const k of res.lostKinds) lostKinds.add(k);
   }
 
+  const exportNames = (s: ExtractedSurface) =>
+    s.undeclaredReason ? null : new Set(runtimeSymbols(s).map((x) => x.path));
+  const moduleFormat = judgeRequires(
+    requireFormat(fromPkg.pkgDir),
+    requireFormat(toPkg.pkgDir),
+    [...(byEntry.get('')?.values() ?? [])].flat(),
+    { fromExports: exportNames(from.surface), toExports: exportNames(to.surface), runtime: opts.runtime ?? {} },
+  );
+
   const unverified = blind.length ? blind.join('; ') : undefined;
   const typeErrors = types?.checked ? types.introduced : [];
   const extras = { ...(unverified ? { unverified } : {}), ...(types ? { types } : {}) };
-  if (!symbolsRemoved.length && !arityChanged.length && !typeErrors.length) return extras;
+  if (
+    !symbolsRemoved.length &&
+    !arityChanged.length &&
+    !typeErrors.length &&
+    !entriesRemoved.length &&
+    !moduleFormat
+  ) {
+    return extras;
+  }
 
   // Candidates are what the TARGET exports, not what it added.
   //
@@ -488,11 +537,16 @@ async function compareVersions(
       package: target.package,
       fromVersion: target.fromVersion,
       toVersion: target.toVersion,
-      severity: symbolsRemoved.length ? 'blocking' : 'warning',
+      severity:
+        symbolsRemoved.length || entriesRemoved.length || moduleFormat?.broken.length
+          ? 'blocking'
+          : 'warning',
       symbolsRemoved,
       arityChanged,
       newExports,
       ...(typeErrors.length ? { typeErrors } : {}),
+      ...(entriesRemoved.length ? { entriesRemoved } : {}),
+      ...(moduleFormat ? { moduleFormat } : {}),
     },
     ...extras,
   };
@@ -501,17 +555,18 @@ async function compareVersions(
 export async function checkUpgrade(
   targets: UpgradeTarget[],
   references: PackageReferences[],
-  opts: { typeCheck?: TypeCheckFn } = {},
+  opts: { typeCheck?: TypeCheckFn; rootDir?: string } = {},
 ): Promise<UpgradeReport> {
   const byPkg = new Map(references.map((r) => [r.package, r]));
   const breaking: BreakingFinding[] = [];
   const ok: string[] = [];
   const unverified: UpgradeReport['unverified'] = [];
   const types: TypeCoverage[] = [];
+  const runtime = opts.rootDir ? readRepoRuntime(opts.rootDir) : {};
 
   for (const t of targets) {
     try {
-      const res = await checkUpgradeOne(t, byPkg.get(t.package), opts);
+      const res = await checkUpgradeOne(t, byPkg.get(t.package), { typeCheck: opts.typeCheck, runtime });
       if (res.types) {
         types.push(
           res.types.checked
@@ -577,6 +632,25 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
       }
       if (b.symbolsRemoved.some((s) => s.renamedTo)) {
         out.push(`  → is a proven rename: both names were the same function at ${b.fromVersion}.`);
+      }
+    }
+    for (const e of b.entriesRemoved ?? []) {
+      out.push(`  Removes entry point ${e.specifier}, which your code imports:`);
+      out.push(`    · ${locations(e.refs)}`);
+    }
+    if (b.moduleFormat) {
+      const m = b.moduleFormat;
+      out.push(
+        m.to === 'esm'
+          ? `  require('${b.package}') now loads an ES module (was CommonJS)`
+          : `  require('${b.package}') no longer resolves: its exports map offers require() nothing`,
+      );
+      for (const x of m.broken.slice(0, REPORT_LOCATION_CAP)) out.push(`    · ${x.file}:${x.line}  ${x.why}`);
+      if (m.broken.length > REPORT_LOCATION_CAP) out.push(`    · (+${m.broken.length - REPORT_LOCATION_CAP} more)`);
+      if (m.olderNode.length) {
+        out.push(
+          `    · throws ERR_REQUIRE_ESM on Node before 20.19 / 22.12: ${capped(m.olderNode.map((s) => `${s.file}:${s.line}`))}`,
+        );
       }
     }
     for (const a of b.arityChanged) {
