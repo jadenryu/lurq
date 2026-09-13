@@ -20,7 +20,7 @@ export const PRICING_BODY =
 
 /** Under the cards. Answers the question the numbers immediately raise. */
 export const PRICING_NOTE =
-  "A call is one tool request against the hosted index. The CLI run locally against your own database is unmetered. Limits reset when the month turns, and the free plan never asks for a card.";
+  "A call is one tool request against the hosted index. The CLI run locally against your own database is unmetered. Past the limit, calls slow to 20 a day instead of stopping, and reset when the month turns. The free plan never asks for a card.";
 
 /** Shown on the emphasised card. */
 export const PRICING_FEATURED_LABEL = "Most popular";

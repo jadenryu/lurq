@@ -760,7 +760,8 @@ export function registerOperatorCommands(program: Command): void {
     .description('grant a paid plan for money collected outside Stripe')
     .option('--tier <tier>', 'plan to grant', 'pro')
     .requiredOption('--months <n>', 'how long before it lapses (1-36)')
-    .action(async (ownerId: string, opts: { tier: string; months: string }) => {
+    .option('--seats <n>', 'seats for a per-seat plan (floored at its minimum)')
+    .action(async (ownerId: string, opts: { tier: string; months: string; seats?: string }) => {
       const { runBillingGrant } = await import('./billing');
       await runBillingGrant(ownerId, opts);
     });

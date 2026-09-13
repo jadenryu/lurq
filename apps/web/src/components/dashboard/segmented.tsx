@@ -110,6 +110,9 @@ export function SegmentedLinks({
             key={option.value}
             href={option.href}
             aria-current={on ? "true" : undefined}
+            // A filter changes what is in view, not where the reader is: without
+            // this, a control sitting halfway down the page jumps them to the top.
+            scroll={false}
             className={cn(CELL, on ? ON : OFF)}
           >
             {option.label}

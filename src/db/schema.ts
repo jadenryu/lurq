@@ -983,6 +983,12 @@ export const subscriptions = pgTable(
     /** Set when the user cancels but has paid through the period. */
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     /**
+     * Seats bought, from the Stripe subscription quantity. Only per-seat plans
+     * read it, and `billedSeats` floors it at the plan's minimum, so a flat plan
+     * or a pre-seat row carrying the default 1 resolves correctly either way.
+     */
+    seats: integer('seats').notNull().default(1),
+    /**
      * Stripe delivers out of order and retries, so a late duplicate of an older
      * event must not overwrite newer state. The webhook drops any event whose
      * timestamp is older than the one that produced the current row.

@@ -53,6 +53,7 @@ import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
 import {
   entitlementFor,
+  isAllowed,
   getSubscription,
   getSubscriptionByCustomer,
   type Entitlement,
@@ -64,7 +65,7 @@ import {
   createPortalSession,
   handleEvent,
 } from '../billing/stripe';
-import { PLANS, type Tier } from '../core/plans';
+import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -551,19 +552,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     try {
       const ent = await resolveEntitlement(ownerId);
       authed.entitlement = ent;
-      if (!ent.withinQuota) {
+      if (!isAllowed(ent)) {
         res
           .status(402)
           .json(
             rpcError(
               -32002,
               `Monthly limit reached for the ${ent.plan.name} plan ` +
-                `(${ent.used}/${ent.plan.monthlyCalls} calls). ` +
-                `It resets when the month turns. Upgrade at ${config.LURQ_WEB_URL}/#pricing`,
+                `(${ent.used}/${ent.limit} calls), and today's ${GRACE_CALLS_PER_DAY} grace calls are spent. ` +
+                `It resets when the month turns. Upgrade at ${config.LURQ_WEB_URL}/dashboard/billing`,
             ),
           );
         return;
       }
+      // Over the allowance but inside the daily grace: served, and marked so a
+      // client reading headers can say why it is about to stop.
+      if (ent.inGrace) res.setHeader('X-Lurq-Quota', 'grace');
       next();
     } catch (err) {
       logger.error(
@@ -785,7 +789,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
         cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
         used: ent.used,
-        limit: ent.plan.monthlyCalls,
+        limit: ent.limit,
+        seats: ent.seats,
         billingEnabled: billingEnabled(),
         manageable: Boolean(sub?.stripeCustomerId),
       });
@@ -859,6 +864,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
+    // CI policy keys are the Team line. Keys already issued keep working; this
+    // only stops new ones. Fails open on a lookup error, like `quota`.
+    if (scopes.includes('policy:write')) {
+      const ent = await resolveEntitlement(ownerId).catch(() => null);
+      if (ent && !ent.plan.ciPolicyKeys) {
+        res.status(403).json({
+          error: `Keys that change policy from CI come with the Team plan. You are on ${ent.plan.name}.`,
+        });
+        return;
+      }
+    }
     try {
       const { key, row } = await createKey(db, { ownerId, label, tier: 'free', scopes });
       capture(ownerId, 'api_key_created', { tier: row.tier });
@@ -1507,9 +1523,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         : {};
     try {
       const ent = await resolveEntitlement(ownerId);
-      if (!ent.withinQuota) {
+      if (!isAllowed(ent)) {
         res.status(402).json({
-          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.plan.monthlyCalls} calls).`,
+          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.limit} calls).`,
         });
         return;
       }
@@ -1555,8 +1571,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       res.status(400).json({ error: 'days must be a whole number from 1 to 365.' });
       return;
     }
+    // Clamped to the plan's window rather than refused, and the served window is
+    // echoed back so the caller can tell a quiet week from a short plan.
+    const ent = await resolveEntitlement(ownerId).catch(() => null);
+    const maxDays = ent?.plan.decisionLogDays ?? 365;
+    const served = Math.min(days, maxDays);
     try {
-      res.status(200).json({ days, decisions: await summarizeDecisions(db, ownerId, days) });
+      res
+        .status(200)
+        .json({ days: served, maxDays, decisions: await summarizeDecisions(db, ownerId, served) });
     } catch (err) {
       logger.error('policy decisions read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read policy decisions.' });

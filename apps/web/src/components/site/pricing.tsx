@@ -39,14 +39,16 @@ import { PLAN_LIST, type Plan } from '@lurq/core/plans';
 
 /** How the price reads. Whole dollars, because every plan is whole dollars. */
 function priceLabel(plan: Plan): string {
-  return plan.priceCents === 0 ? '$0' : `$${Math.round(plan.priceCents / 100)}`;
+  return `$${Math.round(plan.priceCents / 100).toLocaleString('en-US')}`;
 }
 
 /** The allowance line, pulled out of the feature list into its own row. */
 function allowanceLabel(plan: Plan): string {
-  return plan.monthlyCalls === null
-    ? 'Uncapped hosted calls'
-    : `${plan.monthlyCalls.toLocaleString('en-US')} hosted calls a month`;
+  if (plan.monthlyCalls === null) return 'Uncapped hosted calls';
+  const calls = plan.monthlyCalls.toLocaleString('en-US');
+  return plan.perSeat
+    ? `${calls} calls a month per seat, pooled · ${plan.minSeats ?? 1}-seat minimum`
+    : `${calls} hosted calls a month`;
 }
 
 const BTN =
@@ -158,7 +160,7 @@ function PlanAction({ plan }: { plan: Plan }) {
   if (plan.contactOnly) {
     return (
       <a
-        href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('lurq Enterprise')}`}
+        href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`lurq ${plan.name}`)}`}
         className={BTN_OUTLINE}
       >
         Talk to us
@@ -179,7 +181,8 @@ function PlanAction({ plan }: { plan: Plan }) {
 }
 
 function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previous?: Plan }) {
-  const featured = plan.tier === 'pro';
+  // Team, not Pro: it is the plan the ladder is built to sell.
+  const featured = plan.tier === 'team';
 
   return (
     <article
@@ -202,10 +205,11 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
       </header>
 
       <p className="mt-5 flex items-baseline gap-1">
+        {plan.priceFrom ? <span className="mr-0.5 text-[13px] text-ink-3">from</span> : null}
         <span className="font-sans text-[34px] font-medium leading-none tracking-[-0.03em] text-ink">
           {priceLabel(plan)}
         </span>
-        <span className="text-[13px] text-ink-3">/mo</span>
+        <span className="text-[13px] text-ink-3">{plan.perSeat ? '/seat/mo' : '/mo'}</span>
       </p>
 
       {/* The allowance gets its own line above the fold of the card: it is the
@@ -224,7 +228,7 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
           {plan.features
             // The allowance already has its own row above; repeating it as a
             // bullet is the card arguing with itself.
-            .filter((f) => !/hosted calls/i.test(f))
+            .filter((f) => !/\bcalls\b/i.test(f))
             .map((f) => (
               <li key={f} className="flex gap-2.5 text-[13px] leading-[1.5] text-ink-2">
                 <span aria-hidden className="mt-[1px] shrink-0 text-ink-3">
@@ -267,7 +271,7 @@ export function Pricing() {
         <div
           ref={ref}
           data-playing={played ? 'true' : 'false'}
-          className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-3"
+          className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-2 min-[1080px]:grid-cols-4"
         >
           {PLAN_LIST.map((plan, i) => (
             <PlanCard key={plan.tier} plan={plan} index={i} previous={PLAN_LIST[i - 1]} />
