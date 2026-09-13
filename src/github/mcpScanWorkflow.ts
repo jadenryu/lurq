@@ -95,8 +95,10 @@ jobs:
 ${uv}
       # Add each credential below as a repository secret (Settings → Secrets).
       # A missing one is reported as "needs config", never as a broken server.
+      # --require-upload fails the job when the scan could not be recorded, so a
+      # green run always means the dashboard's history has today's scan in it.
       - name: Scan MCP servers
-        run: npx -y ${cliSpec()} mcp-scan --project-only --trust-project --fail-on ${failOn}
+        run: npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload --fail-on ${failOn}
         env:
 ${env}
 `;

@@ -26,7 +26,7 @@ describe('renderMcpScanWorkflow', () => {
     expect(w.on.schedule[0]!.cron).toBe('23 6 * * *');
     expect(w.on.pull_request.paths).toContain('.mcp.json');
     const step = scanStep(w);
-    expect(step.run).toBe(`npx -y ${cliSpec()} mcp-scan --project-only --trust-project --fail-on high`);
+    expect(step.run).toBe(`npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload --fail-on high`);
     expect(step.env).toEqual({ LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}' });
   });
 

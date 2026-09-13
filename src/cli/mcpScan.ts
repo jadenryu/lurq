@@ -51,6 +51,11 @@ export interface McpScanCliOpts {
   upload?: boolean;
   /** `--no-contribute` sets this false: never offer public corroboration. */
   contribute?: boolean;
+  /**
+   * Fail the run when the scan could not be recorded to the account. For CI,
+   * where a green job nobody reads is the only place an upload failure shows.
+   */
+  requireUpload?: boolean;
 }
 
 const THRESHOLDS = ['critical', 'high', 'moderate', 'low', 'info', 'none'] as const;
@@ -88,6 +93,8 @@ export interface ScanReport {
   worst: Severity | null;
   /** Null when not uploaded: no key, --no-upload, or nothing uploadable. */
   account: AccountSync | null;
+  /** With --require-upload: why the scan was not fully recorded, or null. */
+  uploadProblem: string | null;
 }
 
 export interface AccountSync {
@@ -253,6 +260,7 @@ export async function collectScan(dir: string | undefined, opts: McpScanCliOpts)
     findings: stackScan.findings,
     worst: worst(severities),
     account: null,
+    uploadProblem: null,
   };
 }
 
@@ -456,8 +464,32 @@ export async function syncToAccount(report: ScanReport, opts: McpScanCliOpts): P
   return out;
 }
 
+/**
+ * Why a required upload did not fully land, or null when it did.
+ *
+ * Nothing contacted (every server skipped, or none configured) is not a
+ * failure: there was nothing to record. A missing key is, because in CI it
+ * means every scan has been going nowhere.
+ */
+export function uploadProblem(report: Pick<ScanReport, 'account'>, opts: McpScanCliOpts): string | null {
+  if (!opts.requireUpload) return null;
+  if (!resolveApiKey()) return 'no API key is configured; set LURQ_API_KEY';
+  const acc = report.account;
+  if (!acc) return null;
+  if (acc.error) return `the upload failed: ${acc.error}`;
+  if (acc.rejected.length) {
+    return `${acc.rejected.length} server(s) were not recorded: ${acc.rejected
+      .map((r) => `${r.alias ?? 'a server'} (${r.reason})`)
+      .join(', ')}`;
+  }
+  return null;
+}
+
 export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts): Promise<void> {
   const threshold = parseThreshold(opts.failOn);
+  if (opts.requireUpload && opts.upload === false) {
+    throw new Error('--require-upload and --no-upload contradict each other');
+  }
   const report = await collectScan(dir, opts);
   report.account = await syncToAccount(report, opts);
   if (report.account) {
@@ -466,6 +498,7 @@ export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts):
       ...report.account.results.flatMap((r) => (r.since ? [{ severity: r.since.severity as Severity }] : [])),
     ]);
   }
+  report.uploadProblem = uploadProblem(report, opts);
 
   if (opts.json) console.log(JSON.stringify(toJson(report), null, 2));
   else if (report.servers.length === 0) {
@@ -474,6 +507,10 @@ export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts):
   } else render(report);
 
   if (threshold && report.worst && SEVERITY_RANK[report.worst] <= SEVERITY_RANK[threshold]) {
+    process.exitCode = 1;
+  }
+  if (report.uploadProblem) {
+    console.error(red(`upload required, and the scan was not fully recorded: ${report.uploadProblem}`));
     process.exitCode = 1;
   }
 }

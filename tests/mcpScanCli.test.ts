@@ -247,3 +247,47 @@ describe('chunkUploads', () => {
     expect(chunkUploads([{ a: 1 }, big, { b: 2 }], 1_000, 50)).toEqual([[{ a: 1 }], [big], [{ b: 2 }]]);
   });
 });
+
+describe('--require-upload', () => {
+  const landed = { servers: [{ alias: 'fx', serverKey: 'local:fx', deploymentId: 1, change: 'first', worstSeverity: null, since: null }], rejected: [] };
+
+  it('fails the run when no key is configured', async () => {
+    configure({ fx: fixture() });
+    const r = await scanJson({ requireUpload: true });
+    expect(r.uploadProblem).toMatch(/no API key/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('fails the run when the upload errors, or a server is not recorded', async () => {
+    process.env.LURQ_API_KEY = 'lurq_test_key_for_upload';
+    configure({ fx: fixture() });
+
+    vi.mocked(remote.uploadMcpScan).mockRejectedValueOnce(new remote.RemoteError('Could not reach https://api.lurq.run/mcp-scans', 0));
+    expect((await scanJson({ requireUpload: true })).uploadProblem).toMatch(/upload failed: Could not reach/);
+    expect(process.exitCode).toBe(1);
+
+    process.exitCode = undefined;
+    vi.mocked(remote.uploadMcpScan).mockResolvedValueOnce({
+      servers: [],
+      rejected: [{ index: 0, alias: 'fx', reason: 'could not be recorded; try again' }],
+    } as never);
+    expect((await scanJson({ requireUpload: true })).uploadProblem).toMatch(/1 server\(s\) were not recorded: fx/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('passes when the upload lands, and is silent without the flag', async () => {
+    process.env.LURQ_API_KEY = 'lurq_test_key_for_upload';
+    configure({ fx: fixture() });
+    vi.mocked(remote.uploadMcpScan).mockResolvedValue(landed as never);
+    expect((await scanJson({ requireUpload: true })).uploadProblem).toBeNull();
+    expect(process.exitCode).toBeUndefined();
+
+    vi.mocked(remote.uploadMcpScan).mockRejectedValueOnce(new remote.RemoteError('down', 0));
+    expect((await scanJson()).uploadProblem).toBeNull();
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('refuses to combine with --no-upload', async () => {
+    await expect(runMcpScan(root, { requireUpload: true, upload: false })).rejects.toThrow(/contradict/);
+  });
+});

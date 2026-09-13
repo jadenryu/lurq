@@ -68,7 +68,8 @@ This writes `.github/workflows/lurq-mcp-scan.yml`, which rescans the servers
 committed to the repository every day and on any pull request that changes their
 config. It prints the repository secrets to add: your `LURQ_API_KEY` and every
 credential the committed servers reference. The workflow has read-only
-permissions.
+permissions, and fails if a scan could not be recorded, so a green run always
+means the dashboard has that day's scan.
 
 ## Options
 
@@ -82,6 +83,7 @@ permissions.
 | `--concurrency <n>` | Servers scanned at once. Default 4. |
 | `--no-history` | Do not compare with, or record, the previous scan. |
 | `--no-upload` | Keep the scan on this machine. |
+| `--require-upload` | Exit 1 if the scan could not be recorded to your account. The generated CI workflow sets it. |
 | `--no-contribute` | Do not offer public corroboration. |
 | `--json` | Machine-readable output. |
 

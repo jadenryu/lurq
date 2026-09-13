@@ -389,6 +389,7 @@ export function buildProgram(): Command {
     )
     .option('--no-history', 'do not compare with, or record, the previous scan')
     .option('--no-upload', 'keep this scan on this machine; do not record it to your account')
+    .option('--require-upload', 'exit 1 if the scan could not be recorded to your account (for CI)')
     .option(
       '--no-contribute',
       "do not offer published servers' contracts as corroboration for the public index",
