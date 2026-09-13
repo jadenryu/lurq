@@ -637,6 +637,8 @@ export const repoAlerts = pgTable(
   },
   (table) => [
     index('repo_alerts_owner_created_idx').on(table.ownerId, table.createdAt),
+    // The notification sender scans recent alerts across every owner.
+    index('repo_alerts_created_idx').on(table.createdAt),
     // One alert per repo per release. A re-sync of the same version — and the
     // watcher re-syncs on every publish, including non-latest backports — must
     // not re-notify.
@@ -1184,6 +1186,7 @@ export const mcpChangeEvents = pgTable(
   (table) => [
     uniqueIndex('mcp_change_events_pair_idx').on(table.deploymentId, table.fromHash, table.toHash),
     index('mcp_change_events_owner_idx').on(table.ownerId, table.createdAt),
+    index('mcp_change_events_created_idx').on(table.createdAt),
   ],
 );
 
@@ -1215,3 +1218,73 @@ export type McpContractRow = typeof mcpContracts.$inferSelect;
 export type McpDeploymentRow = typeof mcpDeployments.$inferSelect;
 export type McpObservationRow = typeof mcpObservations.$inferSelect;
 export type McpChangeEventRow = typeof mcpChangeEvents.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account email. Two kinds only, chosen so the inbox stays worth reading:
+// URGENT (on by default, rare by construction) and a weekly DIGEST (opt-in).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One row per account, created the first time anything needs it.
+ *
+ * No email address here: the sender reads the verified primary from Clerk at
+ * send time, so a changed address is never stale and lurq holds no list.
+ * `unsubscribe_token` is random rather than derived, so it is revocable and
+ * needs no signing secret.
+ */
+export const notificationPreferences = pgTable('notification_preferences', {
+  ownerId: text('owner_id').primaryKey(),
+  urgentEmail: boolean('urgent_email').notNull().default(true),
+  weeklyDigest: boolean('weekly_digest').notNull().default(false),
+  unsubscribeToken: text('unsubscribe_token').notNull().unique(),
+  lastDigestAt: ts('last_digest_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * One row per email. `idempotency_key` is unique, so two workers building the
+ * same email cannot both send it, and the same key goes to Resend so a retry of
+ * a send that did land is dropped on their side too.
+ */
+export const notificationDeliveries = pgTable(
+  'notification_deliveries',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    kind: text('kind').$type<'urgent' | 'digest'>().notNull(),
+    status: text('status').$type<'pending' | 'sent' | 'failed' | 'skipped'>().notNull(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    attempts: integer('attempts').notNull().default(0),
+    /** Why it failed or was skipped. Our own words, never a recipient address. */
+    error: text('error'),
+    providerId: text('provider_id'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    sentAt: ts('sent_at'),
+  },
+  (table) => [
+    index('notification_deliveries_owner_idx').on(table.ownerId, table.kind, table.createdAt),
+    index('notification_deliveries_status_idx').on(table.status, table.createdAt),
+  ],
+);
+
+/**
+ * Which alert went out in which email. The primary key is the item itself
+ * (`alert:<id>`, `mcp:<id>`), so claiming it is the dedupe: an item can belong to
+ * one email, ever.
+ */
+export const notificationItems = pgTable(
+  'notification_items',
+  {
+    itemKey: text('item_key').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    deliveryId: integer('delivery_id')
+      .notNull()
+      .references(() => notificationDeliveries.id),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [index('notification_items_delivery_idx').on(table.deliveryId)],
+);
+
+export type NotificationPreferencesRow = typeof notificationPreferences.$inferSelect;
+export type NotificationDeliveryRow = typeof notificationDeliveries.$inferSelect;

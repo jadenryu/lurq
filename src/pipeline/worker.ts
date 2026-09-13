@@ -136,6 +136,23 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: mcp drain failed: ${String(err)}`));
+    // Account email. Last in the cycle so it sees this cycle's alerts; hourly is
+    // the ceiling on how late an urgent email can be. A no-op without Resend and
+    // Clerk configured.
+    await (async () => {
+      const { notifyFromConfig } = await import('../notify/run');
+      const handle = createDb({ max: 2 });
+      try {
+        const s = await notifyFromConfig(handle.db);
+        if (s && (s.urgentSent || s.digestSent || s.failed || s.deferred)) {
+          logger.info(
+            `worker: email, ${s.urgentSent} urgent, ${s.digestSent} digest, ${s.retried} retried, ${s.failed} failed, ${s.skipped} skipped, ${s.deferred} deferred by the daily cap`,
+          );
+        }
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: email pass failed: ${String(err)}`));
     // Rescore is NOT run here. It was, every cycle, and it reported "0 changed"
     // every time — which is arithmetic, not luck.
     //

@@ -90,6 +90,7 @@ import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
+import { registerNotificationRoutes } from './notificationRoutes';
 import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
@@ -1618,6 +1619,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     ownerFrom,
     keyOwner,
   });
+
+  // ── Account email: preferences and unsubscribe (issuer) ────────────────────
+  registerNotificationRoutes(app, { db, requireIssuerSecret, ownerFrom });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
   //

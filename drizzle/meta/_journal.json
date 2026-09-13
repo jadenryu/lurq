@@ -267,6 +267,13 @@
       "when": 1789316246674,
       "tag": "0037_mcp_runtime_scans",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789321596348,
+      "tag": "0038_account_email",
+      "breakpoints": true
     }
   ]
 }
