@@ -39,18 +39,22 @@ function apiBase(): string | null {
   return base ? base.replace(/\/$/, "") : null;
 }
 
-/** null when the package has no public summary, or the API is unreachable. */
+/**
+ * null ONLY when the API says the package has no public summary (404).
+ *
+ * Anything else throws. A page that turned "API unreachable" into notFound()
+ * would be cached as a 404 for the whole revalidate window; throwing instead
+ * leaves the last good page in place, or renders an error that is not cached.
+ */
 export async function fetchPublicPackage(name: string): Promise<PublicPackageSummary | null> {
   const base = apiBase();
-  if (!base) return null;
-  try {
-    const res = await fetch(`${base}/public/package?name=${encodeURIComponent(name)}`, {
-      next: { revalidate: PACKAGE_REVALIDATE },
-    });
-    return res.ok ? ((await res.json()) as PublicPackageSummary) : null;
-  } catch {
-    return null;
-  }
+  if (!base) throw new Error("LURQ_MCP_URL is not set; package pages cannot load.");
+  const res = await fetch(`${base}/public/package?name=${encodeURIComponent(name)}`, {
+    next: { revalidate: PACKAGE_REVALIDATE },
+  });
+  if (res.status === 404 || res.status === 400) return null;
+  if (!res.ok) throw new Error(`public package read failed with HTTP ${res.status}`);
+  return (await res.json()) as PublicPackageSummary;
 }
 
 /** The public set, most-downloaded first. Empty when the API is unreachable. */
@@ -58,7 +62,9 @@ export async function fetchPublicPackageList(): Promise<{ name: string; dataAsOf
   const base = apiBase();
   if (!base) return [];
   try {
-    const res = await fetch(`${base}/public/packages`, { next: { revalidate: PACKAGE_REVALIDATE } });
+    // no-store: only the per-request sitemap reads this, and a cached empty list
+    // is exactly the failure that sitemap.ts was changed to stop.
+    const res = await fetch(`${base}/public/packages`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = (await res.json()) as { packages?: { name: string; dataAsOf: string | null }[] };
     return data.packages ?? [];
