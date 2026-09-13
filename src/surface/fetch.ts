@@ -23,6 +23,9 @@ import type { ExtractedSurface } from './types';
 const execFileP = promisify(execFile);
 const FETCH_TIMEOUT_MS = 60_000;
 const MAX_TARBALL_BYTES = 64 * 1024 * 1024;
+const RETRIES = 3;
+const RETRY_BASE_MS = 400;
+const MAX_RETRY_AFTER_MS = 10_000;
 
 export interface FetchedSurface {
   surface: ExtractedSurface;
@@ -41,9 +44,50 @@ export interface FetchedSurface {
 interface DistInfo {
   tarball: string;
   version: string;
+  /** Subresource-integrity string the registry publishes, e.g. `sha512-…`. */
+  integrity?: string;
+  /** Legacy sha1 hex digest, for tarballs published before `integrity`. */
+  shasum?: string;
 }
 
-/** Resolve a version spec to a concrete tarball URL via the registry. */
+/**
+ * `fetch` with a timeout, retrying what is not the package's fault: a dropped
+ * connection, a 429, a 5xx.
+ *
+ * A registry hiccup must not turn an upgrade into "unverified", and a hung
+ * socket must not hang a CI job for the runner's full six hours. Every other
+ * status, 404 included, goes back to the caller to interpret.
+ */
+async function fetchWithRetry(
+  fetchImpl: typeof fetch,
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response | undefined;
+    try {
+      res = await fetchImpl(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    } catch (err) {
+      if (attempt >= RETRIES) throw err;
+    }
+    if (res && res.status !== 429 && res.status < 500) return res;
+    if (res && attempt >= RETRIES) return res;
+    const retryAfter = Number(res?.headers.get('retry-after'));
+    const wait =
+      Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, MAX_RETRY_AFTER_MS)
+        : RETRY_BASE_MS * 2 ** attempt;
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+}
+
+/**
+ * Resolve a version spec to a concrete tarball URL via the registry.
+ *
+ * Null only when the registry says the version does not exist (404), which is a
+ * fact about the package. Any other failure throws: reading a 403 or an
+ * exhausted 503 as "not published" would tell the caller something false.
+ */
 export async function resolveTarball(
   name: string,
   version: string | null,
@@ -51,11 +95,44 @@ export async function resolveTarball(
 ): Promise<DistInfo | null> {
   const spec = version ?? 'latest';
   const url = `https://registry.npmjs.org/${encodeNpmName(name)}/${encodeURIComponent(spec)}`;
-  const res = await fetchImpl(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) return null;
-  const body = (await res.json()) as { version?: string; dist?: { tarball?: string } };
+  const res = await fetchWithRetry(fetchImpl, url, { headers: { accept: 'application/json' } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`registry answered ${res.status} for ${name}@${spec}`);
+  const body = (await res.json()) as {
+    version?: string;
+    dist?: { tarball?: string; integrity?: string; shasum?: string };
+  };
   if (!body?.dist?.tarball || !body.version) return null;
-  return { tarball: body.dist.tarball, version: body.version };
+  return {
+    tarball: body.dist.tarball,
+    version: body.version,
+    ...(body.dist.integrity ? { integrity: body.dist.integrity } : {}),
+    ...(body.dist.shasum ? { shasum: body.dist.shasum } : {}),
+  };
+}
+
+/**
+ * The bytes must be the ones the registry published.
+ *
+ * A proxy, a stale cache, or a tampered mirror serving something else is the one
+ * input a tool that reads package code has to refuse, and the registry states
+ * the digest to compare against. sha512 when published, sha1 for older tarballs.
+ */
+export function verifyIntegrity(
+  buf: Buffer,
+  dist: Pick<DistInfo, 'integrity' | 'shasum'>,
+  label: string,
+): void {
+  const sri = dist.integrity?.split(/\s+/).find((s) => s.startsWith('sha512-'));
+  if (sri) {
+    if (createHash('sha512').update(buf).digest('base64') !== sri.slice('sha512-'.length)) {
+      throw new Error(`tarball integrity mismatch for ${label}`);
+    }
+    return;
+  }
+  if (dist.shasum && createHash('sha1').update(buf).digest('hex') !== dist.shasum) {
+    throw new Error(`tarball shasum mismatch for ${label}`);
+  }
 }
 
 /** A package tarball unpacked into a temporary directory. `cleanup` removes it. */
@@ -84,12 +161,13 @@ export async function unpackPackage(
   const dist = await resolveTarball(name, version, fetchImpl);
   if (!dist) return null;
 
-  const res = await fetchImpl(dist.tarball);
+  const res = await fetchWithRetry(fetchImpl, dist.tarball);
   if (!res.ok) throw new Error(`tarball fetch failed: ${res.status} ${dist.tarball}`);
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.byteLength > MAX_TARBALL_BYTES) {
     throw new Error(`tarball exceeds ${MAX_TARBALL_BYTES} bytes: ${name}@${dist.version}`);
   }
+  verifyIntegrity(buf, dist, `${name}@${dist.version}`);
   const artifactHash = createHash('sha256').update(buf).digest('hex');
 
   const dir = await mkdtemp(join(tmpdir(), 'lurq-surface-'));
