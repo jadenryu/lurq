@@ -57,6 +57,13 @@ export type ReferenceVia =
   /** Erased by TypeScript before runtime — never a runtime-surface claim. */
   | 'type-only';
 
+export interface CallSite {
+  line: number;
+  /** Arguments passed, or null when they cannot be counted: a spread argument,
+   *  or a use that is not a call at all (passed as a callback, stored, exported). */
+  args: number | null;
+}
+
 export interface SymbolReference {
   /** Exported name used from the package. 'default' for a default import. */
   symbol: string;
@@ -71,6 +78,13 @@ export interface SymbolReference {
   specifier: string;
   file: string;
   line: number;
+  /**
+   * The uses this reference leads to. A named import or destructured require
+   * gets every use of its local name in the file; a member read gets itself.
+   * Absent means the scanner did not follow it, which an arity check must
+   * treat as unmeasured rather than as unused.
+   */
+  calls?: CallSite[];
 }
 
 /** Kinds that assert something about the module's own export surface. */
@@ -176,6 +190,67 @@ function gitSourceFiles(dir: string, limit: number): string[] | null {
   return out;
 }
 
+/** What the use at `node` is: a call and its argument count, or anything else. */
+function callSiteOf(sf: ts.SourceFile, node: ts.Node): CallSite {
+  const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+  const p = node.parent;
+  if (p && (ts.isCallExpression(p) || ts.isNewExpression(p)) && p.expression === node) {
+    const args = p.arguments ?? [];
+    return { line, args: args.some(ts.isSpreadElement) ? null : args.length };
+  }
+  return { line, args: null };
+}
+
+/** Is this identifier a read of a binding, rather than a name being declared? */
+function isValueUse(id: ts.Identifier): boolean {
+  const p = id.parent;
+  if (!p) return false;
+  if (ts.isImportSpecifier(p) || ts.isImportClause(p) || ts.isNamespaceImport(p)) return false;
+  if (ts.isImportEqualsDeclaration(p) || ts.isLabeledStatement(p) || ts.isBreakOrContinueStatement(p)) return false;
+  if (ts.isPropertyAccessExpression(p) && p.name === id) return false;
+  if (ts.isQualifiedName(p) && p.right === id) return false;
+  if (ts.isBindingElement(p) && (p.name === id || p.propertyName === id)) return false;
+  if (ts.isExportSpecifier(p) && p.name === id && p.propertyName) return false;
+  const declares =
+    ts.isVariableDeclaration(p) ||
+    ts.isParameter(p) ||
+    ts.isFunctionDeclaration(p) ||
+    ts.isFunctionExpression(p) ||
+    ts.isClassDeclaration(p) ||
+    ts.isClassExpression(p) ||
+    ts.isPropertyAssignment(p) ||
+    ts.isPropertyDeclaration(p) ||
+    ts.isPropertySignature(p) ||
+    ts.isMethodDeclaration(p) ||
+    ts.isGetAccessor(p) ||
+    ts.isSetAccessor(p) ||
+    ts.isEnumMember(p);
+  return !(declares && (p as { name?: ts.Node }).name === id);
+}
+
+/**
+ * Every value use of the given local names in a file.
+ *
+ * ponytail: scope-blind. A parameter that shadows an import is counted as a use
+ * of the import, which can add a call to judge (at worst a spurious warning) but
+ * never removes one. A scope-aware pass means a binder; the type check already
+ * judges TypeScript files exactly, so this only has to be good for plain JS.
+ */
+function valueUses(sf: ts.SourceFile, locals: Set<string>): Map<string, CallSite[]> {
+  const out = new Map<string, CallSite[]>();
+  const visit = (node: ts.Node, inType: boolean): void => {
+    const nowInType = inType || ts.isTypeNode(node);
+    if (!nowInType && ts.isIdentifier(node) && locals.has(node.text) && isValueUse(node)) {
+      const list = out.get(node.text);
+      if (list) list.push(callSiteOf(sf, node));
+      else out.set(node.text, [callSiteOf(sf, node)]);
+    }
+    ts.forEachChild(node, (c) => visit(c, nowInType));
+  };
+  visit(sf, false);
+  return out;
+}
+
 /**
  * Scan a codebase for the symbols it uses from each bare-specifier import.
  *
@@ -229,19 +304,35 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     file: string,
     line: number,
     parent?: string,
-  ) => {
+    call?: CallSite,
+  ): SymbolReference => {
     let syms = byPackage.get(pkg);
     if (!syms) byPackage.set(pkg, (syms = new Map()));
     const list = syms.get(symbol);
-    const ref: SymbolReference = { symbol, via, specifier, file, line, ...(parent ? { parent } : {}) };
-    if (list) {
-      // Same file:line can legitimately carry two different claims (`z` as a
-      // named import, `z.string` as a member read off it), so the dedupe key
-      // has to include how the symbol was reached.
-      if (!list.some((r) => r.file === file && r.line === line && r.via === via)) list.push(ref);
-    } else {
+    const ref: SymbolReference = {
+      symbol,
+      via,
+      specifier,
+      file,
+      line,
+      ...(parent ? { parent } : {}),
+      ...(call ? { calls: [call] } : {}),
+    };
+    if (!list) {
       syms.set(symbol, [ref]);
+      return ref;
     }
+    // Same file:line can legitimately carry two different claims (`z` as a
+    // named import, `z.string` as a member read off it), so the dedupe key
+    // has to include how the symbol was reached. Two calls on one line are one
+    // reference with two call sites, not one call dropped.
+    const same = list.find((r) => r.file === file && r.line === line && r.via === via);
+    if (!same) {
+      list.push(ref);
+      return ref;
+    }
+    if (call) (same.calls ??= []).push(call);
+    return same;
   };
 
   for (const file of listSourceFiles(rootDir, opts.limit)) {
@@ -272,6 +363,13 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
     // `import express, { Request, Response } from 'express'` is correct code;
     // counting Request/Response as runtime symbols reports a miss on it.
     const valueUsed = collectValueIdentifiers(sf);
+    // References whose local name is followed to its uses once the file is read.
+    const followed = new Map<string, SymbolReference[]>();
+    const follow = (local: string, ref: SymbolReference) => {
+      const list = followed.get(local);
+      if (list) list.push(ref);
+      else followed.set(local, [ref]);
+    };
 
     const visit = (node: ts.Node): void => {
       // ── ESM imports ──
@@ -291,7 +389,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
                 const local = el.name.text;
                 const exported = el.propertyName?.text ?? local;
                 const typeOnly = clause.isTypeOnly || el.isTypeOnly || !valueUsed.has(local);
-                record(
+                const ref = record(
                   pkg,
                   exported,
                   typeOnly ? 'type-only' : 'named',
@@ -300,6 +398,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
                   lineOf(el),
                 );
                 if (!typeOnly) {
+                  follow(local, ref);
                   namedBindings.set(local, {
                     pkg,
                     spec: node.moduleSpecifier.text,
@@ -334,7 +433,9 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
           } else if (ts.isObjectBindingPattern(node.name)) {
             for (const el of node.name.elements) {
               const name = el.propertyName ?? el.name;
-              if (ts.isIdentifier(name)) record(pkg, name.text, 'destructured', spec, rel, lineOf(el));
+              if (!ts.isIdentifier(name)) continue;
+              const ref = record(pkg, name.text, 'destructured', spec, rel, lineOf(el));
+              if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
             }
           }
         }
@@ -346,9 +447,11 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
         const ns = nsBindings.get(local);
         const def = defaultBindings.get(local);
         const named = namedBindings.get(local);
-        if (ns) record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node));
-        else if (def) record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node));
-        else if (named) {
+        const call = callSiteOf(sf, node);
+        if (ns) record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node), undefined, call);
+        else if (def) {
+          record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node), undefined, call);
+        } else if (named) {
           record(
             named.pkg,
             node.name.text,
@@ -357,6 +460,7 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
             rel,
             lineOf(node),
             named.exported,
+            call,
           );
         }
       }
@@ -364,6 +468,13 @@ export function scanReferences(rootDir: string, opts: { limit?: number } = {}): 
       ts.forEachChild(node, visit);
     };
     visit(sf);
+
+    if (followed.size) {
+      const uses = valueUses(sf, new Set(followed.keys()));
+      for (const [local, refs] of followed) {
+        for (const ref of refs) ref.calls = [...(ref.calls ?? []), ...(uses.get(local) ?? [])];
+      }
+    }
   }
 
   return [...byPackage.entries()]

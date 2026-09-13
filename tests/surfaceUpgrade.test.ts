@@ -13,6 +13,7 @@ import {
 import {
   formatUpgradeReport,
   isNamespaceMemberClaim,
+  judgeCalls,
   type UpgradeReport,
 } from '../src/surface/upgrade';
 
@@ -88,6 +89,45 @@ describe('reference scanner', () => {
     const names = [...lodash.symbols.keys()];
     expect(names).toContain('debounce'); // destructured
     expect(names).toContain('throttle'); // member read on the binding
+  });
+
+  it('records each use of an imported binding with its argument count', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-calls-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/c.ts'),
+        [
+          `import { parse } from 'cookie';`,
+          `import * as qs from 'qs';`,
+          `const { debounce } = require('lodash');`,
+          `parse('a');`,
+          `parse('a', { decode });`,
+          `parse(...args);`,
+          `export const handlers = [parse];`,
+          `qs.stringify(obj, opts); qs.stringify(obj);`,
+          `debounce(fn, 10);`,
+          `function local(parse: string) { return parse; }`,
+        ].join('\n'),
+      );
+      const refs = scanReferences(dir);
+      const calls = (pkg: string, sym: string) =>
+        refs.find((r) => r.package === pkg)!.symbols.get(sym)!.flatMap((r) => r.calls ?? []);
+      expect(calls('cookie', 'parse').slice(0, 4)).toEqual([
+        { line: 4, args: 1 },
+        { line: 5, args: 2 },
+        { line: 6, args: null },
+        { line: 7, args: null },
+      ]);
+      // Two calls on one line stay two call sites.
+      expect(calls('qs', 'stringify')).toEqual([
+        { line: 8, args: 2 },
+        { line: 8, args: 1 },
+      ]);
+      expect(calls('lodash', 'debounce')).toEqual([{ line: 9, args: 2 }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('ignores relative imports, builtins, and node_modules', () => {
@@ -201,6 +241,83 @@ describe('reference kind classification (miss-rate correction, 2026-08-06)', () 
     // so it asserts nothing about the runtime surface.
     const zod = scanReferences(root).find((r) => r.package === 'zod')!;
     expect(zod.symbols.has('ZodEffects')).toBe(false);
+  });
+});
+
+describe('arity changes judged at the call site', () => {
+  const ref = (calls?: { line: number; args: number | null }[]): SymbolReference => ({
+    symbol: 'parse',
+    via: 'named',
+    specifier: 'cookie',
+    file: 'src/a.ts',
+    line: 1,
+    ...(calls ? { calls } : {}),
+  });
+
+  it('breaks a call that no longer passes enough arguments', () => {
+    const judged = judgeCalls({ path: 'parse', from: 1, to: 2, fromMax: 2, toMax: 2 }, [
+      ref([
+        { line: 4, args: 1 },
+        { line: 5, args: 2 },
+      ]),
+    ]);
+    expect(judged).toEqual({ broken: [{ file: 'src/a.ts', line: 4, args: 1 }], unmeasured: [] });
+  });
+
+  it('breaks a call that passes an argument the new version dropped', () => {
+    const judged = judgeCalls({ path: 'parse', from: 1, to: 1, fromMax: 2, toMax: 1 }, [
+      ref([
+        { line: 3, args: 2 },
+        { line: 4, args: 1 },
+      ]),
+    ]);
+    expect(judged!.broken).toEqual([{ file: 'src/a.ts', line: 3, args: 2 }]);
+  });
+
+  it('does not blame the upgrade for a call that was already wrong', () => {
+    const judged = judgeCalls({ path: 'parse', from: 2, to: 3 }, [ref([{ line: 3, args: 1 }])]);
+    expect(judged!.broken).toEqual([]);
+  });
+
+  // A spread or a callback is a use nobody counted. Calling it safe is the
+  // failure `unverified` exists to prevent.
+  it('keeps uncountable uses as unmeasured', () => {
+    const judged = judgeCalls({ path: 'parse', from: 1, to: 2 }, [ref([{ line: 6, args: null }])]);
+    expect(judged).toEqual({ broken: [], unmeasured: [{ file: 'src/a.ts', line: 6 }] });
+  });
+
+  it('declines to judge when a use was never followed', () => {
+    expect(judgeCalls({ path: 'parse', from: 1, to: 2 }, [ref()])).toBeNull();
+  });
+
+  it('prints the broken calls and their argument counts', () => {
+    const out = formatUpgradeReport({
+      safe: false,
+      breaking: [
+        {
+          package: 'pino',
+          fromVersion: '8.0.0',
+          toVersion: '9.0.0',
+          severity: 'warning',
+          symbolsRemoved: [],
+          arityChanged: [
+            {
+              symbol: 'child',
+              from: 1,
+              to: 2,
+              refs: [ref([{ line: 31, args: 1 }])],
+              callsBroken: [{ file: 'src/log.ts', line: 31, args: 1 }],
+              unmeasured: [{ file: 'src/log.ts', line: 40 }],
+            },
+          ],
+          newExports: [],
+        },
+      ],
+      ok: [],
+      unverified: [],
+    });
+    expect(out).toContain('src/log.ts:31 passes 1');
+    expect(out).toContain('not countable (spread, or passed as a value): src/log.ts:40');
   });
 });
 

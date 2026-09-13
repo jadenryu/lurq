@@ -19,7 +19,7 @@
  * is how a CI gate loses its credibility in one incident.
  */
 import { fetchAndExtract } from './fetch';
-import { diffSurfaces } from './diff';
+import { diffSurfaces, type ArityChange } from './diff';
 import { SURFACE_CLAIM_KINDS } from './references';
 import type { PackageReferences, SymbolReference } from './references';
 import { runtimeSymbols, type ExtractedSurface, type SymbolKind } from './types';
@@ -50,7 +50,17 @@ export interface BreakingFinding {
     specifier?: string;
     from: number | null;
     to: number | null;
+    fromMax?: number | null;
+    toMax?: number | null;
     refs: SymbolReference[];
+    /**
+     * Calls this change breaks: each passed an argument count the old version
+     * accepted and the new one does not. Present only when every use of the
+     * symbol was followed; see `judgeCalls`.
+     */
+    callsBroken?: { file: string; line: number; args: number }[];
+    /** Uses that could not be counted: a spread, or the function passed as a value. */
+    unmeasured?: { file: string; line: number }[];
   }[];
   /**
    * Runtime exports that exist at the target version and did not at the source
@@ -146,6 +156,43 @@ export function isNamespaceMemberClaim(
   return fromObjects.has(ref.parent) && toObjects.has(ref.parent);
 }
 
+/** Does a call with `args` arguments fit? A null or absent `max` is no upper bound. */
+function accepts(args: number, required: number | null, max: number | null | undefined): boolean {
+  return (required === null || args >= required) && (max === null || max === undefined || args <= max);
+}
+
+/**
+ * Judge an arity change at the calls that reach it.
+ *
+ * A changed parameter count on its own is a guess about your code. What decides
+ * it is the calls: `parse(str)` against a version that now requires two
+ * arguments is broken, `parse(str, opts)` is not. A call counts as broken only
+ * when the old version accepted its argument count and the new one does not, so
+ * a call that was already wrong is not blamed on the upgrade.
+ *
+ * Null when some value reference was never followed. Then there is nothing to
+ * judge with, and the caller reports the change as it did before call sites
+ * were counted rather than treating "did not look" as "fine".
+ */
+export function judgeCalls(
+  change: ArityChange,
+  refs: SymbolReference[],
+): { broken: { file: string; line: number; args: number }[]; unmeasured: { file: string; line: number }[] } | null {
+  const valueRefs = refs.filter((r) => r.via !== 'type-only');
+  if (!valueRefs.length || valueRefs.some((r) => r.calls === undefined)) return null;
+  const broken: { file: string; line: number; args: number }[] = [];
+  const unmeasured: { file: string; line: number }[] = [];
+  for (const r of valueRefs) {
+    for (const c of r.calls!) {
+      if (c.args === null) unmeasured.push({ file: r.file, line: c.line });
+      else if (accepts(c.args, change.from, change.fromMax) && !accepts(c.args, change.to, change.toMax)) {
+        broken.push({ file: r.file, line: c.line, args: c.args });
+      }
+    }
+  }
+  return { broken, unmeasured };
+}
+
 interface EntryComparison {
   symbolsRemoved: BreakingFinding['symbolsRemoved'];
   arityChanged: BreakingFinding['arityChanged'];
@@ -210,13 +257,23 @@ function compareEntry(
       }),
     arityChanged: diff.arityChanged
       .filter((a) => referenced.has(a.path))
-      .map((a) => ({
-        symbol: a.path,
-        ...tag,
-        from: a.from,
-        to: a.to,
-        refs: symbols.get(a.path) ?? [],
-      })),
+      .flatMap((a) => {
+        const refs = symbols.get(a.path) ?? [];
+        const judged = judgeCalls(a, refs);
+        // Every use is a call that still fits. The change is real and does not
+        // touch this codebase, and a warning about it is noise.
+        if (judged && !judged.broken.length && !judged.unmeasured.length) return [];
+        const { path, ...counts } = a;
+        return [
+          {
+            symbol: path,
+            ...tag,
+            ...counts,
+            refs,
+            ...(judged ? { callsBroken: judged.broken, unmeasured: judged.unmeasured } : {}),
+          },
+        ];
+      }),
     // The target's whole surface, not just what it added: a rename that shipped
     // the new name a major early leaves `diff.added` empty. `default` is never a
     // useful candidate, and the caller drops anything it just reported removed.
@@ -372,6 +429,26 @@ export async function checkUpgrade(
 /** Candidates listed in the text report. The full set stays in the JSON; this
  *  keeps the report to the one screen §9.0 asks for. */
 const REPORT_CANDIDATE_CAP = 8;
+/** Locations listed per symbol in the text report, for the same reason. */
+const REPORT_LOCATION_CAP = 6;
+
+function capped(items: string[], cap = REPORT_LOCATION_CAP): string {
+  const shown = items.slice(0, cap).join(', ');
+  return items.length > cap ? `${shown} (+${items.length - cap} more)` : shown;
+}
+
+/** The import, then every use it leads to. In ESM a missing named export fails
+ *  the whole module at load, so the import line is itself a break site. */
+function locations(refs: SymbolReference[]): string {
+  const all = refs.flatMap((r) => [`${r.file}:${r.line}`, ...(r.calls ?? []).map((c) => `${r.file}:${c.line}`)]);
+  return capped([...new Set(all)]) || '(no location)';
+}
+
+/** `1`, `1–2`, or `1+` for unbounded. */
+function params(required: number | null, max?: number | null): string {
+  if (max === undefined || max === required) return `${required}`;
+  return max === null ? `${required}+` : `${required}–${max}`;
+}
 
 /** The §9.0 report: fits on one screen, names files and lines. */
 export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade check'): string {
@@ -383,7 +460,7 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
     if (b.symbolsRemoved.length) {
       out.push(`  Removes ${b.symbolsRemoved.length} symbol(s) your code references:`);
       for (const s of b.symbolsRemoved) {
-        const where = s.refs.map((r) => `${r.file}:${r.line}`).join(', ') || '(no location)';
+        const where = locations(s.refs);
         const rename = s.renamedTo ? ` → ${s.renamedTo.join(' | ')}` : '';
         out.push(`    · ${s.specifier ?? b.package}.${s.symbol}${rename}    ${where}`);
       }
@@ -392,9 +469,24 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
       }
     }
     for (const a of b.arityChanged) {
-      const where = a.refs.map((r) => `${r.file}:${r.line}`).join(', ') || '(no location)';
-      out.push(`  Arity change: ${a.specifier ?? b.package}.${a.symbol} ${a.from} → ${a.to} params`);
-      out.push(`    · ${where}`);
+      out.push(
+        `  Arity change: ${a.specifier ?? b.package}.${a.symbol} ${params(a.from, a.fromMax)} → ${params(a.to, a.toMax)} params`,
+      );
+      if (!a.callsBroken) {
+        out.push(`    · ${locations(a.refs)}`);
+        continue;
+      }
+      for (const c of a.callsBroken.slice(0, REPORT_LOCATION_CAP)) {
+        out.push(`    · ${c.file}:${c.line} passes ${c.args}`);
+      }
+      if (a.callsBroken.length > REPORT_LOCATION_CAP) {
+        out.push(`    · (+${a.callsBroken.length - REPORT_LOCATION_CAP} more calls)`);
+      }
+      if (a.unmeasured?.length) {
+        out.push(
+          `    · not countable (spread, or passed as a value): ${capped(a.unmeasured.map((u) => `${u.file}:${u.line}`))}`,
+        );
+      }
     }
     // The reader's next question is always "replaced by what", so answer it here
     // rather than making them open the JSON. Named as candidates, not as a

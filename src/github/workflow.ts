@@ -206,7 +206,10 @@ jobs:
             3. Rewrite every listed call site. A removed symbol carrying
                "renamedTo" has a replacement the package itself proves: at the
                old version both names were exported from the same function, so
-               rename the call. For the rest, "newExports" on each entry names
+               rename the call. Under "arityChanged", "callsBroken" names each
+               call whose argument count the new version no longer accepts, and
+               "unmeasured" names uses to read by hand. For removed symbols
+               without "renamedTo", "newExports" on each entry names
                the exports the target version ADDED, extracted from its shipped
                JavaScript: that is where the replacement for a removed symbol
                comes from. Confirm each one against the freshly installed package
