@@ -59,6 +59,72 @@ export function installTargets(command: string): string[] {
   return [...names];
 }
 
+/** Runners that fetch a package to execute it once: the typosquat path that skips `install`. */
+const RUNNERS: [string, string | null][] = [
+  ['npx', null],
+  ['bunx', null],
+  ['pnpm', 'dlx'],
+  ['yarn', 'dlx'],
+];
+
+/**
+ * Packages a command would download and run. Names that resolve to a local bin
+ * (`npx tsc`, `npx vitest` in a repo that has them) are skipped: those never
+ * touch the registry, and `tsc` the package is not the TypeScript compiler.
+ */
+export function runTargets(command: string, hasLocalBin: (name: string) => boolean = () => false): string[] {
+  const names = new Set<string>();
+  for (const segment of command.split(/&&|\|\||[;|\n]/)) {
+    const tokens = segment.trim().split(/\s+/);
+    let i = 0;
+    while (i < tokens.length && (tokens[i] === 'sudo' || /^[A-Za-z_]\w*=/.test(tokens[i]!))) i++;
+    const runner = RUNNERS.find(([bin, verb]) => tokens[i] === bin && (verb === null || tokens[i + 1] === verb));
+    if (!runner) continue;
+    for (let j = i + (runner[1] ? 2 : 1); j < tokens.length; j++) {
+      const t = tokens[j]!;
+      if (t === '-p' || t === '--package') {
+        const name = specName(tokens[++j] ?? '');
+        if (name) names.add(name);
+      } else if (t.startsWith('--package=')) {
+        const name = specName(t.slice('--package='.length));
+        if (name) names.add(name);
+      } else if (!t.startsWith('-')) {
+        // The first positional is the command; everything after it is its own arguments.
+        const name = specName(t);
+        if (name && !hasLocalBin(name)) names.add(name);
+        break;
+      }
+    }
+  }
+  return [...names];
+}
+
+const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
+
+/** Registry dependencies `after` declares that `before` did not. Null when either side is not a package.json object. */
+export function addedDependencies(before: string, after: string): string[] | null {
+  const read = (text: string): Record<string, any> | null => {
+    try {
+      const v = JSON.parse(text);
+      return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+    } catch {
+      return null;
+    }
+  };
+  const [was, now] = [read(before || '{}'), read(after)];
+  if (!was || !now) return null;
+  const had = new Set(DEP_FIELDS.flatMap((f) => Object.keys(was[f] ?? {})));
+  const added = new Set<string>();
+  for (const field of DEP_FIELDS) {
+    for (const [name, range] of Object.entries(now[field] ?? {})) {
+      // workspace:, file:, link:, npm: aliases, git and URLs never mean the registry name as written.
+      if (had.has(name) || typeof range !== 'string' || /[:/]/.test(range)) continue;
+      if (specName(name) === name) added.add(name);
+    }
+  }
+  return [...added];
+}
+
 export interface HookDecision {
   permissionDecision: 'deny' | 'ask';
   permissionDecisionReason: string;
@@ -70,11 +136,15 @@ const clip = (s: string, n = 240) => {
 };
 
 /** What Claude Code should do with the install, or null to stay out of the way. */
-export function decide(checked: { name: string; verdict: SecurityVerdict }[]): HookDecision | null {
+export function decide(
+  checked: { name: string; verdict: SecurityVerdict }[],
+  opts: { deny?: boolean } = {},
+): HookDecision | null {
   const list = (xs: typeof checked) => xs.map((x) => x.name).join(', ');
   const why = (xs: typeof checked) => xs.map((x) => `${x.name}: ${clip(x.verdict.reasons[0] ?? x.verdict.scope)}`).join('; ');
 
-  const invalid = checked.filter((c) => c.verdict.level === 'invalid');
+  // A runner fetching a name that does not exist just fails; only an install or a declared dependency is stopped.
+  const invalid = opts.deny === false ? [] : checked.filter((c) => c.verdict.level === 'invalid');
   if (invalid.length) {
     return {
       permissionDecision: 'deny',

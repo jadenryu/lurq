@@ -1681,6 +1681,19 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     return ownerId;
   };
 
+  // What the session-start hook prints: the same open urgent changes tool results carry.
+  app.get('/alerts', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (!ownerId) return;
+    try {
+      res.status(200).json({ notice: await agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, '')) });
+      capture(ownerId, 'agent_session_start', {});
+    } catch (err) {
+      logger.error('alerts read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read alerts.' });
+    }
+  });
+
   app.get('/policy', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     const ownerId = keyOwner(req, res);
     if (!ownerId) return;

@@ -3,7 +3,7 @@
  * that setup merges it into the user's settings without disturbing their hooks.
  */
 import { describe, expect, it } from 'vitest';
-import { decide, installTargets, specName } from '../src/cli/hook';
+import { addedDependencies, decide, installTargets, runTargets, specName } from '../src/cli/hook';
 import { hasClaudeHook, withClaudeHook, withoutClaudeHook } from '../src/cli/installSkill';
 import type { SecurityVerdict } from '../src/security/verdict';
 
@@ -73,5 +73,40 @@ describe('Claude Code settings', () => {
   it('leaves no empty hooks object behind when ours was the only one', () => {
     expect(withoutClaudeHook(withClaudeHook({}, 'lurq'))).toEqual({});
     expect(withoutClaudeHook(user)).toBe(user);
+  });
+});
+
+describe('runTargets', () => {
+  it('reads the package a runner fetches, not its arguments', () => {
+    expect(runTargets('npx -y create-next-app@latest my-app --ts')).toEqual(['create-next-app']);
+    expect(runTargets('pnpm dlx shadcn@latest add button && bunx cowsay hi')).toEqual(['shadcn', 'cowsay']);
+    expect(runTargets('npx -p @scope/tool --package=other run-it')).toEqual(['@scope/tool', 'other', 'run-it']);
+  });
+
+  it('skips local bins and commands that are not runners', () => {
+    expect(runTargets('npx tsc --noEmit', (n) => n === 'tsc')).toEqual([]);
+    expect(runTargets('pnpm exec vitest && yarn build')).toEqual([]);
+  });
+});
+
+describe('addedDependencies', () => {
+  const pkg = (deps: Record<string, string>, dev: Record<string, string> = {}) =>
+    JSON.stringify({ name: 'app', dependencies: deps, devDependencies: dev });
+
+  it('lists only registry names that were not declared before', () => {
+    expect(addedDependencies(pkg({ zod: '^3' }), pkg({ zod: '^4', hono: '^4' }, { lodahs: '1.0.0' }))).toEqual(['hono', 'lodahs']);
+    expect(addedDependencies('', pkg({ zod: '^3' }))).toEqual(['zod']);
+  });
+
+  it('ignores workspace, file, git and alias ranges, and unparseable files', () => {
+    expect(addedDependencies(pkg({}), pkg({ a: 'workspace:*', b: 'file:../b', c: 'github:x/c', d: 'npm:zod@3' }))).toEqual([]);
+    expect(addedDependencies(pkg({}), '{ "dependencies": { oops')).toBeNull();
+  });
+});
+
+describe('decide for runners', () => {
+  it('never denies a missing name, still asks on high risk', () => {
+    expect(decide([{ name: 'nope', verdict: verdict('invalid', ['no such package']) }], { deny: false })).toBeNull();
+    expect(decide([{ name: 'evil', verdict: verdict('high', ['bad']) }], { deny: false })?.permissionDecision).toBe('ask');
   });
 });
