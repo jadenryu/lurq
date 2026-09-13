@@ -46,6 +46,12 @@ export interface Plan {
   monthlyCalls: number | null;
   /** Per-minute burst ceiling, enforced by the express limiter. */
   ratePerMinute: number;
+  /**
+   * Dashboard Ask spend per UTC day, in dollars. Must be > 0: the web route
+   * reads a zero limit as "no limit". Free is a taste, not a workload — each
+   * question reserves $0.25 up front, so $0.30 is about three Sonnet questions.
+   */
+  askDailyUsd: number;
   /** How far back the policy decision log can be read. */
   decisionLogDays: number;
   /** May mint `policy:write` keys, the ones CI uses to push a reviewed policy. */
@@ -75,6 +81,7 @@ export const PLANS: Record<Tier, Plan> = {
     priceCents: 0,
     monthlyCalls: 1_000,
     ratePerMinute: 60,
+    askDailyUsd: 0.3,
     decisionLogDays: 7,
     ciPolicyKeys: false,
     tagline: 'Enough to find out whether the index is telling the truth.',
@@ -93,6 +100,7 @@ export const PLANS: Record<Tier, Plan> = {
     priceCents: 1_500,
     monthlyCalls: 10_000,
     ratePerMinute: 120,
+    askDailyUsd: 3,
     decisionLogDays: 90,
     ciPolicyKeys: false,
     tagline: 'For one developer who runs it on every install.',
@@ -113,6 +121,9 @@ export const PLANS: Record<Tier, Plan> = {
     minSeats: 3,
     monthlyCalls: 15_000,
     ratePerMinute: 300,
+    // Between Pro and Business. The Ask budget is per account, not per seat, so a
+    // bigger team shares it; scale it by seat if Team accounts hit the ceiling.
+    askDailyUsd: 8,
     decisionLogDays: 365,
     ciPolicyKeys: true,
     tagline: 'For a team whose agents answer to one policy.',
@@ -132,6 +143,7 @@ export const PLANS: Record<Tier, Plan> = {
     priceFrom: true,
     monthlyCalls: null,
     ratePerMinute: 600,
+    askDailyUsd: 15,
     decisionLogDays: 365,
     ciPolicyKeys: true,
     tagline: 'For a company that needs the graph under its own controls.',
