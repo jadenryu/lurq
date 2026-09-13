@@ -604,6 +604,8 @@ export async function startCheckout(args: {
   tier: string;
   interval?: "month" | "year";
   email?: string | null;
+  /** Where Stripe's back link returns: the billing page or the landing pricing section. */
+  from?: "dashboard" | "pricing";
 }): Promise<string | null> {
   const res = await issuerFetch("/billing/checkout", {
     method: "POST",

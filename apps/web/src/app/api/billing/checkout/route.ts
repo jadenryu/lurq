@@ -40,10 +40,13 @@ export async function POST(request: Request) {
 
   let tier: Tier = "pro";
   let interval: "month" | "year" = "month";
+  // Where the buyer started, so backing out of Stripe returns them there.
+  let from: "dashboard" | "pricing" = "pricing";
   try {
-    const body = (await request.json()) as { tier?: string; interval?: string };
+    const body = (await request.json()) as { tier?: string; interval?: string; from?: string };
     if (typeof body.tier === "string") tier = body.tier as Tier;
     if (body.interval === "year") interval = "year";
+    if (body.from === "dashboard") from = "dashboard";
   } catch {
     // No body is fine: Pro is the cheapest self-serve plan, so it is the default.
     // Seats are not taken here; Stripe's form collects them for per-seat plans.
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
   try {
     const user = await currentUser();
     const email = user?.primaryEmailAddress?.emailAddress ?? null;
-    const url = await startCheckout({ ownerId: owner.ownerId, tier, interval, email });
+    const url = await startCheckout({ ownerId: owner.ownerId, tier, interval, email, from });
     if (!url) {
       // Billing not configured, or no Price for this tier yet. Not the buyer's
       // problem and not an error state worth alarming them with.

@@ -62,6 +62,7 @@ import {
   billingEnabled,
   constructEvent,
   createCheckoutSession,
+  isCheckoutOrigin,
   createPortalSession,
   handleEvent,
 } from '../billing/stripe';
@@ -699,6 +700,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const tier = typeof req.body?.tier === 'string' ? (req.body.tier as Tier) : 'pro';
     const email = typeof req.body?.email === 'string' ? req.body.email : null;
     const interval = req.body?.interval === 'year' ? 'year' : 'month';
+    const from = isCheckoutOrigin(req.body?.from) ? req.body.from : undefined;
     if (!ownerId) {
       res.status(400).json({ error: 'ownerId is required.' });
       return;
@@ -708,7 +710,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const url = await createCheckoutSession(db, { ownerId, tier, interval, email });
+      const url = await createCheckoutSession(db, { ownerId, tier, interval, email, from });
       if (!url) {
         res.status(503).json({ error: 'That plan is not available for checkout yet.' });
         return;
