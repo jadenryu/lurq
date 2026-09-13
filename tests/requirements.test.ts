@@ -83,6 +83,28 @@ describe('require() across a switch to ESM', () => {
     expect(judged!.broken.map((b) => b.line)).toEqual([1]);
   });
 
+  // No Node version loads an async ES module through require(), so engines do not help.
+  it('blocks every require() of an ES module that uses top-level await', () => {
+    const judged = judgeRequires('cjs', 'esm', [ref({ symbol: 'v4', via: 'destructured', line: 2 })], {
+      fromExports: exportsOf('v4'),
+      toExports: exportsOf('v4'),
+      runtime: { engines: '>=22.12' },
+      asyncModule: true,
+    });
+    expect(judged).toEqual({
+      from: 'cjs',
+      to: 'esm',
+      broken: [
+        {
+          file: 'src/log.js',
+          line: 2,
+          why: 'the ES module uses top-level await, so require() throws ERR_REQUIRE_ASYNC_MODULE on every Node',
+        },
+      ],
+      olderNode: [],
+    });
+  });
+
   it('has nothing to say without a CommonJS-to-ESM change or a require', () => {
     const ctx = { fromExports: exportsOf('default'), toExports: exportsOf('default'), runtime: {} };
     expect(judgeRequires('esm', 'esm', [ref({})], ctx)).toBeNull();
@@ -179,6 +201,27 @@ describe('what the new version requires of the project', () => {
         { root: dir },
       );
       expect(found).toEqual([{ kind: 'peer', name: 'vue', needs: '^3.0.0', has: '^2.7.0 (package.json)' }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('side-effect loads', () => {
+  it('records them as loads that claim no exports', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-side-effect-'));
+    try {
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(
+        join(dir, 'src/boot.ts'),
+        [`import 'dotenv/config';`, `require('source-map-support/register');`, `import './local.css';`].join('\n'),
+      );
+      const refs = scanReferences(dir);
+      const get = (pkg: string) => refs.find((r) => r.package === pkg)!.symbols.get('default')![0]!;
+      expect(get('dotenv')).toMatchObject({ via: 'side-effect', specifier: 'dotenv/config', line: 1 });
+      expect(get('dotenv').loader).toBeUndefined();
+      expect(get('source-map-support')).toMatchObject({ via: 'side-effect', loader: 'require', line: 2 });
+      expect(refs.map((r) => r.package)).not.toContain('./local.css');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

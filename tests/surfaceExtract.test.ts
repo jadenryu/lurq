@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { extractSurface } from '../src/surface/extract';
+import { extractSurface, usesTopLevelAwait } from '../src/surface/extract';
 import { diffSurfaces } from '../src/surface/diff';
 import { runtimeSymbols, type ExtractedSurface } from '../src/surface/types';
 import { requireFormat, resolveEntry, resolvesInsidePackage, subpathWithdrawn } from '../src/surface/resolve';
@@ -206,6 +206,18 @@ beforeAll(() => {
     { exports: { '.': './index.js', './types': { types: './t.d.ts' } } },
   );
   pkg('sub-wild', { 'lib/a.js': `exports.a = 1;` }, { exports: { './*': './lib/*.js' } });
+
+  // Top-level await one import away from the entry, and await that is not top-level.
+  pkg(
+    'tla',
+    { 'index.js': `import './boot.js';\nexport const a = 1;`, 'boot.js': `const cfg = await Promise.resolve(1);\nexport default cfg;` },
+    { type: 'module' },
+  );
+  pkg(
+    'no-tla',
+    { 'index.js': `export async function load() { return await Promise.resolve(1); }\nexport const each = async () => { for await (const x of []) {} };` },
+    { type: 'module' },
+  );
 
   // The preact shape: a minified bundle declares every export on line 1.
   pkg('minified-v1', { 'index.js': `function h(a){}function render(a,b){}export{h,render};` });
@@ -621,5 +633,15 @@ describe('withdrawn subpaths', () => {
   it('reads the legacy layout from the files that exist', () => {
     expect(subpathWithdrawn(pkgs['subpath-legacy']!, null, 'lib/extra')).toBe(false);
     expect(subpathWithdrawn(pkgs['subpath-legacy']!, null, 'lib/missing')).toBe(true);
+  });
+});
+
+describe('top-level await', () => {
+  it('finds it anywhere in the package-internal ES module graph', () => {
+    expect(usesTopLevelAwait(pkgs['tla']!, join(pkgs['tla']!, 'index.js'))).toBe(true);
+  });
+
+  it('ignores await inside functions', () => {
+    expect(usesTopLevelAwait(pkgs['no-tla']!, join(pkgs['no-tla']!, 'index.js'))).toBe(false);
   });
 });

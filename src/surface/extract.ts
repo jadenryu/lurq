@@ -590,3 +590,45 @@ export function extractSurface(
       : {}),
   };
 }
+
+/**
+ * Does the ES module graph reachable from `entry`, inside the package, use
+ * top-level await?
+ *
+ * `require()` of such a module throws ERR_REQUIRE_ASYNC_MODULE on every Node
+ * version, including the ones that otherwise load ES modules through require.
+ * Only the package's own files are walked: an await in a dependency is that
+ * dependency's upgrade to report.
+ */
+export function usesTopLevelAwait(pkgDir: string, entry: string): boolean {
+  const seen = new Set<string>();
+  const queue = [entry];
+  while (queue.length && seen.size < MAX_FILES) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    let text: string;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
+    for (const stmt of sf.statements) {
+      if (awaitsAtTopLevel(stmt)) return true;
+      const spec = ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt) ? stmt.moduleSpecifier : undefined;
+      if (spec && ts.isStringLiteral(spec) && resolvesInsidePackage(spec.text)) {
+        const next = resolveInternal(file, spec.text, pkgDir);
+        if (next) queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+/** An `await` or `for await` that is not inside a function or class. */
+function awaitsAtTopLevel(node: ts.Node): boolean {
+  if (ts.isFunctionLike(node) || ts.isClassLike(node)) return false;
+  if (ts.isAwaitExpression(node) || (ts.isForOfStatement(node) && node.awaitModifier)) return true;
+  return ts.forEachChild(node, awaitsAtTopLevel) ?? false;
+}

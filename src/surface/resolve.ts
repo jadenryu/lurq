@@ -234,20 +234,34 @@ const REQUIRE_CONDITIONS = new Set(['require', 'node', 'node-addons', 'default']
  * extension or the nearest package.json. Null when nothing resolves.
  */
 export function requireFormat(pkgDir: string, manifest?: PackageManifest | null): RequireFormat | null {
+  return requireTarget(pkgDir, manifest)?.format ?? null;
+}
+
+/** `requireFormat` together with the file `require()` loads; `file` is null when
+ *  nothing is offered to it. */
+export function requireTarget(
+  pkgDir: string,
+  manifest?: PackageManifest | null,
+): { format: RequireFormat; file: string | null } | null {
   const m = manifest ?? readManifest(pkgDir);
   if (!m) return null;
   let target: string | null;
   if (m.exports !== undefined) {
     target = nodeRequireTarget(rootExport(m.exports));
-    if (!target) return 'unexported';
+    if (!target) return { format: 'unexported', file: null };
   } else {
     target = m.main ?? './index.js';
   }
   const file = resolveFile(resolvePath(pkgDir, target));
   if (!file) return null;
-  if (file.endsWith('.mjs')) return 'esm';
-  if (file.endsWith('.cjs') || file.endsWith('.json') || file.endsWith('.node')) return 'cjs';
-  return nearestPackageType(file, pkgDir) === 'module' ? 'esm' : 'cjs';
+  const format: RequireFormat = file.endsWith('.mjs')
+    ? 'esm'
+    : file.endsWith('.cjs') || file.endsWith('.json') || file.endsWith('.node')
+      ? 'cjs'
+      : nearestPackageType(file, pkgDir) === 'module'
+        ? 'esm'
+        : 'cjs';
+  return { format, file };
 }
 
 /** The root entry of an `exports` value: `"."` of a subpath map, or the value itself. */

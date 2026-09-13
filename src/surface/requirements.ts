@@ -88,7 +88,13 @@ export function judgeRequires(
   from: RequireFormat | null,
   to: RequireFormat | null,
   refs: SymbolReference[],
-  ctx: { fromExports: Set<string> | null; toExports: Set<string> | null; runtime: RepoRuntime },
+  ctx: {
+    fromExports: Set<string> | null;
+    toExports: Set<string> | null;
+    runtime: RepoRuntime;
+    /** The new ES module's own graph uses top-level await. */
+    asyncModule?: boolean;
+  },
 ): RequireBreak | null {
   if (from !== 'cjs' || to === null || to === 'cjs') return null;
   const required = refs.filter((r) => r.loader === 'require');
@@ -106,6 +112,10 @@ export function judgeRequires(
 
   if (to === 'unexported') {
     for (const r of requireSites) add(r.file, r.line, 'the exports map no longer offers anything to require()');
+  } else if (ctx.asyncModule) {
+    for (const r of requireSites) {
+      add(r.file, r.line, 'the ES module uses top-level await, so require() throws ERR_REQUIRE_ASYNC_MODULE on every Node');
+    }
   } else {
     for (const r of required) {
       if (r.via === 'default') {
@@ -128,7 +138,7 @@ export function judgeRequires(
   }
 
   const olderNode =
-    to === 'esm' && !requireEsmGuaranteed(ctx.runtime)
+    to === 'esm' && !ctx.asyncModule && !requireEsmGuaranteed(ctx.runtime)
       ? [...new Map(requireSites.map((r) => [`${r.file}:${r.line}`, { file: r.file, line: r.line }])).values()]
       : [];
 

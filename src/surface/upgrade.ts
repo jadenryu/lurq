@@ -31,7 +31,7 @@ import {
   type RequireBreak,
   type Requirement,
 } from './requirements';
-import { readManifest, requireFormat, resolveEntryCandidates, subpathWithdrawn } from './resolve';
+import { readManifest, requireTarget, resolveEntryCandidates, subpathWithdrawn } from './resolve';
 import type { TypeCheck, TypeCheckFn, TypeDiagnostic } from './typecheck';
 import { runtimeSymbols, type ExtractedSurface, type SymbolKind } from './types';
 
@@ -462,6 +462,10 @@ async function compareVersions(
         continue;
       }
     }
+    // Loaded only for its side effects: nothing is claimed about its exports, so
+    // there is no surface to compare, and reading one would call a stylesheet or
+    // a bootstrap file "unreadable".
+    if ([...symbols.values()].flat().every((r) => r.via === 'side-effect')) continue;
     const res = compareEntry(
       sub ? from.subpathSurfaces?.[sub] : from.surface,
       sub ? to.subpathSurfaces?.[sub] : to.surface,
@@ -481,11 +485,23 @@ async function compareVersions(
 
   const exportNames = (s: ExtractedSurface) =>
     s.undeclaredReason ? null : new Set(runtimeSymbols(s).map((x) => x.path));
+  const fromTarget = requireTarget(fromPkg.pkgDir);
+  const toTarget = requireTarget(toPkg.pkgDir);
+  // The graph walk is only worth it when require() is about to be handed an ES module.
+  const asyncModule =
+    fromTarget?.format === 'cjs' && toTarget?.format === 'esm' && toTarget.file
+      ? (await import('./extract')).usesTopLevelAwait(toPkg.pkgDir, toTarget.file)
+      : false;
   const moduleFormat = judgeRequires(
-    requireFormat(fromPkg.pkgDir),
-    requireFormat(toPkg.pkgDir),
+    fromTarget?.format ?? null,
+    toTarget?.format ?? null,
     [...(byEntry.get('')?.values() ?? [])].flat(),
-    { fromExports: exportNames(from.surface), toExports: exportNames(to.surface), runtime: opts.runtime ?? {} },
+    {
+      fromExports: exportNames(from.surface),
+      toExports: exportNames(to.surface),
+      runtime: opts.runtime ?? {},
+      asyncModule,
+    },
   );
 
   const requirements = judgeRequirements(

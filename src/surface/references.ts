@@ -55,7 +55,13 @@ export type ReferenceVia =
    */
   | 'named-member'
   /** Erased by TypeScript before runtime — never a runtime-surface claim. */
-  | 'type-only';
+  | 'type-only'
+  /**
+   * `import 'pkg/register'` or a bare `require('pkg/setup')`: loads the module
+   * and claims none of its exports. Still a break site when the entry point is
+   * withdrawn, or when `require()` can no longer load it.
+   */
+  | 'side-effect';
 
 export interface CallSite {
   line: number;
@@ -429,6 +435,7 @@ export function scanReferences(
         const pkg = packageOfSpecifier(node.moduleSpecifier.text);
         if (pkg) {
           const clause = node.importClause;
+          if (!clause) record(pkg, 'default', 'side-effect', node.moduleSpecifier.text, rel, lineOf(node));
           if (clause?.name) {
             record(pkg, 'default', 'default', node.moduleSpecifier.text, rel, lineOf(clause.name));
             defaultBindings.set(clause.name.text, { pkg, spec: node.moduleSpecifier.text });
@@ -549,6 +556,16 @@ export function scanReferences(
               if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
             }
           }
+        }
+      }
+
+      // ── a load whose value is unused: `require('pkg/setup')`, `await import('pkg')` ──
+      if (ts.isExpressionStatement(node)) {
+        const load = loadedModule(node.expression);
+        const pkg = load ? packageOfSpecifier(load.spec) : null;
+        if (load && pkg) {
+          const ref = record(pkg, 'default', 'side-effect', load.spec, rel, lineOf(node));
+          if (load.loader === 'require') ref.loader = 'require';
         }
       }
 
