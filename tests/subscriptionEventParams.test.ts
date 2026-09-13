@@ -43,3 +43,43 @@ describe('subscription event guard parameters', () => {
     expect(params.some((p) => p instanceof Date)).toBe(true);
   });
 });
+
+/**
+ * Stripe now retries the webhook on failure, so a delivery can arrive twice and
+ * out of order. The guard on the real upsert is what makes that safe: `<=`
+ * re-applies an event carrying the same timestamp (a duplicate writes the same
+ * values again) and refuses anything older than the row's last event.
+ */
+describe('applySubscriptionEvent retry guard', () => {
+  it('re-applies an equal timestamp and drops an older one', async () => {
+    const { applySubscriptionEvent } = await import('../src/db/subscriptions');
+    const { PgDialect } = await import('drizzle-orm/pg-core');
+    let setWhere: unknown;
+    const fake = {
+      insert: () => ({
+        values: () => ({
+          onConflictDoUpdate: (cfg: { setWhere: unknown }) => {
+            setWhere = cfg.setWhere;
+            return { returning: async () => [{ ownerId: 'user_1' }] };
+          },
+        }),
+      }),
+    } as never;
+
+    await applySubscriptionEvent(fake, 'cus_1', {
+      tier: 'pro',
+      status: 'active',
+      stripeSubscriptionId: 'sub_1',
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      seats: 1,
+      overageEnabled: false,
+      interval: 'month',
+      eventAt: WHEN,
+    });
+
+    const q = new PgDialect().sqlToQuery(setWhere as never);
+    expect(q.sql).toMatch(/"last_event_at" is null or "subscriptions"\."last_event_at" <= \$\d+/);
+    expect(q.params).toContain(WHEN.toISOString());
+  });
+});
