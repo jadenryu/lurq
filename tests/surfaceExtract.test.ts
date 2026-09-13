@@ -148,6 +148,27 @@ beforeAll(() => {
     'v1.js': `export default function v1(a) {}; export function updateV1State(x) {}`,
     'util.js': `export function helper() {}; export function alsoInternal() {}`,
   });
+
+  // cookie 1.x exported `parse` and `parseCookie` from one function, then 2.0
+  // dropped `parse`. `unrelated` is removed too, and has no survivor.
+  pkg('alias-v1', {
+    'index.js': `
+      function parseCookie(str, opts) {}
+      exports.parseCookie = parseCookie;
+      exports.parse = parseCookie;
+      exports.unrelated = function (a) {};
+    `,
+  });
+  pkg('alias-v2', {
+    'index.js': `
+      function parseCookie(str, opts) {}
+      exports.parseCookie = parseCookie;
+    `,
+  });
+
+  // The preact shape: a minified bundle declares every export on line 1.
+  pkg('minified-v1', { 'index.js': `function h(a){}function render(a,b){}export{h,render};` });
+  pkg('minified-v2', { 'index.js': `function h(a){}export{h};` });
 });
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -483,5 +504,26 @@ describe('entry fallback for ESM-first packages', () => {
     const s = extractSurface(p);
     expect(runtimeSymbols(s).map((x) => x.path)).toEqual(['fromCjs']);
     expect(s.entry).toBe('index.cjs');
+  });
+});
+
+describe('renames the package proves', () => {
+  const diff = (a: string, b: string) =>
+    diffSurfaces(
+      { ...extractSurface(pkgs[a]!), version: '1.0.0' },
+      { ...extractSurface(pkgs[b]!), version: '2.0.0' },
+    );
+
+  it('names the surviving export when both names were one declaration', () => {
+    const d = diff('alias-v1', 'alias-v2');
+    expect(d.removed.map((s) => s.path).sort()).toEqual(['parse', 'unrelated']);
+    expect(d.renamed).toEqual([{ path: 'parse', to: ['parseCookie'] }]);
+  });
+
+  // Matching on line would call `render` a rename of `h`: same file, line 1.
+  it('does not treat a shared line as a shared declaration', () => {
+    const d = diff('minified-v1', 'minified-v2');
+    expect(d.removed.map((s) => s.path)).toEqual(['render']);
+    expect(d.renamed).toEqual([]);
   });
 });

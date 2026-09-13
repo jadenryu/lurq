@@ -29,6 +29,13 @@ export interface SignatureChange {
   to: string;
 }
 
+export interface Rename {
+  path: string;
+  /** Names the same declaration was also exported under at `from`, and that
+   *  `to` still exports. */
+  to: string[];
+}
+
 export interface SurfaceDiff {
   package: string;
   fromVersion: string | null;
@@ -44,6 +51,16 @@ export interface SurfaceDiff {
   /** Type-level removals — break `tsc`, NOT `node`. Reported separately (§8.1). */
   typeOnlyRemoved: SurfaceSymbol[];
   deprecated: SurfaceSymbol[];
+  /**
+   * Removed symbols whose implementation survives under another name.
+   *
+   * Not a guess from similar names. At `from`, both names were exported from the
+   * same declaration, and `to` still exports the other one. cookie 1 → 2
+   * (`parse` → `parseCookie`) and zod 3 → 4 (`ZodSchema` → `ZodType`) are this
+   * shape. Empty means "no proof", not "no rename": a rename that shipped in a
+   * single release leaves no alias behind to find.
+   */
+  renamed: Rename[];
   /** Set when no comparison could be made; callers must not read the arrays. */
   inconclusive?: string;
 }
@@ -63,6 +80,7 @@ const empty = (
   signatureChanged: [],
   typeOnlyRemoved: [],
   deprecated: [],
+  renamed: [],
   inconclusive: reason,
 });
 
@@ -117,6 +135,20 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
     (s) => s.deprecated && !fromRuntime.get(s.path)?.deprecated,
   );
 
+  // Keyed on offset, never line: preact's minified bundle declares twelve
+  // exports on line 1, and matching by line would call `render` a rename of `h`.
+  const declKey = (s: SurfaceSymbol) =>
+    s.sourceRef?.offset === undefined ? null : `${s.sourceRef.file}#${s.sourceRef.offset}`;
+  const renamed: Rename[] = [];
+  for (const r of removed) {
+    const key = declKey(r);
+    if (key === null) continue;
+    const survivors = [...fromRuntime.values()]
+      .filter((s) => s.path !== r.path && toRuntime.has(s.path) && declKey(s) === key)
+      .map((s) => s.path);
+    if (survivors.length) renamed.push({ path: r.path, to: survivors });
+  }
+
   return {
     package: from.package,
     fromVersion: from.version,
@@ -128,5 +160,6 @@ export function diffSurfaces(from: ExtractedSurface, to: ExtractedSurface): Surf
     signatureChanged,
     typeOnlyRemoved,
     deprecated,
+    renamed,
   };
 }
