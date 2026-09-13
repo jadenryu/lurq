@@ -9,9 +9,9 @@ import { openInBrowser } from '../core/open';
 import { resolveApiKey } from '../core/userConfig';
 import { isCategory, type Category, type Confidence } from '../core/types';
 import { searchCapabilities } from '../core/capabilities';
-import { createDb } from '../db/client';
-import { getPackageVersions } from '../db/packages';
-import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from '../mcp/handlers';
+import type { createDb } from '../db/client';
+import type * as Handlers from '../mcp/handlers';
+import type * as Packages from '../db/packages';
 import { CONFIDENCE, QUALITY_WEIGHTS } from '../scoring/weights';
 import {
   activeWeightsPath,
@@ -38,8 +38,24 @@ import {
 } from './format';
 import { MissingKeyError } from './remote';
 
+// The local-index code paths, loaded on first use rather than at import. They
+// pull in drizzle-orm and postgres, which only a self-hoster's own database
+// needs and which the published package does not install: imported statically,
+// every hosted `lurq evaluate` would die resolving a driver it never calls.
+const handleRecommend: typeof Handlers.handleRecommend = async (...a) =>
+  (await import('../mcp/handlers')).handleRecommend(...a);
+const handleEvaluate: typeof Handlers.handleEvaluate = async (...a) =>
+  (await import('../mcp/handlers')).handleEvaluate(...a);
+const handleCompare: typeof Handlers.handleCompare = async (...a) =>
+  (await import('../mcp/handlers')).handleCompare(...a);
+const handleVerify: typeof Handlers.handleVerify = async (...a) =>
+  (await import('../mcp/handlers')).handleVerify(...a);
+const getPackageVersions: typeof Packages.getPackageVersions = async (...a) =>
+  (await import('../db/packages')).getPackageVersions(...a);
+
 async function withDb<T>(fn: (db: ReturnType<typeof createDb>['db']) => Promise<T>): Promise<T> {
   requireConfig(['DATABASE_URL']);
+  const { createDb } = await import('../db/client');
   const handle = createDb();
   try {
     return await fn(handle.db);

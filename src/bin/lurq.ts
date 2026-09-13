@@ -9,6 +9,7 @@ import { withSetupOnMissingKey } from '../cli/install';
 import { loadEnv } from '../core/config';
 import { enforceGate } from '../core/gate';
 import { logger } from '../core/logger';
+import { selfHostHint } from '../core/selfHost';
 
 loadEnv();
 
@@ -21,7 +22,7 @@ notifyOnUpdate();
 // A fresh program per attempt: commander instances are single-use.
 withSetupOnMissingKey(() => buildProgram().parseAsync(process.argv))
   .catch((err) => {
-    logger.error(err instanceof Error ? err.message : String(err));
+    logger.error(selfHostHint(err) ?? (err instanceof Error ? err.message : String(err)));
     process.exit(1);
   });
 

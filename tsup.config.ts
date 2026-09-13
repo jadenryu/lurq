@@ -15,7 +15,9 @@ import { defineConfig } from 'tsup';
 const NO_BUNDLE = ['typescript', 'e2b'];
 
 // Two build targets (§4E operator/public plane split):
-//  - Public: the read-only oracle bin + library entry → `dist` (PUBLISHED).
+//  - Public: the `lurq` bin → `dist` (PUBLISHED). There used to be a library
+//    entry beside it (dist/index.js), but package.json never declared `main` or
+//    `exports`, so nothing could import it: it only doubled the tarball.
 //  - Operator: the dataset-building bin → `dist-operator` (NOT published; the
 //    `files: ["dist"]` whitelist excludes it, so ingestion code never ships).
 export default defineConfig([
@@ -23,18 +25,23 @@ export default defineConfig([
     name: 'public',
     entry: {
       'bin/lurq': 'src/bin/lurq.ts',
-      index: 'src/index.ts',
     },
     format: ['esm'],
     target: 'node20',
     platform: 'node',
     outDir: 'dist',
     clean: true,
-    sourcemap: true,
-    splitting: false,
+    // No sourcemaps in the published package: they were 4.7 MB of an 8.8 MB
+    // install, downloaded by every `npx lurqrun` and read by nobody.
+    sourcemap: false,
+    // Split for the same reason as the operator target below, and for install
+    // size too. Only the commands a user runs load their externals, so the
+    // self-host server stack (express, postgres, drizzle-orm, stripe, ioredis…)
+    // can be left out of the published dependencies entirely: `lurq verify`
+    // never resolves it, and `lurq serve-http` names what to install
+    // (core/selfHost.ts, scripts/publish-manifest.mjs).
+    splitting: true,
     external: NO_BUNDLE,
-    // Type declarations only for the library entry; the bin doesn't need them.
-    dts: { entry: { index: 'src/index.ts' } },
     // Preserves the `#!/usr/bin/env node` shebang on the bin entry.
     shims: true,
   },

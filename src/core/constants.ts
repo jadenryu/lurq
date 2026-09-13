@@ -19,9 +19,9 @@ export const PACKAGE_NAME = 'lurqrun';
  * The import is resolved at build time — esbuild inlines the JSON, so there is
  * no file read at runtime and no dependence on where the bundle sits on disk.
  * That last part is why this is an import and not a `readFileSync` of a path
- * relative to `import.meta.url`: the public bin lands at dist/bin/lurq.js and
- * the library entry at dist/index.js, so any relative path correct for one is
- * wrong for the other.
+ * relative to `import.meta.url`: the public bin is split into chunks that sit at
+ * different depths under dist/, so no one relative path is correct for all of
+ * them.
  */
 export const VERSION: string = pkg.version;
 
