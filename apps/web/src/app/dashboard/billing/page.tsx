@@ -37,6 +37,7 @@ export default async function DashboardBillingPage(props: PageProps<"/dashboard/
         <BillingPanel
           billing={billing}
           justCheckedOut={justChecked}
+          now={new Date().toISOString()}
           canManage={owner?.canManage ?? true}
           inOrganization={Boolean(owner?.orgId)}
         />

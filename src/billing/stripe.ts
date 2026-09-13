@@ -114,12 +114,40 @@ export async function customerFor(
   return customer.id;
 }
 
+/**
+ * Where a checkout was started, so Stripe's back link returns there. A closed
+ * set rather than a URL from the browser: Stripe redirects to whatever we pass,
+ * and a caller-supplied URL would make checkout an open redirect.
+ */
+export type CheckoutOrigin = 'dashboard' | 'pricing';
+
+const CANCEL_PATH: Record<CheckoutOrigin, string> = {
+  dashboard: '/dashboard/billing',
+  pricing: '/#pricing',
+};
+
+export const isCheckoutOrigin = (v: unknown): v is CheckoutOrigin => v === 'dashboard' || v === 'pricing';
+
+/** Where Stripe sends the browser after paying, and after backing out. */
+export function checkoutReturnUrls(webUrl: string, from: CheckoutOrigin = 'pricing') {
+  const base = webUrl.replace(/\/$/, '');
+  return {
+    // Stripe substitutes the real id. The dashboard reads it to poll for the
+    // webhook having landed, so the page after payment can say "active" rather
+    // than "we think so".
+    success: `${base}/dashboard/billing?checkout={CHECKOUT_SESSION_ID}`,
+    cancel: `${base}${CANCEL_PATH[from]}`,
+  };
+}
+
 export interface CheckoutRequest {
   ownerId: string;
   tier: Tier;
   /** Defaults to monthly. */
   interval?: BillingInterval;
   email?: string | null;
+  /** Defaults to the landing page's pricing section. */
+  from?: CheckoutOrigin;
 }
 
 /**
@@ -146,7 +174,7 @@ export async function createCheckoutSession(
   if (!customer) return null;
 
   const config = getConfig();
-  const base = config.LURQ_WEB_URL.replace(/\/$/, '');
+  const urls = checkoutReturnUrls(config.LURQ_WEB_URL, req.from);
   const plan = PLANS[req.tier];
   // Per-seat plans let the buyer pick the seat count on Stripe's own form, with
   // the plan minimum enforced there. The webhook reads the final quantity, so
@@ -171,11 +199,8 @@ export async function createCheckoutSession(
     customer,
     // A metered item takes no quantity; usage arrives later as meter events.
     line_items: overage ? [lineItem, { price: overage }] : [lineItem],
-    // Stripe substitutes the real id. The dashboard reads it to poll for the
-    // webhook having landed, so the page after payment can say "active" rather
-    // than "we think so".
-    success_url: `${base}/dashboard/billing?checkout={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${base}/#pricing`,
+    success_url: urls.success,
+    cancel_url: urls.cancel,
     // Carried onto the Subscription so tierForPrice has a fallback if the Price
     // is later swapped out from under us.
     subscription_data: { metadata: { ownerId: req.ownerId, tier: req.tier } },
