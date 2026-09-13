@@ -18,6 +18,7 @@ import type { Database } from '../db/client';
 import { claims, entities, observations, symbols } from '../db/schema';
 import { UNBOUNDED_ARITY, type SymbolRow } from '../db/schema';
 import { enqueueSurface, mcpSurfaceRef, surfaceRef } from '../db/surface';
+import { needsFill, scheduleFill } from '../pipeline/fillSurface';
 import { canonicalKey, type EntityKind, type Verdict } from '../graph/types';
 import { diffSurfaces } from '../surface/diff';
 import type { ExtractedSurface, ExtractionTier, SurfaceSymbol } from '../surface/types';
@@ -267,15 +268,18 @@ export interface DiffSurfaceInput {
 }
 
 export async function handleDiffSurface(db: Database, input: DiffSurfaceInput) {
+  // An answer computed while a side is being backfilled is about to go stale:
+  // the fill can add renames it could not see. It is served, but not cached.
+  let filling = false;
   return cached(
     'diff_surface',
     ckey([input.package, input.fromVersion, input.toVersion]),
-    () => diffSurfaceUncached(db, input),
-    { skipCache: (v) => v.verdict === 'unknown' },
+    () => diffSurfaceUncached(db, input, () => (filling = true)),
+    { skipCache: (v) => v.verdict === 'unknown' || filling },
   );
 }
 
-async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
+async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput, onFill: () => void) {
   let [a, b] = await Promise.all([
     loadStored(db, input.package, input.fromVersion),
     loadStored(db, input.package, input.toVersion),
@@ -315,6 +319,16 @@ async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput) {
       renamed: [],
       observedAt: null,
     };
+  }
+
+  // Rows stored before migration 0037 carry no offsets or argument limits, so
+  // they cannot prove a rename. Fill them behind this answer, never in front of
+  // it; see pipeline/fillSurface.ts for what keeps that cheap.
+  for (const [stored, version] of [
+    [a!, input.fromVersion],
+    [b!, input.toVersion],
+  ] as const) {
+    if (needsFill(stored.rows) && scheduleFill(db, input.package, version, stored.entityId)) onFill();
   }
 
   const diff = diffSurfaces(
