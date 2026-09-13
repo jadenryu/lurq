@@ -91,27 +91,14 @@ Close the issue to stop lurq updating it, or generate the workflow with
 `lurq mcp-ci --no-issue` to leave it out. Text from MCP servers is escaped in the
 issue, so a tool description cannot mention anyone or link anywhere.
 
-## Designing and previewing the messages
+## Previewing the messages
 
-The emails are [React Email](https://react.email) templates. Run the preview
-server and edit with live reload:
-
-```bash
-npm run email:dev     # http://localhost:3030
-```
-
-- `src/notify/emails/theme.ts` holds every colour, size and font.
-- `src/notify/emails/components.tsx` is the shared layout, alert row and footer.
-- `src/notify/emails/urgent.tsx` and `weekly.tsx` are the two emails, each
-  previewed with the sample data in `samples.ts`.
-- The subjects and plain-text parts are in `src/notify/render.ts`.
-
-To check the plain-text parts and the Slack, Discord, Teams and webhook
-payloads, or to send both emails to a real inbox:
+Operators can render every message from sample data:
 
 ```bash
-npm run operator -- notify-preview                            # writes ./notify-preview
-npm run operator -- notify-preview --send-to you@example.com  # also sends both emails through Resend
+npm run operator -- notify-preview              # writes ./notify-preview, opens the urgent email
+npm run operator -- notify-preview --send-to you@example.com   # also sends both emails through Resend
 ```
 
-The channel formats are `src/notify/channels.ts`.
+The email templates are `src/notify/render.ts`; the Slack, Discord, Teams and
+webhook formats are `src/notify/channels.ts`.
