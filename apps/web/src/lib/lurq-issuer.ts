@@ -830,3 +830,41 @@ export async function acknowledgeMcpChange(ownerId: string, eventId: number): Pr
   if (!res.ok) throw new LurqIssuerError("Could not acknowledge the change.", 502);
   return true;
 }
+
+// ── Account email ────────────────────────────────────────────────────────────
+
+export interface NotificationPreferences {
+  urgentEmail: boolean;
+  weeklyDigest: boolean;
+  /** False when the deployment has no email provider: toggles govern nothing yet. */
+  emailConfigured: boolean;
+}
+
+export async function fetchNotificationPreferences(ownerId: string): Promise<NotificationPreferences> {
+  const res = await issuerFetch(`/notification-preferences?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read email settings.", 502);
+  return (await res.json()) as NotificationPreferences;
+}
+
+export async function updateNotificationPreferences(
+  ownerId: string,
+  patch: Partial<Pick<NotificationPreferences, "urgentEmail" | "weeklyDigest">>,
+): Promise<NotificationPreferences> {
+  const res = await issuerFetch("/notification-preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ...patch }),
+  });
+  if (!res.ok) throw new LurqIssuerError("Could not save email settings.", 502);
+  return (await res.json()) as NotificationPreferences;
+}
+
+/** Unsubscribe by the token in an email link. Resolves the same whether or not it matched. */
+export async function unsubscribeWithToken(token: string, kind: "urgent" | "digest"): Promise<boolean> {
+  const res = await issuerFetch("/notifications/unsubscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, kind }),
+  });
+  return res.ok;
+}
