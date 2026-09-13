@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { extractSurface } from '../src/surface/extract';
 import { diffSurfaces } from '../src/surface/diff';
 import { runtimeSymbols, type ExtractedSurface } from '../src/surface/types';
-import { resolveEntry, resolvesInsidePackage } from '../src/surface/resolve';
+import { requireFormat, resolveEntry, resolvesInsidePackage, subpathWithdrawn } from '../src/surface/resolve';
 
 let root: string;
 const pkgs: Record<string, string> = {};
@@ -177,6 +177,35 @@ beforeAll(() => {
   });
   pkg('optional-v1', { 'index.js': `exports.f = function (a, b = 1) {}; exports.g = function (a) {};` });
   pkg('optional-v2', { 'index.js': `exports.f = function (a) {}; exports.g = function (a, b = 1) {};` });
+
+  // What `require()` is handed, per Node.
+  pkg('fmt-cjs', { 'index.js': `exports.a = 1;` });
+  pkg('fmt-type-module', { 'index.js': `export const a = 1;` }, { type: 'module' });
+  pkg('fmt-import-only', { 'index.mjs': `export const a = 1;` }, { exports: { '.': { import: './index.mjs' } } });
+  pkg(
+    'fmt-dual',
+    { 'index.mjs': `export const a = 1;`, 'index.cjs': `exports.a = 1;` },
+    { exports: { '.': { import: './index.mjs', require: './index.cjs' } } },
+  );
+  // Node takes the first matching key, so `default` here wins over `require`.
+  pkg(
+    'fmt-key-order',
+    { 'index.js': `export const a = 1;`, 'index.cjs': `exports.a = 1;` },
+    { type: 'module', exports: { default: './index.js', require: './index.cjs' } },
+  );
+  pkg(
+    'fmt-nested-type',
+    { 'dist/cjs/index.js': `exports.a = 1;`, 'dist/cjs/package.json': `{"type":"commonjs"}` },
+    { type: 'module', exports: { require: './dist/cjs/index.js' } },
+  );
+
+  // Subpaths withdrawn, kept, and kept only for types.
+  pkg(
+    'sub-v2',
+    { 'index.js': `exports.a = 1;` },
+    { exports: { '.': './index.js', './types': { types: './t.d.ts' } } },
+  );
+  pkg('sub-wild', { 'lib/a.js': `exports.a = 1;` }, { exports: { './*': './lib/*.js' } });
 
   // The preact shape: a minified bundle declares every export on line 1.
   pkg('minified-v1', { 'index.js': `function h(a){}function render(a,b){}export{h,render};` });
@@ -560,5 +589,37 @@ describe('argument ranges', () => {
       { ...extractSurface(pkgs['optional-v2']!), version: '2.0.0' },
     );
     expect(d.arityChanged).toEqual([{ path: 'f', from: 1, to: 1, fromMax: 2, toMax: 1 }]);
+  });
+});
+
+describe('what require() is handed', () => {
+  it('follows Node: extension, nearest package.json, and exports key order', () => {
+    expect(requireFormat(pkgs['fmt-cjs']!)).toBe('cjs');
+    expect(requireFormat(pkgs['fmt-type-module']!)).toBe('esm');
+    expect(requireFormat(pkgs['fmt-import-only']!)).toBe('unexported');
+    expect(requireFormat(pkgs['fmt-dual']!)).toBe('cjs');
+    expect(requireFormat(pkgs['fmt-key-order']!)).toBe('esm');
+    expect(requireFormat(pkgs['fmt-nested-type']!)).toBe('cjs');
+  });
+});
+
+describe('withdrawn subpaths', () => {
+  it('calls a subpath the exports map dropped withdrawn', () => {
+    expect(subpathWithdrawn(pkgs['sub-v2']!, null, 'legacy')).toBe(true);
+  });
+
+  // Still offered to TypeScript; tier A just does not read that condition.
+  it('does not call a types-only subpath withdrawn', () => {
+    expect(subpathWithdrawn(pkgs['sub-v2']!, null, 'types')).toBe(false);
+  });
+
+  it('follows patterns to the file they name', () => {
+    expect(subpathWithdrawn(pkgs['sub-wild']!, null, 'a')).toBe(false);
+    expect(subpathWithdrawn(pkgs['sub-wild']!, null, 'gone')).toBe(true);
+  });
+
+  it('reads the legacy layout from the files that exist', () => {
+    expect(subpathWithdrawn(pkgs['subpath-legacy']!, null, 'lib/extra')).toBe(false);
+    expect(subpathWithdrawn(pkgs['subpath-legacy']!, null, 'lib/missing')).toBe(true);
   });
 });

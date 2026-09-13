@@ -210,3 +210,112 @@ export function resolveInternal(
   if (target !== root && !target.startsWith(root + sep)) return null;
   return resolveFile(target);
 }
+
+/**
+ * What `require('<pkg>')` gets, by Node's rules rather than tier A's.
+ *
+ *   cjs         a CommonJS file
+ *   esm         an ES module. `require()` of it works on Node 20.19+ and 22.12+
+ *               and returns the module namespace; older Node throws ERR_REQUIRE_ESM
+ *   unexported  the `exports` map offers `require` nothing (ERR_PACKAGE_PATH_NOT_EXPORTED)
+ */
+export type RequireFormat = 'cjs' | 'esm' | 'unexported';
+
+const REQUIRE_CONDITIONS = new Set(['require', 'node', 'node-addons', 'default']);
+
+/**
+ * Tier A reads whichever entry yields a surface, `import` conditions included,
+ * because it asks what the package exports. This asks what a CommonJS caller is
+ * handed, so it walks `exports` in the map's own key order, as Node does, with
+ * only the conditions `require` matches, then reads the file's format from its
+ * extension or the nearest package.json. Null when nothing resolves.
+ */
+export function requireFormat(pkgDir: string, manifest?: PackageManifest | null): RequireFormat | null {
+  const m = manifest ?? readManifest(pkgDir);
+  if (!m) return null;
+  let target: string | null;
+  if (m.exports !== undefined) {
+    target = nodeRequireTarget(rootExport(m.exports));
+    if (!target) return 'unexported';
+  } else {
+    target = m.main ?? './index.js';
+  }
+  const file = resolveFile(resolvePath(pkgDir, target));
+  if (!file) return null;
+  if (file.endsWith('.mjs')) return 'esm';
+  if (file.endsWith('.cjs') || file.endsWith('.json') || file.endsWith('.node')) return 'cjs';
+  return nearestPackageType(file, pkgDir) === 'module' ? 'esm' : 'cjs';
+}
+
+/** The root entry of an `exports` value: `"."` of a subpath map, or the value itself. */
+function rootExport(exp: unknown): unknown {
+  if (exp && typeof exp === 'object' && !Array.isArray(exp) && isSubpathMap(exp as Record<string, unknown>)) {
+    return (exp as Record<string, unknown>)['.'];
+  }
+  return exp;
+}
+
+/** The first target Node's resolver picks for `require`, conditions in key order. */
+function nodeRequireTarget(exp: unknown, depth = 0): string | null {
+  if (depth > 8 || exp === null || exp === undefined) return null;
+  if (typeof exp === 'string') return exp;
+  if (Array.isArray(exp)) {
+    for (const e of exp) {
+      const t = nodeRequireTarget(e, depth + 1);
+      if (t) return t;
+    }
+    return null;
+  }
+  if (typeof exp !== 'object') return null;
+  for (const [condition, value] of Object.entries(exp as Record<string, unknown>)) {
+    if (!REQUIRE_CONDITIONS.has(condition)) continue;
+    const t = nodeRequireTarget(value, depth + 1);
+    if (t) return t;
+  }
+  return null;
+}
+
+/** `type` of the nearest package.json at or above `file`. Node reads the nearest
+ *  one whether or not it sets `type`, which is how `dist/cjs/package.json` works. */
+function nearestPackageType(file: string, pkgDir: string): string | undefined {
+  const root = resolvePath(pkgDir);
+  for (let dir = dirname(file); dir.startsWith(root); dir = dirname(dir)) {
+    const manifest = join(dir, 'package.json');
+    if (existsSync(manifest)) {
+      try {
+        return (JSON.parse(readFileSync(manifest, 'utf8')) as { type?: string }).type;
+      } catch {
+        return undefined;
+      }
+    }
+    if (dir === root || dirname(dir) === dir) break;
+  }
+  return undefined;
+}
+
+/**
+ * Has the package stopped offering `./<sub>` to a runtime loader at all?
+ *
+ * True when nothing resolves for it and nothing still claims it: no `exports`
+ * map (the legacy layout, where the file is simply gone), a map that no longer
+ * lists it, or a map that lists it at a file the tarball does not contain. A
+ * subpath still listed only under conditions tier A does not read (`types`,
+ * `browser`) is not withdrawn, and calling it withdrawn would block a PR on
+ * working code.
+ */
+export function subpathWithdrawn(pkgDir: string, manifest: PackageManifest | null, sub: string): boolean {
+  const m = manifest ?? readManifest(pkgDir);
+  if (!m) return false;
+  if (resolveEntryCandidates(pkgDir, m, sub).length) return false;
+  if (m.exports === undefined) return true;
+  const key = `./${sub.replace(/^\.?\//, '').replace(/\/$/, '')}`;
+  return !exportsDeclares(m.exports, key) || pickAllFromExports(m.exports, key).length > 0;
+}
+
+/** Does an `exports` map name this subpath key, directly or through a pattern? */
+function exportsDeclares(exp: unknown, key: string): boolean {
+  if (!exp || typeof exp !== 'object' || Array.isArray(exp)) return key === '.';
+  const o = exp as Record<string, unknown>;
+  if (!isSubpathMap(o)) return key === '.';
+  return key in o || Object.keys(o).some((p) => p.includes('*') && matchWildcard(p, key) !== null);
+}
