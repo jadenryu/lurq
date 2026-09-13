@@ -11,7 +11,7 @@ export default function TermsPage() {
   return (
     <PageShell eyebrow="Legal" title="Terms of Service">
       <p className="mb-8 text-sm text-muted-foreground/70">
-        Last updated: July 16, 2026
+        Last updated: September 13, 2026
       </p>
 
       <div className="mb-10 rounded-lg border border-dashed border-border bg-card/40 p-4 text-sm text-muted-foreground">
@@ -163,7 +163,106 @@ export default function TermsPage() {
           Notify us promptly of any unauthorized use.
         </p>
 
-        <h2>9. Disclaimers</h2>
+        <h2>9. Paid plans and billing</h2>
+        <p>
+          Some plans (currently Pro and Team) are paid subscriptions. The plans,
+          their prices and their limits are described on our{" "}
+          <a href="/#pricing">pricing page</a>. By starting a paid plan you
+          agree to the following.
+        </p>
+        <ul>
+          <li>
+            <strong>Payment processing.</strong> Payments are processed by
+            Stripe through Stripe Checkout. We do not receive or store your full
+            card details. Stripe&apos;s terms and privacy policy also apply to
+            your payment.
+          </li>
+          <li>
+            <strong>Billing period and automatic renewal.</strong> Subscriptions
+            are billed in advance, monthly or yearly depending on what you choose
+            at checkout, and{" "}
+            <strong>
+              renew automatically at the end of each period until you cancel
+            </strong>
+            . You authorize us, through Stripe, to charge your payment method at
+            each renewal.
+          </li>
+          <li>
+            <strong>Taxes.</strong> Prices are shown before tax. Applicable sales
+            tax, VAT or similar taxes are calculated from your billing details and
+            added at checkout and on each invoice.
+          </li>
+          <li>
+            <strong>Usage limits.</strong> Each plan includes a monthly allowance
+            of hosted calls, counted per calendar month (UTC). Once it is used,
+            the account keeps a small number of calls per day until the month
+            turns, and further calls are refused until then, as described on the
+            pricing page. The command-line tool run locally against your own
+            database is not metered.
+          </li>
+          <li>
+            <strong>Team seats.</strong> Team is billed per seat, with a minimum
+            number of seats shown on the pricing page. You choose the seat count
+            at checkout and can change it in the billing portal. Changes to seat
+            count mid-period may be prorated, as shown by Stripe when you make
+            the change.
+          </li>
+          <li>
+            <strong>Team overage.</strong> On a monthly Team subscription, the
+            call allowance is pooled across seats, and{" "}
+            <strong>
+              calls past the pool are billed as usage at the per-1,000-call rate
+              shown on the pricing page
+            </strong>
+            , up to a ceiling of twice the pool in a month. Past that ceiling the
+            daily grace applies instead. Overage is reported during the month and
+            charged on your next invoice. Yearly Team subscriptions do not bill
+            overage.
+          </li>
+          <li>
+            <strong>Cancellation.</strong> You can cancel at any time from the
+            billing page of your dashboard, which opens Stripe&apos;s billing
+            portal. Cancellation takes effect at the end of the current billing
+            period; you keep the paid plan until then, and the account then
+            returns to the Free plan. We do not delete your account or data
+            because a subscription ends.
+          </li>
+          <li>
+            <strong>Downgrades and plan changes.</strong> Plan changes are made in
+            the billing portal. Any credit or charge for a change is calculated by
+            Stripe and shown before you confirm. When an account moves to a lower
+            plan, the lower plan&apos;s limits apply from then on, including how
+            far back the policy decision log can be read. Keys already issued
+            keep working.
+          </li>
+          <li>
+            <strong>Refunds.</strong> Except where required by law, fees already
+            paid are non-refundable, including for partial billing periods and
+            unused calls. If you believe you were charged in error, contact us at{" "}
+            <a href="mailto:contact@lurq.run">contact@lurq.run</a> and we will
+            review it.
+          </li>
+          <li>
+            <strong>Failed payments.</strong> If a renewal payment fails, Stripe
+            will retry it over several days and your plan stays active while it
+            does. If payment still cannot be collected, the subscription is
+            cancelled and the account returns to the Free plan.
+          </li>
+          <li>
+            <strong>Price changes.</strong> We may change plan prices or limits.
+            A price change applies to an existing subscription only from its next
+            renewal after we have given you at least 30 days&apos; notice by
+            email, and you can cancel before it takes effect.
+          </li>
+          <li>
+            <strong>Business plans.</strong> Business plans are arranged directly
+            with us. The price, limits and any service levels are set out in a
+            separate order form or agreement, which controls over this section
+            where the two conflict.
+          </li>
+        </ul>
+
+        <h2>10. Disclaimers</h2>
         <p>
           <strong>
             The Services are provided &ldquo;as is&rdquo; and &ldquo;as
@@ -178,7 +277,7 @@ export default function TermsPage() {
           warranties, so some of these exclusions may not apply to you.
         </p>
 
-        <h2>10. Limitation of liability</h2>
+        <h2>11. Limitation of liability</h2>
         <p>
           <strong>
             To the maximum extent permitted by law, lurq and its operators,
@@ -203,7 +302,7 @@ export default function TermsPage() {
           some of the above may not apply to you.
         </p>
 
-        <h2>11. Indemnification</h2>
+        <h2>12. Indemnification</h2>
         <p>
           You agree to indemnify and hold harmless lurq and its operators and
           contributors from any claims, damages, liabilities, and expenses
@@ -212,17 +311,20 @@ export default function TermsPage() {
           third-party right.
         </p>
 
-        <h2>12. Termination</h2>
+        <h2>13. Termination</h2>
         <p>
           You may stop using the Services at any time. We may suspend or terminate
           your access to the Services at any time, with or without notice,
           including if we reasonably believe you have violated these Terms.
+          If we terminate a paid plan for a reason other than your breach of
+          these Terms, we will refund the fees you prepaid for the unused part of
+          the billing period.
           Sections that by their nature should survive termination (including
           intellectual property, disclaimers, limitation of liability, and
           indemnification) will survive.
         </p>
 
-        <h2>13. Changes to the Services and these Terms</h2>
+        <h2>14. Changes to the Services and these Terms</h2>
         <p>
           We may modify or discontinue the Services, in whole or in part, at any
           time. We may also update these Terms from time to time. When we make
@@ -232,7 +334,7 @@ export default function TermsPage() {
           Terms.
         </p>
 
-        <h2>14. Governing law and disputes</h2>
+        <h2>15. Governing law and disputes</h2>
         <p>
           These Terms are governed by the laws of the Commonwealth of Virginia,
           without regard to its conflict-of-laws rules. You agree that any dispute
@@ -241,7 +343,7 @@ export default function TermsPage() {
           Commonwealth of Virginia, and you consent to their jurisdiction.
         </p>
 
-        <h2>15. Miscellaneous</h2>
+        <h2>16. Miscellaneous</h2>
         <p>
           These Terms, together with our <a href="/privacy">Privacy Policy</a>,
           are the entire agreement between you and lurq regarding the Services. If
@@ -251,7 +353,7 @@ export default function TermsPage() {
           merger, acquisition, or sale of assets.
         </p>
 
-        <h2>16. Contact</h2>
+        <h2>17. Contact</h2>
         <p>
           Questions about these Terms? Reach us at{" "}
           <a href="mailto:contact@lurq.run">contact@lurq.run</a>.
