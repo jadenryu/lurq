@@ -267,6 +267,13 @@
       "when": 1789311921905,
       "tag": "0037_subscription_seats",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789319618728,
+      "tag": "0038_symbol_offsets",
+      "breakpoints": true
     }
   ]
 }
