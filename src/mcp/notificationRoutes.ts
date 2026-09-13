@@ -9,7 +9,7 @@ import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { getOrCreatePreferences, setPreferences, unsubscribeByToken } from '../db/notifications';
-import { emailConfigured } from '../notify/config';
+import { emailConfigured } from '../notify/run';
 
 export interface NotificationRouteDeps {
   db: Database;
