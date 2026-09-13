@@ -598,6 +598,7 @@ export async function fetchBilling(ownerId: string): Promise<BillingSummary> {
 export async function startCheckout(args: {
   ownerId: string;
   tier: string;
+  interval?: "month" | "year";
   email?: string | null;
 }): Promise<string | null> {
   const res = await issuerFetch("/billing/checkout", {
