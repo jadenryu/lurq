@@ -30,7 +30,7 @@ export const PRICING_NOTE =
   "A call is one tool request against the hosted index. The CLI run locally against your own database is unmetered. " +
   `When a plan's monthly calls run out, it keeps ${GRACE_CALLS_PER_DAY} calls a day instead of stopping, until the month turns (UTC).` +
   (TEAM_OVERAGE
-    ? ` Monthly Team is the exception: calls past the pool are billed at ${TEAM_OVERAGE / 100} per 1,000, up to ${OVERAGE_CAP_MULTIPLE}x the pool, and the daily grace applies after that. Yearly Team has no overage.`
+    ? ` Monthly Team is the exception: calls past the pool are billed at $${TEAM_OVERAGE / 100} per 1,000, up to ${OVERAGE_CAP_MULTIPLE}x the pool, and the daily grace applies after that. Yearly Team has no overage.`
     : "") +
   " Business is uncapped. The free plan never asks for a card.";
 

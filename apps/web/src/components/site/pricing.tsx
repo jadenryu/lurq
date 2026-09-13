@@ -262,7 +262,7 @@ function PlanCard({
       {plan.monthlyCalls !== null ? (
         <p className="mt-1.5 text-[12px] leading-[1.5] text-ink-3">
           {plan.overageCentsPer1k && interval === 'month'
-            ? `Past the pool: ${plan.overageCentsPer1k / 100} per 1,000 calls, up to ${OVERAGE_CAP_MULTIPLE}x the pool`
+            ? `Past the pool: $${plan.overageCentsPer1k / 100} per 1,000 calls, up to ${OVERAGE_CAP_MULTIPLE}x the pool`
             : `Past the limit: ${GRACE_CALLS_PER_DAY} calls a day until the month turns`}
         </p>
       ) : null}
