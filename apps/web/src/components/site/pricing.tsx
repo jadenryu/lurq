@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 
@@ -89,6 +89,17 @@ function BuyButton({ plan, interval }: { plan: Plan; interval: BillingInterval }
   const [requested, setRequested] = useState(false);
   const { isSignedIn } = useAuth();
 
+  // Back from Stripe restores this page from the back-forward cache with the
+  // button still spent. Reset it, or the buyer who changed their mind cannot
+  // try again without reloading.
+  useEffect(() => {
+    const restore = (e: PageTransitionEvent) => {
+      if (e.persisted) setPending(false);
+    };
+    window.addEventListener('pageshow', restore);
+    return () => window.removeEventListener('pageshow', restore);
+  }, []);
+
   // Signed out, checkout would bounce off a 401. Send them to sign up first and
   // come back, rather than opening Stripe for an account that does not exist.
   if (!isSignedIn) {
@@ -106,7 +117,7 @@ function BuyButton({ plan, interval }: { plan: Plan; interval: BillingInterval }
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: plan.tier, interval }),
+        body: JSON.stringify({ tier: plan.tier, interval, from: 'pricing' }),
       });
       const data = (await res.json()) as { url?: string; error?: string; contact?: boolean };
       if (data.url) {

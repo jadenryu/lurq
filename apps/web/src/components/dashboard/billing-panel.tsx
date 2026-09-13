@@ -147,6 +147,16 @@ export function BillingPanel({
   // after arrival is what turns that into "it worked" rather than "did it?".
   const [waiting, setWaiting] = useState(justCheckedOut && billing.tier === "free");
 
+  // Back from Stripe restores this page from the back-forward cache with the
+  // buttons still disabled and "Opening checkout…" on screen. Reset them.
+  useEffect(() => {
+    const restore = (e: PageTransitionEvent) => {
+      if (e.persisted) setPending(null);
+    };
+    window.addEventListener("pageshow", restore);
+    return () => window.removeEventListener("pageshow", restore);
+  }, []);
+
   useEffect(() => {
     if (!waiting) return;
     const t = setTimeout(() => {
@@ -273,7 +283,7 @@ export function BillingPanel({
           <div className="mt-5">
             <button
               type="button"
-              onClick={() => post("/api/billing/checkout", "checkout", { tier: upgrade.tier })}
+              onClick={() => post("/api/billing/checkout", "checkout", { tier: upgrade.tier, from: "dashboard" })}
               disabled={pending !== null || !billing.billingEnabled || needsOrg}
               className={`${BTN} bg-ink text-ground hover:bg-white`}
             >
@@ -284,7 +294,7 @@ export function BillingPanel({
             <button
               type="button"
               onClick={() =>
-                post("/api/billing/checkout", "checkout", { tier: upgrade.tier, interval: "year" })
+                post("/api/billing/checkout", "checkout", { tier: upgrade.tier, interval: "year", from: "dashboard" })
               }
               disabled={pending !== null || !billing.billingEnabled || needsOrg}
               className={`${BTN} ml-2 border border-edge text-ink hover:border-ink`}
