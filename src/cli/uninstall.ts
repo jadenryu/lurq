@@ -20,9 +20,11 @@ import { dim, green, red, yellow } from './format';
 import {
   agentSpecs,
   BLOCK_START,
-  claudeSettingsPath,
-  hasClaudeHook,
-  withoutClaudeHook,
+  hasLurqHooks,
+  hookAgentFor,
+  hooksLabel,
+  hooksPath,
+  withoutLurqHooks,
   readJsonObject,
   removeMarkedBlock,
   resolveAgents,
@@ -31,6 +33,7 @@ import {
   writeJson,
   type AgentSpec,
 } from './installSkill';
+import type { HookAgent } from './hook';
 
 export interface Removal {
   label: string;
@@ -81,13 +84,13 @@ function mcpEntryRemoval(spec: AgentSpec): Removal | null {
   };
 }
 
-function claudeHookRemoval(): Removal | null {
-  const path = claudeSettingsPath();
-  if (!existsSync(path) || !hasClaudeHook(readJsonObject(path))) return null;
+function hooksRemoval(agent: HookAgent): Removal | null {
+  const path = hooksPath(agent);
+  if (!existsSync(path) || !hasLurqHooks(readJsonObject(path))) return null;
   return {
-    label: 'Claude Code hooks',
+    label: hooksLabel(agent),
     path,
-    apply: () => writeJson(path, withoutClaudeHook(readJsonObject(path))),
+    apply: () => writeJson(path, withoutLurqHooks(readJsonObject(path))),
   };
 }
 
@@ -142,11 +145,12 @@ export function planUninstall(
       problems.push(`${spec.label}: ${err instanceof Error ? err.message : String(err)}`);
     }
     add(instructionsRemoval(spec));
-    if (spec.id === 'claude-code') {
+    const hookAgent = hookAgentFor(spec.id);
+    if (hookAgent) {
       try {
-        add(claudeHookRemoval());
+        add(hooksRemoval(hookAgent));
       } catch (err) {
-        problems.push(`Claude Code settings: ${err instanceof Error ? err.message : String(err)}`);
+        problems.push(`${hooksLabel(hookAgent)}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }

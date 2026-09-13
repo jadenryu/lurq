@@ -6,8 +6,21 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addedDependencies, applyEdits, decide, installTargets, isJsProject, promptTips, runTargets, specName, unseen } from '../src/cli/hook';
-import { hasClaudeHook, withClaudeHook, withoutClaudeHook } from '../src/cli/installSkill';
+import {
+  addedDependencies,
+  applyEdits,
+  decide,
+  installTargets,
+  isJsProject,
+  normalize,
+  patchedPackageJsons,
+  promptTips,
+  render,
+  runTargets,
+  specName,
+  unseen,
+} from '../src/cli/hook';
+import { hasLurqHooks, withLurqHooks, withoutLurqHooks } from '../src/cli/installSkill';
 import type { SecurityVerdict } from '../src/security/verdict';
 
 const verdict = (level: SecurityVerdict['level'], reasons: string[] = []): SecurityVerdict => ({
@@ -64,9 +77,9 @@ describe('Claude Code settings', () => {
   const user = { model: 'opus', hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-guard' }] }], Stop: [] } };
 
   it('adds each hook after the user’s, idempotently, and removes them back to the original', () => {
-    const once = withClaudeHook(user, 'lurq');
-    expect(withClaudeHook(once, 'lurq')).toEqual(once);
-    expect(hasClaudeHook(once)).toBe(true);
+    const once = withLurqHooks(user, 'claude', 'lurq');
+    expect(withLurqHooks(once, 'claude', 'lurq')).toEqual(once);
+    expect(hasLurqHooks(once)).toBe(true);
     expect(once.hooks.PreToolUse).toHaveLength(2);
     expect(once.hooks.PreToolUse[1]).toEqual({
       matcher: 'Bash|Edit|Write|MultiEdit',
@@ -75,12 +88,12 @@ describe('Claude Code settings', () => {
     expect(once.hooks.SessionStart[0].hooks[0].command).toBe('lurq hook session-start');
     expect(once.hooks.UserPromptSubmit[0]).not.toHaveProperty('matcher');
     expect(once.hooks.Stop).toEqual([]);
-    expect(withoutClaudeHook(once)).toEqual(user);
+    expect(withoutLurqHooks(once)).toEqual(user);
   });
 
   it('leaves no empty hooks object behind when ours was the only one', () => {
-    expect(withoutClaudeHook(withClaudeHook({}, 'lurq'))).toEqual({});
-    expect(withoutClaudeHook(user)).toBe(user);
+    expect(withoutLurqHooks(withLurqHooks({}, 'claude', 'lurq'))).toEqual({});
+    expect(withoutLurqHooks(user)).toBe(user);
   });
 });
 
@@ -143,5 +156,80 @@ describe('measured nudges', () => {
     expect(applyEdits('{"a":1}', [{ old_string: '"a":1', new_string: '"a":1,"b":2' }])).toBe('{"a":1,"b":2}');
     expect(applyEdits('x x', [{ old_string: 'x', new_string: '$&y', replace_all: true }])).toBe('$&y $&y');
     expect(applyEdits('{}', [{ old_string: 'missing', new_string: 'y' }])).toBeNull();
+  });
+});
+
+describe('Codex and Cursor hook files', () => {
+  it('nests Codex hooks like Claude Code, with the agent flag', () => {
+    const codex = withLurqHooks({}, 'codex', 'lurq');
+    expect(codex.hooks.PreToolUse).toEqual([
+      { matcher: 'Bash|apply_patch', hooks: [{ type: 'command', command: 'lurq hook --agent codex pre-tool-use', timeout: 30 }] },
+    ]);
+    expect(withoutLurqHooks(codex)).toEqual({});
+  });
+
+  it('writes Cursor’s flat entries with a schema version, and takes them back out', () => {
+    const user = { version: 1, hooks: { afterFileEdit: [{ command: './format.sh' }] } };
+    const cursor = withLurqHooks(user, 'cursor', '"/Users/me/.npm global/bin/lurq"');
+    expect(cursor.hooks.beforeShellExecution).toEqual([
+      { command: '"/Users/me/.npm global/bin/lurq" hook --agent cursor pre-tool-use', timeout: 30 },
+    ]);
+    expect(cursor.hooks.postToolUse[0].matcher).toBe('Shell');
+    expect(withLurqHooks({}, 'cursor', 'lurq').version).toBe(1);
+    expect(withoutLurqHooks(cursor)).toEqual(user);
+  });
+});
+
+describe('patchedPackageJsons (Codex apply_patch)', () => {
+  const pkg = '{\n  "name": "app",\n  "dependencies": {\n    "zod": "^3.0.0"\n  }\n}\n';
+  const read = () => pkg;
+
+  it('applies an update hunk to package.json and finds the added dependency', () => {
+    const patch = '*** Begin Patch\n*** Update File: package.json\n@@\n   "dependencies": {\n+    "lodahs": "^1.0.0",\n     "zod": "^3.0.0"\n*** Update File: src/index.ts\n@@\n-a\n+b\n*** End Patch';
+    const files = patchedPackageJsons(patch, '/repo', read);
+    expect(files).toHaveLength(1);
+    expect(addedDependencies(files[0]!.before, files[0]!.after)).toEqual(['lodahs']);
+  });
+
+  it('reads an added package.json, and skips a hunk that does not apply', () => {
+    const add = '*** Begin Patch\n*** Add File: packages/x/package.json\n+{"dependencies":{"hono":"^4"}}\n*** End Patch';
+    expect(addedDependencies('', patchedPackageJsons(add, '/repo', read)[0]!.after)).toEqual(['hono']);
+    const stale = '*** Begin Patch\n*** Update File: package.json\n@@\n-    "nope": "1"\n+    "ky": "1"\n*** End Patch';
+    expect(patchedPackageJsons(stale, '/repo', read)).toEqual([]);
+  });
+});
+
+describe('agent wire formats', () => {
+  const deny = { permissionDecision: 'deny' as const, permissionDecisionReason: 'not real' };
+  const ask = { permissionDecision: 'ask' as const, permissionDecisionReason: 'risky.' };
+
+  it('keeps Claude Code’s shape, and turns Codex’s unsupported ask into a deny with a way through', () => {
+    expect(render('claude', 'pre-tool-use', { decision: ask })).toEqual({ hookSpecificOutput: { hookEventName: 'PreToolUse', ...ask } });
+    const codex = render('codex', 'pre-tool-use', { decision: ask }) as any;
+    expect(codex.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(codex.hookSpecificOutput.permissionDecisionReason).toContain('LURQ_ALLOW=1');
+    expect(render('codex', 'prompt', { context: 'tip' })).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'tip' } });
+  });
+
+  it('speaks Cursor’s field names', () => {
+    expect(render('cursor', 'pre-tool-use', { decision: deny })).toEqual({ permission: 'deny', user_message: 'not real', agent_message: 'not real' });
+    expect(render('cursor', 'post-tool-use', { context: 'call usage' })).toEqual({ additional_context: 'call usage' });
+    expect(render('cursor', 'session-start', null)).toBeNull();
+  });
+
+  it('reads Cursor input as Claude Code input', () => {
+    expect(normalize('cursor', { conversation_id: 'c1', command: 'npm i zod', cwd: '/p' })).toEqual({
+      session_id: 'c1',
+      cwd: '/p',
+      tool_name: 'Bash',
+      tool_input: { command: 'npm i zod' },
+    });
+    expect(normalize('cursor', { session_id: 's', workspace_roots: ['/w'] })).toEqual({ session_id: 's', cwd: '/w' });
+    const claude = { session_id: 's', tool_name: 'Edit' };
+    expect(normalize('claude', claude)).toBe(claude);
+  });
+
+  it('lets a user-approved command through', () => {
+    expect(installTargets('LURQ_ALLOW=1 npm i evil-pkg')).toEqual([]);
   });
 });

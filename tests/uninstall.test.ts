@@ -19,8 +19,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   agentSpecs,
   installAgent,
-  claudeSettingsPath,
-  installClaudeHook,
+  hooksPath,
+  installHooks,
   installInstructionsFile,
   removeMarkedBlock,
   upsertMarkedBlock,
@@ -99,14 +99,26 @@ describe('lurq uninstall', () => {
     expect(readUserConfig().apiKey).toBe('lurq_live_x');
   });
 
-  it('takes the hooks out of Claude Code settings and keeps the user’s own', async () => {
-    const settings = { hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'fmt' }] }] } };
-    put(claudeSettingsPath(), JSON.stringify(settings));
-    expect(installClaudeHook(claudeSettingsPath(), { command: 'lurq', onPath: true })).toBe(claudeSettingsPath());
-    expect(installClaudeHook(undefined, { command: 'npx lurqrun', onPath: false })).toBeNull();
+  it('takes the hooks out of Claude Code, Codex and Cursor, and keeps the user’s own', async () => {
+    const on = { command: 'lurq', onPath: true, path: '/usr/local/bin/lurq' };
+    const claude = { hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'fmt' }] }] } };
+    const cursor = { version: 1, hooks: { afterFileEdit: [{ command: './format.sh' }] } };
+    put(hooksPath('claude'), JSON.stringify(claude));
+    put(hooksPath('cursor'), JSON.stringify(cursor));
+    for (const agent of ['claude', 'codex', 'cursor'] as const) expect(installHooks(agent, undefined, on)).toBe(hooksPath(agent));
+    expect(JSON.parse(readFileSync(hooksPath('cursor'), 'utf8')).hooks.sessionStart[0].command).toBe('/usr/local/bin/lurq hook --agent cursor session-start');
+    expect(installHooks('claude', undefined, { command: 'npx lurqrun', onPath: false })).toBeNull();
 
-    await runUninstall({ agent: 'claude-code', yes: true });
-    expect(JSON.parse(readFileSync(claudeSettingsPath(), 'utf8'))).toEqual(settings);
+    await runUninstall({ yes: true });
+    expect(JSON.parse(readFileSync(hooksPath('claude'), 'utf8'))).toEqual(claude);
+    expect(JSON.parse(readFileSync(hooksPath('cursor'), 'utf8'))).toEqual(cursor);
+    expect(JSON.parse(readFileSync(hooksPath('codex'), 'utf8'))).toEqual({});
+  });
+
+  it('leaves Codex alone when its config.toml already defines hooks', () => {
+    put(join(home, '.codex', 'config.toml'), '[[hooks.PreToolUse]]\nmatcher = "Bash"\n');
+    expect(installHooks('codex', undefined, { command: 'lurq', onPath: true })).toBeNull();
+    expect(existsSync(hooksPath('codex'))).toBe(false);
   });
 
   it('refuses to act without --yes when nobody can answer the prompt', async () => {
