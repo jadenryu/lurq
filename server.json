@@ -3,7 +3,7 @@
   "name": "io.github.jadenryu/lurq",
   "title": "lurq",
   "description": "Verify npm packages before your AI agent installs them: hallucinations, advisories, API drift.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "websiteUrl": "https://www.lurq.run",
   "repository": {
     "url": "https://github.com/jadenryu/lurq",
