@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
@@ -149,5 +149,70 @@ describe('type check across an upgrade', () => {
   it('stops once the budget is spent', () => {
     const check = typeChecker(ts, join(root, 'project'), { budgetMs: -1 })('cookie', v1, v2, ['src/session.ts']);
     expect(check).toEqual({ checked: false, reason: 'type check budget used up by earlier packages' });
+  });
+});
+
+describe('type check environments that are not a clean npm install', () => {
+  const dirs: string[] = [];
+  const at = (dir: string, files: Record<string, string>) => {
+    for (const [file, body] of Object.entries(files)) {
+      mkdirSync(join(dir, file, '..'), { recursive: true });
+      writeFileSync(join(dir, file), body);
+    }
+    return dir;
+  };
+  const temp = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-types-env-'));
+    dirs.push(dir);
+    return dir;
+  };
+  afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
+  const tsconfig = JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] });
+
+  // CI runs the check before installing. Types that now come from the package's
+  // own dependency read as an empty interface, and an install would clear that.
+  it('declines when the new types import a dependency that is not installed', () => {
+    const project = at(temp(), {
+      'tsconfig.json': tsconfig,
+      'src/a.ts': `import { make } from 'lib';\nconst o = make({ foo: 'x' });\nexport const f: string = o.foo;\n`,
+    });
+    const from = at(temp(), {
+      'package.json': JSON.stringify({ name: 'lib', version: '1.0.0', types: 'index.d.ts' }),
+      'index.d.ts': `export interface Opts { foo: string }\nexport declare function make(o: Opts): Opts;\n`,
+    });
+    const to = at(temp(), {
+      'package.json': JSON.stringify({ name: 'lib', version: '1.1.0', types: 'index.d.ts', dependencies: { '@lib/core': '1.1.0' } }),
+      'index.d.ts': `import type { CoreOpts } from '@lib/core';\nexport interface Opts extends CoreOpts {}\nexport declare function make(o: Opts): Opts;\n`,
+    });
+    expect(typeChecker(ts, project)('lib', from, to, ['src/a.ts'])).toEqual({
+      checked: false,
+      reason: "the new version's types import @lib/core, which is not installed here",
+    });
+  });
+
+  // The zod + @hookform/resolvers shape: a peer-dependent adapter links to pnpm's
+  // store copy. Leaving that copy on the old version split one type in two.
+  it('swaps pnpm\'s store copy too, so a peer adapter sees the same version', () => {
+    const lib = (version: string) => ({
+      'package.json': JSON.stringify({ name: 'schema', version, types: 'index.d.ts', main: 'index.js' }),
+      'index.d.ts': `export declare class Schema { private _cached; parse(x: unknown): unknown; }\nexport declare function object(): Schema;\n`,
+      'index.js': 'exports.object = () => ({})',
+    });
+    const root = temp();
+    const store = join(root, 'node_modules/.pnpm');
+    at(join(store, 'schema@1.0.0/node_modules/schema'), lib('1.0.0'));
+    at(join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/adapter'), {
+      'package.json': JSON.stringify({ name: 'adapter', version: '1.0.0', types: 'index.d.ts', peerDependencies: { schema: '*' } }),
+      'index.d.ts': `import { Schema } from 'schema';\nexport declare function resolver(s: Schema): void;\n`,
+    });
+    symlinkSync(join(store, 'schema@1.0.0/node_modules/schema'), join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/schema'));
+    symlinkSync(join(store, 'schema@1.0.0/node_modules/schema'), join(root, 'node_modules/schema'));
+    symlinkSync(join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/adapter'), join(root, 'node_modules/adapter'));
+    at(root, {
+      'tsconfig.json': tsconfig,
+      'src/form.ts': `import { object } from 'schema';\nimport { resolver } from 'adapter';\nresolver(object());\n`,
+    });
+    const check = typeChecker(ts, root)('schema', at(temp(), lib('1.0.0')), at(temp(), lib('1.0.1')), ['src/form.ts']);
+    expect(check).toEqual({ checked: true, files: 1, introduced: [] });
   });
 });

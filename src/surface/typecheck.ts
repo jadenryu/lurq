@@ -121,6 +121,9 @@ export function typeChecker(
       return { checked: false, reason: 'no tsconfig.json includes the files that import it' };
     }
 
+    // The installed copy pnpm keeps under `.pnpm/<name>@<version>` is named for the
+    // version being upgraded from, which is how the overlay recognises it.
+    const installedVersion = manifestVersion(ts, fromDir);
     const introduced: TypeDiagnostic[] = [];
     let covered = 0;
     for (const [configPath, group] of groups) {
@@ -128,14 +131,24 @@ export function typeChecker(
       if (!cache) caches.set(configPath, (cache = new Map()));
       const shared = shareSourceFiles ? cache : new Map<string, TSApi.SourceFile>();
 
-      const before = build(ts, group.parsed, pkg, fromDir, shared, false);
+      const before = build(ts, group.parsed, pkg, fromDir, installedVersion, shared, false);
       if ('reason' in before) return { checked: false, reason: `old version: ${before.reason}` };
       // Found once, on the old program, and checked identically on both sides.
       const files = [...group.files, ...importersOf(ts, before.program, group.files)];
       const beforeDiagnostics = semanticDiagnostics(before.program, files);
       if (Date.now() > expiresAt) return { checked: false, reason: 'type check ran out of time' };
-      const after = build(ts, group.parsed, pkg, toDir, shared, true);
+      const after = build(ts, group.parsed, pkg, toDir, installedVersion, shared, true);
       if ('reason' in after) return { checked: false, reason: after.reason };
+      // Types that now lean on a dependency this checkout has not installed read
+      // as empty interfaces, and those report errors an install would clear.
+      const missingBefore = unresolvedTypeImports(ts, before);
+      const newlyMissing = [...unresolvedTypeImports(ts, after)].filter((s) => !missingBefore.has(s));
+      if (newlyMissing.length) {
+        return {
+          checked: false,
+          reason: `the new version's types import ${newlyMissing.join(', ')}, which is not installed here`,
+        };
+      }
 
       introduced.push(
         ...newDiagnostics(ts, root, beforeDiagnostics, semanticDiagnostics(after.program, files)),
@@ -210,16 +223,23 @@ function projectFor(
  * package's declarations came from the overlay, which is the new-version
  * requirement described up top.
  */
+interface Built {
+  program: TSApi.Program;
+  host: TSApi.CompilerHost;
+  overlaid: (fileName: string) => boolean;
+}
+
 function build(
   ts: Compiler,
   parsed: TSApi.ParsedCommandLine,
   pkg: string,
   pkgDir: string,
+  installedVersion: string | undefined,
   cache: Map<string, TSApi.SourceFile>,
   ownTypes: boolean,
-): { program: TSApi.Program } | { reason: string } {
+): Built | { reason: string } {
   const options: TSApi.CompilerOptions = { ...parsed.options, noEmit: true, incremental: false };
-  const { host, overlaid } = overlayHost(ts, options, pkg, pkgDir, cache);
+  const { host, overlaid } = overlayHost(ts, options, pkg, pkgDir, installedVersion, cache);
   // No `projectReferences`: those point imports at a referenced project's built
   // output, which a fresh checkout does not have. Reading the sources is closer
   // to what the developer's editor sees.
@@ -235,7 +255,29 @@ function build(
     return { reason: `its type definitions do not parse with TypeScript ${ts.version}` };
   }
 
-  return { program };
+  return { program, host, overlaid };
+}
+
+/** What the package's own declarations import that does not resolve here. */
+function unresolvedTypeImports(ts: Compiler, built: Built): Set<string> {
+  const out = new Set<string>();
+  const options = built.program.getCompilerOptions();
+  for (const sf of built.program.getSourceFiles()) {
+    if (!sf.isDeclarationFile || !built.overlaid(sf.fileName)) continue;
+    for (const { fileName: spec } of ts.preProcessFile(sf.text, true, true).importedFiles) {
+      if (!ts.resolveModuleName(spec, sf.fileName, options, built.host).resolvedModule) out.add(spec);
+    }
+  }
+  return out;
+}
+
+function manifestVersion(ts: Compiler, dir: string): string | undefined {
+  try {
+    const version = (JSON.parse(ts.sys.readFile(join(dir, 'package.json')) ?? '{}') as { version?: unknown }).version;
+    return typeof version === 'string' ? version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function semanticDiagnostics(program: TSApi.Program, files: string[]): TSApi.Diagnostic[] {
@@ -272,15 +314,19 @@ function importersOf(ts: Compiler, program: TSApi.Program, targets: string[]): s
  * A compiler host that serves `pkgDir` wherever the project would load the
  * package from `node_modules`.
  *
- * Only a top-level install is replaced: `node_modules/<pkg>` whose path holds
- * no other `node_modules`. A copy nested under another dependency belongs to
- * that dependency and does not move with this upgrade.
+ * Only the project's own install is replaced: `node_modules/<pkg>` whose path
+ * holds no other `node_modules`, or pnpm's store copy for the installed version
+ * (`node_modules/.pnpm/<pkg>@<version>…/node_modules/<pkg>`), which is the same
+ * install that peer-dependent packages link to. Leaving that copy on the old
+ * version made pnpm projects report errors an install would not. Any other
+ * nested copy belongs to another dependency and does not move with this upgrade.
  */
 function overlayHost(
   ts: Compiler,
   options: TSApi.CompilerOptions,
   pkg: string,
   pkgDir: string,
+  installedVersion: string | undefined,
   cache: Map<string, TSApi.SourceFile>,
 ): { host: TSApi.CompilerHost; overlaid: (fileName: string) => boolean } {
   const host = ts.createCompilerHost(options, true);
@@ -292,13 +338,39 @@ function overlayHost(
     getSourceFile: host.getSourceFile.bind(host),
   };
   const marker = `/node_modules/${pkg}`;
-  const redirect = (fileName: string): string | null => {
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // pnpm writes a scoped name's slash as `+`, and appends peer suffixes after the version.
+  const pnpmStore = installedVersion
+    ? new RegExp(`^(.*)/node_modules/\\.pnpm/${escape(pkg.replace('/', '+'))}@${escape(installedVersion)}(?:[_(][^/]*)?$`)
+    : null;
+  const ownInstall = (prefix: string) => {
+    if (!prefix.includes('/node_modules/')) return true;
+    const store = pnpmStore?.exec(prefix);
+    return Boolean(store && !store[1]!.includes('/node_modules/'));
+  };
+  const direct = (fileName: string): string | null => {
     const p = fileName.replace(/\\/g, '/');
     const i = p.indexOf(marker);
-    if (i < 0 || p.slice(0, i).includes('/node_modules/')) return null;
+    if (i < 0 || !ownInstall(p.slice(0, i))) return null;
     const rest = p.slice(i + marker.length);
     // `cookie-parser` is not `cookie`.
     return rest === '' || rest.startsWith('/') ? pkgDir + rest : null;
+  };
+  // A symlinked install reaches the package through another package's
+  // node_modules (pnpm links a peer-dependent adapter to the project's copy).
+  // Judged by where the package ROOT really lives, so a file that exists only in
+  // the new version still resolves, and a link to a different version does not
+  // match. Without this the adapter read the old package.json through the link,
+  // and TypeScript kept two versions of one type apart.
+  const redirect = (fileName: string): string | null => {
+    const hit = direct(fileName);
+    if (hit !== null || !ts.sys.realpath) return hit;
+    const p = fileName.replace(/\\/g, '/');
+    const i = p.lastIndexOf(marker);
+    const end = i + marker.length;
+    if (i < 0 || (p.length > end && p[end] !== '/')) return null;
+    const root = ts.sys.realpath(p.slice(0, end)).replace(/\\/g, '/');
+    return root === p.slice(0, end) ? null : direct(root + p.slice(end));
   };
 
   host.fileExists = (p) => {
