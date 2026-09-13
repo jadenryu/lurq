@@ -166,7 +166,7 @@ export async function runUninstall(opts: { agent?: string; yes?: boolean }): Pro
   }
 
   console.log('lurq uninstall removes:');
-  for (const r of removals) console.log(`  • ${r.label.padEnd(34)} ${short(r.path)}`);
+  for (const r of removals) console.log(`  • ${r.label.padEnd(36)} ${short(r.path)}`);
   console.log(dim('  Everything else in these files stays as it is.\n'));
 
   if (!opts.yes) {
