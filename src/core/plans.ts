@@ -58,6 +58,8 @@ export interface Plan {
   decisionLogDays: number;
   /** May mint `policy:write` keys, the ones CI uses to push a reviewed policy. */
   ciPolicyKeys: boolean;
+  /** May send alerts to Slack, Discord, Teams or a signed webhook. */
+  alertChannels: boolean;
   /** One line under the price. Kept to a single clause. */
   tagline: string;
   /** Shown on the card. Lead with what changes from the tier below. */
@@ -129,6 +131,7 @@ export const PLANS: Record<Tier, Plan> = {
     askDailyUsd: 0.3,
     decisionLogDays: 7,
     ciPolicyKeys: false,
+    alertChannels: false,
     tagline: 'Enough to find out whether the index is telling the truth.',
     features: [
       'CLI and installable skill',
@@ -148,6 +151,7 @@ export const PLANS: Record<Tier, Plan> = {
     askDailyUsd: 3,
     decisionLogDays: 90,
     ciPolicyKeys: false,
+    alertChannels: false,
     tagline: 'For one developer who runs it on every install.',
     features: [
       '10,000 hosted calls a month',
@@ -172,6 +176,7 @@ export const PLANS: Record<Tier, Plan> = {
     askDailyUsd: 8,
     decisionLogDays: 365,
     ciPolicyKeys: true,
+    alertChannels: true,
     tagline: 'For a team whose agents answer to one policy.',
     features: [
       '15,000 calls per seat, pooled',
@@ -192,6 +197,7 @@ export const PLANS: Record<Tier, Plan> = {
     askDailyUsd: 15,
     decisionLogDays: 365,
     ciPolicyKeys: true,
+    alertChannels: true,
     tagline: 'For a company that needs the graph under its own controls.',
     features: [
       'Uncapped hosted calls',

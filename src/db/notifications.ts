@@ -7,17 +7,19 @@
  * "an alert is emailed at most once" true across retries and concurrent workers.
  */
 import { randomBytes } from 'node:crypto';
-import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Database } from './client';
 import {
+  notificationChannels,
   notificationDeliveries,
   notificationItems,
   notificationPreferences,
+  type NotificationChannelRow,
   type NotificationDeliveryRow,
   type NotificationPreferencesRow,
 } from './schema';
 
-export type NotificationKind = 'urgent' | 'digest';
+export type NotificationKind = 'urgent' | 'digest' | 'channel';
 
 const newToken = () => randomBytes(32).toString('base64url');
 
@@ -48,7 +50,7 @@ export async function setPreferences(
 }
 
 /** Turn one kind off by token. False when no account holds the token. */
-export async function unsubscribeByToken(db: Database, token: string, kind: NotificationKind): Promise<boolean> {
+export async function unsubscribeByToken(db: Database, token: string, kind: 'urgent' | 'digest'): Promise<boolean> {
   const rows = await db
     .update(notificationPreferences)
     .set({ ...(kind === 'urgent' ? { urgentEmail: false } : { weeklyDigest: false }), updatedAt: new Date() })
@@ -74,7 +76,7 @@ export async function markDigestSent(db: Database, ownerId: string, at: Date): P
  */
 export async function createDelivery(
   db: Database,
-  input: { ownerId: string; kind: NotificationKind; idempotencyKey: string },
+  input: { ownerId: string; kind: NotificationKind; idempotencyKey: string; channelId?: number | null },
 ): Promise<{ row: NotificationDeliveryRow; created: boolean }> {
   const inserted = await db
     .insert(notificationDeliveries)
@@ -149,16 +151,90 @@ export async function countDeliveries(db: Database, ownerId: string, kind: Notif
 
 /** Failed deliveries still worth retrying: under the attempt ceiling and young
  *  enough that Resend's 24h idempotency window still covers a duplicate. */
-export async function retryableDeliveries(db: Database, since: Date, maxAttempts: number): Promise<NotificationDeliveryRow[]> {
+export async function retryableDeliveries(
+  db: Database,
+  since: Date,
+  maxAttempts: number,
+  kinds: NotificationKind[] = ['urgent', 'digest'],
+): Promise<NotificationDeliveryRow[]> {
   return db
     .select()
     .from(notificationDeliveries)
     .where(
       and(
         eq(notificationDeliveries.status, 'failed'),
+        inArray(notificationDeliveries.kind, kinds),
         lt(notificationDeliveries.attempts, maxAttempts),
         gte(notificationDeliveries.createdAt, since),
       ),
     )
     .limit(200);
+}
+
+// ── Alert channels (Slack, Discord, Teams, signed webhook) ───────────────────
+
+type NewChannel = typeof notificationChannels.$inferInsert;
+type ChannelPatch = Partial<
+  Pick<
+    NotificationChannelRow,
+    'label' | 'minSeverity' | 'enabled' | 'consecutiveFailures' | 'disabledReason' | 'lastDeliveredAt' | 'lastError'
+  >
+>;
+
+const liveChannel = (ownerId: string, id: number) =>
+  and(eq(notificationChannels.ownerId, ownerId), eq(notificationChannels.id, id), isNull(notificationChannels.deletedAt));
+
+export async function listChannels(db: Database, ownerId: string): Promise<NotificationChannelRow[]> {
+  return db
+    .select()
+    .from(notificationChannels)
+    .where(and(eq(notificationChannels.ownerId, ownerId), isNull(notificationChannels.deletedAt)))
+    .orderBy(notificationChannels.id);
+}
+
+export async function getChannel(db: Database, ownerId: string, id: number): Promise<NotificationChannelRow | null> {
+  const [row] = await db.select().from(notificationChannels).where(liveChannel(ownerId, id)).limit(1);
+  return row ?? null;
+}
+
+export async function insertChannel(db: Database, row: NewChannel): Promise<NotificationChannelRow> {
+  const [created] = await db.insert(notificationChannels).values(row).returning();
+  return created!;
+}
+
+export async function updateChannel(db: Database, ownerId: string, id: number, patch: ChannelPatch): Promise<NotificationChannelRow | null> {
+  const [row] = await db
+    .update(notificationChannels)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(liveChannel(ownerId, id))
+    .returning();
+  return row ?? null;
+}
+
+/** Soft delete: the row stays, both secrets are wiped, nothing is ever sent again. */
+export async function removeChannel(db: Database, ownerId: string, id: number): Promise<boolean> {
+  const rows = await db
+    .update(notificationChannels)
+    .set({ deletedAt: new Date(), enabled: false, urlCiphertext: '', signingSecretCiphertext: null, updatedAt: new Date() })
+    .where(liveChannel(ownerId, id))
+    .returning({ id: notificationChannels.id });
+  return rows.length > 0;
+}
+
+/** Every channel that may receive alerts, across accounts, for the sender. */
+export async function activeChannels(db: Database): Promise<NotificationChannelRow[]> {
+  return db
+    .select()
+    .from(notificationChannels)
+    .where(and(eq(notificationChannels.enabled, true), isNull(notificationChannels.deletedAt)))
+    .limit(10_000);
+}
+
+export async function channelById(db: Database, id: number): Promise<NotificationChannelRow | null> {
+  const [row] = await db
+    .select()
+    .from(notificationChannels)
+    .where(and(eq(notificationChannels.id, id), isNull(notificationChannels.deletedAt)))
+    .limit(1);
+  return row ?? null;
 }

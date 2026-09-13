@@ -153,6 +153,19 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: email pass failed: ${String(err)}`));
+    // Alert channels (Slack, Discord, Teams, webhooks). A no-op without LURQ_SECRETS_KEY.
+    await (async () => {
+      const { channelsFromConfig } = await import('../notify/channelRun');
+      const handle = createDb({ max: 2 });
+      try {
+        const s = await channelsFromConfig(handle.db);
+        if (s && (s.sent || s.failed || s.disabled)) {
+          logger.info(`worker: channels, ${s.sent} sent, ${s.failed} failed, ${s.disabled} switched off, ${s.skipped} skipped`);
+        }
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: channel pass failed: ${String(err)}`));
     // Rescore is NOT run here. It was, every cycle, and it reported "0 changed"
     // every time — which is arithmetic, not luck.
     //

@@ -113,6 +113,10 @@ const EnvSchema = z.object({
   /** Clerk secret key, used only to read a recipient's verified primary email at
    *  send time — lurq stores no email addresses. Unset → nothing is sent. */
   CLERK_SECRET_KEY: z.string().min(1).optional(),
+  /** 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts stored
+   *  Slack/Discord/Teams/webhook URLs, which are credentials. Unset → alert
+   *  channels are disabled rather than stored in the clear. */
+  LURQ_SECRETS_KEY: z.string().min(1).optional(),
 
   // Billing (Stripe). Every secret here lives on this service and nowhere else:
   // the web app holds no Stripe credential and reaches checkout through the
