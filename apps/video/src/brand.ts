@@ -1,7 +1,7 @@
 import { loadFont } from "@remotion/fonts";
 import { staticFile } from "remotion";
 
-export { HEADLINE_LINE_1, HEADLINE_LINE_2, IDE_HEADING, INSTALL_COMMAND } from "@/content/copy";
+export { HEADLINE_LINE_1, HEADLINE_LINE_2, IDE_HEADING, INSTALL_COMMAND, WORDMARK } from "@/content/copy";
 
 /** apps/web/src/app/styles/tokens.css, as a browser computes them. */
 export const color = {
