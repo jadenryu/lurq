@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
@@ -254,8 +254,8 @@ Rules:
   connected and can read the code.`;
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return new Response("Unauthorized", { status: 401 });
+  const owner = await currentOwner();
+  if (!owner) return new Response("Unauthorized", { status: 401 });
 
   const apiKey = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY;
   // A missing key is a deployment state, not a user error — say which, so the
@@ -272,7 +272,7 @@ export async function POST(req: Request) {
   // spend, and it resets on cold start. A real per-account budget belongs with
   // the usage metering the backend already does (db/usage.ts), not here. Swap
   // for @upstash/ratelimit if this ever needs to hold across instances.
-  const limit = checkRateLimit(`ask:${userId}`, 10, 60_000);
+  const limit = checkRateLimit(`ask:${owner.ownerId}`, 10, 60_000);
   if (!limit.ok) {
     return new Response("Too many questions. Wait a minute and try again.", {
       status: 429,
@@ -319,7 +319,7 @@ export async function POST(req: Request) {
   try {
     // The reserve response carries the ceiling too, so this is one round trip,
     // not a read followed by a write.
-    ({ spentMicros: afterReserve, limitMicros } = await recordAskSpend(userId, reserveMicros));
+    ({ spentMicros: afterReserve, limitMicros } = await recordAskSpend(owner.ownerId, reserveMicros));
   } catch {
     // Fail CLOSED. Without a ledger we do not know what has been spent, and
     // guessing "nothing" turns a backend outage into unlimited spend — the
@@ -336,7 +336,7 @@ export async function POST(req: Request) {
   const settle = async (actualUsd: number, answered?: AskAnswered) => {
     const delta = Math.round(actualUsd * 1_000_000) - reserveMicros;
     if (delta === 0 && !answered) return;
-    await recordAskSpend(userId, delta, answered).catch((err) => {
+    await recordAskSpend(owner.ownerId, delta, answered).catch((err) => {
       console.error(
         "[lurq] ask spend NOT settled — today's budget is now wrong for this account:",
         err instanceof Error ? err.message : String(err),
@@ -398,7 +398,7 @@ export async function POST(req: Request) {
           if (
             turnCost + reserve > QUESTION_USD ||
             turnCost + reserve > remainingUsd ||
-            spentThisHour(userId) + turnCost + reserve > HOURLY_USD
+            spentThisHour(owner.ownerId) + turnCost + reserve > HOURLY_USD
           ) {
             send(
               turn === 0
@@ -443,7 +443,7 @@ export async function POST(req: Request) {
           for (const block of response.content) {
             if (block.type !== "tool_use") continue;
             try {
-              const out = await runTool(block.name, block.input, userId, remoteNames);
+              const out = await runTool(block.name, block.input, owner.ownerId, remoteNames);
               results.push({
                 type: "tool_result",
                 tool_use_id: block.id,
@@ -480,7 +480,7 @@ export async function POST(req: Request) {
         console.warn("[lurq] ask failed:", err instanceof Error ? err.message : String(err));
         send(`\n\n${message}`);
       } finally {
-        addSpend(userId, turnCost);
+        addSpend(owner.ownerId, turnCost);
         // Awaited inside the stream's finally so the charge lands before the
         // response closes. A failure here is logged, not swallowed silently:
         // an unrecorded charge is spend the next question will not see.
@@ -499,12 +499,12 @@ export async function POST(req: Request) {
         console.log(
           JSON.stringify({
             at: "ask",
-            owner: userId,
+            owner: owner.ownerId,
             turns: turnsUsed,
             chars: question.length,
             cacheReadTokens: cacheRead,
             usd: Number(turnCost.toFixed(5)),
-            hourUsd: Number(spentThisHour(userId).toFixed(5)),
+            hourUsd: Number(spentThisHour(owner.ownerId).toFixed(5)),
           }),
         );
         controller.close();

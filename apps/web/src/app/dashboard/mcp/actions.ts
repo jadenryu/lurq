@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { isDemoUser } from "@/lib/demo-data";
 import { acknowledgeMcpChange } from "@/lib/lurq-issuer";
 
@@ -13,11 +13,11 @@ import { acknowledgeMcpChange } from "@/lib/lurq-issuer";
  * belong to this ownerId or it 404s). Demo accounts never write.
  */
 export async function acknowledgeChange(eventId: number): Promise<{ ok: boolean }> {
-  const { userId } = await auth();
-  if (!userId || !Number.isInteger(eventId) || eventId <= 0) return { ok: false };
-  if (await isDemoUser(userId)) return { ok: false };
+  const owner = await currentOwner();
+  if (!owner || !Number.isInteger(eventId) || eventId <= 0) return { ok: false };
+  if (await isDemoUser(owner.userId)) return { ok: false };
   try {
-    const ok = await acknowledgeMcpChange(userId, eventId);
+    const ok = await acknowledgeMcpChange(owner.ownerId, eventId);
     if (ok) revalidatePath("/dashboard/mcp", "layout");
     return { ok };
   } catch {

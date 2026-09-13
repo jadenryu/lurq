@@ -147,6 +147,11 @@ const EnvSchema = z.object({
   STRIPE_PRICE_PRO: z.string().min(1).optional(),
   /** Per-seat Price id backing Team. The subscription quantity is the seat count. */
   STRIPE_PRICE_TEAM: z.string().min(1).optional(),
+  /** Yearly Price ids, 20% under twelve months (core/plans ANNUAL_DISCOUNT). */
+  STRIPE_PRICE_PRO_ANNUAL: z.string().min(1).optional(),
+  STRIPE_PRICE_TEAM_ANNUAL: z.string().min(1).optional(),
+  /** Metered Price billed from the overage meter, attached to monthly Team. */
+  STRIPE_PRICE_TEAM_OVERAGE: z.string().min(1).optional(),
   /** Price id backing Enterprise. Normally unset: Enterprise is sold by
    *  conversation, and `contactOnly` in core/plans.ts is what the page reads. */
   STRIPE_PRICE_ENTERPRISE: z.string().min(1).optional(),

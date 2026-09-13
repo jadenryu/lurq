@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SignInButton, SignUpButton } from "@clerk/nextjs";
+import { OrganizationSwitcher, SignInButton, SignUpButton } from "@clerk/nextjs";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { Lock } from "lucide-react";
 import { AccountMenu } from "@/components/dashboard/account-menu";
@@ -235,7 +235,19 @@ export function DashboardNav({ locked = false }: { locked?: boolean }) {
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
           </Link>
-          <div className="w-auto">{locked ? <Guest compact /> : <AccountMenu compact />}</div>
+          <div className="flex w-auto items-center gap-2">
+            {locked ? (
+              <Guest compact />
+            ) : (
+              <>
+                <OrganizationSwitcher
+                  afterSelectOrganizationUrl="/dashboard"
+                  afterSelectPersonalUrl="/dashboard"
+                />
+                <AccountMenu compact />
+              </>
+            )}
+          </div>
         </div>
         {!locked && (
           <div className="px-4 pb-3">
@@ -313,7 +325,23 @@ export function DashboardNav({ locked = false }: { locked?: boolean }) {
           </nav>
         </LayoutGroup>
 
-        <div className="border-t border-edge p-2">{locked ? <Guest /> : <AccountMenu />}</div>
+        <div className="border-t border-edge p-2">
+          {locked ? (
+            <Guest />
+          ) : (
+            <>
+              {/* Picking an organization makes it the account every dashboard
+                  page reads and writes (lib/owner.ts). Personal stays listed so
+                  nobody loses their own keys by joining a team. */}
+              <OrganizationSwitcher
+                afterSelectOrganizationUrl="/dashboard"
+                afterSelectPersonalUrl="/dashboard"
+                appearance={{ elements: { rootBox: "mb-2 w-full", organizationSwitcherTrigger: "w-full justify-between" } }}
+              />
+              <AccountMenu />
+            </>
+          )}
+        </div>
       </aside>
     </>
   );

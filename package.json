@@ -1,7 +1,7 @@
 {
   "name": "lurqrun",
   "version": "0.1.1",
-  "description": "A continuously-updated, evidence-scored index of JS/TS frameworks and libraries, exposed as an MCP server, CLI, and agent skill — so AI coding assistants get fresh, objective dependency recommendations.",
+  "description": "Verify npm packages before your AI coding agent installs them: hallucinated and typosquatted names, advisories, API drift and version conflicts. MCP server, CLI and agent skill for Claude Code, Cursor and VS Code.",
   "type": "module",
   "license": "MIT",
   "author": "jadenryu",
@@ -9,18 +9,28 @@
     "type": "git",
     "url": "git+https://github.com/jadenryu/lurq.git"
   },
-  "homepage": "https://github.com/jadenryu/lurq#readme",
+  "homepage": "https://www.lurq.run",
   "bugs": {
     "url": "https://github.com/jadenryu/lurq/issues"
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "npm",
     "dependencies",
-    "recommendations",
+    "package-verification",
+    "hallucinated-packages",
+    "slopsquatting",
+    "typosquatting",
+    "supply-chain-security",
+    "dependency-management",
+    "ai-agents",
+    "coding-agent",
     "claude-code",
-    "ai-coding"
+    "cursor",
+    "vscode",
+    "copilot"
   ],
   "bin": {
     "lurq": "dist/bin/lurq.js"

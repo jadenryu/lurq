@@ -66,6 +66,7 @@ import {
   handleEvent,
 } from '../billing/stripe';
 import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
+import { registerPublicPackageRoutes } from './publicPackages';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -337,6 +338,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // unauthenticated on purpose: it is a static description of the product —
   // the same list the docs print — and holds nothing about any account. Behind
   // the IP limiter only, since it costs no backend work at all.
+  // Public, keyless package summaries for the lurq.run/npm pages. Behind the IP
+  // limiter only; publicPackages.ts keeps them to a summary of the top packages.
+  registerPublicPackageRoutes(app, db, ipLimiter);
+
   app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
     const limit = Math.min(Number(req.query.limit) || 6, CAPABILITIES.length);
@@ -550,6 +555,22 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * paying customer at once. Over-serving during an outage is recoverable;
    * locking out the paid tier is the incident.
    */
+  /**
+   * One line for the agent, appended to tool results past the pool. A header is
+   * invisible to a model reading a tool result; this is what gets relayed to the
+   * developer, which is the only way an over-limit account learns it is one.
+   */
+  const quotaNotice = (ent: Entitlement | undefined): string | null => {
+    if (!ent || ent.withinQuota) return null;
+    if (ent.inOverage) {
+      return `lurq: this account is past its ${ent.limit} included calls this month; further calls are billed as ${ent.plan.name} overage.`;
+    }
+    if (ent.inGrace) {
+      return `lurq: monthly limit reached (${ent.used}/${ent.limit} calls). A few grace calls a day remain until the month turns. Tell the user they can upgrade at ${config.LURQ_WEB_URL}/dashboard/billing`;
+    }
+    return null;
+  };
+
   const quota = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const authed = req as AuthedRequest;
     const ownerId = authed.lurqKey?.ownerId ?? null;
@@ -571,7 +592,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       }
       // Over the allowance but inside the daily grace: served, and marked so a
       // client reading headers can say why it is about to stop.
-      if (ent.inGrace) res.setHeader('X-Lurq-Quota', 'grace');
+      if (ent.inOverage) res.setHeader('X-Lurq-Quota', 'overage');
+      else if (ent.inGrace) res.setHeader('X-Lurq-Quota', 'grace');
       next();
     } catch (err) {
       logger.error(
@@ -634,6 +656,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const ownerId = typeof req.body?.ownerId === 'string' ? req.body.ownerId.trim() : '';
     const tier = typeof req.body?.tier === 'string' ? (req.body.tier as Tier) : 'pro';
     const email = typeof req.body?.email === 'string' ? req.body.email : null;
+    const interval = req.body?.interval === 'year' ? 'year' : 'month';
     if (!ownerId) {
       res.status(400).json({ error: 'ownerId is required.' });
       return;
@@ -643,7 +666,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       return;
     }
     try {
-      const url = await createCheckoutSession(db, { ownerId, tier, email });
+      const url = await createCheckoutSession(db, { ownerId, tier, interval, email });
       if (!url) {
         res.status(503).json({ error: 'That plan is not available for checkout yet.' });
         return;
@@ -795,6 +818,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         used: ent.used,
         limit: ent.limit,
         seats: ent.seats,
+        interval: sub?.billingInterval ?? null,
         billingEnabled: billingEnabled(),
         manageable: Boolean(sub?.stripeCustomerId),
       });
@@ -1783,7 +1807,11 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   app.post('/mcp', ipLimiter, auth, keyLimiter, quota, async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
     // Thread the authenticated key's owner identity into the tools (§3.1).
-    const server = buildMcpServer(db, { ownerId: (req as AuthedRequest).lurqKey?.ownerId ?? null });
+    const authed = req as AuthedRequest;
+    const server = buildMcpServer(db, {
+      ownerId: authed.lurqKey?.ownerId ?? null,
+      notice: quotaNotice(authed.entitlement),
+    });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

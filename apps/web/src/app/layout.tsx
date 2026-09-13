@@ -13,10 +13,11 @@ import "./globals.css";
 // declaration is the one that wins.
 import "./styles/tokens.css";
 
-// TITLE mirrors the home page h1 (components/marketing/hero.tsx).
-const TITLE = "lurq | your agent picks the packages, lurq knows what happens next";
+// TITLE is what a search result and a chat citation show, so it leads with what
+// lurq does in the words people search for, not the hero's line.
+const TITLE = "lurq: verify npm packages before your AI coding agent installs them";
 const DESCRIPTION =
-  "lurq is the verification infra behind your agent's choices, from package selection to dynamic upkeeping. lurq combats version drift while returning tangible results, fast.";
+  "lurq checks every npm package your AI coding agent picks: hallucinated and typosquatted names, security advisories, deprecated APIs and version conflicts. MCP server and CLI for Claude Code, Cursor and VS Code.";
 
 export const metadata: Metadata = {
   // Canonical base for resolving relative metadata URLs (canonical, OG images).
@@ -25,7 +26,8 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/" },
-  // og:image is auto-injected from app/opengraph-image.tsx.
+  // og:image is auto-injected from app/opengraph-image.jpg, a capture of the hero
+  // (regenerate with apps/web/scripts/capture-og-image.sh).
   openGraph: {
     type: "website",
     siteName: "lurq",

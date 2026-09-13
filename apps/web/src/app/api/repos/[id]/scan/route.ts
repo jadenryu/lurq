@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { isDemoUser } from "@/lib/demo-data";
 import { scanRepo, LurqIssuerError } from "@/lib/lurq-issuer";
 
 export async function POST(_req: Request, ctx: RouteContext<"/api/repos/[id]/scan">) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
-  if (await isDemoUser(userId)) {
+  const owner = await currentOwner();
+  if (!owner) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  if (await isDemoUser(owner.userId)) {
     return NextResponse.json({ error: "Not available on demo data." }, { status: 409 });
   }
 
@@ -16,7 +16,7 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/repos/[id]/sca
   }
 
   try {
-    await scanRepo(userId, repoId);
+    await scanRepo(owner.ownerId, repoId);
     return NextResponse.json({ scanned: true });
   } catch (err) {
     if (err instanceof LurqIssuerError) {

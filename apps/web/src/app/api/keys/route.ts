@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { ADMIN_ONLY, currentOwner } from "@/lib/owner";
 import { demoIssuedKey, demoKeys, isDemoUser } from "@/lib/demo-data";
 import { fetchKeys, issueKey, LurqIssuerError } from "@/lib/lurq-issuer";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 /**
  * Self-serve API-key issuance/listing. Clerk authenticates the user here;
- * `ownerId` is always the individual Clerk user id (no org concept, one
- * identity per account). The backend never sees Clerk, it trusts this route
+ * `ownerId` is the Active Organization when there is one, else the Clerk user
+ * (lib/owner.ts). The backend never sees Clerk, it trusts this route
  * via the shared LURQ_ISSUER_SECRET. Plaintext keys are returned to the client
  * exactly once, at creation, and never stored here.
  *
@@ -17,15 +17,15 @@ import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
  * written to Postgres.
  */
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return NextResponse.json({ error: "Sign in to view your keys." }, { status: 401 });
   }
-  if (await isDemoUser(userId)) {
+  if (await isDemoUser(owner.userId)) {
     return NextResponse.json({ keys: demoKeys(), demo: true });
   }
   try {
-    const keys = await fetchKeys(userId);
+    const keys = await fetchKeys(owner.ownerId);
     return NextResponse.json({ keys });
   } catch (err) {
     if (err instanceof LurqIssuerError) {
@@ -47,8 +47,8 @@ export async function GET() {
 const MAX_ACTIVE_KEYS = 20;
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return NextResponse.json({ error: "Sign in to generate a key." }, { status: 401 });
   }
 
@@ -57,14 +57,17 @@ export async function POST(req: Request) {
   // Opt-in and strict `=== true`: this key can rewrite what every agent on the
   // account may install, so nothing but an explicit choice should grant it.
   const scopes = body.policyWrite === true ? ["policy:write"] : [];
+  if (scopes.length > 0 && !owner.canManage) {
+    return NextResponse.json({ error: ADMIN_ONLY }, { status: 403 });
+  }
 
-  if (await isDemoUser(userId)) {
+  if (await isDemoUser(owner.userId)) {
     return NextResponse.json({ ...demoIssuedKey(), demo: true });
   }
 
   // Per-user, not per-IP: the identity is already authenticated here, so keying
   // on it throttles the actual actor rather than everyone behind one NAT.
-  const limit = checkRateLimit(`keys:${userId}`, 10, 60_000);
+  const limit = checkRateLimit(`keys:${owner.ownerId}`, 10, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many keys created. Wait a minute and try again." },
@@ -73,7 +76,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const existing = await fetchKeys(userId);
+    const existing = await fetchKeys(owner.ownerId);
     const active = existing.filter((k) => !k.revokedAt).length;
     if (active >= MAX_ACTIVE_KEYS) {
       return NextResponse.json(
@@ -90,7 +93,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { key, prefix } = await issueKey({ ownerId: userId, label, scopes });
+    const { key, prefix } = await issueKey({ ownerId: owner.ownerId, label, scopes });
     return NextResponse.json({ key, prefix });
   } catch (err) {
     if (err instanceof LurqIssuerError) {

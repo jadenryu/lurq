@@ -578,6 +578,8 @@ export interface BillingSummary {
   planName: string;
   /** Seats billed. 1 for flat plans. */
   seats: number;
+  /** Null before a Stripe subscription exists, and for hand-granted plans. */
+  interval: "month" | "year" | null;
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -600,6 +602,7 @@ export async function fetchBilling(ownerId: string): Promise<BillingSummary> {
 export async function startCheckout(args: {
   ownerId: string;
   tier: string;
+  interval?: "month" | "year";
   email?: string | null;
 }): Promise<string | null> {
   const res = await issuerFetch("/billing/checkout", {
