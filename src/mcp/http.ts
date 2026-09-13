@@ -66,6 +66,7 @@ import {
   handleEvent,
 } from '../billing/stripe';
 import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
+import { registerPublicPackageRoutes } from './publicPackages';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -336,6 +337,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // unauthenticated on purpose: it is a static description of the product —
   // the same list the docs print — and holds nothing about any account. Behind
   // the IP limiter only, since it costs no backend work at all.
+  // Public, keyless package summaries for the lurq.run/npm pages. Behind the IP
+  // limiter only; publicPackages.ts keeps them to a summary of the top packages.
+  registerPublicPackageRoutes(app, db, ipLimiter);
+
   app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
     const limit = Math.min(Number(req.query.limit) || 6, CAPABILITIES.length);
