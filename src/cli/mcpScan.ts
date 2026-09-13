@@ -30,7 +30,10 @@ import { DEFAULTS, scanServers, type ServerScan } from '../mcpScan/connect';
 import { loadLocal, saveLocal } from '../mcpScan/localHistory';
 import { scrub } from '../mcpScan/redact';
 import { contentHash, type Snapshot } from '../mcpScan/snapshot';
+import { VERSION } from '../core/constants';
+import { resolveApiKey } from '../core/userConfig';
 import { bold, dim, green, red, table, yellow } from './format';
+import { RemoteError, uploadMcpScan, type McpScanUploadResult, type UploadedServer } from './remote';
 
 export interface McpScanCliOpts {
   json?: boolean;
@@ -44,6 +47,10 @@ export interface McpScanCliOpts {
   failOn?: string;
   /** `--no-history` sets this false. */
   history?: boolean;
+  /** `--no-upload` sets this false: keep the scan on this machine. */
+  upload?: boolean;
+  /** `--no-contribute` sets this false: never offer public corroboration. */
+  contribute?: boolean;
 }
 
 const THRESHOLDS = ['critical', 'high', 'moderate', 'low', 'info', 'none'] as const;
@@ -79,6 +86,17 @@ export interface ScanReport {
   /** Cross-server findings: collisions and shadowing. */
   findings: McpFinding[];
   worst: Severity | null;
+  /** Null when not uploaded: no key, --no-upload, or nothing uploadable. */
+  account: AccountSync | null;
+}
+
+export interface AccountSync {
+  recorded: number;
+  changed: number;
+  results: McpScanUploadResult['servers'];
+  rejected: { alias: string | null; reason: string }[];
+  /** Why the upload stopped, when it did. The local report is unaffected. */
+  error: string | null;
 }
 
 /** Can we ask the user a question? Never in CI, never with --json. */
@@ -234,6 +252,7 @@ export async function collectScan(dir: string | undefined, opts: McpScanCliOpts)
     stack: stackScan.stack,
     findings: stackScan.findings,
     worst: worst(severities),
+    account: null,
   };
 }
 
@@ -280,12 +299,21 @@ function render(report: ScanReport): void {
     ),
   );
 
-  const changes = report.servers.filter((s) => s.sinceLastScan && !s.sinceLastScan.unchanged);
+  // The account's history outranks this machine's: it includes scans from CI
+  // and teammates, so its "last scan" is the real one.
+  const accountSince = new Map(
+    (report.account?.results ?? []).filter((r) => r.since).map((r) => [r.alias, r.since!]),
+  );
+  const changes = report.servers.flatMap((s) => {
+    const acc = accountSince.get(s.alias);
+    if (acc) return [{ alias: s.alias, severity: acc.severity as Severity, at: acc.at, summary: acc.summary }];
+    const d = s.sinceLastScan;
+    return d && !d.unchanged ? [{ alias: s.alias, severity: d.severity, at: d.at, summary: d.summary }] : [];
+  });
   if (changes.length) {
     console.log(`\n${bold('Since the last scan')}`);
-    for (const s of changes) {
-      const d = s.sinceLastScan!;
-      console.log(`  ${sevColour(d.severity)(d.severity.toUpperCase().padEnd(8))} ${bold(s.alias)} ${dim(ago(d.at))}  ${d.summary}`);
+    for (const c of changes) {
+      console.log(`  ${sevColour(c.severity)(c.severity.toUpperCase().padEnd(8))} ${bold(c.alias)} ${dim(ago(c.at))}  ${c.summary}`);
     }
   }
 
@@ -318,6 +346,17 @@ function render(report: ScanReport): void {
     console.log(yellow(`~${report.stack.estimatedContextTokens!.toLocaleString()} tokens of tool schema ride in every request — worth trimming`));
   }
   for (const n of report.notes) console.log(dim(`· ${n}`));
+
+  const acc = report.account;
+  if (acc) {
+    if (acc.recorded) {
+      console.log(dim(`recorded ${acc.recorded} server(s) to your account${acc.changed ? `, ${acc.changed} changed since the last upload` : ''}`));
+    }
+    for (const r of acc.rejected) console.log(yellow(`not recorded: ${r.alias ?? 'a server'}: ${r.reason}`));
+    if (acc.error) console.log(yellow(`could not record this scan to your account: ${acc.error}`));
+  } else if (!resolveApiKey()) {
+    console.log(dim('run `lurq setup` to keep this history across machines and see it in the dashboard'));
+  }
 }
 
 /** JSON for machines: full snapshots are omitted unless asked, they are large. */
@@ -333,9 +372,100 @@ function toJson(report: ScanReport) {
   };
 }
 
+/** Servers never contacted are not history; there is nothing to record. */
+const NOT_UPLOADED = new Set(['untrusted', 'disabled', 'cancelled']);
+
+function toUpload(s: ServerReport): UploadedServer {
+  return {
+    alias: s.alias,
+    serverKey: s.serverKey,
+    configFingerprint: s.configFingerprint,
+    registry: s.registry,
+    packageName: s.packageName,
+    pinnedVersion: s.pinnedVersion,
+    transport: s.transport,
+    status: s.status,
+    error: s.error,
+    snapshot: s.snapshot
+      ? {
+          serverInfo: s.snapshot.serverInfo,
+          instructions: s.snapshot.instructions,
+          tools: s.snapshot.tools,
+          prompts: s.snapshot.prompts,
+          resourceTemplates: s.snapshot.resourceTemplates,
+        }
+      : null,
+  };
+}
+
+/**
+ * Split uploads under the server's body ceiling and per-request server cap.
+ *
+ * Greedy and order-preserving. A server bigger than the budget on its own goes
+ * alone rather than being dropped: the server decides whether it is too large,
+ * and says so per server.
+ */
+export function chunkUploads<T>(items: T[], maxBytes = 3_000_000, maxCount = 50): T[][] {
+  const chunks: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const item of items) {
+    const size = JSON.stringify(item).length;
+    if (current.length && (bytes + size > maxBytes || current.length >= maxCount)) {
+      chunks.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(item);
+    bytes += size;
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Record the scan under the configured key's account.
+ *
+ * Never fails the scan: the local report is complete without it, and an
+ * exhausted quota or an unreachable service should read as "not recorded",
+ * not as a broken scanner.
+ */
+export async function syncToAccount(report: ScanReport, opts: McpScanCliOpts): Promise<AccountSync | null> {
+  if (opts.upload === false || !resolveApiKey()) return null;
+  const servers = report.servers.filter((s) => !NOT_UPLOADED.has(s.status)).map(toUpload);
+  if (!servers.length) return null;
+
+  const out: AccountSync = { recorded: 0, changed: 0, results: [], rejected: [], error: null };
+  for (const chunk of chunkUploads(servers)) {
+    try {
+      const r = await uploadMcpScan({
+        source: process.env.CI ? 'ci' : 'cli',
+        clientVersion: VERSION,
+        contribute: opts.contribute !== false,
+        servers: chunk,
+      });
+      out.results.push(...r.servers);
+      out.rejected.push(...r.rejected.map((x) => ({ alias: x.alias, reason: x.reason })));
+    } catch (err) {
+      out.error = err instanceof RemoteError ? err.message : err instanceof Error ? err.message : String(err);
+      break;
+    }
+  }
+  out.recorded = out.results.length;
+  out.changed = out.results.filter((r) => r.change === 'changed').length;
+  return out;
+}
+
 export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts): Promise<void> {
   const threshold = parseThreshold(opts.failOn);
   const report = await collectScan(dir, opts);
+  report.account = await syncToAccount(report, opts);
+  if (report.account) {
+    report.worst = worst([
+      ...(report.worst ? [{ severity: report.worst }] : []),
+      ...report.account.results.flatMap((r) => (r.since ? [{ severity: r.since.severity as Severity }] : [])),
+    ]);
+  }
 
   if (opts.json) console.log(JSON.stringify(toJson(report), null, 2));
   else if (report.servers.length === 0) {

@@ -9,6 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildProgram } from '../src/cli/index';
 import { runMcpScan, runMcpStackLive } from '../src/cli/mcpScan';
 import { lurqHome } from '../src/core/userConfig';
+import * as remote from '../src/cli/remote';
+import { chunkUploads } from '../src/cli/mcpScan';
+
+vi.mock('../src/cli/remote', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/cli/remote')>()),
+  uploadMcpScan: vi.fn(),
+}));
 
 const GOOD = join(__dirname, 'fixtures', 'mcpServers', 'good.mjs');
 
@@ -16,6 +23,7 @@ let home: string;
 let root: string;
 let prevHome: string | undefined;
 let prevLurqHome: string | undefined;
+let prevKey: string | undefined;
 let out: string[];
 
 function configure(servers: Record<string, unknown>, where: 'home' | 'project' = 'home') {
@@ -45,6 +53,10 @@ beforeEach(() => {
   // baseline another test reads.
   prevLurqHome = process.env.LURQ_HOME;
   process.env.LURQ_HOME = mkdtempSync(join(tmpdir(), 'lurq-cli-state-'));
+  // No key unless a test sets one: a developer shell with LURQ_API_KEY must not upload.
+  prevKey = process.env.LURQ_API_KEY;
+  delete process.env.LURQ_API_KEY;
+  vi.mocked(remote.uploadMcpScan).mockReset();
   out = [];
   vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
     out.push(args.join(' '));
@@ -55,6 +67,8 @@ beforeEach(() => {
 afterEach(() => {
   process.env.HOME = prevHome;
   process.env.LURQ_HOME = prevLurqHome;
+  if (prevKey === undefined) delete process.env.LURQ_API_KEY;
+  else process.env.LURQ_API_KEY = prevKey;
   process.exitCode = undefined;
   vi.restoreAllMocks();
 });
@@ -157,5 +171,79 @@ describe('command wiring', () => {
     expect(flags).toEqual(
       expect.arrayContaining(['--fail-on', '--no-history', '--trust-project', '--only', '--timeout', '--json']),
     );
+  });
+});
+
+describe('recording to the account', () => {
+  const recorded = (over: Record<string, unknown> = {}) => ({
+    servers: [{ alias: 'fx', serverKey: 'local:fx', deploymentId: 1, change: 'first', worstSeverity: null, since: null, ...over }],
+    rejected: [],
+  });
+
+  it('uploads what was contacted when a key is configured, and never without one', async () => {
+    configure({ fx: fixture(), broken: { command: 'lurq-definitely-not-a-command' } });
+    configure({ repo: { command: 'lurq-another-missing-command' } }, 'project');
+    await scanJson();
+    expect(remote.uploadMcpScan).not.toHaveBeenCalled();
+
+    process.env.LURQ_API_KEY = 'lurq_test_key_for_upload';
+    vi.mocked(remote.uploadMcpScan).mockResolvedValue(recorded() as never);
+    const r = await scanJson();
+    expect(remote.uploadMcpScan).toHaveBeenCalledTimes(1);
+    const body = vi.mocked(remote.uploadMcpScan).mock.calls[0]![0];
+    // A failure is history; the untrusted project server was never launched, so it is not.
+    expect(body.servers.map((s) => [s.alias, s.status]).sort()).toEqual([
+      ['broken', 'spawn_failed'],
+      ['fx', 'ok'],
+    ]);
+    expect(body.contribute).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('lurq_test_key_for_upload');
+    expect(r.account).toMatchObject({ recorded: 1, changed: 0, error: null });
+  });
+
+  it('respects --no-upload and --no-contribute', async () => {
+    process.env.LURQ_API_KEY = 'lurq_test_key_for_upload';
+    configure({ fx: fixture() });
+    vi.mocked(remote.uploadMcpScan).mockResolvedValue(recorded() as never);
+    await scanJson({ upload: false });
+    expect(remote.uploadMcpScan).not.toHaveBeenCalled();
+    await scanJson({ contribute: false });
+    expect(vi.mocked(remote.uploadMcpScan).mock.calls[0]![0].contribute).toBe(false);
+  });
+
+  it('keeps the scan when the upload fails, and says why', async () => {
+    process.env.LURQ_API_KEY = 'lurq_test_key_for_upload';
+    configure({ fx: fixture() });
+    vi.mocked(remote.uploadMcpScan).mockRejectedValue(new remote.RemoteError('Monthly limit reached', 402));
+    const r = await scanJson({ failOn: 'high' });
+    expect(r.servers[0].status).toBe('ok');
+    expect(r.account).toMatchObject({ recorded: 0, error: 'Monthly limit reached' });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  // A change seen from CI yesterday is this machine's change too.
+  it("gates on the account's change history, not just this machine's", async () => {
+    process.env.LURQ_API_KEY = 'lurq_test_key_for_upload';
+    configure({ fx: fixture() });
+    vi.mocked(remote.uploadMcpScan).mockResolvedValue(
+      recorded({ change: 'changed', since: { at: new Date().toISOString(), severity: 'critical', summary: 'rug pull', rugPull: ['search'] } }) as never,
+    );
+    const r = await scanJson({ failOn: 'high' });
+    expect(r.worst).toBe('critical');
+    expect(r.account.changed).toBe(1);
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe('chunkUploads', () => {
+  it('splits by count and by size, keeping order', () => {
+    const items = Array.from({ length: 5 }, (_, i) => ({ i, pad: 'x'.repeat(100) }));
+    expect(chunkUploads(items, 1_000_000, 2).map((c) => c.map((x) => x.i))).toEqual([[0, 1], [2, 3], [4]]);
+    expect(chunkUploads(items, 250, 50).map((c) => c.length)).toEqual([2, 2, 1]);
+  });
+
+  it('sends an oversized item alone rather than dropping it', () => {
+    const big = { pad: 'x'.repeat(5_000) };
+    expect(chunkUploads([{ a: 1 }, big, { b: 2 }], 1_000, 50)).toEqual([[{ a: 1 }], [big], [{ b: 2 }]]);
   });
 });

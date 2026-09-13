@@ -388,6 +388,11 @@ export function buildProgram(): Command {
       'none',
     )
     .option('--no-history', 'do not compare with, or record, the previous scan')
+    .option('--no-upload', 'keep this scan on this machine; do not record it to your account')
+    .option(
+      '--no-contribute',
+      "do not offer published servers' contracts as corroboration for the public index",
+    )
     .option('--json', 'output JSON instead of a report')
     .action(async (dir: string | undefined, opts: import('./mcpScan').McpScanCliOpts) => {
       const { runMcpScan } = await import('./mcpScan');
