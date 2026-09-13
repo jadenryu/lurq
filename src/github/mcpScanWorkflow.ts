@@ -4,16 +4,16 @@
  * A laptop scan catches a change the next time someone runs it; this catches it
  * the day it ships. It runs only the servers committed to the repository —
  * a runner has no user-level agent configs — with credentials mapped from
- * repository secrets, and uploads under the account so the dashboard's history
- * and change feed include it.
+ * repository secrets, uploads under the account so the dashboard's history
+ * includes it, and keeps a pinned "lurq dashboard" issue current.
  *
  * `--trust-project` is correct here and nowhere else by default: the person who
  * commits this file is the repository's owner approving its own config, which is
  * exactly the approval a fresh clone on a laptop lacks.
  *
- * The permissions block is the trust model: read-only contents, no token that
- * can write. A poisoned tool description reaching the scan can change the
- * report, never the repository.
+ * The permissions block is the trust model. Contents are read-only. The one
+ * write, `issues: write`, exists for the dashboard issue, and everything the
+ * scan read from a server is escaped before it reaches that issue.
  */
 import { cliSpec } from './workflow';
 import type { Severity } from '../audit/types';
@@ -29,6 +29,8 @@ export interface McpScanWorkflowOptions {
   secrets?: string[];
   /** A server launches with uvx/uv, which the runner does not have by default. */
   needsUv?: boolean;
+  /** Keep the pinned dashboard issue current. Default true. */
+  githubIssue?: boolean;
 }
 
 const DEFAULT_CRON = '23 6 * * *';
@@ -42,7 +44,7 @@ const VALID_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * GitHub refuses repository secrets whose names start with `GITHUB_`, so a
  * server reading `GITHUB_TOKEN` is mapped from `MCP_GITHUB_TOKEN` — and not
  * from the runner's own GITHUB_TOKEN, which is scoped to this workflow's
- * read-only permissions and is not the credential the user configured.
+ * permissions and is not the credential the user configured.
  */
 export function secretNameFor(envName: string): string {
   return envName.toUpperCase().startsWith('GITHUB_') ? `MCP_${envName}` : envName;
@@ -52,10 +54,16 @@ export function renderMcpScanWorkflow(opts: McpScanWorkflowOptions = {}): string
   const cron = opts.cron ?? DEFAULT_CRON;
   if (cron.trim().split(/\s+/).length !== 5) throw new Error(`cron must have five fields; got "${cron}"`);
   const failOn = opts.failOn ?? 'high';
+  const issue = opts.githubIssue !== false;
   const secrets = [...new Set(opts.secrets ?? [])].filter((s) => VALID_NAME.test(s) && s !== 'LURQ_API_KEY').sort();
 
+  // The runner's token for the dashboard issue is named LURQ_GITHUB_ISSUE_TOKEN
+  // in spirit but must be GITHUB_TOKEN for the CLI to find it. A server that
+  // reads GITHUB_TOKEN gets its own credential instead, mapped above.
+  const serverWantsGithubToken = secrets.includes('GITHUB_TOKEN');
   const env = [
     '          LURQ_API_KEY: ${{ secrets.LURQ_API_KEY }}',
+    ...(issue && !serverWantsGithubToken ? ['          GITHUB_TOKEN: ${{ github.token }}'] : []),
     ...secrets.map((s) => `          ${s}: \${{ secrets.${secretNameFor(s)} }}`),
   ].join('\n');
 
@@ -65,6 +73,16 @@ export function renderMcpScanWorkflow(opts: McpScanWorkflowOptions = {}): string
       - uses: astral-sh/setup-uv@v6
 `
     : '';
+
+  const permissions = issue
+    ? `# Contents are read-only; nothing the scan reads can change code. The one write
+# keeps the pinned "lurq dashboard" issue current, with server text escaped.
+permissions:
+  contents: read
+  issues: write`
+    : `# Read-only. The scan reads tool contracts; nothing it reads can write here.
+permissions:
+  contents: read`;
 
   return `# Rescans the MCP servers committed to this repository: what each one exposes,
 # what its tools tell your agents, and what changed since the last scan.
@@ -79,9 +97,7 @@ on:
 ${CONFIG_PATHS.map((p) => `      - '${p}'`).join('\n')}
   workflow_dispatch: {}
 
-# Read-only. The scan reads tool contracts; nothing it reads can write here.
-permissions:
-  contents: read
+${permissions}
 
 jobs:
   scan:
@@ -98,7 +114,7 @@ ${uv}
       # --require-upload fails the job when the scan could not be recorded, so a
       # green run always means the dashboard's history has today's scan in it.
       - name: Scan MCP servers
-        run: npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload --fail-on ${failOn}
+        run: npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload${issue ? ' --github-issue' : ''} --fail-on ${failOn}
         env:
 ${env}
 `;
