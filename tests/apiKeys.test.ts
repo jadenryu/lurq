@@ -7,6 +7,8 @@ import {
   resetAuthCache,
   listKeysForOwner,
   findKeyForOwner,
+  revokeKey,
+  rotateKey,
 } from '../src/auth/apiKeys';
 import { API_KEY_PREFIX } from '../src/core/constants';
 import type { Database } from '../src/db/client';
@@ -188,5 +190,55 @@ describe('findKeyForOwner', () => {
       ownerId: 'user_abc',
     });
     expect(result).toEqual(mine);
+  });
+});
+
+describe('revocation evicts the cached key', () => {
+  beforeEach(() => resetAuthCache());
+
+  /**
+   * A DB whose SELECT answers from a mutable `revoked` flag, the way the real
+   * `isNull(revokedAt)` filter would. Before eviction, a key revoked through the
+   * dashboard kept authenticating from this process's cache for up to a minute.
+   */
+  function revocableDb() {
+    const state = { revoked: false, selects: 0 };
+    const row = { id: 7, keyHash: 'h', prefix: 'lurq_live_x', label: null, tier: 'free', ownerId: 'u1', scopes: [], revokedAt: null } as unknown as ApiKeyRow;
+    const selectChain = () => {
+      state.selects += 1;
+      const rows = async () => (state.revoked ? [] : [row]);
+      const tail = { limit: rows, orderBy: () => ({ limit: rows }) };
+      return { from: () => ({ where: () => tail }) };
+    };
+    const db = {
+      select: selectChain,
+      insert: () => ({ values: () => ({ returning: async () => [{ ...row, id: 8 }] }) }),
+      update: () => ({
+        set: (v: { revokedAt?: Date }) => ({
+          where: () => {
+            if (v.revokedAt) state.revoked = true;
+            const done = Promise.resolve();
+            return Object.assign(done, { returning: async () => (v.revokedAt ? [{ id: row.id }] : []) });
+          },
+        }),
+      }),
+    } as unknown as Database;
+    return { db, state };
+  }
+
+  it('revokeKey makes the next lookup miss instead of serving the cache', async () => {
+    const { db } = revocableDb();
+    const k = 'lurq_live_secret';
+    expect(await lookupActiveKey(db, k)).not.toBeNull();
+    expect(await revokeKey(db, '7')).toBe(1);
+    expect(await lookupActiveKey(db, k)).toBeNull();
+  });
+
+  it('rotateKey evicts the previous key too', async () => {
+    const { db } = revocableDb();
+    const k = 'lurq_live_secret';
+    expect(await lookupActiveKey(db, k)).not.toBeNull();
+    expect(await rotateKey(db, '7')).not.toBeNull();
+    expect(await lookupActiveKey(db, k)).toBeNull();
   });
 });

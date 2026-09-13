@@ -13,13 +13,21 @@ describe('compact', () => {
     });
   });
 
-  it('drops empty arrays but keeps non-empty ones', () => {
-    expect(compact({ advisories: [], flags: ['x'] })).toEqual({ flags: ['x'] });
+  // Empty containers are contract, not noise: `lurq verify` crashed iterating a
+  // clean verdict's stripped `reasons`, and `excluded`/`removed` are documented
+  // as present-but-empty.
+  it('keeps empty arrays and objects', () => {
+    expect(compact({ reasons: [], flags: ['x'], annotations: {} })).toEqual({
+      reasons: [],
+      flags: ['x'],
+      annotations: {},
+    });
   });
 
-  it('recurses into nested objects and drops those left empty', () => {
-    expect(compact({ breakdown: { m: 90, efficiency: null, quality: null }, gone: { x: null } })).toEqual({
+  it('recurses into nested objects, keeping ones left empty', () => {
+    expect(compact({ breakdown: { m: 90, efficiency: null, quality: null }, kept: { x: null } })).toEqual({
       breakdown: { m: 90 },
+      kept: {},
     });
   });
 

@@ -9,9 +9,9 @@ import { openInBrowser } from '../core/open';
 import { resolveApiKey } from '../core/userConfig';
 import { isCategory, type Category, type Confidence } from '../core/types';
 import { searchCapabilities } from '../core/capabilities';
-import { createDb } from '../db/client';
-import { getPackageVersions } from '../db/packages';
-import { handleCompare, handleEvaluate, handleRecommend, handleVerify } from '../mcp/handlers';
+import type { createDb } from '../db/client';
+import type * as Handlers from '../mcp/handlers';
+import type * as Packages from '../db/packages';
 import { CONFIDENCE, QUALITY_WEIGHTS } from '../scoring/weights';
 import {
   activeWeightsPath,
@@ -38,8 +38,24 @@ import {
 } from './format';
 import { MissingKeyError } from './remote';
 
+// The local-index code paths, loaded on first use rather than at import. They
+// pull in drizzle-orm and postgres, which only a self-hoster's own database
+// needs and which the published package does not install: imported statically,
+// every hosted `lurq evaluate` would die resolving a driver it never calls.
+const handleRecommend: typeof Handlers.handleRecommend = async (...a) =>
+  (await import('../mcp/handlers')).handleRecommend(...a);
+const handleEvaluate: typeof Handlers.handleEvaluate = async (...a) =>
+  (await import('../mcp/handlers')).handleEvaluate(...a);
+const handleCompare: typeof Handlers.handleCompare = async (...a) =>
+  (await import('../mcp/handlers')).handleCompare(...a);
+const handleVerify: typeof Handlers.handleVerify = async (...a) =>
+  (await import('../mcp/handlers')).handleVerify(...a);
+const getPackageVersions: typeof Packages.getPackageVersions = async (...a) =>
+  (await import('../db/packages')).getPackageVersions(...a);
+
 async function withDb<T>(fn: (db: ReturnType<typeof createDb>['db']) => Promise<T>): Promise<T> {
   requireConfig(['DATABASE_URL']);
+  const { createDb } = await import('../db/client');
   const handle = createDb();
   try {
     return await fn(handle.db);
@@ -65,10 +81,9 @@ export function indexSource(): 'hosted' | 'local' {
   if (process.env.LURQ_LOCAL === '1') return 'local';
   if (resolveApiKey()) return 'hosted';
   if (process.env.DATABASE_URL) return 'local';
-  throw new MissingKeyError(
-    'No API key configured. Run `lurq setup` to connect this machine, ' +
-      'or set DATABASE_URL to read from your own index.',
-  );
+  // Self-hosters know about DATABASE_URL; telling everyone else to set one sent
+  // them looking for a database they are never meant to run.
+  throw new MissingKeyError();
 }
 
 /**
@@ -77,8 +92,10 @@ export function indexSource(): 'hosted' | 'local' {
  * The hosted tools return exactly what the local handler returns (mcp/server.ts
  * wraps every handler result as a single JSON text block), so both paths hand
  * back the same shape and the caller renders it once. The one difference is
- * that the hosted path has been through `compact`, which drops null fields and
- * empty arrays, hence the `?? []` guards in the renderers below.
+ * that the hosted path has been through `compact`, which drops null fields
+ * (so absent = unknown, render with `== null`). Servers deployed before that was
+ * fixed also dropped empty arrays and objects, and old servers stay out there,
+ * hence the `?? []` guards on every container in the renderers below.
  */
 async function fromIndex<T>(
   tool: string,
@@ -199,7 +216,10 @@ export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promis
   // Every component can be null for a barely-tracked package, and `compact`
   // drops the whole object once they are, so this is absent, not just empty.
   const b = res.scoreBreakdown ?? {};
-  const advisories = res.advisories ?? [];
+  // Absent is "never checked", not "none" (see EvaluateOutput.advisories). An
+  // older server sent `[]` for both and compacted it away, so it too lands on
+  // the cautious reading.
+  const advisories = res.advisories;
   console.log(
     detail([
       ['health', `${res.healthScore}  ${confidenceLabel(res.confidence)}`],
@@ -223,7 +243,11 @@ export async function runEvaluate(pkg: string, opts: { json?: boolean }): Promis
       ],
       [
         'advisories',
-        advisories.length ? advisories.map((a) => `${a.severity}`).join(', ') : 'none',
+        advisories == null
+          ? yellow('not checked yet')
+          : advisories.length
+            ? advisories.map((a) => `${a.severity}`).join(', ')
+            : 'none',
       ],
       ['repo', res.repoUrl ?? '—'],
     ]),
@@ -413,7 +437,15 @@ export async function runEditWeights(opts: EditWeightsOpts): Promise<void> {
           `maint ${weights.health.maintenance.toFixed(3)}, adopt ${weights.health.adoption.toFixed(3)}, rel ${weights.health.reliability.toFixed(3)}, eff ${weights.health.efficiency.toFixed(3)}`,
       );
     }
-    console.log(dim('\nRun `lurq rescore` to apply the new health weights to the stored index.'));
+    // `rescore` is an operator command, not part of the published CLI, and the
+    // hosted service ranks with its own weights: say both instead of pointing
+    // at a command that does not exist here.
+    console.log(
+      dim(
+        '\nThese weights apply to a self-hosted index, on its next operator rescore.' +
+          '\nThe hosted service ranks with its published weights (`lurq weights`).',
+      ),
+    );
     return;
   }
 
@@ -528,8 +560,8 @@ export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<
   // Reasons before stats. Someone scanning this output stops at the first line
   // that tells them something, and a severity buried under a download count is
   // a severity that gets skipped.
-  for (const r of v.reasons) console.log(`  ${red('•')} ${r}`);
-  for (const u of v.unknowns) console.log(`  ${yellow('?')} ${u}`);
+  for (const r of v.reasons ?? []) console.log(`  ${red('•')} ${r}`);
+  for (const u of v.unknowns ?? []) console.log(`  ${yellow('?')} ${u}`);
 
   if (v.level === 'invalid') return;
 
@@ -543,7 +575,7 @@ export async function runVerify(pkg: string, opts: { json?: boolean }): Promise<
       // Never "0" for something nobody has looked at.
       [
         'advisories',
-        res.advisoryCount === null ? yellow('not checked yet') : String(res.advisoryCount),
+        res.advisoryCount == null ? yellow('not checked yet') : String(res.advisoryCount),
       ],
       ['risk', riskColor(v.level)],
       ['risk flags', riskFlags.length ? yellow(riskFlags.join(', ')) : 'none'],
@@ -561,8 +593,8 @@ export async function runVersions(
   loadEnv();
   if (!process.env.DATABASE_URL) {
     throw new Error(
-      '`lurq versions` reads a local index and needs DATABASE_URL. ' +
-        'On the hosted service, `lurq usage <pkg> --known <v>` gives the API delta between two versions.',
+      '`lurq versions` reads a self-hosted index and is not available on the hosted service. ' +
+        'To see what changed between two versions, run `lurq usage <pkg> --known <v>`.',
     );
   }
   await withDb(async (db) => {
@@ -642,9 +674,15 @@ export async function runSandbox(
 /** Version-exact API surface + drift from a known version (§4D). */
 export async function runUsage(
   pkg: string,
-  opts: { version?: string; known?: string; json?: boolean },
+  opts: { version?: string; known?: string; query?: string; offset?: number; json?: boolean },
 ): Promise<void> {
-  const args = { package: pkg, version: opts.version, knownVersion: opts.known };
+  const args = {
+    package: pkg,
+    version: opts.version,
+    knownVersion: opts.known,
+    query: opts.query,
+    offset: opts.offset,
+  };
   const res = await fromIndex('usage', args, async (db) => {
     const { handleUsage } = await import('../mcp/handlers');
     return handleUsage(db, args);
@@ -670,6 +708,9 @@ export async function runUsage(
       (res.surface ?? []).map((s) => [s.name, s.kind, s.signature ?? '']),
     ),
   );
+  // Paging, a name filter that matched nothing, or a shallow surface: each is a
+  // table that is not the whole API, and must not be read as one.
+  if (res.note) console.log(res.shallow ? yellow(res.note) : dim(res.note));
 
   if (res.delta) {
     const d = res.delta;
@@ -863,7 +904,8 @@ export async function runMcpSurface(
   }
   if (res.configRequest) console.log(yellow(`\n${res.configRequest}\n`));
 
-  if (res.verdict !== 'verified_true' || res.tools.length === 0) {
+  const tools = res.tools ?? [];
+  if (res.verdict !== 'verified_true' || tools.length === 0) {
     console.log(yellow(`${res.verdict}: ${res.coverageNote}`));
     return;
   }
@@ -871,9 +913,10 @@ export async function runMcpSurface(
   console.log(
     table(
       ['Tool', 'Required', 'Optional', 'Behaviour'],
-      res.tools.map((t) => {
-        const optional = t.params.filter((p) => !t.required.includes(p));
-        const a = t.annotations;
+      tools.map((t) => {
+        const required = t.required ?? [];
+        const optional = (t.params ?? []).filter((p) => !required.includes(p));
+        const a = t.annotations ?? {};
         // Only the powers that are ON are worth ink; an absent flag is the
         // benign default and printing it would bury the two that matter.
         const behaviour = [
@@ -884,7 +927,7 @@ export async function runMcpSurface(
         ]
           .filter(Boolean)
           .join(' ');
-        return [t.name, t.required.join(', ') || '—', optional.join(', ') || '—', behaviour];
+        return [t.name, required.join(', ') || '—', optional.join(', ') || '—', behaviour];
       }),
     ),
   );
@@ -915,42 +958,56 @@ export async function runMcpDrift(
     return;
   }
 
-  const widened = res.annotationFlips.filter((f) => f.widensPrivilege);
+  const {
+    annotationFlips = [],
+    silentDrift = [],
+    removedTools = [],
+    requiredAdded = [],
+    paramsRemoved = [],
+    typeChanged = [],
+    addedTools = [],
+    requiredRelaxed = [],
+    paramsAdded = [],
+    outputChanged = [],
+    deprecated = [],
+    prosePolished = [],
+  } = res;
+  const widened = annotationFlips.filter((f) => f.widensPrivilege);
   for (const f of widened) {
     console.log(red(`⚠ privilege  ${f.tool}.${f.hint}: ${f.from} → ${f.to}`));
   }
-  for (const t of res.silentDrift) {
+  for (const t of silentDrift) {
     console.log(yellow(`⚠ silent     ${t}: schema changed, description did not`));
   }
-  for (const t of res.removedTools) console.log(red(`✗ removed    ${t}`));
-  for (const c of res.requiredAdded) {
+  for (const t of removedTools) console.log(red(`✗ removed    ${t}`));
+  for (const c of requiredAdded) {
     console.log(red(`✗ required   ${c.tool}: ${c.params.join(', ')} now mandatory`));
   }
-  for (const c of res.paramsRemoved) {
+  for (const c of paramsRemoved) {
     console.log(red(`✗ dropped    ${c.tool}: ${c.params.join(', ')}`));
   }
-  for (const c of res.typeChanged.filter((x) => !x.widened)) {
+  for (const c of typeChanged.filter((x) => !x.widened)) {
     console.log(red(`✗ narrowed   ${c.tool}.${c.param}`));
   }
-  for (const t of res.addedTools) console.log(green(`+ added      ${t}`));
-  for (const c of res.requiredRelaxed) {
+  for (const t of addedTools) console.log(green(`+ added      ${t}`));
+  for (const c of requiredRelaxed) {
     console.log(green(`+ optional   ${c.tool}: ${c.params.join(', ')}`));
   }
-  for (const c of res.paramsAdded) {
+  for (const c of paramsAdded) {
     console.log(green(`+ params     ${c.tool}: ${c.params.join(', ')}`));
   }
   // Compatible movement is printed too. The summary counts it, so leaving it
   // out of the body left the reader told that five parameters were relaxed and
   // unable to see which five.
-  for (const c of res.typeChanged.filter((x) => x.widened)) {
+  for (const c of typeChanged.filter((x) => x.widened)) {
     console.log(green(`+ relaxed    ${c.tool}.${c.param}`));
   }
-  for (const t of res.outputChanged) console.log(dim(`· output     ${t}`));
-  for (const f of res.annotationFlips.filter((x) => !x.widensPrivilege)) {
+  for (const t of outputChanged) console.log(dim(`· output     ${t}`));
+  for (const f of annotationFlips.filter((x) => !x.widensPrivilege)) {
     console.log(dim(`· safer      ${f.tool}.${f.hint}: ${f.from} → ${f.to}`));
   }
-  for (const t of res.deprecated) console.log(yellow(`· deprecated ${t}`));
-  for (const t of res.prosePolished) console.log(dim(`· docs only  ${t}`));
+  for (const t of deprecated) console.log(yellow(`· deprecated ${t}`));
+  for (const t of prosePolished) console.log(dim(`· docs only  ${t}`));
 
   console.log(
     res.breaking ? red(`\n${res.summary}`) : green(`\n${res.summary || 'no contract change'}`),
@@ -1043,7 +1100,7 @@ export async function runAudit(
       // to write into the shared one — a poisoned tool list would be served to
       // everybody. Hosted callers get the worker's queue instead.
       probeNote =
-        '--probe needs your own index (DATABASE_URL); on the hosted service the worker probes queued servers for you';
+        '--probe is for a self-hosted index; on the hosted service queued MCP servers are probed for you';
     } else {
       const budget = Math.max(5_000, Number(opts.probeBudget ?? 90) * 1000);
       const { probed, skipped } = await probeProjectServers(inv.mcpServers, budget);
@@ -1078,6 +1135,7 @@ export async function runAudit(
   if (probeNote) console.log(dim(probeNote));
 
   const flagged = (res.items ?? [])
+    .map((i) => ({ ...i, findings: i.findings ?? [] }))
     .filter((i) => i.findings.length > 0)
     .sort(
       (a, b) =>
