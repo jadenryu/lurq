@@ -53,6 +53,11 @@ describe('the plan table itself', () => {
 
     const rates = PLAN_LIST.map((p) => p.ratePerMinute);
     for (let i = 1; i < rates.length; i++) expect(rates[i]!).toBeGreaterThan(rates[i - 1]!);
+
+    // Zero would read as "no limit" in the web route, so free must be positive.
+    const ask = PLAN_LIST.map((p) => p.askDailyUsd);
+    expect(ask[0]!).toBeGreaterThan(0);
+    for (let i = 1; i < ask.length; i++) expect(ask[i]!).toBeGreaterThan(ask[i - 1]!);
   });
 
   it('keeps free free and paid paid', () => {

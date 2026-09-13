@@ -31,6 +31,12 @@ export interface Plan {
   monthlyCalls: number | null;
   /** Per-minute burst ceiling, enforced by the express limiter. */
   ratePerMinute: number;
+  /**
+   * Dashboard Ask spend per UTC day, in dollars. Must be > 0: the web route
+   * reads a zero limit as "no limit". Free is a taste, not a workload — each
+   * question reserves $0.25 up front, so $0.30 is about three Sonnet questions.
+   */
+  askDailyUsd: number;
   /** One line under the price. Kept to a single clause. */
   tagline: string;
   /** Shown on the card. Lead with what changes from the tier below. */
@@ -48,6 +54,7 @@ export const PLANS: Record<Tier, Plan> = {
     priceCents: 0,
     monthlyCalls: 200,
     ratePerMinute: 60,
+    askDailyUsd: 0.3,
     tagline: 'Enough to find out whether the index is telling the truth.',
     features: [
       'CLI and installable skill',
@@ -64,6 +71,7 @@ export const PLANS: Record<Tier, Plan> = {
     priceCents: 500,
     monthlyCalls: 10_000,
     ratePerMinute: 120,
+    askDailyUsd: 3,
     tagline: 'For one developer who runs it on every install.',
     features: [
       '10,000 hosted calls a month',
@@ -80,6 +88,7 @@ export const PLANS: Record<Tier, Plan> = {
     priceCents: 10_000,
     monthlyCalls: null,
     ratePerMinute: 600,
+    askDailyUsd: 15,
     tagline: 'For a team that needs the graph under its own controls.',
     features: [
       'Uncapped hosted calls',
