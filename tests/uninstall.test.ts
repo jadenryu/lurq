@@ -19,6 +19,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   agentSpecs,
   installAgent,
+  claudeSettingsPath,
+  installClaudeHook,
   installInstructionsFile,
   removeMarkedBlock,
   upsertMarkedBlock,
@@ -95,6 +97,16 @@ describe('lurq uninstall', () => {
     expect(readFileSync(join(home, '.codex', 'config.toml'), 'utf8')).toBe(codexToml);
     expect(JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8')).mcpServers.lurq).toBeTruthy();
     expect(readUserConfig().apiKey).toBe('lurq_live_x');
+  });
+
+  it('takes the install hook out of Claude Code settings and keeps the user’s own', async () => {
+    const settings = { hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'fmt' }] }] } };
+    put(claudeSettingsPath(), JSON.stringify(settings));
+    expect(installClaudeHook(claudeSettingsPath(), { command: 'lurq', onPath: true })).toBe(claudeSettingsPath());
+    expect(installClaudeHook(undefined, { command: 'npx lurqrun', onPath: false })).toBeNull();
+
+    await runUninstall({ agent: 'claude-code', yes: true });
+    expect(JSON.parse(readFileSync(claudeSettingsPath(), 'utf8'))).toEqual(settings);
   });
 
   it('refuses to act without --yes when nobody can answer the prompt', async () => {

@@ -232,6 +232,8 @@ export interface InstallResult {
   message?: string;
   /** Where the standing-instructions file landed, when the agent supports one. */
   instructionsPath?: string;
+  /** Where the verify-before-install hook landed (Claude Code only). */
+  hookPath?: string;
 }
 
 export function readJsonObject(path: string): Record<string, any> {
@@ -506,6 +508,52 @@ export function installInstructions(spec: AgentSpec): string | null {
   return target.path;
 }
 
+// ── Claude Code hook ─────────────────────────────────────────────────────────
+
+/** Claude Code's user settings, where hooks live (its MCP servers are in ~/.claude.json). */
+export const claudeSettingsPath = (): string => home('.claude', 'settings.json');
+
+const HOOK_ARGS = 'hook pre-tool-use';
+const isLurqHook = (h: any): boolean => typeof h?.command === 'string' && h.command.endsWith(` ${HOOK_ARGS}`);
+
+export const hasClaudeHook = (settings: Record<string, any>): boolean =>
+  Array.isArray(settings.hooks?.PreToolUse) &&
+  settings.hooks.PreToolUse.some((g: any) => Array.isArray(g?.hooks) && g.hooks.some(isLurqHook));
+
+/** `settings` without lurq's hook. A group that held only ours goes, and so does a `hooks` left empty. */
+export function withoutClaudeHook(settings: Record<string, any>): Record<string, any> {
+  if (!hasClaudeHook(settings)) return settings;
+  const PreToolUse = settings.hooks.PreToolUse.flatMap((g: any) => {
+    if (!Array.isArray(g?.hooks) || !g.hooks.some(isLurqHook)) return [g];
+    const rest = g.hooks.filter((h: unknown) => !isLurqHook(h));
+    return rest.length ? [{ ...g, hooks: rest }] : [];
+  });
+  const hooks = { ...settings.hooks, PreToolUse };
+  if (PreToolUse.length === 0) delete hooks.PreToolUse;
+  const next = { ...settings, hooks };
+  if (Object.keys(hooks).length === 0) delete next.hooks;
+  return next;
+}
+
+/** `settings` with exactly one lurq hook, next to whatever hooks the user has. */
+export function withClaudeHook(settings: Record<string, any>, lurq: string): Record<string, any> {
+  const base = withoutClaudeHook(settings);
+  const groups = Array.isArray(base.hooks?.PreToolUse) ? base.hooks.PreToolUse : [];
+  const ours = { matcher: 'Bash', hooks: [{ type: 'command', command: `${lurq} ${HOOK_ARGS}`, timeout: 30 }] };
+  return { ...base, hooks: { ...base.hooks, PreToolUse: [...groups, ours] } };
+}
+
+/**
+ * Have Claude Code run `lurq verify` on every package an install command names
+ * (see hook.ts). Null when `lurq` is not on PATH: the hook runs before every Bash
+ * command, and resolving `npx` each time would cost more than the check is worth.
+ */
+export function installClaudeHook(path = claudeSettingsPath(), invocation = lurqInvocation()): string | null {
+  if (!invocation.onPath) return null;
+  writeJson(path, withClaudeHook(readJsonObject(path), invocation.command));
+  return path;
+}
+
 /** Apply the lurq entry to one agent's config, in the given mode. */
 export function installAgent(spec: AgentSpec, mode: InstallMode): InstallResult {
   try {
@@ -529,6 +577,13 @@ export function installAgent(spec: AgentSpec, mode: InstallMode): InstallResult 
       result.message = `MCP entry written; instructions file failed: ${
         err instanceof Error ? err.message : String(err)
       }`;
+    }
+    if (spec.id === 'claude-code') {
+      try {
+        result.hookPath = installClaudeHook() ?? undefined;
+      } catch (err) {
+        result.message = `MCP entry written; install hook failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
     }
     return result;
   } catch (err) {
@@ -623,6 +678,8 @@ export function printInstallReport(
       console.log(`  ✓ ${spec.label.padEnd(26)} ${short(r.instructionsPath!)}`);
     }
   }
+  const hooked = results.find((r) => r.hookPath);
+  if (hooked) console.log(`\nClaude Code hook: packages are verified before any npm, pnpm, yarn or bun install runs (${short(hooked.hookPath!)})`);
   if (instructionsPath) console.log(`\nFull guide: ${short(instructionsPath)}`);
 
   console.log('\nNext steps:');

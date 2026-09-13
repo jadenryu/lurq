@@ -534,6 +534,15 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('hook')
+    .argument('<event>', 'the agent event being handled: pre-tool-use')
+    .description('run as a Claude Code hook: verify packages before an install command runs')
+    .action(async (event: string) => {
+      const { runHook } = await import('./hook');
+      await runHook(event);
+    });
+
+  program
     .command('serve')
     .description('start the MCP server over stdio (for agent integration)')
     .action(async () => {

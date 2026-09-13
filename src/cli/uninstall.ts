@@ -20,6 +20,9 @@ import { dim, green, red, yellow } from './format';
 import {
   agentSpecs,
   BLOCK_START,
+  claudeSettingsPath,
+  hasClaudeHook,
+  withoutClaudeHook,
   readJsonObject,
   removeMarkedBlock,
   resolveAgents,
@@ -78,6 +81,16 @@ function mcpEntryRemoval(spec: AgentSpec): Removal | null {
   };
 }
 
+function claudeHookRemoval(): Removal | null {
+  const path = claudeSettingsPath();
+  if (!existsSync(path) || !hasClaudeHook(readJsonObject(path))) return null;
+  return {
+    label: 'Claude Code install hook',
+    path,
+    apply: () => writeJson(path, withoutClaudeHook(readJsonObject(path))),
+  };
+}
+
 function instructionsRemoval(spec: AgentSpec): Removal | null {
   const target = spec.instructions;
   if (!target || !existsSync(target.path)) return null;
@@ -129,6 +142,13 @@ export function planUninstall(
       problems.push(`${spec.label}: ${err instanceof Error ? err.message : String(err)}`);
     }
     add(instructionsRemoval(spec));
+    if (spec.id === 'claude-code') {
+      try {
+        add(claudeHookRemoval());
+      } catch (err) {
+        problems.push(`Claude Code settings: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 
   if (opts.global) {
