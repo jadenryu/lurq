@@ -74,9 +74,11 @@ function withinDays(date: Date | null, days: number): boolean {
   return date ? Date.now() - date.getTime() <= days * DAY_MS : false;
 }
 
-/** Top advisories by severity, capped (§12.4). */
-function topAdvisories(advisories: Advisory[] | null, max = 5): Advisory[] {
-  if (!advisories?.length) return [];
+/** Top advisories by severity, capped (§12.4). Null stays null: it means this
+ *  package was never checked, and `[]` would read as a clean bill (the same
+ *  distinction `verify` keeps for `advisoryCount`). */
+function topAdvisories(advisories: Advisory[] | null, max = 5): Advisory[] | null {
+  if (!advisories) return null;
   return [...advisories]
     .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
     .slice(0, max);

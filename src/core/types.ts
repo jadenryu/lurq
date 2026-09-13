@@ -463,7 +463,9 @@ export interface EvaluateOutput {
   archived: boolean;
   /** The shared safety call — identical to what `verify` and `audit` return. */
   verdict: SecurityVerdict;
-  advisories: Advisory[];
+  /** Top advisories by severity. Null (absent once compacted) = not checked
+   *  yet, never "none"; `verdict.unknowns` says so in words. */
+  advisories: Advisory[] | null;
   summary: string | null;
   usageGuide: UsageGuide | null;
   repoUrl: string | null;
