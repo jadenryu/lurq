@@ -49,7 +49,13 @@ export interface SurfaceSymbol {
   /** Full declaration text. Tier C only — tier A cannot see types, and an
    *  overload set collapses to one symbol whose signature lists each overload. */
   signature?: string;
-  sourceRef?: { file: string; line: number };
+  /**
+   * Where the exported value is declared. `offset` is the declaration's
+   * character position: two exports with the same file and offset are one value
+   * under two names. The line cannot say that, because a minified bundle
+   * declares everything on line 1.
+   */
+  sourceRef?: { file: string; line: number; offset?: number };
 }
 
 export interface ExtractedSurface {

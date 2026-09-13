@@ -185,7 +185,7 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
       origin: 'local',
       deprecated: hasDeprecatedTag(sf, node),
       tier: TIER,
-      sourceRef: { file: rel, line: lineOf(sf, node) },
+      sourceRef: { file: rel, line: lineOf(sf, node), offset: node.getStart(sf) },
       ...over,
     });
   };
