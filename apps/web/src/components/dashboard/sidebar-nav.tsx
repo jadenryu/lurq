@@ -39,6 +39,9 @@ const REPORT = "/dashboard/report";
  */
 const WORKSPACE: NavItem[] = [
   { href: "/dashboard", label: "overview" },
+  // Questions about the account, answered by an agent reading it. The ⌘K
+  // palette hands typed questions here.
+  { href: "/dashboard/ask", label: "ask" },
   // Where the landing page's scan box lands, so it is also the first page many
   // people ever see in here.
   { href: REPORT, label: "builder report" },
