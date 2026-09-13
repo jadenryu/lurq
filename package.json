@@ -1,6 +1,6 @@
 {
   "name": "lurqrun",
-  "version": "0.2.0",
+  "version": "0.1.2",
   "description": "Verify npm packages before your AI coding agent installs them: hallucinated and typosquatted names, advisories, API drift and version conflicts. MCP server, CLI and agent skill for Claude Code, Cursor and VS Code.",
   "type": "module",
   "license": "MIT",
