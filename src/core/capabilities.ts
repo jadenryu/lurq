@@ -218,7 +218,7 @@ export const CAPABILITIES: Capability[] = [
     id: 'usage-dashboard',
     title: 'See how lurq is being used',
     question: 'Who on my team is calling lurq, and how much?',
-    answer: 'Call volume by tool and by day, plus the outcomes reported back after a recommendation.',
+    answer: 'Call volume by tool and by day, plus the outcomes agents reported back about the packages they chose.',
     page: '/dashboard/usage',
     aliases: ['activity', 'analytics', 'volume', 'calls', 'team', 'adoption', 'heatmap'],
   },
@@ -246,7 +246,7 @@ export const CAPABILITIES: Capability[] = [
     title: 'Tell lurq how it went',
     question: 'How does lurq learn from what I picked?',
     answer:
-      'An opt-in report of whether you took the recommendation and whether it built. Coarse signal only — never source code.',
+      'An opt-in report of whether you went with a package lurq checked and whether it built. Coarse signal only — never source code.',
     mcp: 'report_outcome',
     aliases: ['feedback', 'outcome', 'accepted', 'flywheel', 'learn'],
   },
