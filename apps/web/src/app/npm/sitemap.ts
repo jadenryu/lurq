@@ -4,7 +4,12 @@ import { PACKAGE_REVALIDATE, fetchPublicPackageList, packagePath } from "@/lib/p
 
 // Served at /npm/sitemap.xml and listed in robots.ts. One file: the public set is
 // capped at 5,000 packages, well under Google's 50,000-per-sitemap limit.
-export const revalidate = 86400;
+//
+// Built per request, not cached. It was revalidated daily, and the first deploy
+// built it before the API had /public/packages, so an EMPTY sitemap was cached
+// for a day. A crawler reads a sitemap a few times a day, so fetching the list
+// each time costs nothing, and a failed read can never outlive the failure.
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const list = await fetchPublicPackageList();
