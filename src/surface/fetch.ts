@@ -58,17 +58,29 @@ export async function resolveTarball(
   return { tarball: body.dist.tarball, version: body.version };
 }
 
+/** A package tarball unpacked into a temporary directory. `cleanup` removes it. */
+export interface Unpacked {
+  pkgDir: string;
+  version: string;
+  /** sha256 of the tarball — the extraction cache key. */
+  artifactHash: string;
+  cleanup: () => Promise<void>;
+}
+
 /**
- * Download, hash, unpack, and extract. Throws only on infrastructure failure —
- * the caller records UNVERIFIABLE and requeues rather than condemning the
- * package, because a rate limit is not evidence about a package (§4.2).
+ * Download, hash, and unpack. Throws only on infrastructure failure — the
+ * caller records UNVERIFIABLE and requeues rather than condemning the package,
+ * because a rate limit is not evidence about a package (§4.2). Null when the
+ * version does not resolve on the registry.
+ *
+ * Split from extraction so a caller can keep two versions on disk at once:
+ * `check-upgrade` type-checks the project against both.
  */
-export async function fetchAndExtract(
+export async function unpackPackage(
   name: string,
   version: string | null,
-  opts: { fetchImpl?: typeof fetch; subpaths?: string[] } = {},
-): Promise<FetchedSurface | null> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  fetchImpl: typeof fetch = fetch,
+): Promise<Unpacked | null> {
   const dist = await resolveTarball(name, version, fetchImpl);
   if (!dist) return null;
 
@@ -81,6 +93,7 @@ export async function fetchAndExtract(
   const artifactHash = createHash('sha256').update(buf).digest('hex');
 
   const dir = await mkdtemp(join(tmpdir(), 'lurq-surface-'));
+  const cleanup = () => rm(dir, { recursive: true, force: true }).catch(() => {});
   try {
     const tgz = join(dir, 'pkg.tgz');
     const pkgDir = join(dir, 'pkg');
@@ -96,51 +109,77 @@ export async function fetchAndExtract(
     await execFileP('tar', ['xzf', tgz, '--strip-components=1', '-C', pkgDir], {
       timeout: FETCH_TIMEOUT_MS,
     });
+    return { pkgDir, version: dist.version, artifactHash, cleanup };
+  } catch (err) {
+    await cleanup();
+    throw err;
+  }
+}
 
-    // A tarball with no readable manifest is a fact ABOUT THE PACKAGE, not an
-    // infrastructure failure — it must surface as UNDECLARED rather than throw,
-    // or the drain will treat a type-only package as our own outage and retry
-    // it forever (§4.2).
-    try {
-      await readFile(join(pkgDir, 'package.json'), 'utf8');
-    } catch {
-      return {
-        surface: {
-          package: name,
-          version: dist.version,
-          tier: 'shipped_js_ast',
-          entry: null,
-          symbols: [],
-          filesWalked: 0,
-          externalReExports: [],
-          undeclaredReason: 'tarball contains no readable package.json',
-        },
-        artifactHash,
-        resolvedVersion: dist.version,
-      };
-    }
+/** The tier-A surface of an unpacked package, plus any subpath entries asked for. */
+export async function extractUnpacked(
+  name: string,
+  unpacked: Unpacked,
+  subpaths?: string[],
+): Promise<FetchedSurface> {
+  const { pkgDir, version, artifactHash } = unpacked;
 
-    // Loaded here, not at module scope: `extractSurface` pulls in the TypeScript
-    // compiler, which is an operator-only dependency. A static edge put it in
-    // every bundle chunk that reaches this file, so `sync` (which never
-    // extracts) refused to boot without it.
-    const { extractSurface } = await import('./extract');
-    const surface = extractSurface(pkgDir);
-    const subpathSurfaces: Record<string, ExtractedSurface> = {};
-    for (const sub of new Set(opts.subpaths ?? [])) {
-      subpathSurfaces[sub] = {
-        ...extractSurface(pkgDir, { subpath: sub }),
-        package: `${name}/${sub}`,
-        version: dist.version,
-      };
-    }
+  // A tarball with no readable manifest is a fact ABOUT THE PACKAGE, not an
+  // infrastructure failure — it must surface as UNDECLARED rather than throw,
+  // or the drain will treat a type-only package as our own outage and retry
+  // it forever (§4.2).
+  try {
+    await readFile(join(pkgDir, 'package.json'), 'utf8');
+  } catch {
     return {
-      surface: { ...surface, package: name, version: dist.version },
-      ...(opts.subpaths?.length ? { subpathSurfaces } : {}),
+      surface: {
+        package: name,
+        version,
+        tier: 'shipped_js_ast',
+        entry: null,
+        symbols: [],
+        filesWalked: 0,
+        externalReExports: [],
+        undeclaredReason: 'tarball contains no readable package.json',
+      },
       artifactHash,
-      resolvedVersion: dist.version,
+      resolvedVersion: version,
     };
+  }
+
+  // Loaded here, not at module scope: `extractSurface` pulls in the TypeScript
+  // compiler, which is an operator-only dependency. A static edge put it in
+  // every bundle chunk that reaches this file, so `sync` (which never
+  // extracts) refused to boot without it.
+  const { extractSurface } = await import('./extract');
+  const surface = extractSurface(pkgDir);
+  const subpathSurfaces: Record<string, ExtractedSurface> = {};
+  for (const sub of new Set(subpaths ?? [])) {
+    subpathSurfaces[sub] = {
+      ...extractSurface(pkgDir, { subpath: sub }),
+      package: `${name}/${sub}`,
+      version,
+    };
+  }
+  return {
+    surface: { ...surface, package: name, version },
+    ...(subpaths?.length ? { subpathSurfaces } : {}),
+    artifactHash,
+    resolvedVersion: version,
+  };
+}
+
+/** Download, unpack, extract, and clean up. See `unpackPackage` for what throws. */
+export async function fetchAndExtract(
+  name: string,
+  version: string | null,
+  opts: { fetchImpl?: typeof fetch; subpaths?: string[] } = {},
+): Promise<FetchedSurface | null> {
+  const unpacked = await unpackPackage(name, version, opts.fetchImpl ?? fetch);
+  if (!unpacked) return null;
+  try {
+    return await extractUnpacked(name, unpacked, opts.subpaths);
   } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    await unpacked.cleanup();
   }
 }
