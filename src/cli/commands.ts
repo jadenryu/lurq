@@ -81,10 +81,9 @@ export function indexSource(): 'hosted' | 'local' {
   if (process.env.LURQ_LOCAL === '1') return 'local';
   if (resolveApiKey()) return 'hosted';
   if (process.env.DATABASE_URL) return 'local';
-  throw new MissingKeyError(
-    'No API key configured. Run `lurq setup` to connect this machine, ' +
-      'or set DATABASE_URL to read from your own index.',
-  );
+  // Self-hosters know about DATABASE_URL; telling everyone else to set one sent
+  // them looking for a database they are never meant to run.
+  throw new MissingKeyError();
 }
 
 /**
@@ -429,7 +428,15 @@ export async function runEditWeights(opts: EditWeightsOpts): Promise<void> {
           `maint ${weights.health.maintenance.toFixed(3)}, adopt ${weights.health.adoption.toFixed(3)}, rel ${weights.health.reliability.toFixed(3)}, eff ${weights.health.efficiency.toFixed(3)}`,
       );
     }
-    console.log(dim('\nRun `lurq rescore` to apply the new health weights to the stored index.'));
+    // `rescore` is an operator command, not part of the published CLI, and the
+    // hosted service ranks with its own weights: say both instead of pointing
+    // at a command that does not exist here.
+    console.log(
+      dim(
+        '\nThese weights apply to a self-hosted index, on its next operator rescore.' +
+          '\nThe hosted service ranks with its published weights (`lurq weights`).',
+      ),
+    );
     return;
   }
 
@@ -577,8 +584,8 @@ export async function runVersions(
   loadEnv();
   if (!process.env.DATABASE_URL) {
     throw new Error(
-      '`lurq versions` reads a local index and needs DATABASE_URL. ' +
-        'On the hosted service, `lurq usage <pkg> --known <v>` gives the API delta between two versions.',
+      '`lurq versions` reads a self-hosted index and is not available on the hosted service. ' +
+        'To see what changed between two versions, run `lurq usage <pkg> --known <v>`.',
     );
   }
   await withDb(async (db) => {
@@ -1059,7 +1066,7 @@ export async function runAudit(
       // to write into the shared one — a poisoned tool list would be served to
       // everybody. Hosted callers get the worker's queue instead.
       probeNote =
-        '--probe needs your own index (DATABASE_URL); on the hosted service the worker probes queued servers for you';
+        '--probe is for a self-hosted index; on the hosted service queued MCP servers are probed for you';
     } else {
       const budget = Math.max(5_000, Number(opts.probeBudget ?? 90) * 1000);
       const { probed, skipped } = await probeProjectServers(inv.mcpServers, budget);
