@@ -21,7 +21,8 @@
  */
 import type Stripe from 'stripe';
 import { logger } from '../core/logger';
-import { PLAN_LIST, type Plan } from '../core/plans';
+import { PLAN_LIST, annualPriceCents, type BillingInterval, type Plan } from '../core/plans';
+import { OVERAGE_EVENT } from './overage';
 import { stripeClient } from './stripe';
 
 /** The only events the webhook acts on. Anything else is acknowledged and dropped. */
@@ -73,12 +74,14 @@ async function findPrice(
   stripe: Stripe,
   productId: string,
   amount: number,
+  interval: BillingInterval = 'month',
 ): Promise<Stripe.Price | null> {
   for await (const price of stripe.prices.list({ product: productId, active: true, limit: 100 })) {
     if (
       price.unit_amount === amount &&
       price.currency === 'usd' &&
-      price.recurring?.interval === 'month'
+      price.recurring?.interval === interval &&
+      price.recurring?.usage_type !== 'metered'
     ) {
       return price;
     }
@@ -87,10 +90,14 @@ async function findPrice(
 }
 
 /**
- * Create or reuse the Product and monthly Price for one plan.
- * Returns the Price id to put in the environment.
+ * Create or reuse the Product, its monthly and yearly Prices, and its metered
+ * overage Price when the plan has one. Returns the env vars to set.
  */
-async function provisionPlan(stripe: Stripe, plan: Plan, notes: string[]): Promise<string> {
+async function provisionPlan(
+  stripe: Stripe,
+  plan: Plan,
+  notes: string[],
+): Promise<Record<string, string>> {
   let product = await findProduct(stripe, plan.tier);
   if (product) {
     // A product created before Managed Payments existed has no tax code, and
@@ -112,20 +119,84 @@ async function provisionPlan(stripe: Stripe, plan: Plan, notes: string[]): Promi
     notes.push(`product for ${plan.tier}: created ${product.id}`);
   }
 
-  const existing = await findPrice(stripe, product.id, plan.priceCents);
-  if (existing) {
-    notes.push(`price for ${plan.tier}: reused ${existing.id} ($${plan.priceCents / 100}/mo)`);
-    return existing.id;
+  const env: Record<string, string> = {};
+  const key = `STRIPE_PRICE_${plan.tier.toUpperCase()}`;
+  for (const interval of ['month', 'year'] as const) {
+    const amount = interval === 'year' ? annualPriceCents(plan) : plan.priceCents;
+    const existing = await findPrice(stripe, product.id, amount, interval);
+    const price =
+      existing ??
+      (await stripe.prices.create({
+        product: product.id,
+        unit_amount: amount,
+        currency: 'usd',
+        recurring: { interval },
+        metadata: { [MARKER]: plan.tier },
+      }));
+    notes.push(
+      `price for ${plan.tier}: ${existing ? 'reused' : 'created'} ${price.id} ($${amount / 100}/${interval})`,
+    );
+    env[interval === 'year' ? `${key}_ANNUAL` : key] = price.id;
+  }
+  if (plan.overageCentsPer1k) {
+    env[`${key}_OVERAGE`] = await provisionOverage(
+      stripe,
+      product.id,
+      plan.tier,
+      plan.overageCentsPer1k,
+      notes,
+    );
+  }
+  return env;
+}
+
+/**
+ * The meter that counts overage calls, and the metered Price billed from it.
+ * `transform_quantity` turns summed calls into started thousands, so the Price
+ * reads "$8 per 1,000" in Stripe exactly as it does on the pricing page.
+ */
+async function provisionOverage(
+  stripe: Stripe,
+  productId: string,
+  tier: string,
+  centsPer1k: number,
+  notes: string[],
+): Promise<string> {
+  let meter: Stripe.Billing.Meter | null = null;
+  for await (const m of stripe.billing.meters.list({ status: 'active', limit: 100 })) {
+    if (m.event_name === OVERAGE_EVENT) {
+      meter = m;
+      break;
+    }
+  }
+  if (meter) {
+    notes.push(`meter ${OVERAGE_EVENT}: reused ${meter.id}`);
+  } else {
+    meter = await stripe.billing.meters.create({
+      display_name: 'lurq overage calls',
+      event_name: OVERAGE_EVENT,
+      default_aggregation: { formula: 'sum' },
+      customer_mapping: { type: 'by_id', event_payload_key: 'stripe_customer_id' },
+      value_settings: { event_payload_key: 'value' },
+    });
+    notes.push(`meter ${OVERAGE_EVENT}: created ${meter.id}`);
   }
 
+  for await (const price of stripe.prices.list({ product: productId, active: true, limit: 100 })) {
+    if (price.recurring?.meter === meter.id && price.unit_amount === centsPer1k) {
+      notes.push(`overage price for ${tier}: reused ${price.id}`);
+      return price.id;
+    }
+  }
   const price = await stripe.prices.create({
-    product: product.id,
-    unit_amount: plan.priceCents,
+    product: productId,
     currency: 'usd',
-    recurring: { interval: 'month' },
-    metadata: { [MARKER]: plan.tier },
+    unit_amount: centsPer1k,
+    recurring: { interval: 'month', usage_type: 'metered', meter: meter.id },
+    transform_quantity: { divide_by: 1000, round: 'up' },
+    metadata: { [MARKER]: `${tier}_overage` },
   });
-  notes.push(`price for ${plan.tier}: created ${price.id} ($${plan.priceCents / 100}/mo)`);
+  notes.push(`overage price for ${tier}: created ${price.id} ($${centsPer1k / 100} per 1,000 calls)`);
   return price.id;
 }
 
@@ -182,8 +253,7 @@ export async function provisionBilling(webhookUrl: string): Promise<ProvisionRes
   const env: Record<string, string> = {};
 
   for (const plan of sellable()) {
-    const priceId = await provisionPlan(stripe, plan, notes);
-    env[`STRIPE_PRICE_${plan.tier.toUpperCase()}`] = priceId;
+    Object.assign(env, await provisionPlan(stripe, plan, notes));
   }
 
   const secret = await provisionWebhook(stripe, webhookUrl, notes);

@@ -1008,6 +1008,14 @@ export const subscriptions = pgTable(
      * or a pre-seat row carrying the default 1 resolves correctly either way.
      */
     seats: integer('seats').notNull().default(1),
+    /** The subscription carries the metered overage item, so calls past the pool bill. */
+    overageEnabled: boolean('overage_enabled').notNull().default(false),
+    /** Calendar month ('YYYY-MM') that `overageReported` counts. */
+    overageMonth: text('overage_month'),
+    /** Overage calls already sent to Stripe for `overageMonth`. */
+    overageReported: integer('overage_reported').notNull().default(0),
+    /** The plan item's Stripe interval ('month' | 'year'). Null for manual grants. */
+    billingInterval: text('billing_interval'),
     /**
      * Stripe delivers out of order and retries, so a late duplicate of an older
      * event must not overwrite newer state. The webhook drops any event whose

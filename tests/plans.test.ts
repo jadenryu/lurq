@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   PLANS,
   PLAN_LIST,
+  ANNUAL_DISCOUNT,
+  OVERAGE_CAP_MULTIPLE,
+  annualPriceCents,
   billedSeats,
   isServed,
   monthlyAllowance,
+  overageCalls,
   planFor,
+  quotaState,
   type Tier,
 } from '../src/core/plans';
 
@@ -33,6 +38,39 @@ describe('seats and the pooled allowance', () => {
     expect(PLANS.team.ciPolicyKeys).toBe(true);
     const days = PLAN_LIST.map((p) => p.decisionLogDays);
     expect(days).toEqual([...days].sort((a, b) => a - b));
+  });
+});
+
+describe('annual prices', () => {
+  it('charges twelve months less the discount', () => {
+    expect(ANNUAL_DISCOUNT).toBe(0.2);
+    expect(annualPriceCents(PLANS.pro)).toBe(14_400); // $12/mo
+    expect(annualPriceCents(PLANS.team)).toBe(24_000); // $20/seat/mo
+  });
+});
+
+describe('quotaState and overage', () => {
+  it('is within quota under the pool, and uncapped always is', () => {
+    expect(quotaState(1_000, 999, false)).toEqual({ withinQuota: true, inOverage: false });
+    expect(quotaState(null, 10_000_000, false)).toEqual({ withinQuota: true, inOverage: false });
+  });
+
+  it('serves overage past the pool only when the subscription is metered', () => {
+    expect(quotaState(1_000, 1_000, false).inOverage).toBe(false);
+    expect(quotaState(1_000, 1_000, true).inOverage).toBe(true);
+  });
+
+  it('stops overage at the ceiling, so a runaway loop cannot bill without bound', () => {
+    const ceiling = 1_000 * OVERAGE_CAP_MULTIPLE;
+    expect(quotaState(1_000, ceiling - 1, true).inOverage).toBe(true);
+    expect(quotaState(1_000, ceiling, true).inOverage).toBe(false);
+  });
+
+  it('bills only calls past the pool, capped at the ceiling', () => {
+    expect(overageCalls(1_000, 800)).toBe(0);
+    expect(overageCalls(1_000, 1_250)).toBe(250);
+    expect(overageCalls(1_000, 50_000)).toBe(1_000 * (OVERAGE_CAP_MULTIPLE - 1));
+    expect(overageCalls(null, 50_000)).toBe(0);
   });
 });
 

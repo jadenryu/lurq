@@ -14,7 +14,13 @@ import {
 } from '@/content/pricing';
 import { CONTACT_EMAIL } from '@/content/copy';
 import { useRevealOnce } from '@/lib/use-reveal-once';
-import { PLAN_LIST, type Plan } from '@lurq/core/plans';
+import {
+  ANNUAL_DISCOUNT,
+  PLAN_LIST,
+  annualPriceCents,
+  type BillingInterval,
+  type Plan,
+} from '@lurq/core/plans';
 
 /**
  * Three plans on the room surface, after the reader has been shown how to
@@ -38,8 +44,14 @@ import { PLAN_LIST, type Plan } from '@lurq/core/plans';
  */
 
 /** How the price reads. Whole dollars, because every plan is whole dollars. */
-function priceLabel(plan: Plan): string {
-  return `$${Math.round(plan.priceCents / 100).toLocaleString('en-US')}`;
+function priceLabel(plan: Plan, interval: BillingInterval): string {
+  // Yearly reads as its monthly equivalent, the way buyers compare plans; the
+  // card says it is billed yearly underneath.
+  const cents =
+    interval === 'year' && plan.paid && !plan.contactOnly
+      ? annualPriceCents(plan) / 12
+      : plan.priceCents;
+  return `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 }
 
 /** The allowance line, pulled out of the feature list into its own row. */
@@ -71,7 +83,7 @@ const BTN_OUTLINE = `${BTN} border border-edge text-ink hover:border-ink`;
  * the plan by hand. The click still means "I want to buy this" either way; only
  * the fulfilment differs, and that is our problem rather than theirs.
  */
-function BuyButton({ plan }: { plan: Plan }) {
+function BuyButton({ plan, interval }: { plan: Plan; interval: BillingInterval }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requested, setRequested] = useState(false);
@@ -94,7 +106,7 @@ function BuyButton({ plan }: { plan: Plan }) {
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: plan.tier }),
+        body: JSON.stringify({ tier: plan.tier, interval }),
       });
       const data = (await res.json()) as { url?: string; error?: string; contact?: boolean };
       if (data.url) {
@@ -107,7 +119,7 @@ function BuyButton({ plan }: { plan: Plan }) {
         const ask = await fetch('/api/billing/request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tier: plan.tier }),
+          body: JSON.stringify({ tier: plan.tier, interval }),
         });
         const asked = (await ask.json()) as { ok?: boolean; error?: string };
         if (asked.ok) {
@@ -154,7 +166,7 @@ function BuyButton({ plan }: { plan: Plan }) {
   );
 }
 
-function PlanAction({ plan }: { plan: Plan }) {
+function PlanAction({ plan, interval }: { plan: Plan; interval: BillingInterval }) {
   const { isSignedIn } = useAuth();
 
   if (plan.contactOnly) {
@@ -168,7 +180,7 @@ function PlanAction({ plan }: { plan: Plan }) {
     );
   }
 
-  if (plan.paid) return <BuyButton plan={plan} />;
+  if (plan.paid) return <BuyButton plan={plan} interval={interval} />;
 
   // Free routes the way the nav's CTA routes, and swaps to the dashboard when
   // signed in for the reason the nav gives: offering "Get started" to someone
@@ -180,7 +192,17 @@ function PlanAction({ plan }: { plan: Plan }) {
   );
 }
 
-function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previous?: Plan }) {
+function PlanCard({
+  plan,
+  index,
+  previous,
+  interval,
+}: {
+  plan: Plan;
+  index: number;
+  previous?: Plan;
+  interval: BillingInterval;
+}) {
   // Team, not Pro: it is the plan the ladder is built to sell.
   const featured = plan.tier === 'team';
 
@@ -207,10 +229,13 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
       <p className="mt-5 flex items-baseline gap-1">
         {plan.priceFrom ? <span className="mr-0.5 text-[13px] text-ink-3">from</span> : null}
         <span className="font-sans text-[34px] font-medium leading-none tracking-[-0.03em] text-ink">
-          {priceLabel(plan)}
+          {priceLabel(plan, interval)}
         </span>
         <span className="text-[13px] text-ink-3">{plan.perSeat ? '/seat/mo' : '/mo'}</span>
       </p>
+      {interval === 'year' && plan.paid && !plan.contactOnly ? (
+        <p className="mt-1.5 text-[12px] text-ink-3">billed yearly</p>
+      ) : null}
 
       {/* The allowance gets its own line above the fold of the card: it is the
           number people are comparing, and burying it third in a bullet list
@@ -241,7 +266,7 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
       </div>
 
       <div className="mt-7">
-        <PlanAction plan={plan} />
+        <PlanAction plan={plan} interval={interval} />
       </div>
     </article>
   );
@@ -249,6 +274,7 @@ function PlanCard({ plan, index, previous }: { plan: Plan; index: number; previo
 
 export function Pricing() {
   const { ref, played } = useRevealOnce<HTMLDivElement>();
+  const [interval, setBilling] = useState<BillingInterval>('month');
 
   return (
     <section id="pricing" className="w-full py-24 min-[900px]:py-32">
@@ -269,12 +295,38 @@ export function Pricing() {
         <p className="mt-6 max-w-[58ch] text-[14px] leading-[1.6] text-ink-2">{PRICING_BODY}</p>
 
         <div
+          role="group"
+          aria-label="Billing period"
+          className="mt-8 inline-flex rounded-full border border-edge p-1 text-[13px]"
+        >
+          {(['month', 'year'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={interval === value}
+              onClick={() => setBilling(value)}
+              className={`rounded-full px-3.5 py-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark ${
+                interval === value ? 'bg-ink text-ground' : 'text-ink-2 hover:text-ink'
+              }`}
+            >
+              {value === 'month' ? 'Monthly' : `Yearly, ${Math.round(ANNUAL_DISCOUNT * 100)}% off`}
+            </button>
+          ))}
+        </div>
+
+        <div
           ref={ref}
           data-playing={played ? 'true' : 'false'}
           className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-2 min-[1080px]:grid-cols-4"
         >
           {PLAN_LIST.map((plan, i) => (
-            <PlanCard key={plan.tier} plan={plan} index={i} previous={PLAN_LIST[i - 1]} />
+            <PlanCard
+              key={plan.tier}
+              plan={plan}
+              index={i}
+              previous={PLAN_LIST[i - 1]}
+              interval={interval}
+            />
           ))}
         </div>
 

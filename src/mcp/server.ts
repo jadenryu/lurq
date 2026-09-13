@@ -94,6 +94,8 @@ function json(obj: unknown) {
  */
 export interface ServerContext {
   ownerId?: string | null;
+  /** Appended to every tool result: the quota notice once an account is past its pool. */
+  notice?: string | null;
 }
 
 export function buildMcpServer(
@@ -121,6 +123,14 @@ export function buildMcpServer(
       }
     })();
 
+  // Every tool result leaves through here, so a notice reaches the agent however
+  // the tool built its payload.
+  const reply = (obj: unknown) => {
+    const result = json(obj);
+    if (ctx.notice) result.content.push({ type: 'text' as const, text: ctx.notice });
+    return result;
+  };
+
   server.registerTool(
     'evaluate',
     {
@@ -132,7 +142,7 @@ export function buildMcpServer(
       },
     },
     async (args) =>
-      json(await run('evaluate', () => handleEvaluate(db, args, ctx.ownerId ?? null))),
+      reply(await run('evaluate', () => handleEvaluate(db, args, ctx.ownerId ?? null))),
   );
 
   // Read-only on purpose. There is no tool that writes policy: the agent being
@@ -146,7 +156,7 @@ export function buildMcpServer(
         "The rules this account's selection policy enforces on which packages you may add: denied packages (with the reason), license allowlist, confidence, advisory, adoption, staleness and bundle-size floors. Read it once before choosing dependencies so you pick an allowed package first; recommend and evaluate already enforce it. Read-only.",
       inputSchema: {},
     },
-    async () => json(await run('policy', () => handlePolicy(db, ctx.ownerId ?? null))),
+    async () => reply(await run('policy', () => handlePolicy(db, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -158,7 +168,7 @@ export function buildMcpServer(
         packages: z.array(npmName).min(2).max(5).describe('2–5 npm package names'),
       },
     },
-    async (args) => json(await run('compare', () => handleCompare(db, args, ctx.ownerId ?? null))),
+    async (args) => reply(await run('compare', () => handleCompare(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -172,7 +182,7 @@ export function buildMcpServer(
         node: z.string().optional().describe(COMPAT_NODE_DESCRIPTION),
       },
     },
-    async (args) => json(await run('compat', () => handleCompat(db, args))),
+    async (args) => reply(await run('compat', () => handleCompat(db, args))),
   );
 
   server.registerTool(
@@ -184,7 +194,7 @@ export function buildMcpServer(
         package: npmName.describe('npm package name to verify'),
       },
     },
-    async (args) => json(await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null))),
+    async (args) => reply(await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null))),
   );
 
   server.registerTool(
@@ -202,7 +212,7 @@ export function buildMcpServer(
           .describe('A version you already know; returns the API delta from it to the target'),
       },
     },
-    async (args) => json(await run('usage', () => handleUsage(db, args))),
+    async (args) => reply(await run('usage', () => handleUsage(db, args))),
   );
 
   server.registerTool(
@@ -218,7 +228,7 @@ export function buildMcpServer(
           .describe('Package names that make up the stack; omit or empty to get usage guidance'),
       },
     },
-    async (args) => json(await run('diagram', () => handleDiagram(db, args))),
+    async (args) => reply(await run('diagram', () => handleDiagram(db, args))),
   );
 
   server.registerTool(
@@ -232,7 +242,7 @@ export function buildMcpServer(
         version: z.string().optional().describe('Exact version; omit for the latest extracted'),
       },
     },
-    async (args) => json(await run('resolve_surface', () => handleResolveSurface(db, args))),
+    async (args) => reply(await run('resolve_surface', () => handleResolveSurface(db, args))),
   );
 
   server.registerTool(
@@ -247,7 +257,7 @@ export function buildMcpServer(
         toVersion: z.string().describe('Version you are moving to'),
       },
     },
-    async (args) => json(await run('diff_surface', () => handleDiffSurface(db, args))),
+    async (args) => reply(await run('diff_surface', () => handleDiffSurface(db, args))),
   );
 
   server.registerTool(
@@ -289,7 +299,7 @@ export function buildMcpServer(
       },
     },
     async (args) =>
-      json(
+      reply(
         await run('mcp_stack', async () => {
           const { checkMcpStack } = await import('../compat/mcpStack');
           return checkMcpStack(
@@ -315,7 +325,7 @@ export function buildMcpServer(
         version: z.string().optional().describe('Exact version; omit for the latest probed'),
       },
     },
-    async (args) => json(await run('mcp_surface', () => handleMcpSurface(db, args))),
+    async (args) => reply(await run('mcp_surface', () => handleMcpSurface(db, args))),
   );
 
   server.registerTool(
@@ -330,7 +340,7 @@ export function buildMcpServer(
         toVersion: z.string().describe('Version you are moving to'),
       },
     },
-    async (args) => json(await run('mcp_drift', () => handleMcpDrift(db, args))),
+    async (args) => reply(await run('mcp_drift', () => handleMcpDrift(db, args))),
   );
 
   server.registerTool(
@@ -375,7 +385,7 @@ export function buildMcpServer(
           .describe('MCP servers read from .mcp.json / agent configs'),
       },
     },
-    async (args) => json(await run('audit', () => handleAudit(db, args, ctx.ownerId ?? null))),
+    async (args) => reply(await run('audit', () => handleAudit(db, args, ctx.ownerId ?? null))),
   );
 
   // Self-description, and the only tool that reads nothing. An agent holding
@@ -397,7 +407,7 @@ export function buildMcpServer(
           .describe('What you are trying to do, in plain words. Omit for the full menu.'),
       },
     },
-    async (args) => json({ capabilities: searchCapabilities(args.query ?? '', 6) }),
+    async (args) => reply({ capabilities: searchCapabilities(args.query ?? '', 6) }),
   );
 
   server.registerTool(
@@ -423,7 +433,7 @@ export function buildMcpServer(
     // ownerId comes from the authenticated key (ctx), NOT the tool arguments —
     // a caller must never be able to attribute an outcome to another org.
     async (args) =>
-      json(await run('report_outcome', () => handleReportOutcome(db, args, ctx.ownerId ?? null))),
+      reply(await run('report_outcome', () => handleReportOutcome(db, args, ctx.ownerId ?? null))),
   );
 
   return server;

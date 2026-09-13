@@ -3,11 +3,24 @@
 import { useEffect, useState } from "react";
 import { Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import type { BillingSummary } from "@/lib/lurq-issuer";
-import { GRACE_CALLS_PER_DAY, PLANS, PLAN_LIST, type Plan, type Tier } from "@lurq/core/plans";
+import {
+  ANNUAL_DISCOUNT,
+  GRACE_CALLS_PER_DAY,
+  PLANS,
+  PLAN_LIST,
+  annualPriceCents,
+  type Plan,
+  type Tier,
+} from "@lurq/core/plans";
 
 /** "$15/mo" or "$25/seat/mo". */
 function perMonth(plan: Plan): string {
   return `$${Math.round(plan.priceCents / 100).toLocaleString("en-US")}${plan.perSeat ? "/seat" : ""}/mo`;
+}
+
+/** "$144/yr" or "$240/seat/yr". */
+function perYear(plan: Plan): string {
+  return `$${Math.round(annualPriceCents(plan) / 100).toLocaleString("en-US")}${plan.perSeat ? "/seat" : ""}/yr`;
 }
 
 /**
@@ -58,7 +71,9 @@ function statusLine(b: BillingSummary): { text: string; tone: string } | null {
     }
     case "active": {
       const end = fmtDate(b.currentPeriodEnd);
-      return end ? { text: `Renews ${end}.`, tone: "text-ink-3" } : null;
+      const cadence =
+        b.interval === "year" ? " Billed yearly." : b.interval === "month" ? " Billed monthly." : "";
+      return end ? { text: `Renews ${end}.${cadence}`, tone: "text-ink-3" } : null;
     }
     case "canceled":
       return { text: "Cancelled. You are on the free plan.", tone: "text-ink-2" };
@@ -115,9 +130,15 @@ const BTN =
 export function BillingPanel({
   billing,
   justCheckedOut,
+  canManage = true,
+  inOrganization = false,
 }: {
   billing: BillingSummary;
   justCheckedOut: boolean;
+  /** False for an organization member who is not an admin. */
+  canManage?: boolean;
+  /** An organization is active. Per-seat plans can only be bought for one. */
+  inOrganization?: boolean;
 }) {
   const [pending, setPending] = useState<"checkout" | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +181,8 @@ export function BillingPanel({
   const status = statusLine(billing);
   // The next self-serve plan up, so Pro is offered Team rather than nothing.
   const upgrade = PLAN_LIST.slice(PLAN_LIST.indexOf(plan) + 1).find((p) => p.paid && !p.contactOnly);
+  // Team's seats are an organization's members; a personal account has none.
+  const needsOrg = Boolean(upgrade?.perSeat) && !inOrganization;
 
   return (
     <div className="space-y-6">
@@ -175,7 +198,7 @@ export function BillingPanel({
         <PanelHeader
           title="plan"
           trailing={
-            billing.manageable ? (
+            billing.manageable && canManage ? (
               <button
                 type="button"
                 onClick={() => post("/api/billing/portal", "portal")}
@@ -199,6 +222,11 @@ export function BillingPanel({
             </p>
           ) : null}
           {status ? <p className={`mt-3 text-[13px] ${status.tone}`}>{status.text}</p> : null}
+          {!canManage ? (
+            <p className="mt-3 text-[13px] text-ink-3">
+              Only an organization admin can change the plan.
+            </p>
+          ) : null}
         </div>
 
         <div className="mt-6 border-t border-edge pt-4">
@@ -215,7 +243,7 @@ export function BillingPanel({
 
       {/* Only shown when there is somewhere to go. An upgrade card on the top
           plan is an advert for something the reader already bought. */}
-      {upgrade ? (
+      {upgrade && canManage ? (
         <Panel>
           <PanelHeader title={`upgrade to ${upgrade.name.toLowerCase()}`} />
           <p className="mt-3 max-w-[60ch] text-[13px] leading-[1.6] text-ink-2">
@@ -236,16 +264,32 @@ export function BillingPanel({
               </li>
             ))}
           </ul>
+          {needsOrg ? (
+            <p className="mt-4 max-w-[60ch] text-[13px] leading-[1.6] text-ink-2">
+              Team is bought for an organization, and its seats are the members. Create one from
+              the account switcher in the sidebar, switch to it, then upgrade here.
+            </p>
+          ) : null}
           <div className="mt-5">
             <button
               type="button"
               onClick={() => post("/api/billing/checkout", "checkout", { tier: upgrade.tier })}
-              disabled={pending !== null || !billing.billingEnabled}
+              disabled={pending !== null || !billing.billingEnabled || needsOrg}
               className={`${BTN} bg-ink text-ground hover:bg-white`}
             >
               {pending === "checkout"
                 ? "Opening checkout…"
                 : `Upgrade for ${perMonth(upgrade)}`}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                post("/api/billing/checkout", "checkout", { tier: upgrade.tier, interval: "year" })
+              }
+              disabled={pending !== null || !billing.billingEnabled || needsOrg}
+              className={`${BTN} ml-2 border border-edge text-ink hover:border-ink`}
+            >
+              {`or ${perYear(upgrade)}, ${Math.round(ANNUAL_DISCOUNT * 100)}% off`}
             </button>
             {!billing.billingEnabled ? (
               <p className="mt-2 text-[12px] text-ink-3">

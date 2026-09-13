@@ -12,6 +12,7 @@ import {
   isServed,
   monthlyAllowance,
   planFor,
+  quotaState,
   type Plan,
   type Tier,
 } from '../core/plans';
@@ -91,6 +92,10 @@ export interface SubscriptionUpdate {
   cancelAtPeriodEnd: boolean;
   /** Subscription quantity. 1 for flat plans. */
   seats: number;
+  /** The subscription carries a metered overage item. */
+  overageEnabled: boolean;
+  /** The plan item's billing interval, as Stripe reports it. */
+  interval: string | null;
   eventAt: Date;
 }
 
@@ -128,6 +133,8 @@ export async function applySubscriptionEvent(
       currentPeriodEnd: update.currentPeriodEnd,
       cancelAtPeriodEnd: update.cancelAtPeriodEnd,
       seats: update.seats,
+      overageEnabled: update.overageEnabled,
+      billingInterval: update.interval,
       lastEventAt: update.eventAt,
       updatedAt: new Date(),
     })
@@ -140,6 +147,8 @@ export async function applySubscriptionEvent(
         currentPeriodEnd: update.currentPeriodEnd,
         cancelAtPeriodEnd: update.cancelAtPeriodEnd,
         seats: update.seats,
+        overageEnabled: update.overageEnabled,
+        billingInterval: update.interval,
         lastEventAt: update.eventAt,
         updatedAt: new Date(),
       },
@@ -269,6 +278,20 @@ export async function dailyCallCount(db: Database, ownerId: string): Promise<num
   return Number(rows[0]?.total ?? 0);
 }
 
+/** Calls in one calendar month ('YYYY-MM', by UTC day), all tools. */
+export async function callsInMonth(db: Database, ownerId: string, month: string): Promise<number> {
+  const rows = await db
+    .select({ total: sql<string>`coalesce(sum(${ownerUsageDaily.count}), 0)` })
+    .from(ownerUsageDaily)
+    .where(
+      and(
+        eq(ownerUsageDaily.ownerId, ownerId),
+        sql`to_char(${ownerUsageDaily.date}, 'YYYY-MM') = ${month}`,
+      ),
+    );
+  return Number(rows[0]?.total ?? 0);
+}
+
 export interface Entitlement {
   plan: Plan;
   /** Seats billed. 1 for flat plans. */
@@ -279,6 +302,8 @@ export interface Entitlement {
   limit: number | null;
   /** False once the monthly allowance is spent. Uncapped plans are always true. */
   withinQuota: boolean;
+  /** Past the pool on a subscription with metered overage, under the ceiling. */
+  inOverage: boolean;
   /**
    * Over the allowance but still inside today's GRACE_CALLS_PER_DAY, so the call
    * is served with a warning rather than refused. Never true while withinQuota.
@@ -288,7 +313,7 @@ export interface Entitlement {
 
 /** Whether the request path should serve this call at all. */
 export function isAllowed(ent: Entitlement): boolean {
-  return ent.withinQuota || ent.inGrace;
+  return ent.withinQuota || ent.inOverage || ent.inGrace;
 }
 
 /**
@@ -314,7 +339,15 @@ export async function entitlementFor(
   // customer's, and are not metered.
   if (!ownerId) {
     const plan = planFor('enterprise');
-    return { plan, seats: 1, used: 0, limit: null, withinQuota: true, inGrace: false };
+    return {
+      plan,
+      seats: 1,
+      used: 0,
+      limit: null,
+      withinQuota: true,
+      inOverage: false,
+      inGrace: false,
+    };
   }
 
   const [sub, used] = await Promise.all([
@@ -326,10 +359,15 @@ export async function entitlementFor(
   const plan = planFor(served ? sub!.tier : 'free');
   const seats = billedSeats(plan, sub?.seats);
   const limit = monthlyAllowance(plan, seats);
-  const withinQuota = limit === null || used < limit;
+  const { withinQuota, inOverage } = quotaState(
+    limit,
+    used,
+    served && Boolean(sub?.overageEnabled),
+  );
   // Only paid for once the month is spent, so the common path stays two queries.
   // ponytail: today's count includes calls made before the cap was crossed, so
   // the grace on the crossing day is smaller. Track calls-over-cap if that matters.
-  const inGrace = !withinQuota && (await dailyCallCount(db, ownerId)) < GRACE_CALLS_PER_DAY;
-  return { plan, seats, used, limit, withinQuota, inGrace };
+  const inGrace =
+    !withinQuota && !inOverage && (await dailyCallCount(db, ownerId)) < GRACE_CALLS_PER_DAY;
+  return { plan, seats, used, limit, withinQuota, inOverage, inGrace };
 }

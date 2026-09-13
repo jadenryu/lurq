@@ -281,6 +281,13 @@
       "when": 1789319677465,
       "tag": "0039_mcp_runtime_scans",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1789320072191,
+      "tag": "0040_subscription_overage_and_interval",
+      "breakpoints": true
     }
   ]
 }
