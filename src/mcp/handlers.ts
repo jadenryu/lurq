@@ -17,6 +17,7 @@ import type {
   CompatOutput,
   Confidence,
   EvaluateOutput,
+  ExportSymbol,
   UsageOutput,
   VerifyOutput,
 } from '../core/types';
@@ -25,6 +26,7 @@ import type { Database } from '../db/client';
 import { getPackageByName, getTopPackageNames } from '../db/packages';
 import { diffSurface } from '../usage/diff';
 import { getOrExtractSurface, USAGE_EXTRACT_BUDGET_MS } from '../usage/service';
+import { typesPackageName } from '../usage/extract';
 import { getLatestVerificationByName } from '../db/verification';
 import { loadLearnedSuccessors, recordOutcome } from '../db/outcomes';
 import { lookupSuccessor, type LearnedSuccessors } from '../core/successors';
@@ -39,7 +41,6 @@ import {
 } from '../ingestion/sources';
 import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
-import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
 import { applyPolicy, describeRules, hasRules, check as checkPolicy } from '../policy/enforce';
 import { getEnforcedPolicy, loadPolicyFacts, recordDecisions } from '../db/selectionPolicy';
@@ -74,9 +75,11 @@ function withinDays(date: Date | null, days: number): boolean {
   return date ? Date.now() - date.getTime() <= days * DAY_MS : false;
 }
 
-/** Top advisories by severity, capped (§12.4). */
-function topAdvisories(advisories: Advisory[] | null, max = 5): Advisory[] {
-  if (!advisories?.length) return [];
+/** Top advisories by severity, capped (§12.4). Null stays null: it means this
+ *  package was never checked, and `[]` would read as a clean bill (the same
+ *  distinction `verify` keeps for `advisoryCount`). */
+function topAdvisories(advisories: Advisory[] | null, max = 5): Advisory[] | null {
+  if (!advisories) return null;
   return [...advisories]
     .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
     .slice(0, max);
@@ -559,6 +562,74 @@ export interface UsageInput {
   /** The version the agent already knows (e.g. its training-cutoff version) —
    *  when given, the response includes the delta the agent must account for. */
   knownVersion?: string;
+  /** Case-insensitive fragment of a symbol name; narrows the surface first. */
+  query?: string;
+  /** Index of the first symbol to return, for paging past USAGE_PAGE_SIZE. */
+  offset?: number;
+}
+
+/**
+ * Symbols per `usage` response. The whole surface used to go out in one piece:
+ * react@19 is ~266 symbols / 30 KB, ~8k tokens of context for an agent that
+ * usually wanted two names. A page this size is ~2k, and `query` gets the agent
+ * to the symbol it came for without paging at all.
+ */
+export const USAGE_PAGE_SIZE = 80;
+
+/** One page of a (name-sorted) surface, plus the sentence that says it is one. */
+function pageSurface(
+  surface: ExportSymbol[],
+  input: UsageInput,
+): { symbols: ExportSymbol[]; total: number; note?: string } {
+  const q = input.query?.trim().toLowerCase();
+  const matched = q ? surface.filter((s) => s.name.toLowerCase().includes(q)) : surface;
+  const offset = Math.max(0, Math.floor(input.offset ?? 0));
+  const symbols = matched.slice(offset, offset + USAGE_PAGE_SIZE);
+  const total = matched.length;
+  const what = q ? `symbols matching "${input.query}"` : 'exported symbols';
+  // A silently short list reads as the whole API. Every cut says so, and how to
+  // get the rest.
+  if (q && total === 0) {
+    return {
+      symbols,
+      total,
+      note: `No exported symbol name contains "${input.query}" (${surface.length} in total). Try a shorter fragment, or omit query to page through all of them.`,
+    };
+  }
+  if (offset >= total && total > 0) {
+    return { symbols, total, note: `offset ${offset} is past the last of ${total} ${what}.` };
+  }
+  const end = offset + symbols.length;
+  if (offset === 0 && end === total) return { symbols, total };
+  return {
+    symbols,
+    total,
+    note:
+      `Showing ${offset + 1}–${end} of ${total} ${what}, sorted by name. ` +
+      (end < total
+        ? `Pass offset: ${end} for the next page, or query with part of a name to jump to it.`
+        : 'This is the last page.'),
+  };
+}
+
+/**
+ * A surface that is one exported value typed by an interface and nothing else.
+ *
+ * DefinitelyTyped's CommonJS shape, `declare const _: _.LoDashStatic; export = _`,
+ * puts the entire callable API on the members of that interface. A top-level
+ * export list sees two names, `default` and `LoDashStatic`, and reporting that
+ * as `available: true` told agents lodash@4.17.21 exports two things. Detected
+ * rather than fixed: enumerating interface members is a different extractor.
+ */
+function isShallowSurface(surface: ExportSymbol[]): boolean {
+  const main = surface.find((s) => s.name === 'default');
+  const rest = surface.filter((s) => s !== main);
+  return (
+    main?.kind === 'variable' &&
+    rest.length > 0 &&
+    rest.length <= 3 &&
+    rest.every((s) => s.kind === 'interface' || s.kind === 'type' || s.kind === 'namespace')
+  );
 }
 
 /**
@@ -609,15 +680,27 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
     }),
     fetchNpmCompatAtVersion(input.package, version).catch(() => null),
   ]);
+  const page = surface ? pageSurface(surface, input) : null;
+  const shallow = surface !== null && isShallowSurface(surface);
+  const types = typesPackageName(input.package);
   const out: UsageOutput = {
     package: input.package,
     version,
-    surface,
+    surface: page?.symbols ?? null,
     available: surface !== null,
     engines: compat?.engines ?? null,
-    note: surface
-      ? undefined
-      : 'No extracted API surface for this version yet; fall back to the README.',
+    ...(page ? { totalSymbols: page.total } : {}),
+    ...(shallow ? { shallow: true } : {}),
+    note: !surface
+      ? // The README is not in this response, so "fall back to the README"
+        // left the agent with nothing to act on. Name the two things it can do.
+        `No type-derived API surface for ${input.package}@${version}: it ships no .d.ts and ${types} has no matching major, or extraction is still running (retry in a few seconds). For the names it exports at runtime call resolve_surface; for usage, read https://www.npmjs.com/package/${input.package}/v/${version}.`
+      : shallow
+        ? `Shallow surface: ${input.package} exports one value typed by ${surface
+            .filter((s) => s.name !== 'default')
+            .map((s) => s.name)
+            .join(', ')}, so its methods are that interface's members and are NOT listed here. Read them in its type declarations (${types} if the package bundles none), or call resolve_surface for the names it exports at runtime.`
+        : page?.note,
   };
 
   if (input.knownVersion && input.knownVersion !== version && surface) {

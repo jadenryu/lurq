@@ -25,7 +25,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: url("/terms"), lastModified, changeFrequency: "yearly", priority: 0.3 },
     // The docs are a separate zone (apps/docs) with no sitemap of their own, so
     // they are listed here or not at all. Mirrors apps/docs/content/docs.
-    ...["", "/quickstart", "/how-it-works", "/mcp-tools", "/mcp-scan", "/cli", "/self-hosting"].map(
+    ...[
+      "",
+      "/quickstart",
+      "/mcp-tools",
+      "/mcp-scan",
+      "/alerts",
+      "/cli",
+      "/plans-and-troubleshooting",
+      "/how-it-works",
+      "/self-hosting",
+    ].map(
       (slug) => ({
         url: url(`/docs${slug}`),
         lastModified,

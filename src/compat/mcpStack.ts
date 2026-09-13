@@ -28,8 +28,6 @@
  * second is the only way to cover remote, PyPI, Docker and private servers.
  */
 import type { Database } from '../db/client';
-import { enqueueSurface } from '../db/surface';
-import { loadStored, rowsToSurface } from '../mcp/surfaceHandlers';
 import {
   contractOf,
   MCP_TIER,
@@ -135,6 +133,13 @@ export async function loadStackMembers(
       });
       continue;
     }
+    // Loaded here, on the index path only. `lurq mcp-scan` imports this module
+    // for `isCrowded` and always passes live tools, and a static import would
+    // make every hosted scan resolve drizzle-orm, which the CLI does not install.
+    const [{ enqueueSurface }, { loadStored, rowsToSurface }] = await Promise.all([
+      import('../db/surface'),
+      import('../mcp/surfaceHandlers'),
+    ]);
     const stored = await loadStored(db, s.server, s.version, tenantId, 'mcp_server');
     if (!stored || stored.rows.length === 0 || stored.verdict === 'verified_false') {
       if (stored?.verdict !== 'verified_false' && NPM_NAME.test(s.server)) {

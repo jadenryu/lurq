@@ -72,6 +72,8 @@ export interface BrowserAuthResult {
 export function keyViaBrowser(opts: {
   noOpen?: boolean;
   onUrl: (url: string) => void;
+  /** Stop waiting now and resolve null (the user chose to paste instead). */
+  signal?: AbortSignal;
 }): Promise<BrowserAuthResult | null> {
   return new Promise((resolve) => {
     const nonce = randomBytes(18).toString('base64url');
@@ -135,6 +137,7 @@ export function keyViaBrowser(opts: {
     timer.unref?.();
 
     server.on('error', () => finish(null));
+    opts.signal?.addEventListener('abort', () => finish(null), { once: true });
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as AddressInfo;
       const url = `${WEB_ORIGIN}/dashboard/cli?port=${port}&nonce=${encodeURIComponent(nonce)}`;
