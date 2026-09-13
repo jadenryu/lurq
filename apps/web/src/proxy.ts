@@ -8,11 +8,15 @@
 // this is the canonical spot: do not re-add a root-level proxy.ts.
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Default-public; protect by exception. Only the dashboard requires auth.
+// Default-public; protect by exception. Only the dashboard requires auth, and
+// one page of it does not: the builder report is where the landing page's scan
+// box sends a visitor who has no account yet. This is the ONLY gate for every
+// other dashboard route — the layout renders a locked nav, it does not redirect.
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
+const isOpenReport = createRouteMatcher(["/dashboard/report"]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
+  if (isProtectedRoute(req) && !isOpenReport(req)) {
     await auth.protect();
   }
 });

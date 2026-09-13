@@ -9,8 +9,17 @@ import {
 } from "@/lib/lurq-issuer";
 
 const CONFIDENCES = ["unproven", "promising", "emerging", "proven"] as const;
+const SEVERITIES = ["info", "low", "moderate", "high", "critical"] as const;
 const MAX_ENTRIES = 500;
 const MAX_LEN = 214;
+
+/** Same ceilings the backend parser enforces; see src/policy/parse.ts. */
+const LIMITS = {
+  minWeeklyDownloads: { min: 0, max: 100_000_000 },
+  maxStaleMonths: { min: 1, max: 240 },
+  maxBundleKb: { min: 1, max: 100_000 },
+  minPackageAgeDays: { min: 1, max: 365 },
+} as const;
 
 /**
  * Validated here as well as in the backend, for the same reason `/api/repos/[id]`
@@ -35,8 +44,34 @@ function parsePolicy(input: unknown): SelectionPolicy | null {
     return out;
   };
 
-  const allow = strings(raw.allow);
-  if (!allow) return null;
+  // Exceptions carry a reason and an expiry when set from a policy file. Both are
+  // kept on the way through: dropping them on a dashboard save would turn an
+  // expiring exception into a permanent one without anyone deciding that.
+  if (!Array.isArray(raw.allow) || raw.allow.length > MAX_ENTRIES) return null;
+  const allow: SelectionPolicy["allow"] = [];
+  for (const item of raw.allow) {
+    // A bare name is what this form sent before exceptions had those fields.
+    const entry = typeof item === "string" ? { name: item } : item;
+    if (!entry || typeof entry !== "object") return null;
+    const rule = entry as Record<string, unknown>;
+    if (typeof rule.name !== "string") return null;
+    const name = rule.name.trim();
+    if (!name || name.length > MAX_LEN) return null;
+    const out: SelectionPolicy["allow"][number] = { name };
+    if (rule.reason != null) {
+      if (typeof rule.reason !== "string" || rule.reason.length > MAX_LEN) return null;
+      if (rule.reason.trim()) out.reason = rule.reason.trim();
+    }
+    if (rule.expires != null) {
+      if (typeof rule.expires !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(rule.expires)) return null;
+      out.expires = rule.expires;
+    }
+    allow.push(out);
+  }
+
+  // Same reasoning as the other late fields: absent means the pre-existing
+  // behaviour (enforce), and anything else is rejected rather than guessed.
+  if (raw.mode !== undefined && raw.mode !== "enforce" && raw.mode !== "warn") return null;
 
   if (!Array.isArray(raw.deny) || raw.deny.length > MAX_ENTRIES) return null;
   const deny: SelectionPolicy["deny"] = [];
@@ -72,7 +107,50 @@ function parsePolicy(input: unknown): SelectionPolicy | null {
     if (!licenses) return null;
   }
 
-  return { allow, deny, minConfidence, licenses, blockDeprecated: raw.blockDeprecated };
+  // Bounded, finite, or null for "no rule". Rejected rather than clamped: a
+  // clamp saves a rule other than the one the form sent.
+  const bounded = (
+    value: unknown,
+    limit: { min: number; max: number },
+  ): number | null | false => {
+    if (value == null) return null;
+    if (typeof value !== "number" || !Number.isFinite(value)) return false;
+    if (value < limit.min || value > limit.max) return false;
+    return value;
+  };
+
+  if (raw.blockArchived !== undefined && typeof raw.blockArchived !== "boolean") return null;
+
+  let maxAdvisorySeverity: SelectionPolicy["maxAdvisorySeverity"] = null;
+  if (raw.maxAdvisorySeverity != null) {
+    if (typeof raw.maxAdvisorySeverity !== "string") return null;
+    if (!SEVERITIES.includes(raw.maxAdvisorySeverity as (typeof SEVERITIES)[number])) return null;
+    maxAdvisorySeverity = raw.maxAdvisorySeverity as SelectionPolicy["maxAdvisorySeverity"];
+  }
+
+  const minWeeklyDownloads = bounded(raw.minWeeklyDownloads, LIMITS.minWeeklyDownloads);
+  if (minWeeklyDownloads === false) return null;
+  const maxStaleMonths = bounded(raw.maxStaleMonths, LIMITS.maxStaleMonths);
+  if (maxStaleMonths === false) return null;
+  const maxBundleKb = bounded(raw.maxBundleKb, LIMITS.maxBundleKb);
+  if (maxBundleKb === false) return null;
+  const minPackageAgeDays = bounded(raw.minPackageAgeDays, LIMITS.minPackageAgeDays);
+  if (minPackageAgeDays === false) return null;
+
+  return {
+    mode: raw.mode === "warn" ? "warn" : "enforce",
+    allow,
+    deny,
+    minConfidence,
+    licenses,
+    blockDeprecated: raw.blockDeprecated,
+    blockArchived: raw.blockArchived === true,
+    maxAdvisorySeverity,
+    minWeeklyDownloads,
+    maxStaleMonths,
+    maxBundleKb,
+    minPackageAgeDays,
+  };
 }
 
 function failure(err: unknown): NextResponse {

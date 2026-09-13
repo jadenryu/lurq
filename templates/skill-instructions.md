@@ -24,6 +24,9 @@ whatever was popular then; lurq is re-synced daily and its claims are checkable.
   side-by-side health comparison.
 - **Need details on one package** → `evaluate` for full scores, signals, advisories,
   and a usage guide (what it is, when to use it, how it fits).
+- **Adding dependencies in a team codebase** → `policy` once, before choosing. It lists
+  the packages and thresholds the team's policy refuses, so you pick an allowed package
+  first instead of being refused after. `recommend` and `evaluate` enforce it either way.
 - **Commit to a multi-package stack** → `compat` with the whole set. Individually healthy
   packages can still refuse to install together; this returns the exact clashing peer or
   engine constraints, plus any conflicts already proven in a sandbox. Read-only and

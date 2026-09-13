@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCopy } from "@/lib/use-copy";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/dashboard/panel";
 import { Input } from "@/components/ui/input";
@@ -26,11 +27,12 @@ export function CreateKeyDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
+  const [policyWrite, setPolicyWrite] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [isDemoKey, setIsDemoKey] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
 
   async function generate() {
     setLoading(true);
@@ -39,7 +41,7 @@ export function CreateKeyDialog() {
       const res = await fetch("/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: label.trim() || undefined }),
+        body: JSON.stringify({ label: label.trim() || undefined, policyWrite }),
       });
       const data = (await res.json()) as { key?: string; error?: string; demo?: boolean };
       if (!res.ok || !data.key) {
@@ -56,22 +58,17 @@ export function CreateKeyDialog() {
     }
   }
 
-  async function copy() {
-    if (!newKey) return;
-    await navigator.clipboard.writeText(newKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
   function reset() {
     setOpen(false);
     // Let the close animation finish before clearing state under it.
     setTimeout(() => {
       setLabel("");
+      setPolicyWrite(false);
       setError(null);
       setNewKey(null);
       setIsDemoKey(false);
-      setCopied(false);
+      // The copy-confirm clears itself on its own timer inside useCopy, and it
+      // is shorter than this one — nothing to reset here.
     }, 200);
   }
 
@@ -96,16 +93,24 @@ export function CreateKeyDialog() {
               <code className="flex-1 overflow-x-auto rounded-[var(--radius-control)] border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
                 {newKey}
               </code>
-              <Button variant="outline" onClick={copy}>
+              <Button variant="outline" onClick={() => void copy(newKey)}>
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
-            {!isDemoKey && (
-              <p className="text-sm text-muted-foreground">
-                Next: run <code className="font-mono text-foreground">npx lurqrun</code>{" "}
-                and paste this key to connect your coding agent.
-              </p>
-            )}
+            {!isDemoKey &&
+              (policyWrite ? (
+                <p className="text-sm text-muted-foreground">
+                  Next: store it as a CI secret named{" "}
+                  <code className="font-mono text-foreground">LURQ_API_KEY</code> and run{" "}
+                  <code className="font-mono text-foreground">lurq policy push</code>. Keep it out
+                  of agent configs.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Next: run <code className="font-mono text-foreground">npx lurqrun</code>{" "}
+                  and paste this key to connect your coding agent.
+                </p>
+              ))}
             <DialogFooter>
               <Button onClick={reset}>Done</Button>
             </DialogFooter>
@@ -129,6 +134,21 @@ export function CreateKeyDialog() {
                 maxLength={200}
               />
             </div>
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-[var(--color-primary)]"
+                checked={policyWrite}
+                onChange={(e) => setPolicyWrite(e.target.checked)}
+              />
+              <span>
+                Can change selection policy
+                <span className="block text-muted-foreground">
+                  For <code className="font-mono">lurq policy push</code> in CI. Never paste this
+                  key into a coding agent: it could loosen the rules that agent runs under.
+                </span>
+              </span>
+            </label>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>

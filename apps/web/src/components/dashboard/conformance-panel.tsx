@@ -19,11 +19,17 @@ import type { ConformanceReport, RepoConformance } from "@/lib/lurq-issuer";
 
 /** Rule → how it reads in a row. Kept as words, not colour: the rules differ in
  *  kind, not severity, and a red/amber ramp would invent a ranking we don't have. */
-const RULE_LABEL: Record<string, string> = {
+export const RULE_LABEL: Record<string, string> = {
   denied: "denied",
+  advisory: "advisory",
   license: "licence",
   deprecated: "deprecated",
+  archived: "archived",
   confidence: "evidence",
+  adoption: "adoption",
+  stale: "stale",
+  size: "size",
+  age: "too new",
 };
 
 function RepoRow({ repo }: { repo: RepoConformance }) {

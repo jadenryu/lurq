@@ -30,6 +30,116 @@ const CONFIDENCES: {
 /** The licenses teams actually write rules about. Anything else is typed in. */
 const COMMON_LICENSES = ["MIT", "Apache-2.0", "BSD-3-Clause", "ISC", "BSD-2-Clause"];
 
+/**
+ * Worst tolerated → blocked, in the order a person escalates.
+ *
+ * The control names what is *allowed through*, not what is blocked, because
+ * that is how the rule is said out loud ("nothing high or above") and a control
+ * phrased the other way is one somebody sets backwards once and then trusts.
+ */
+const SEVERITIES: { id: NonNullable<SelectionPolicy["maxAdvisorySeverity"]>; blurb: string }[] = [
+  { id: "info", blurb: "Informational only." },
+  { id: "low", blurb: "Low and below." },
+  { id: "moderate", blurb: "Moderate and below." },
+  { id: "high", blurb: "High and below." },
+  { id: "critical", blurb: "Everything, including critical." },
+];
+
+/**
+ * A numeric rule: off, or a number with presets.
+ *
+ * Presets are not decoration. A free number field asks every reader to invent a
+ * threshold, and the number they invent is either round (10,000) or copied from
+ * whatever package they were annoyed by last week. The presets are the defensible
+ * answers; the field stays for the team that has a real one.
+ */
+function NumberRule({
+  label,
+  description,
+  unit,
+  value,
+  presets,
+  disabled,
+  min,
+  max,
+  onChange,
+  children,
+}: {
+  label: string;
+  description: string;
+  unit: string;
+  value: number | null;
+  presets: number[];
+  disabled: boolean;
+  min: number;
+  max: number;
+  onChange: (next: number | null) => void;
+  /** Consequence line, shown only while the rule is on. */
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="border-t border-edge pt-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-lg">
+          <p className="text-sm font-medium text-ink">{label}</p>
+          <p className="mt-1 text-sm leading-relaxed text-ink-2">{description}</p>
+        </div>
+        <Toggle
+          on={value !== null}
+          disabled={disabled}
+          labels={["set", "any"]}
+          onClick={() => onChange(value === null ? presets[Math.floor(presets.length / 2)]! : null)}
+        />
+      </div>
+
+      {value !== null && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="inline-flex h-8 items-center gap-0.5 rounded-[var(--radius-control)] border border-edge bg-surface-2 p-0.5">
+            {presets.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                disabled={disabled}
+                aria-pressed={value === preset}
+                onClick={() => onChange(preset)}
+                className={cn(
+                  "rounded-[3px] px-2.5 text-[12px] font-medium leading-7 tabular-nums transition-colors",
+                  value === preset
+                    ? "bg-surface text-ink shadow-[0_1px_0_0_var(--edge-lit)]"
+                    : "text-ink-3 hover:text-ink",
+                )}
+              >
+                {preset.toLocaleString()}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-1.5">
+            <span className="sr-only">{label}</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={min}
+              max={max}
+              value={value}
+              disabled={disabled}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                // An out-of-range or unparseable entry leaves the rule alone
+                // rather than saving a number the server will reject anyway.
+                if (!Number.isFinite(next) || next < min || next > max) return;
+                onChange(next);
+              }}
+              className="h-8 w-24 rounded-[var(--radius-control)] border border-edge bg-surface px-2 font-mono text-xs tabular-nums text-ink focus:border-signal/50 focus:outline-none"
+            />
+            <span className="text-[12px] text-ink-3">{unit}</span>
+          </label>
+          {children && <span className="text-[12px] text-ink-3">{children}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Row({
   label,
   description,
@@ -175,11 +285,21 @@ export function SelectionPolicyPanel({
 
   // "Enforcing" is not the same as "configured". A policy with only an allow
   // list rules on nothing, so the chip has to read the rules, not the record.
-  const enforcing =
-    policy.deny.length > 0 ||
-    policy.minConfidence !== null ||
-    policy.licenses !== null ||
-    policy.blockDeprecated;
+  const active = [
+    policy.deny.length > 0,
+    policy.minConfidence !== null,
+    policy.licenses !== null,
+    policy.blockDeprecated,
+    policy.blockArchived,
+    policy.maxAdvisorySeverity !== null,
+    policy.minWeeklyDownloads !== null,
+    policy.maxStaleMonths !== null,
+    policy.maxBundleKb !== null,
+    policy.minPackageAgeDays !== null,
+  ];
+  const inForce = active.filter(Boolean).length;
+  const enforcing = inForce > 0;
+  const warnOnly = policy.mode === "warn";
 
   async function save() {
     setSaving(true);
@@ -207,13 +327,34 @@ export function SelectionPolicyPanel({
       <PanelHeader
         title="selection policy"
         trailing={
-          <Chip tone={enforcing ? "accent" : "neutral"} dot>
-            {enforcing ? "enforcing" : "not enforcing"}
-          </Chip>
+          <div className="flex items-center gap-2.5">
+            {/* The count, not just the state. "Enforcing" tells you a rule
+                exists; "3 of 9 rules" tells you how much of your standard is
+                actually switched on, which is the question anyone auditing this
+                page came to answer. */}
+            <span className="text-[12px] tabular-nums text-ink-3">
+              {inForce} of {active.length} rules
+            </span>
+            <Chip tone={!enforcing ? "neutral" : warnOnly ? "warn" : "accent"} dot>
+              {!enforcing ? "Not enforcing" : warnOnly ? "Warn only" : "Enforcing"}
+            </Chip>
+          </div>
         }
       />
 
       <div className="mt-5 space-y-5">
+        <Row
+          label="Warn only"
+          description="Report what these rules would refuse, without refusing it. Agents get the warning and nothing is blocked. Roll a new rule out this way, see what it catches in the activity below, then switch back to enforcing."
+        >
+          <Toggle
+            on={warnOnly}
+            disabled={locked}
+            labels={["warn", "enforce"]}
+            onClick={() => patch({ mode: warnOnly ? "enforce" : "warn" })}
+          />
+        </Row>
+
         <Row
           label="Blocked packages"
           description="Never recommended, and flagged when an agent evaluates one it found on its own. The reason is handed to the agent verbatim, “use the internal http client” redirects it; “denied” just makes it try again."
@@ -232,13 +373,14 @@ export function SelectionPolicyPanel({
         />
         <div className="-mt-3">
           <NameList
-            items={policy.allow}
+            items={policy.allow.map((a) => a.name)}
             placeholder="package name, then Enter"
             disabled={locked}
             empty="no exceptions"
-            onAdd={(name) => patch({ allow: [...policy.allow, name] })}
-            onRemove={(name) => patch({ allow: policy.allow.filter((a) => a !== name) })}
+            onAdd={(name) => patch({ allow: [...policy.allow, { name }] })}
+            onRemove={(name) => patch({ allow: policy.allow.filter((a) => a.name !== name) })}
           />
+          <ExceptionNotes allow={policy.allow} />
         </div>
 
         <Row
@@ -249,6 +391,17 @@ export function SelectionPolicyPanel({
             on={policy.blockDeprecated}
             disabled={locked}
             onClick={() => patch({ blockDeprecated: !policy.blockDeprecated })}
+          />
+        </Row>
+
+        <Row
+          label="Refuse abandoned repositories"
+          description="Blocks packages whose source repository is archived. Deprecation is a publisher telling you to stop; archiving is a maintainer leaving without saying so, and most packages that go unmaintained never get a deprecation notice at all."
+        >
+          <Toggle
+            on={policy.blockArchived}
+            disabled={locked}
+            onClick={() => patch({ blockArchived: !policy.blockArchived })}
           />
         </Row>
 
@@ -341,6 +494,104 @@ export function SelectionPolicyPanel({
             </>
           )}
         </div>
+
+        <div className="border-t border-edge pt-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 max-w-lg">
+              <p className="text-sm font-medium text-ink">Known vulnerabilities</p>
+              <p className="mt-1 text-sm leading-relaxed text-ink-2">
+                The worst advisory severity you will accept. Anything above it is refused,
+                and the advisory id and summary go to the agent so it can pick a different
+                package rather than pin an old version of this one.
+              </p>
+            </div>
+            <Toggle
+              on={policy.maxAdvisorySeverity !== null}
+              disabled={locked}
+              labels={["set", "any"]}
+              onClick={() =>
+                patch({
+                  maxAdvisorySeverity: policy.maxAdvisorySeverity === null ? "moderate" : null,
+                })
+              }
+            />
+          </div>
+          {policy.maxAdvisorySeverity !== null && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+              {SEVERITIES.map((level) => {
+                const on = policy.maxAdvisorySeverity === level.id;
+                return (
+                  <button
+                    key={level.id}
+                    type="button"
+                    disabled={locked}
+                    aria-pressed={on}
+                    onClick={() => patch({ maxAdvisorySeverity: level.id })}
+                    className={cn(
+                      "rounded-[var(--radius-control)] border p-2.5 text-left transition-colors disabled:opacity-60",
+                      on ? "border-signal/50 bg-surface-2" : "border-edge hover:bg-surface-2/60",
+                    )}
+                  >
+                    <span className="text-[13px] font-medium text-ink">{level.id}</span>
+                    <span className="mt-1 block text-[12px] leading-snug text-ink-2">
+                      {level.blurb}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <NumberRule
+          label="Minimum package age"
+          description="Refuses packages first published fewer than this many days ago. Brand-new packages are where malware, hijacked maintainer accounts and names squatted because a model hallucinated them sit before anyone has looked. Waiting a few days is cheap; cleaning up after one is not."
+          unit="days since first publish"
+          presets={[7, 30, 90]}
+          min={1}
+          max={365}
+          value={policy.minPackageAgeDays}
+          disabled={locked}
+          onChange={(minPackageAgeDays) => patch({ minPackageAgeDays })}
+        />
+
+        <NumberRule
+          label="Minimum adoption"
+          description="A floor on weekly npm downloads. The bluntest rule here on purpose: it is the one number every engineer already has an intuition for, and it says “nothing nobody else runs in production” without anyone having to reason about evidence grades."
+          unit="weekly downloads"
+          presets={[1000, 10000, 100000]}
+          min={0}
+          max={100_000_000}
+          value={policy.minWeeklyDownloads}
+          disabled={locked}
+          onChange={(minWeeklyDownloads) => patch({ minWeeklyDownloads })}
+        />
+
+        <NumberRule
+          label="Maximum staleness"
+          description="Refuses packages with no release in this long. Set in months, not days — this is a judgement about whether anyone is minding the package, and a threshold in days claims a precision the signal does not have."
+          unit="months since release"
+          presets={[12, 24, 36]}
+          min={1}
+          max={240}
+          value={policy.maxStaleMonths}
+          disabled={locked}
+          onChange={(maxStaleMonths) => patch({ maxStaleMonths })}
+        >
+          finished libraries are the known false positive — add them to exceptions
+        </NumberRule>
+
+        <NumberRule
+          label="Bundle ceiling"
+          description="Refuses packages above this minified + gzipped size. Only applies to packages lurq has measured, which are the ones that ship to a browser, so a rule set for the frontend never refuses a backend dependency."
+          unit="KB min+gzip"
+          presets={[20, 50, 100]}
+          min={1}
+          max={100_000}
+          value={policy.maxBundleKb}
+          disabled={locked}
+          onChange={(maxBundleKb) => patch({ maxBundleKb })}
+        />
       </div>
 
       <div className="mt-6 flex items-center justify-end gap-3 border-t border-edge pt-4">
@@ -355,6 +606,36 @@ export function SelectionPolicyPanel({
         </Button>
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Reason and expiry for the exceptions that carry them (set from a policy file;
+ * the chips above only show names). An expired exception is called out, because
+ * a name still sitting in the list reads as still applying, and it is not.
+ */
+function ExceptionNotes({ allow }: { allow: SelectionPolicy["allow"] }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const noted = allow.filter((a) => a.reason || a.expires);
+  if (!noted.length) return null;
+  return (
+    <ul className="mt-2.5 space-y-1">
+      {noted.map((a) => {
+        const lapsed = !!a.expires && a.expires <= today;
+        return (
+          <li key={a.name} className="font-mono text-[0.7rem] text-ink-3">
+            <span className="text-ink-2">{a.name}</span>
+            {a.reason && <> · {a.reason}</>}
+            {a.expires && (
+              <span className={lapsed ? "text-warn" : undefined}>
+                {" · "}
+                {lapsed ? `expired ${a.expires}, no longer applied` : `expires ${a.expires}`}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

@@ -36,6 +36,7 @@ import {
   table,
   yellow,
 } from './format';
+import { MissingKeyError } from './remote';
 
 async function withDb<T>(fn: (db: ReturnType<typeof createDb>['db']) => Promise<T>): Promise<T> {
   requireConfig(['DATABASE_URL']);
@@ -64,7 +65,7 @@ export function indexSource(): 'hosted' | 'local' {
   if (process.env.LURQ_LOCAL === '1') return 'local';
   if (resolveApiKey()) return 'hosted';
   if (process.env.DATABASE_URL) return 'local';
-  throw new Error(
+  throw new MissingKeyError(
     'No API key configured. Run `lurq setup` to connect this machine, ' +
       'or set DATABASE_URL to read from your own index.',
   );

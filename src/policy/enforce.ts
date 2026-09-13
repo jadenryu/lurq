@@ -5,7 +5,7 @@
  * clock — the rules are the part worth testing exhaustively, and a pure function
  * is the only version of them that can be.
  */
-import type { Candidate, Confidence } from '../core/types';
+import type { Advisory, AdvisorySeverity, Candidate, Confidence } from '../core/types';
 import type { Exclusion, PolicyFacts, SelectionPolicy } from './types';
 
 /** Ordering for the `minConfidence` floor. Mirrors search/recommend. */
@@ -15,6 +15,27 @@ const CONFIDENCE_RANK: Record<Confidence, number> = {
   emerging: 2,
   proven: 3,
 };
+
+/**
+ * Worst tolerated → blocked. Ranked so `maxAdvisorySeverity: 'moderate'` reads
+ * as "moderate is fine, high and critical are not", which is how the rule is
+ * phrased in the UI and how teams say it out loud.
+ */
+const SEVERITY_RANK: Record<AdvisorySeverity, number> = {
+  info: 0,
+  low: 1,
+  moderate: 2,
+  high: 3,
+  critical: 4,
+};
+
+/** The worst advisory on a package, or null when it carries none. */
+function worst(advisories: Advisory[] | null | undefined): Advisory | null {
+  if (!advisories?.length) return null;
+  return advisories.reduce((a, b) =>
+    SEVERITY_RANK[b.severity] > SEVERITY_RANK[a.severity] ? b : a,
+  );
+}
 
 /**
  * Does this policy actually rule on anything?
@@ -29,13 +50,96 @@ export function hasRules(policy: SelectionPolicy): boolean {
     policy.deny.length > 0 ||
     policy.minConfidence !== null ||
     policy.licenses !== null ||
-    policy.blockDeprecated
+    policy.blockDeprecated ||
+    policy.blockArchived ||
+    policy.maxAdvisorySeverity !== null ||
+    policy.minWeeklyDownloads !== null ||
+    policy.maxStaleMonths !== null ||
+    policy.maxBundleKb !== null ||
+    policy.minPackageAgeDays !== null
   );
+}
+
+/**
+ * The policy as enforced at `now`: exceptions past their expiry removed.
+ *
+ * Applied by the loader that owns the clock, never inside `check`, so the rules
+ * stay a pure function. And never applied to what `GET /policy` returns: a pull
+ * that silently dropped expired entries would delete them on the next push,
+ * erasing the record that an exception existed and lapsed.
+ */
+export function withoutExpired(policy: SelectionPolicy, now: Date): SelectionPolicy {
+  const today = now.toISOString().slice(0, 10);
+  // `expires` is the first day the exception no longer applies. ISO dates
+  // compare correctly as strings, which is why the parser insists on that form.
+  return { ...policy, allow: policy.allow.filter((a) => !a.expires || a.expires > today) };
+}
+
+/**
+ * One sentence per active rule, most severe first — what an agent reads before
+ * it picks. Empty when nothing is enforced: an allowlist on its own exempts
+ * packages from rules that do not exist, so it is not worth a line.
+ */
+export function describeRules(policy: SelectionPolicy): string[] {
+  if (!hasRules(policy)) return [];
+  const out: string[] = [];
+  if (policy.mode === 'warn') {
+    out.push('Warn only: packages that break these rules are reported, not refused.');
+  }
+  for (const a of policy.allow) {
+    // "expires", not "until": the date is the first day it no longer applies.
+    const expires = a.expires ? `, expires ${a.expires}` : '';
+    out.push(`Always allowed: ${a.name}${a.reason ? ` (${a.reason})` : ''}${expires}.`);
+  }
+  for (const d of policy.deny) out.push(`Never use ${d.name}${d.reason ? `: ${d.reason}` : '.'}`);
+  if (policy.maxAdvisorySeverity) {
+    out.push(`No packages with a known advisory above ${policy.maxAdvisorySeverity}.`);
+  }
+  if (policy.minPackageAgeDays !== null) {
+    out.push(`No packages first published less than ${policy.minPackageAgeDays} days ago.`);
+  }
+  if (policy.licenses) {
+    out.push(
+      policy.licenses.length
+        ? `Licenses allowed: ${policy.licenses.join(', ')}.`
+        : 'No license is allowed, so every package with a known license is refused.',
+    );
+  }
+  if (policy.blockDeprecated) out.push('No deprecated packages.');
+  if (policy.blockArchived) out.push('No packages whose repository is archived.');
+  if (policy.minConfidence) out.push(`lurq confidence must be ${policy.minConfidence} or better.`);
+  if (policy.minWeeklyDownloads !== null) {
+    out.push(`At least ${policy.minWeeklyDownloads.toLocaleString('en-US')} weekly downloads.`);
+  }
+  if (policy.maxStaleMonths !== null) {
+    out.push(`A release within the last ${policy.maxStaleMonths} months.`);
+  }
+  if (policy.maxBundleKb !== null) out.push(`Bundle size at most ${policy.maxBundleKb} KB min+gzip.`);
+  return out;
+}
+
+/**
+ * What changed between two policies, as `-`/`+` rule sentences.
+ *
+ * Diffed on the sentences rather than the JSON: a reviewer approving a policy
+ * change reads "- Never use request" faster than a nested field path, and two
+ * policies that describe the same rules are the same policy for that purpose.
+ */
+export function diffPolicies(before: SelectionPolicy, after: SelectionPolicy): string[] {
+  const was = describeRules(before);
+  const now = describeRules(after);
+  return [
+    ...was.filter((r) => !now.includes(r)).map((r) => `- ${r}`),
+    ...now.filter((r) => !was.includes(r)).map((r) => `+ ${r}`),
+  ];
 }
 
 export interface PolicyResult {
   allowed: Candidate[];
+  /** Refused. Always empty in warn mode. */
   excluded: Exclusion[];
+  /** Would have been refused; kept in `allowed`. Always empty in enforce mode. */
+  warned: Exclusion[];
 }
 
 /**
@@ -51,14 +155,19 @@ export function applyPolicy(
 ): PolicyResult {
   const allowed: Candidate[] = [];
   const excluded: Exclusion[] = [];
+  const warned: Exclusion[] = [];
+  const warnOnly = policy.mode === 'warn';
 
   for (const candidate of candidates) {
     const exclusion = check(policy, candidate, facts.get(candidate.name));
-    if (exclusion) excluded.push(exclusion);
-    else allowed.push(candidate);
+    if (!exclusion) allowed.push(candidate);
+    else if (warnOnly) {
+      warned.push(exclusion);
+      allowed.push(candidate);
+    } else excluded.push(exclusion);
   }
 
-  return { allowed, excluded };
+  return { allowed, excluded, warned };
 }
 
 /**
@@ -80,7 +189,7 @@ export function check(
 ): Exclusion | null {
   const { name } = pkg;
 
-  if (policy.allow.includes(name)) return null;
+  if (policy.allow.some((a) => a.name === name)) return null;
 
   const denied = policy.deny.find((d) => d.name === name);
   if (denied) {
@@ -93,9 +202,49 @@ export function check(
 
   // Absent facts never convict. An unindexed license cannot fail a license
   // rule — that turns "we didn't look" into a refusal, which is the same lie as
-  // turning it into an all-clear, just pointed the other way.
+  // turning it into an all-clear, just pointed the other way. Every rule below
+  // reads its fact through `?.` plus a null check for exactly that reason.
+
+  // Security first: a known vulnerability outranks every judgement call under
+  // it. A package that is also deprecated, huge and stale is still reported as
+  // the security problem, because that is the one the agent must not route
+  // around.
+  if (policy.maxAdvisorySeverity) {
+    const hit = worst(facts?.advisories);
+    if (hit && SEVERITY_RANK[hit.severity] > SEVERITY_RANK[policy.maxAdvisorySeverity]) {
+      return {
+        name,
+        rule: 'advisory',
+        reason: `Known ${hit.severity} advisory (${hit.id}): ${hit.summary}. Your policy allows ${policy.maxAdvisorySeverity} and below.`,
+      };
+    }
+  }
+
+  // Next to security because it is security: a brand-new package is where
+  // malware, account takeovers and squatted names a model hallucinated all live
+  // before anyone has looked. Cheaper to wait out than to clean up.
+  if (
+    policy.minPackageAgeDays !== null &&
+    facts?.daysSincePublished != null &&
+    facts.daysSincePublished < policy.minPackageAgeDays
+  ) {
+    return {
+      name,
+      rule: 'age',
+      reason: `First published ${facts.daysSincePublished} days ago; your policy requires ${policy.minPackageAgeDays}. New packages are where supply-chain attacks live before anyone notices.`,
+    };
+  }
+
   if (policy.blockDeprecated && facts?.deprecated) {
     return { name, rule: 'deprecated', reason: 'Marked deprecated on npm.' };
+  }
+
+  if (policy.blockArchived && facts?.archived) {
+    return {
+      name,
+      rule: 'archived',
+      reason: 'Its source repository is archived, so nothing will be fixed upstream.',
+    };
   }
 
   if (policy.licenses && facts?.license && !policy.licenses.includes(facts.license)) {
@@ -114,6 +263,42 @@ export function check(
         reason: `Evidence is ${pkg.confidence}; your policy requires ${policy.minConfidence} or better.`,
       };
     }
+  }
+
+  // Adoption, staleness and size are the three judgement calls, ordered by how
+  // strong a claim each one makes. Downloads say "nobody else runs this"; a
+  // release gap says "nobody is minding it"; size says "it costs more than it is
+  // worth" — the weakest of the three, so it is reported last.
+  if (
+    policy.minWeeklyDownloads !== null &&
+    facts?.weeklyDownloads != null &&
+    facts.weeklyDownloads < policy.minWeeklyDownloads
+  ) {
+    return {
+      name,
+      rule: 'adoption',
+      reason: `${facts.weeklyDownloads.toLocaleString('en-US')} weekly downloads is below your floor of ${policy.minWeeklyDownloads.toLocaleString('en-US')}.`,
+    };
+  }
+
+  if (
+    policy.maxStaleMonths !== null &&
+    facts?.monthsSinceRelease != null &&
+    facts.monthsSinceRelease > policy.maxStaleMonths
+  ) {
+    return {
+      name,
+      rule: 'stale',
+      reason: `Last release was ${facts.monthsSinceRelease} months ago; your policy allows ${policy.maxStaleMonths}.`,
+    };
+  }
+
+  if (policy.maxBundleKb !== null && facts?.bundleKb != null && facts.bundleKb > policy.maxBundleKb) {
+    return {
+      name,
+      rule: 'size',
+      reason: `${facts.bundleKb.toFixed(1)} KB min+gzip exceeds your ceiling of ${policy.maxBundleKb} KB.`,
+    };
   }
 
   return null;

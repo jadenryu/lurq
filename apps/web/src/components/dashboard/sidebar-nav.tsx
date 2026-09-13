@@ -3,16 +3,22 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SignInButton, SignUpButton } from "@clerk/nextjs";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { Lock } from "lucide-react";
 import { AccountMenu } from "@/components/dashboard/account-menu";
 import { CommandPalette, CommandPaletteTrigger } from "@/components/dashboard/command-palette";
 import { Logo } from "@/components/common/logo";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
   href: string;
   label: string;
 }
+
+/** The one row a signed-out visitor can open. See proxy.ts. */
+const REPORT = "/dashboard/report";
 
 /**
  * Two groups, split by who the row is about.
@@ -33,6 +39,9 @@ interface NavItem {
  */
 const WORKSPACE: NavItem[] = [
   { href: "/dashboard", label: "overview" },
+  // Where the landing page's scan box lands, so it is also the first page many
+  // people ever see in here.
+  { href: REPORT, label: "builder report" },
   // The repositories page: connect a repo, scan it, let lurq keep it current.
   // "autopilot" is what the page has always been for — the per-repo section is
   // already anchored `#autopilot` — and it names the outcome instead of the
@@ -74,19 +83,46 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 /**
+ * A row a signed-out visitor can see but not open.
+ *
+ * Shown rather than hidden: the rail IS the answer to "what else is in here",
+ * and a report page with no nav would read as a landing page with a login. The
+ * row is a sign-up button that lands them on the page they clicked, so the
+ * lock is never a dead end — and proxy.ts, not this button, is what actually
+ * keeps the page closed.
+ */
+function LockedRow({ item, className }: { item: NavItem; className: string }) {
+  return (
+    <SignUpButton mode="modal" fallbackRedirectUrl={item.href} signInFallbackRedirectUrl={item.href}>
+      <button
+        type="button"
+        aria-label={`${item.label}, sign up to open`}
+        className={cn(className, "gap-2 text-ink-3 hover:text-ink-2")}
+      >
+        {item.label}
+        <Lock aria-hidden className="ml-auto size-3 shrink-0 opacity-70" />
+      </button>
+    </SignUpButton>
+  );
+}
+
+/**
  * Nav rows carry no icons. A glyph beside "usage" or "activity" adds no
  * information a one-word label doesn't already give, and a column of mismatched
  * pictograms is the fastest way to make a tool look unserious. Identity for the
- * current route comes from an accent rule plus a lifted surface instead.
+ * current route comes from an accent rule plus a lifted surface instead. The
+ * lock on a signed-out row is the exception, because it is state, not identity.
  */
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({ item, active, locked }: { item: NavItem; active: boolean; locked: boolean }) {
   const reduce = useReducedMotion();
   const className = cn(
-    "relative flex h-[30px] items-center rounded-[var(--radius-control)] pl-3.5 pr-3 text-[13px] lowercase tracking-[-0.005em] transition-colors",
+    "relative flex h-[30px] w-full items-center rounded-[var(--radius-control)] pl-3.5 pr-3 text-[13px] lowercase tracking-[-0.005em] transition-colors",
     active
       ? "bg-surface-2 text-ink"
       : "text-ink-2 hover:bg-surface-2/60 hover:text-ink",
   );
+  if (locked && item.href !== REPORT) return <LockedRow item={item} className={className} />;
+
   const inner = (
     <>
       {/* One indicator for the whole rail, not one per row. `layoutId` makes
@@ -122,10 +158,12 @@ function NavGroup({
   label,
   items,
   pathname,
+  locked,
 }: {
   label: string;
   items: NavItem[];
   pathname: string;
+  locked: boolean;
 }) {
   return (
     <div>
@@ -134,9 +172,32 @@ function NavGroup({
       </p>
       <div className="flex flex-col gap-px">
         {items.map((item) => (
-          <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+          <NavLink
+            key={item.href}
+            item={item}
+            active={isActive(pathname, item.href)}
+            locked={locked}
+          />
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Where the account menu sits, for someone who does not have an account yet. */
+function Guest({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={cn("flex items-center gap-3", !compact && "justify-between px-1.5 py-1")}>
+      <SignInButton mode="modal">
+        <button type="button" className="text-[12.5px] text-ink-3 hover:text-ink">
+          Log in
+        </button>
+      </SignInButton>
+      <SignUpButton mode="modal">
+        <button type="button" className={buttonVariants({ size: "sm" })}>
+          Sign up free
+        </button>
+      </SignUpButton>
     </div>
   );
 }
@@ -145,8 +206,12 @@ function NavGroup({
  * Full-height sidebar on desktop (logo → grouped nav → account card pinned to the
  * bottom); a compact top bar + scrollable tab row on mobile. One client component
  * so both share the active-route logic.
+ *
+ * `locked` is the signed-out render (see app/dashboard/layout.tsx): every row
+ * but the builder report is a sign-up, and the palette is gone, because every
+ * command in it leads somewhere a visitor cannot go.
  */
-export function DashboardNav() {
+export function DashboardNav({ locked = false }: { locked?: boolean }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
   // The nav owns the palette's open state so both trigger buttons drive one
@@ -157,7 +222,7 @@ export function DashboardNav() {
 
   return (
     <>
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      {!locked && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />}
 
       {/* Mobile: top bar (logo + account) then search, then a scrollable tab row. */}
       <div className="border-b border-border md:hidden">
@@ -165,13 +230,13 @@ export function DashboardNav() {
           <Link href="/" className="transition-opacity hover:opacity-80">
             <Logo />
           </Link>
-          <div className="w-auto">
-            <AccountMenu compact />
+          <div className="w-auto">{locked ? <Guest compact /> : <AccountMenu compact />}</div>
+        </div>
+        {!locked && (
+          <div className="px-4 pb-3">
+            <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} className="w-full" />
           </div>
-        </div>
-        <div className="px-4 pb-3">
-          <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} className="w-full" />
-        </div>
+        )}
         {/* Its own LayoutGroup and its own layoutId. The mobile bar and the
             desktop sidebar are both in the DOM at all times — one is hidden by a
             media query, not unmounted — so sharing one id would give framer two
@@ -183,17 +248,21 @@ export function DashboardNav() {
                 account, and it scrolls. */}
             {ALL.map((item) => {
               const active = isActive(pathname, item.href);
+              const className = cn(
+                "relative flex shrink-0 snap-start items-center rounded-[var(--radius-control)] px-3 py-1.5 text-sm lowercase tracking-[-0.005em] transition-colors",
+                active
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              );
+              if (locked && item.href !== REPORT) {
+                return <LockedRow key={item.href} item={item} className={className} />;
+              }
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "relative shrink-0 snap-start rounded-[var(--radius-control)] px-3 py-1.5 text-sm lowercase tracking-[-0.005em] transition-colors",
-                    active
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
+                  className={className}
                 >
                   {active && (
                     <motion.span
@@ -226,20 +295,20 @@ export function DashboardNav() {
         {/* Above the rail, not inside it: it searches what lurq can *do*, which
             is mostly not a page, so listing it as an eighth nav row would file it
             under the one thing it isn't. */}
-        <div className="px-2.5 py-3">
-          <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} className="w-full" />
-        </div>
+        {!locked && (
+          <div className="px-2.5 py-3">
+            <CommandPaletteTrigger onClick={() => setPaletteOpen(true)} className="w-full" />
+          </div>
+        )}
 
         <LayoutGroup id="dashboard-nav-desktop">
-          <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-2 pb-4">
-            <NavGroup label="workspace" items={WORKSPACE} pathname={pathname} />
-            <NavGroup label="account" items={ACCOUNT} pathname={pathname} />
+          <nav className={cn("flex flex-1 flex-col gap-5 overflow-y-auto px-2 pb-4", locked && "pt-3")}>
+            <NavGroup label="workspace" items={WORKSPACE} pathname={pathname} locked={locked} />
+            <NavGroup label="account" items={ACCOUNT} pathname={pathname} locked={locked} />
           </nav>
         </LayoutGroup>
 
-        <div className="border-t border-edge p-2">
-          <AccountMenu />
-        </div>
+        <div className="border-t border-edge p-2">{locked ? <Guest /> : <AccountMenu />}</div>
       </aside>
     </>
   );

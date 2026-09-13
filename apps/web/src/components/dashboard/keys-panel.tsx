@@ -11,6 +11,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import { useCopy } from "@/lib/use-copy";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -62,7 +63,7 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [rotatingId, setRotatingId] = useState<number | null>(null);
   const [rotatedKey, setRotatedKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   const [error, setError] = useState<string | null>(null);
 
   const visible = useMemo(() => {
@@ -117,9 +118,7 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
 
   async function copyRotated() {
     if (!rotatedKey) return;
-    await navigator.clipboard.writeText(rotatedKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    await copy(rotatedKey);
   }
 
   return (
@@ -165,7 +164,12 @@ export function KeysPanel({ keys, readOnly = false }: { keys: DashboardKey[]; re
                       {key.prefix}…
                     </TableCell>
                     <TableCell>
-                      <Chip>{key.tier}</Chip>
+                      <span className="inline-flex gap-1.5">
+                        <Chip>{key.tier}</Chip>
+                        {key.scopes?.includes("policy:write") && (
+                          <Chip tone="warn">policy write</Chip>
+                        )}
+                      </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {formatDate(key.createdAt)}

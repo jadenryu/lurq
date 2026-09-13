@@ -348,6 +348,35 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('stats')
+    .description('accounts and tool calls across every user (signups-with-a-key, active, calls by tool)')
+    .option('--days <n>', 'trailing window in days (default 30)', (v) => parseInt(v, 10))
+    .option('--json', 'print raw JSON')
+    .action(async (opts: { days?: number; json?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { getProductStats } = await import('../db/usage');
+      const { db, close } = createDb();
+      try {
+        const s = await getProductStats(db, opts.days ?? 30);
+        if (opts.json) {
+          console.log(JSON.stringify(s, null, 2));
+          return;
+        }
+        console.log(`last ${s.days}d`);
+        console.log(
+          `accounts    ${s.accounts.total} total · ${s.accounts.new} new · ${s.accounts.active} active`,
+        );
+        console.log(`tool calls  ${s.calls.total}`);
+        const width = Math.max(0, ...s.calls.byTool.map((r) => r.tool.length));
+        for (const r of s.calls.byTool) console.log(`  ${r.tool.padEnd(width)}  ${r.count}`);
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('usage-prune')
     .description('report on stale dashboard usage counters (DRY RUN unless --apply)')
     .option('--keep-days <n>', 'days of history to retain (default 90)', (v) => parseInt(v, 10))

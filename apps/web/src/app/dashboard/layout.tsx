@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { DashboardNav } from "@/components/dashboard/sidebar-nav";
 import { PageTransition } from "@/components/dashboard/motion";
@@ -8,8 +7,11 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // No redirect here any more. A layout cannot see which page it wraps, and one
+  // page under it (/dashboard/report) is open to signed-out visitors; proxy.ts
+  // protects every other route before this runs. Signed out, the nav renders
+  // locked: the tabs are visible, and each one is a sign-up.
   const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
 
   return (
     // `dashboard-type` remaps the two font tokens for this subtree only:
@@ -20,7 +22,7 @@ export default async function DashboardLayout({
     // spent 12% of the screen on gutters, which is what pushed tables and the
     // stat row into a horizontal scroll.
     <div className="dashboard-type flex min-h-screen flex-col md:flex-row">
-      <DashboardNav />
+      <DashboardNav locked={!userId} />
       <main id="content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 sm:px-6 md:px-8 md:py-7">
         {/* Was max-w-5xl. A 1024px column of cards centred in a 2560px window is
             the loudest "this is a website with a login" tell there is: every

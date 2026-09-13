@@ -90,6 +90,61 @@ export function buildProgram(): Command {
       );
     });
 
+  // Selection policy as a file in the repo: pull it, review changes in a PR,
+  // push from CI. Pushing needs a key with the policy:write scope, which the key
+  // `setup` stores never has.
+  const policy = program
+    .command('policy')
+    .description('keep your selection policy in a file: pull it, review it, push it');
+
+  policy
+    .command('pull')
+    .argument('[file]', 'write the policy here (default: stdout)')
+    .description('download the policy your agents are held to')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(async (file: string | undefined, opts: { url?: string; apiKey?: string }) => {
+      const { runPolicyPull } = await import('./policy');
+      await runPolicyPull(file, opts);
+    });
+
+  policy
+    .command('push')
+    .argument('<file>', 'policy JSON, as written by `lurq policy pull`')
+    .description('replace the policy with this file (needs a policy:write key)')
+    .option('--check', 'validate the file only; send nothing (for PR checks)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(
+      async (file: string, opts: { check?: boolean; url?: string; apiKey?: string }) => {
+        const { runPolicyPush } = await import('./policy');
+        await runPolicyPush(file, opts);
+      },
+    );
+
+  policy
+    .command('history')
+    .description('who changed the policy, from where, and what changed')
+    .option('--json', 'output the changes as JSON')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(async (opts: { json?: boolean; url?: string; apiKey?: string }) => {
+      const { runPolicyHistory } = await import('./policy');
+      await runPolicyHistory(opts);
+    });
+
+  policy
+    .command('log')
+    .description('packages the policy refused, or warned about, grouped by rule')
+    .option('--days <n>', 'look back this many days, 1 to 365 (default 30)')
+    .option('--json', 'output the log as JSON')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .action(async (opts: { days?: string; json?: boolean; url?: string; apiKey?: string }) => {
+      const { runPolicyLog } = await import('./policy');
+      await runPolicyLog(opts);
+    });
+
   // Answers "can lurq do X" without making anyone read `--help` twice. Local
   // and instant: the catalog ships in the binary, so this works before setup and
   // offline.

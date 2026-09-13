@@ -6,7 +6,7 @@
  */
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { Database } from './client';
-import { ownerUsageDaily } from './schema';
+import { apiKeys, ownerUsageDaily } from './schema';
 
 export interface UsagePoint {
   /** UTC day, 'YYYY-MM-DD'. */
@@ -106,6 +106,60 @@ export async function getUsageByTool(
     .orderBy(desc(sql`sum(${ownerUsageDaily.count})`));
 
   return rows.map((r) => ({ tool: r.tool, count: Number(r.count) }));
+}
+
+export interface ProductStats {
+  days: number;
+  /** Owners that minted a self-serve key: total ever, first key in the window,
+   *  and any tool call in the window. */
+  accounts: { total: number; new: number; active: number };
+  calls: { total: number; byTool: { tool: string; count: number }[] };
+}
+
+/**
+ * Whole-product numbers across every account, for the operator `stats` command.
+ *
+ * An "account" here is an owner with at least one key, revoked ones included:
+ * someone who signed up AND reached the dashboard. A Clerk sign-up that never
+ * made a key exists only in Clerk. Calls on operator keys (no owner) never reach
+ * owner_usage_daily, so they are not counted either.
+ */
+export async function getProductStats(db: Database, days: number): Promise<ProductStats> {
+  const since = windowStart(days);
+  const [accounts] = (await db.execute<{ total: number; new: number; active: number }>(sql`
+    select
+      count(*)::int as total,
+      (count(*) filter (where first_at >= ${since}))::int as new,
+      (select count(distinct owner_id)::int from ${ownerUsageDaily} where date >= ${since}) as active
+    from (
+      select min(${apiKeys.createdAt}) as first_at
+      from ${apiKeys}
+      where ${apiKeys.ownerId} is not null
+      group by ${apiKeys.ownerId}
+    ) firsts
+  `)) as unknown as { total: number; new: number; active: number }[];
+
+  const byTool = (
+    await db
+      .select({
+        tool: ownerUsageDaily.tool,
+        count: sql<number>`sum(${ownerUsageDaily.count})::int`,
+      })
+      .from(ownerUsageDaily)
+      .where(gte(ownerUsageDaily.date, since))
+      .groupBy(ownerUsageDaily.tool)
+      .orderBy(desc(sql`sum(${ownerUsageDaily.count})`))
+  ).map((r) => ({ tool: r.tool, count: Number(r.count) }));
+
+  return {
+    days,
+    accounts: {
+      total: Number(accounts?.total ?? 0),
+      new: Number(accounts?.new ?? 0),
+      active: Number(accounts?.active ?? 0),
+    },
+    calls: { total: byTool.reduce((n, r) => n + r.count, 0), byTool },
+  };
 }
 
 export interface UsageRetentionReport {

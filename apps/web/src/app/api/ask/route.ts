@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { searchCapabilities } from "@lurq/core/capabilities";
 import { loadRepos, loadRepo, loadUsage, loadAlerts } from "@/lib/dashboard-data";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
-import { recordAskSpend } from "@/lib/lurq-issuer";
+import { callAskTool, fetchAskTools, recordAskSpend, type AskTool } from "@/lib/lurq-issuer";
 import { costOf, reserveFor } from "@lurq/core/modelPricing";
 
 /**
@@ -141,7 +141,42 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-async function runTool(name: string, input: unknown): Promise<unknown> {
+/**
+ * The package tools (evaluate, verify, compare, compat, surface diffs), as the
+ * backend's MCP server declares them. Fetched, not copied, so a schema change
+ * there cannot leave Ask sending arguments the tool rejects.
+ *
+ * ponytail: cached per instance, since the list only changes on a backend
+ * deploy. A failed fetch is retried on the next question, and this one is
+ * answered with the account tools alone rather than not at all.
+ */
+let packageTools: Promise<AskTool[]> | null = null;
+
+function loadPackageTools(): Promise<AskTool[]> {
+  packageTools ??= fetchAskTools().catch((err) => {
+    packageTools = null;
+    console.warn("[lurq] ask package tools unavailable:", err instanceof Error ? err.message : String(err));
+    return [];
+  });
+  return packageTools;
+}
+
+/** One result may not eat a question's budget. ~6k tokens of JSON is plenty to cite from. */
+const TOOL_RESULT_CHARS = 24_000;
+
+async function runTool(
+  name: string,
+  input: unknown,
+  ownerId: string,
+  remote: ReadonlySet<string>,
+): Promise<unknown> {
+  if (remote.has(name)) {
+    const args = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+    const result = await callAskTool(ownerId, name, args);
+    // Thrown so the loop marks it is_error and the model says what failed.
+    if (result.isError) throw new Error(result.text);
+    return result.text;
+  }
   switch (name) {
     case "list_repos": {
       const { data } = await loadRepos();
@@ -176,7 +211,7 @@ async function runTool(name: string, input: unknown): Promise<unknown> {
   }
 }
 
-const SYSTEM = `You answer questions about one lurq account, using only the tools provided.
+const SYSTEM = `You answer questions about one lurq account and the npm packages it depends on, using only the tools provided.
 
 lurq indexes JS/TS packages and watches the dependencies of repositories a user
 has connected. Vocabulary you will meet in tool results:
@@ -201,7 +236,14 @@ Rules:
   Never estimate, extrapolate, or fill a gap from general knowledge about a package.
 - Cite concretely: name repos, packages and versions from the data.
 - Be brief. Two or three sentences unless asked to go deeper. No preamble.
-- When a next action exists, name the exact command or dashboard page.`;
+- When a next action exists, name the exact command or dashboard page.
+- For a question about a specific package (should we upgrade, is it safe, do these
+  work together, what breaks between two versions) use the package tools. A result
+  that says UNKNOWN or queued means lurq has not indexed it yet: say so, never fill
+  it in.
+- You cannot change anything, and you cannot see the user's code. When the next
+  step is an edit, give the exact prompt to hand their coding agent, which has lurq
+  connected and can read the code.`;
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -308,6 +350,19 @@ export async function POST(req: Request) {
   /** This question may not exceed what it reserved. */
   const remainingUsd = QUESTION_USD;
 
+  // Account readers first, package tools after, in a stable order: the prompt
+  // cache keys on the tool list, so it must not reshuffle between requests.
+  const remote = await loadPackageTools();
+  const remoteNames = new Set(remote.map((t) => t.name));
+  const tools: Anthropic.Tool[] = [
+    ...TOOLS,
+    ...remote.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+    })),
+  ];
+
   const client = new Anthropic({ apiKey });
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
 
@@ -358,7 +413,7 @@ export async function POST(req: Request) {
             // minimum cacheable prefix is model-dependent (512–4096 tokens) and
             // a prefix under it silently does not cache rather than erroring.
             system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-            tools: TOOLS,
+            tools,
             messages,
           });
 
@@ -376,10 +431,16 @@ export async function POST(req: Request) {
           for (const block of response.content) {
             if (block.type !== "tool_use") continue;
             try {
+              const out = await runTool(block.name, block.input, userId, remoteNames);
               results.push({
                 type: "tool_result",
                 tool_use_id: block.id,
-                content: JSON.stringify(await runTool(block.name, block.input)),
+                content: (() => {
+                  const text = typeof out === "string" ? out : JSON.stringify(out);
+                  return text.length > TOOL_RESULT_CHARS
+                    ? `${text.slice(0, TOOL_RESULT_CHARS)}\n…(truncated: cite only what is above)`
+                    : text;
+                })(),
               });
             } catch (err) {
               // A failed read is reported back to the model, not thrown: it can

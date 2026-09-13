@@ -16,13 +16,16 @@ import type { Store } from 'express-rate-limit';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
+import { capture, flush as flushAnalytics } from '../core/analytics';
 import { formatError } from '../core/errors';
 import { CAPABILITIES, searchCapabilities } from '../core/capabilities';
 import {
   createKey,
   findKeyForOwner,
+  hasScope,
   listKeysForOwner,
   lookupActiveKey,
+  parseScopes,
   revokeKey,
   rotateKey,
 } from '../auth/apiKeys';
@@ -39,8 +42,13 @@ import {
   setRepoPolicy,
   upsertRepos,
 } from '../db/repos';
-import { getSelectionPolicy, setSelectionPolicy } from '../db/selectionPolicy';
-import { parseSelectionPolicy } from '../policy/parse';
+import {
+  getSelectionPolicy,
+  listPolicyChanges,
+  setSelectionPolicy,
+  summarizeDecisions,
+} from '../db/selectionPolicy';
+import { validateSelectionPolicy } from '../policy/parse';
 import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
 import {
@@ -72,6 +80,7 @@ import {
   MAX_RUNS_PER_POST,
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
+import { builderProfile, type BuilderProfile } from '../github/builderProfile';
 import { parseTarget, publicScan, type PublicScan } from '../github/publicScan';
 import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
@@ -79,6 +88,7 @@ import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
 import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
+import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { renderPrometheus } from './metrics';
 
 interface AuthedRequest extends Request {
@@ -102,6 +112,9 @@ export interface ScanCacheEntry {
   ttl: number;
   value: PublicScan | null;
 }
+
+/** The same entry for a builder profile, which holds several scans. */
+type ProfileCacheEntry = Omit<ScanCacheEntry, 'value'> & { value: BuilderProfile | null };
 
 /** A settled answer: every declared dependency was already in the index. */
 const SCAN_TTL_MS = 15 * 60_000;
@@ -131,6 +144,11 @@ export function scanTtl(scan: PublicScan | null): number {
   return scan.depsTracked < scan.depsDeclared ? SCAN_PROVISIONAL_TTL_MS : SCAN_TTL_MS;
 }
 
+/** A builder profile holds only as long as its least settled repo. */
+export function profileTtl(profile: BuilderProfile | null): number {
+  return profile ? Math.min(SCAN_TTL_MS, ...profile.repos.map(scanTtl)) : SCAN_PROVISIONAL_TTL_MS;
+}
+
 /**
  * Make room without wiping the cache.
  *
@@ -139,7 +157,10 @@ export function scanTtl(scan: PublicScan | null): number {
  * Drop what has expired first, and only then the oldest entries — a Map
  * iterates in insertion order, so that is the front of it.
  */
-export function evictScans(cache: Map<string, ScanCacheEntry>, max = SCAN_CACHE_MAX): void {
+export function evictScans<T extends { at: number; ttl: number }>(
+  cache: Map<string, T>,
+  max = SCAN_CACHE_MAX,
+): void {
   const now = Date.now();
   for (const [k, v] of cache) if (now - v.at >= v.ttl) cache.delete(k);
   for (const k of cache.keys()) {
@@ -390,6 +411,52 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
   });
 
+  /**
+   * The builder report behind /dashboard/report: a GitHub profile's archetype,
+   * trait scores and up to six stack scans. A larger /scan/public, so it shares
+   * that route's limiter and the shape of its cache.
+   *
+   * Returns the WHOLE profile. The web hop cuts it down for signed-out visitors;
+   * builderProfile.ts says why it is never computed smaller. Everything in it is
+   * public GitHub and npm data, so the cut is a conversion boundary, not a
+   * security one, and anyone calling this directly is held by `scanLimiter`.
+   */
+  const profileCache = new Map<string, ProfileCacheEntry>();
+
+  app.post('/scan/profile', ipLimiter, scanLimiter, async (req: Request, res: Response) => {
+    const raw = (req.body ?? {}) as { target?: unknown };
+    const target = typeof raw.target === 'string' ? parseTarget(raw.target) : null;
+    if (!target) {
+      res.status(400).json({ error: 'Give a GitHub username or a repo (owner/name).' });
+      return;
+    }
+
+    // A typed repo profiles its owner, with that repo read first.
+    const login = target.kind === 'repo' ? target.owner : target.login;
+    const featured = target.kind === 'repo' ? target.name : undefined;
+    // GitHub logins and repo names are case-insensitive, so the cache is too.
+    const key = `${login}/${featured ?? ''}`.toLowerCase();
+    const missing = () => res.status(404).json({ error: 'No public GitHub profile found for that.' });
+
+    const hit = profileCache.get(key);
+    if (hit && Date.now() - hit.at < hit.ttl) {
+      if (!hit.value) missing();
+      else res.json(hit.value);
+      return;
+    }
+
+    try {
+      const profile = await builderProfile(db, login, featured);
+      if (profileCache.size >= SCAN_CACHE_MAX) evictScans(profileCache);
+      profileCache.set(key, { at: Date.now(), ttl: profileTtl(profile), value: profile });
+      if (!profile) missing();
+      else res.json(profile);
+    } catch (err) {
+      logger.error('profile scan failed:', formatError(err));
+      res.status(502).json({ error: 'Could not read that profile.' });
+    }
+  });
+
   // Bearer API-key auth: resolve and attach the key, or 401.
   const auth = async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
     const header = req.headers.authorization;
@@ -539,6 +606,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     prefix: row.prefix,
     label: row.label,
     tier: row.tier,
+    scopes: row.scopes,
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
     revokedAt: row.revokedAt,
@@ -746,16 +814,24 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   });
 
   app.post('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { ownerId?: unknown; label?: unknown };
+    const body = (req.body ?? {}) as { ownerId?: unknown; label?: unknown; scopes?: unknown };
     const ownerId = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
     if (!ownerId) {
       res.status(400).json({ error: 'ownerId is required.' });
       return;
     }
+    // Rejected, not filtered: silently dropping an unknown scope would hand back
+    // a key that fails later, far from the request that asked for it.
+    const scopes = parseScopes(body.scopes);
+    if (!scopes) {
+      res.status(400).json({ error: 'scopes must be a list of known scopes.' });
+      return;
+    }
     const label = typeof body.label === 'string' ? body.label.slice(0, 200) : undefined;
     try {
-      const { key, row } = await createKey(db, { ownerId, label, tier: 'free' });
-      res.status(201).json({ key, prefix: row.prefix });
+      const { key, row } = await createKey(db, { ownerId, label, tier: 'free', scopes });
+      capture(ownerId, 'api_key_created', { tier: row.tier });
+      res.status(201).json({ key, prefix: row.prefix, scopes: row.scopes });
     } catch (err) {
       logger.error('key issuance failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not issue key.' });
@@ -1328,14 +1404,18 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   app.put('/selection-policy', requireIssuerSecret, async (req: Request, res: Response) => {
     const ownerId = ownerFrom(req);
-    const policy = parseSelectionPolicy((req.body ?? {}).policy);
-    if (!ownerId || !policy) {
-      res.status(400).json({ error: 'ownerId and a complete policy are required.' });
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    const parsed = validateSelectionPolicy((req.body ?? {}).policy);
+    if ('error' in parsed) {
+      res.status(400).json({ error: parsed.error });
       return;
     }
     try {
-      await setSelectionPolicy(db, ownerId, policy);
-      res.status(200).json({ policy });
+      const previous = await setSelectionPolicy(db, ownerId, parsed.policy, 'dashboard');
+      res.status(200).json({ policy: parsed.policy, previous });
     } catch (err) {
       logger.error(
         'selection policy write failed:',
@@ -1365,6 +1445,163 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       }
     },
   );
+
+  // ── Ask's package tools (dashboard-authenticated) ─────────────────────────
+  //
+  // The dashboard holds no API key for its user, so it cannot reach /mcp. These
+  // run the same tools for the signed-in owner the web app names, and count
+  // against that owner's plan exactly like an agent's call would: Ask looking a
+  // package up is a hosted call, not a free side door around the quota.
+
+  app.get('/ask-tools', requireIssuerSecret, async (_req: Request, res: Response) => {
+    try {
+      res.status(200).json({ tools: await listDashboardTools(db) });
+    } catch (err) {
+      logger.error('ask tools list failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not list Ask tools.' });
+    }
+  });
+
+  app.post('/ask-tools/call', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const body = (req.body ?? {}) as { name?: unknown; arguments?: unknown };
+    const name = typeof body.name === 'string' ? body.name : '';
+    if (!ownerId || !DASHBOARD_TOOLS.has(name)) {
+      res.status(400).json({ error: 'ownerId and an Ask tool name are required.' });
+      return;
+    }
+    const args =
+      body.arguments && typeof body.arguments === 'object' && !Array.isArray(body.arguments)
+        ? (body.arguments as Record<string, unknown>)
+        : {};
+    try {
+      const ent = await resolveEntitlement(ownerId);
+      if (!ent.withinQuota) {
+        res.status(402).json({
+          error: `Monthly limit reached for the ${ent.plan.name} plan (${ent.used}/${ent.plan.monthlyCalls} calls).`,
+        });
+        return;
+      }
+    } catch (err) {
+      // Fails open, for the reason `quota` does: an entitlement hiccup must not
+      // read as "out of allowance" to every account at once.
+      logger.error(
+        'ask tool quota lookup failed, serving anyway:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    try {
+      res.status(200).json(await callDashboardTool(db, ownerId, name, args));
+    } catch (err) {
+      logger.error('ask tool call failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not run that lookup.' });
+    }
+  });
+
+  // ── Selection policy as code (API-key authenticated) ───────────────────────
+  //
+  // The same rules the dashboard edits, for `lurq policy pull/push` — so a team
+  // can keep policy in a reviewed file and apply it from CI. Owner comes from the
+  // key, never the body. Reads are open to any account key; writes need the
+  // `policy:write` scope, which `lurq setup` never requests: the key sitting in an
+  // agent's MCP config must not be able to loosen the policy that agent obeys.
+  // Not behind `quota`: governing the agent should never compete with using it.
+
+  // History and the decision log, shared by the key routes below and the
+  // dashboard routes beside them: same reads, two ways of proving the owner.
+  const sendPolicyHistory = async (ownerId: string, res: Response): Promise<void> => {
+    try {
+      res.status(200).json({ changes: await listPolicyChanges(db, ownerId) });
+    } catch (err) {
+      logger.error('policy history read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read policy history.' });
+    }
+  };
+
+  const sendPolicyDecisions = async (ownerId: string, rawDays: unknown, res: Response) => {
+    const days = rawDays === undefined ? 30 : Number(rawDays);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      res.status(400).json({ error: 'days must be a whole number from 1 to 365.' });
+      return;
+    }
+    try {
+      res.status(200).json({ days, decisions: await summarizeDecisions(db, ownerId, days) });
+    } catch (err) {
+      logger.error('policy decisions read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read policy decisions.' });
+    }
+  };
+
+  app.get('/selection-policy/history', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    await sendPolicyHistory(ownerId, res);
+  });
+
+  app.get('/selection-policy/decisions', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    await sendPolicyDecisions(ownerId, req.query.days, res);
+  });
+
+  const keyOwner = (req: Request, res: Response): string | null => {
+    const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
+    if (!ownerId) res.status(403).json({ error: 'This key has no account attached.' });
+    return ownerId;
+  };
+
+  app.get('/policy', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (!ownerId) return;
+    try {
+      res.status(200).json({ policy: await getSelectionPolicy(db, ownerId) });
+    } catch (err) {
+      logger.error('policy read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read policy.' });
+    }
+  });
+
+  app.put('/policy', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (!ownerId) return;
+    if (!hasScope((req as AuthedRequest).lurqKey!, 'policy:write')) {
+      res.status(403).json({
+        error: 'This key cannot change policy. Create a key with the policy:write scope in the dashboard.',
+      });
+      return;
+    }
+    const parsed = validateSelectionPolicy((req.body ?? {}).policy);
+    if ('error' in parsed) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    try {
+      // `previous` is what lets `lurq policy push` print the change it made,
+      // diffed against what was actually replaced rather than a stale pull.
+      const actor = `key ${(req as AuthedRequest).lurqKey!.prefix}`;
+      const previous = await setSelectionPolicy(db, ownerId, parsed.policy, actor);
+      res.status(200).json({ policy: parsed.policy, previous });
+    } catch (err) {
+      logger.error('policy write failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not save policy.' });
+    }
+  });
+
+  app.get('/policy/history', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (ownerId) await sendPolicyHistory(ownerId, res);
+  });
+
+  app.get('/policy/decisions', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (ownerId) await sendPolicyDecisions(ownerId, req.query.days, res);
+  });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
   //
@@ -1554,7 +1791,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }, FORCE_EXIT_MS);
     force.unref();
     server.close(() => {
-      void closeDb().then(
+      // Queued PostHog events go before the pool; flush never throws.
+      void flushAnalytics().then(closeDb).then(
         () => process.exit(0),
         () => process.exit(0),
       );

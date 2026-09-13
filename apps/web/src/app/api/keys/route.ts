@@ -52,8 +52,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Sign in to generate a key." }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { label?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { label?: unknown; policyWrite?: unknown };
   const label = typeof body.label === "string" ? body.label.slice(0, 200) : undefined;
+  // Opt-in and strict `=== true`: this key can rewrite what every agent on the
+  // account may install, so nothing but an explicit choice should grant it.
+  const scopes = body.policyWrite === true ? ["policy:write"] : [];
 
   if (await isDemoUser(userId)) {
     return NextResponse.json({ ...demoIssuedKey(), demo: true });
@@ -87,7 +90,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { key, prefix } = await issueKey({ ownerId: userId, label });
+    const { key, prefix } = await issueKey({ ownerId: userId, label, scopes });
     return NextResponse.json({ key, prefix });
   } catch (err) {
     if (err instanceof LurqIssuerError) {

@@ -40,6 +40,40 @@ import {
   type AgentSpec,
   type InstallMode,
 } from './installSkill';
+import { MissingKeyError } from './remote';
+
+/**
+ * Run a command; if it stops for want of a key, offer setup and run it again.
+ *
+ * Someone whose first command is `lurq evaluate zod` used to get an error and
+ * exit 1 at the moment they were most curious. Now they sign in and see the
+ * answer they asked for. One retry only: if setup ends without storing a key
+ * (they cancelled), the retry throws the original error and that is the exit.
+ *
+ * Asks only in a real terminal. CI, pipes and `--json` keep the plain error,
+ * because a prompt nobody can answer is a hang.
+ */
+export async function withSetupOnMissingKey(
+  run: () => Promise<unknown>,
+  ask: () => Promise<boolean> = askToConnect,
+  setup: () => Promise<void> = () => runSetup({}),
+): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    if (!(err instanceof MissingKeyError) || !(await ask())) throw err;
+    await setup();
+    await run();
+  }
+}
+
+async function askToConnect(): Promise<boolean> {
+  const interactive =
+    process.stdin.isTTY && process.stdout.isTTY && !process.env.CI && !process.argv.includes('--json');
+  if (!interactive) return false;
+  const { confirm } = await import('@inquirer/prompts');
+  return confirm({ message: 'This machine has no lurq API key yet. Connect it now?', default: true });
+}
 
 export interface WizardOptions {
   apiKey?: string;

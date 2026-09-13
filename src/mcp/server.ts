@@ -18,6 +18,7 @@ import {
   handleCompare,
   handleCompat,
   handleEvaluate,
+  handlePolicy,
   handleReportOutcome,
   handleUsage,
   handleVerify,
@@ -33,6 +34,7 @@ import {
   VERIFY_DESCRIPTION,
 } from './toolDescriptions';
 import { recordUsage } from '../db/usage';
+import { capture } from '../core/analytics';
 
 const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
@@ -104,12 +106,18 @@ export function buildMcpServer(
   // usage counter for the dashboard (§ dashboard v1 phase 2). The counter is
   // recorded in a finally so an errored call still counts; recordUsage no-ops
   // when ctx.ownerId is null (stdio/local or operator keys with no account).
+  // The PostHog event carries the tool name and outcome only, never arguments,
+  // and no-ops under the same null-owner rule (src/core/analytics.ts).
   const run = <T>(tool: string, fn: () => Promise<T>): Promise<T> =>
     (async () => {
+      let ok = false;
       try {
-        return await timed(tool, fn);
+        const result = await timed(tool, fn);
+        ok = true;
+        return result;
       } finally {
         void recordUsage(db, ctx.ownerId ?? null, tool);
+        capture(ctx.ownerId, 'tool_called', { tool, ok });
       }
     })();
 
@@ -125,6 +133,20 @@ export function buildMcpServer(
     },
     async (args) =>
       json(await run('evaluate', () => handleEvaluate(db, args, ctx.ownerId ?? null))),
+  );
+
+  // Read-only on purpose. There is no tool that writes policy: the agent being
+  // governed must not be able to edit its own rules. People change policy in the
+  // dashboard or with `lurq policy push` and a scoped key.
+  server.registerTool(
+    'policy',
+    {
+      title: 'Read the dependency policy',
+      description:
+        "The rules this account's selection policy enforces on which packages you may add: denied packages (with the reason), license allowlist, confidence, advisory, adoption, staleness and bundle-size floors. Read it once before choosing dependencies so you pick an allowed package first; recommend and evaluate already enforce it. Read-only.",
+      inputSchema: {},
+    },
+    async () => json(await run('policy', () => handlePolicy(db, ctx.ownerId ?? null))),
   );
 
   server.registerTool(

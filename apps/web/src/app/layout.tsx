@@ -4,6 +4,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PostHogIdentify } from "@/components/common/posthog-identify";
 import { geist, commitMono } from "@/lib/fonts";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
@@ -100,6 +101,7 @@ export default function RootLayout({
           <TooltipProvider>{children}</TooltipProvider>
           <Analytics />
           <SpeedInsights />
+          <PostHogIdentify />
         </body>
       </html>
     </ClerkProvider>

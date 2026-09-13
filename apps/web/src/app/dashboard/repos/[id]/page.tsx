@@ -12,7 +12,9 @@ import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
 import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
 import { UpgradeRuns } from "@/components/dashboard/upgrade-runs";
 import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
+import { CopyButton } from "@/components/dashboard/copy-button";
 import { buttonVariants } from "@/components/ui/button";
+import { repoBrief } from "@/lib/llm-export";
 import { loadRepo, loadRepoBrief } from "@/lib/dashboard-data";
 import { relativeTime } from "@/lib/format";
 import { isScanPending } from "@/lib/repo-scan";
@@ -65,9 +67,15 @@ export default async function RepoDetailPage({
         }
         demo={demo}
         action={
-          <Link href="/dashboard/repos" className={buttonVariants({ variant: "outline" })}>
-            All repositories
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* This repo's findings, addressed to the agent that will fix them:
+                package, both versions, the manifest path each range is declared
+                in, and the coverage caveat so nothing absent reads as verified. */}
+            <CopyButton label="Copy for agent" copiedLabel="Copied" text={repoBrief(repo)} />
+            <Link href="/dashboard/repos" className={buttonVariants({ variant: "outline" })}>
+              All repositories
+            </Link>
+          </div>
         }
       />
 

@@ -41,8 +41,8 @@ import { truncateSentences } from '../ingestion/summarize';
 import { FIRST_TOUCH_BUDGET_MS, getOrFetchPackage } from '../pipeline/single';
 import { hasCriticalOrHighAdvisory } from '../scoring/score';
 import { recommend, type RecommendOptions } from '../search/recommend';
-import { applyPolicy, hasRules, check as checkPolicy } from '../policy/enforce';
-import { getSelectionPolicy, loadPolicyFacts } from '../db/selectionPolicy';
+import { applyPolicy, describeRules, hasRules, check as checkPolicy } from '../policy/enforce';
+import { getEnforcedPolicy, loadPolicyFacts, recordDecisions } from '../db/selectionPolicy';
 import type { PolicyVerdict } from '../policy/types';
 import { assessVerdict } from '../security/verdict';
 import type { RiskLevel } from '../core/types';
@@ -183,19 +183,47 @@ export async function handleRecommend(
     },
   );
 
-  const policy = await getSelectionPolicy(db, ownerId);
+  const policy = await getEnforcedPolicy(db, ownerId);
   if (!hasRules(policy)) return base;
 
   const facts = await loadPolicyFacts(
     db,
     base.candidates.map((c) => c.name),
   );
-  const { allowed, excluded } = applyPolicy(policy, base.candidates, facts);
+  const { allowed, excluded, warned } = applyPolicy(policy, base.candidates, facts);
+  void (policy.mode === 'warn'
+    ? recordDecisions(db, ownerId, 'recommend', warned, 'warned')
+    : recordDecisions(db, ownerId, 'recommend', excluded, 'blocked'));
 
   // `excluded` is always present once a policy is in force, even when empty —
   // an agent that sees the field knows the list was filtered and that silence
-  // means nothing was refused, rather than that nothing was checked.
-  return { ...base, candidates: allowed, excluded };
+  // means nothing was refused, rather than that nothing was checked. In warn
+  // mode nothing is filtered, and the would-be refusals ride along as
+  // `policyWarnings` so the agent can still prefer a clean candidate.
+  return policy.mode === 'warn'
+    ? { ...base, candidates: allowed, policyWarnings: warned }
+    : { ...base, candidates: allowed, excluded };
+}
+
+// ── policy ──────────────────────────────────────────────────────────────────
+
+/**
+ * The owner's selection policy, as the sentences an agent acts on.
+ *
+ * Not the raw object: `compact` strips `[]` and `null`, and for `licenses` those
+ * mean opposite things (allow nothing vs no rule). One line per active rule
+ * survives compaction intact and costs fewer tokens than the JSON would.
+ */
+export async function handlePolicy(db: Database, ownerId: string | null) {
+  if (!ownerId) {
+    return {
+      enforced: false,
+      rules: [],
+      note: 'No lurq account on this connection, so no policy applies. Connect with `lurq setup`.',
+    };
+  }
+  const rules = describeRules(await getEnforcedPolicy(db, ownerId));
+  return { enforced: rules.length > 0, rules };
 }
 
 // ── evaluate ────────────────────────────────────────────────────────────────
@@ -245,7 +273,7 @@ export async function handleEvaluate(
   // asked lurq to build, but `evaluate` is the call it makes about a package it
   // found on its own — from training, a blog post, or a human's suggestion — and
   // it is the last point before the install where a rule can still apply.
-  const policy = await getSelectionPolicy(db, ownerId);
+  const policy = await getEnforcedPolicy(db, ownerId);
   if (!hasRules(policy)) return evaluated;
 
   const facts = await loadPolicyFacts(db, [evaluated.name]);
@@ -254,7 +282,19 @@ export async function handleEvaluate(
     { name: evaluated.name, confidence: evaluated.confidence },
     facts.get(evaluated.name),
   );
-  return { ...evaluated, policy: exclusion ? { allowed: false, ...exclusion } : { allowed: true } };
+  if (!exclusion) return { ...evaluated, policy: { allowed: true } };
+  void recordDecisions(
+    db,
+    ownerId,
+    'evaluate',
+    [exclusion],
+    policy.mode === 'warn' ? 'warned' : 'blocked',
+  );
+  return {
+    ...evaluated,
+    policy:
+      policy.mode === 'warn' ? { allowed: true, warning: exclusion } : { allowed: false, ...exclusion },
+  };
 }
 
 // ── compare ─────────────────────────────────────────────────────────────────

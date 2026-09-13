@@ -246,6 +246,20 @@
       "when": 1789240338707,
       "tag": "0034_uneven_thunderbird",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789255733363,
+      "tag": "0035_api_key_scopes",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789256793967,
+      "tag": "0036_policy_audit",
+      "breakpoints": true
     }
   ]
 }

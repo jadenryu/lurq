@@ -30,6 +30,9 @@ import {
   demoRepoBrief,
   demoRepoDetail,
   demoRepos,
+  demoPolicyDecisions,
+  demoPolicyHistory,
+  demoSelectionPolicy,
   demoUsage,
   isDemoUser,
 } from "@/lib/demo-data";
@@ -61,6 +64,10 @@ import {
   fetchConformance,
   EMPTY_CONFORMANCE,
   type ConformanceReport,
+  fetchPolicyDecisions,
+  fetchPolicyHistory,
+  type PolicyChange,
+  type PolicyDecision,
   type BillingSummary,
 } from "@/lib/lurq-issuer";
 
@@ -220,7 +227,10 @@ export interface ReposData {
 export async function loadSelectionPolicy(): Promise<Loaded<SelectionPolicy>> {
   const { userId, demo } = await context();
   if (!userId) return { data: EMPTY_SELECTION_POLICY, demo: false, failed: false };
-  if (demo) return { data: EMPTY_SELECTION_POLICY, demo: true, failed: false };
+  // A fixture, not the empty policy: demo mode renders the conformance panel
+  // right below this one reporting violations, and an empty policy next to a
+  // list of broken rules is a contradiction the reader can see.
+  if (demo) return { data: demoSelectionPolicy(), demo: true, failed: false };
   try {
     return { data: await fetchSelectionPolicy(userId), demo: false, failed: false };
   } catch (err) {
@@ -230,6 +240,29 @@ export async function loadSelectionPolicy(): Promise<Loaded<SelectionPolicy>> {
     );
     return { data: EMPTY_SELECTION_POLICY, demo: false, failed: true };
   }
+}
+
+const ACTIVITY_DAYS = 30;
+
+export interface PolicyActivity {
+  days: number;
+  decisions: PolicyDecision[];
+  changes: PolicyChange[];
+}
+
+/** What the policy caught over the last month, and who changed it. */
+export function loadPolicyActivity(): Promise<Loaded<PolicyActivity>> {
+  return load(
+    async (userId) => {
+      const [decisions, changes] = await Promise.all([
+        fetchPolicyDecisions(userId, ACTIVITY_DAYS),
+        fetchPolicyHistory(userId),
+      ]);
+      return { days: ACTIVITY_DAYS, decisions, changes };
+    },
+    () => ({ days: ACTIVITY_DAYS, decisions: demoPolicyDecisions(), changes: demoPolicyHistory() }),
+    { days: ACTIVITY_DAYS, decisions: [], changes: [] },
+  );
 }
 
 export async function loadRepos(): Promise<Loaded<ReposData>> {

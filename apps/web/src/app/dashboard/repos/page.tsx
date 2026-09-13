@@ -6,7 +6,15 @@ import { DriftMeter } from "@/components/dashboard/drift-meter";
 import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
-import { loadAlerts, loadImpact, loadRepos } from "@/lib/dashboard-data";
+import { CopyButton } from "@/components/dashboard/copy-button";
+import {
+  loadAlerts,
+  loadConformance,
+  loadImpact,
+  loadRepos,
+  loadSelectionPolicy,
+} from "@/lib/dashboard-data";
+import { workspaceBrief } from "@/lib/llm-export";
 import { installUrl } from "@/lib/github-connect";
 
 const IMPACT_DAYS = 30;
@@ -25,10 +33,21 @@ export default async function ReposPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { userId } = await auth();
-  const [{ data, demo, failed }, { data: impact }, { data: alerts }] = await Promise.all([
+  const [
+    { data, demo, failed },
+    { data: impact },
+    { data: alerts },
+    { data: conformance },
+    { data: policy },
+  ] = await Promise.all([
     loadRepos(),
     loadImpact(IMPACT_DAYS),
     loadAlerts(),
+    // Read here only to build the export. Both are `cache()`d loaders the policy
+    // page already calls, so this costs a request the first time and nothing
+    // after — cheaper than a second endpoint that assembles the same brief.
+    loadConformance(),
+    loadSelectionPolicy(),
   ]);
   const params = await searchParams;
   const connect = params.connect;
@@ -77,11 +96,28 @@ export default async function ReposPage({
         subtitle="How far behind each project is, and what upgrading will break."
         demo={demo}
         action={
-          url && data.repos.length > 0 ? (
-            <a href={url}>
-              <Button variant="outline">Add repositories</Button>
-            </a>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {/* The whole workspace as a brief. The last mile of this product is
+                an agent editing a manifest, and until now that mile was a human
+                reading a table and retyping it into a chat window. */}
+            {data.repos.length > 0 && (
+              <CopyButton
+                label="Copy all findings"
+                copiedLabel="Copied for agent"
+                text={workspaceBrief({
+                  conformance,
+                  alerts,
+                  repos: data.repos,
+                  policy,
+                })}
+              />
+            )}
+            {url && data.repos.length > 0 && (
+              <a href={url}>
+                <Button variant="outline">Add repositories</Button>
+              </a>
+            )}
+          </div>
         }
       />
 

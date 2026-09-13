@@ -87,6 +87,45 @@ Both work without an index: the weight model ships with the package. `rescore`
 and `discover` rebuild a dataset and live on the operator plane, not the public
 CLI. See [Self-hosting](/docs/self-hosting).
 
+## Selection policy
+
+Keep the rules your agents are held to in a file, review changes in a pull
+request, and apply them from CI.
+
+```bash
+# download the current policy
+lurq policy pull lurq.policy.json
+
+# in a PR check: is the file a valid policy? sends nothing
+lurq policy push lurq.policy.json --check
+
+# after merge: replace the policy with the file
+lurq policy push lurq.policy.json
+
+# who changed the policy, from where, and what changed
+lurq policy history
+
+# what agents were refused, or warned about, in the last 30 days
+lurq policy log --days 30
+```
+
+`push --check` prints the change the file would make when an API key is
+available, and every `push` prints the change it made. An invalid file is
+rejected with the field that is wrong.
+
+Two fields are worth knowing when you edit the file by hand:
+
+- `"mode": "warn"` reports what the rules would refuse without refusing it.
+  Roll a new rule out in warn mode, read `lurq policy log`, then switch to
+  `"enforce"`.
+- An exception can carry a reason and an expiry:
+  `{ "name": "moment", "reason": "legacy date code", "expires": "2027-01-01" }`.
+  On the expiry date it stops applying, and stays in the file until you remove it.
+
+`push` replaces the whole policy. It needs an API key with the `policy:write`
+scope, created in the dashboard. The key `lurq setup` stores for your agents
+can read policy but never change it, so an agent cannot loosen its own rules.
+
 ## Setup and credentials
 
 ```bash

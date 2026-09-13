@@ -77,7 +77,7 @@ function headers(): Record<string, string> {
 /** Give up rather than hold a visitor's request open on a slow origin. */
 const TIMEOUT_MS = 6_000;
 
-async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+export async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
     const res = await fetch(url, {
       ...init,
@@ -99,7 +99,7 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
  * raw.githubusercontent.com is a separate budget from the REST API, which is
  * the whole reason this path avoids the API for the common case.
  */
-async function rootManifest(owner: string, name: string): Promise<unknown | null> {
+export async function rootManifest(owner: string, name: string): Promise<unknown | null> {
   return getJson<unknown>(
     `https://raw.githubusercontent.com/${owner}/${name}/HEAD/package.json`,
     { headers: { Accept: 'application/json' } },
@@ -227,9 +227,21 @@ export async function publicScan(db: Database, target: ScanTarget): Promise<Publ
         );
 
   if (!resolved) return null;
+  return scanManifest(db, resolved.owner, resolved.name, resolved.manifest);
+}
 
-  const manifest = parseManifest('package.json', resolved.manifest);
-  const full = `${resolved.owner}/${resolved.name}`;
+/**
+ * One repo's drift, from a root manifest already in hand. Shared with the
+ * builder profile (builderProfile.ts), which reads several of a person's repos.
+ */
+export async function scanManifest(
+  db: Database,
+  owner: string,
+  name: string,
+  raw: unknown,
+): Promise<PublicScan> {
+  const manifest = parseManifest('package.json', raw);
+  const full = `${owner}/${name}`;
   const url = `https://github.com/${full}`;
 
   // A real repo with no registry dependencies. Not an error: it is a true and

@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import { InlineError, Panel, eyebrow } from "@/components/dashboard/panel";
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { ConformancePanel } from "@/components/dashboard/conformance-panel";
+import { PolicyActivityPanel } from "@/components/dashboard/policy-activity-panel";
 import { SelectionPolicyPanel } from "@/components/dashboard/selection-policy";
-import { loadConformance, loadSelectionPolicy } from "@/lib/dashboard-data";
+import {
+  loadConformance,
+  loadPolicyActivity,
+  loadSelectionPolicy,
+} from "@/lib/dashboard-data";
 
 export const metadata: Metadata = {
   title: "selection policy",
@@ -19,10 +24,8 @@ export const metadata: Metadata = {
  * repository to hang the setting off yet.
  */
 export default async function PolicyPage() {
-  const [{ data: policy, demo, failed }, { data: conformance }] = await Promise.all([
-    loadSelectionPolicy(),
-    loadConformance(),
-  ]);
+  const [{ data: policy, demo, failed }, { data: conformance }, { data: activity }] =
+    await Promise.all([loadSelectionPolicy(), loadConformance(), loadPolicyActivity()]);
 
   return (
     <div>
@@ -48,6 +51,10 @@ export default async function PolicyPage() {
             anyone wants. Splitting them across pages is what makes a policy feel
             like a setting nobody can see the effect of. */}
         <ConformancePanel report={conformance} />
+
+        {/* The proof the rules do anything, and the record of who changed them.
+            Warn mode is only useful with this beside it. */}
+        <PolicyActivityPanel {...activity} />
 
         <Panel padding="tight">
           <p className={eyebrow}>where these rules apply</p>
