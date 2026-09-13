@@ -30,6 +30,7 @@ export function CopyButton({
   className,
   /** Announced instead of the visible label, when the label is only a glyph. */
   srLabel,
+  onCopy,
 }: {
   text: string;
   label?: string;
@@ -38,6 +39,8 @@ export function CopyButton({
   size?: "sm" | "default";
   className?: string;
   srLabel?: string;
+  /** Called after a copy that actually reached the clipboard. */
+  onCopy?: () => void;
 }) {
   const { copied, copy } = useCopy();
   return (
@@ -46,7 +49,7 @@ export function CopyButton({
         type="button"
         variant={variant}
         size={size}
-        onClick={() => void copy(text)}
+        onClick={() => void copy(text).then((ok) => ok && onCopy?.())}
         className={cn("gap-1.5", className)}
       >
         {copied ? (
@@ -69,17 +72,19 @@ export function CopyInline({
   text,
   label,
   className,
+  onCopy,
 }: {
   text: string;
   label: string;
   className?: string;
+  onCopy?: () => void;
 }) {
   const { copied, copy } = useCopy();
   return (
     <>
       <button
         type="button"
-        onClick={() => void copy(text)}
+        onClick={() => void copy(text).then((ok) => ok && onCopy?.())}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-[var(--radius-chip)] text-[12px] outline-none transition-colors focus-visible:ring-1 focus-visible:ring-signal/60",
           copied ? "text-ok" : "text-ink-3 hover:text-ink",

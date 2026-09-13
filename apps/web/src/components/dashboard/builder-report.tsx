@@ -4,10 +4,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
-import { ChevronRight, Lock } from "lucide-react";
+import { ChevronRight, Download, Lock } from "lucide-react";
 import posthog from "posthog-js";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CopyButton, CopyInline } from "@/components/dashboard/copy-button";
+import { repoBrief, reportBrief, summarize, type SummaryPoint } from "@/lib/builder-brief";
 import {
   Chip,
   EmptyState,
@@ -224,6 +226,7 @@ function Report({ report, target }: { report: BuilderReport; target: string }) {
             @{report.login}
           </a>
         </div>
+        <ReportActions report={report} target={target} back={back} />
       </Panel>
 
       <StatRow>
@@ -237,13 +240,15 @@ function Report({ report, target }: { report: BuilderReport; target: string }) {
         />
       </StatRow>
 
+      <Summary report={report} />
+
       <Traits traits={report.traits} archetype={report.archetype} back={back} />
 
       {report.locked && <Gate report={report} back={back} />}
 
       {first ? (
         <Panel padding="none">
-          <StackHead stack={first} />
+          <StackHead stack={first} hiddenDeps={report.locked?.deps ?? 0} />
           <StackBody stack={first} />
           {report.locked && (report.locked.deps > 0 || report.locked.conflicts > 0) && (
             <LockedRow>
@@ -287,6 +292,9 @@ function Report({ report, target }: { report: BuilderReport; target: string }) {
                     </span>
                   </summary>
                   <div className="border-t border-edge">
+                    <div className="flex justify-end border-b border-edge px-[var(--panel-px)] py-2">
+                      <RepoCopy stack={stack} />
+                    </div>
                     <StackBody stack={stack} bare />
                   </div>
                 </details>
@@ -391,6 +399,7 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
   const first = report.repos[0];
   const items = [
     "How you scored on all four traits, and the facts behind each",
+    "What you do well, what to fix, and a stats card to share",
     locked.repos > 0 && `${plural(locked.repos, "more repo")} of yours, read against the index`,
     locked.deps > 0 &&
       first &&
@@ -435,7 +444,108 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
   );
 }
 
-function StackHead({ stack }: { stack: RepoStack }) {
+/**
+ * The report's two exports: everything as a brief for a coding agent, and the
+ * stats card. The card is signed-in only because it is the trait scores; the
+ * brief is whatever this session was sent, so it needs no gate of its own.
+ */
+function ReportActions({ report, target, back }: { report: BuilderReport; target: string; back: string }) {
+  return (
+    <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-edge pt-4">
+      <CopyButton
+        text={reportBrief(report)}
+        label="Copy report for your agent"
+        onCopy={() => posthog.capture("builder_report_copy", { scope: "report", login: report.login })}
+      />
+      {report.locked ? (
+        <SignUpButton mode="modal" fallbackRedirectUrl={back} signInFallbackRedirectUrl={back}>
+          <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}>
+            <Lock aria-hidden className="size-3.5" />
+            Export stats card
+          </button>
+        </SignUpButton>
+      ) : (
+        <a
+          href={`/api/scan/card?target=${encodeURIComponent(target)}`}
+          download={`lurq-${report.login}.png`}
+          onClick={() => posthog.capture("builder_card_export", { login: report.login, archetype: report.archetype })}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+        >
+          <Download aria-hidden className="size-3.5" />
+          Export stats card
+        </a>
+      )}
+      <p className="text-[11.5px] text-ink-3">
+        The brief ranks your repos worst first, so an agent knows where to start.
+      </p>
+    </div>
+  );
+}
+
+/** What they do well and what to fix, in words. Absent while traits are locked. */
+function Summary({ report }: { report: BuilderReport }) {
+  const summary = summarize(report);
+  if (!summary) return null;
+  return (
+    <Panel>
+      <PanelHeader title="the short version" />
+      <div className="grid gap-6 min-[720px]:grid-cols-2">
+        <SummaryList title="what you do well" points={summary.strengths} dot="bg-ok" />
+        <SummaryList
+          title="what to fix"
+          points={summary.gaps}
+          dot="bg-bad"
+          empty="Nothing stood out as weak in what was read."
+        />
+      </div>
+    </Panel>
+  );
+}
+
+function SummaryList({
+  title,
+  points,
+  dot,
+  empty,
+}: {
+  title: string;
+  points: SummaryPoint[];
+  dot: string;
+  empty?: string;
+}) {
+  return (
+    <div>
+      <p className={microLabel}>{title}</p>
+      {points.length === 0 ? (
+        <p className="mt-2 text-[13px] text-ink-3">{empty}</p>
+      ) : (
+        <ul className="mt-2 space-y-2.5">
+          {points.map((p) => (
+            <li key={p.title} className="flex gap-2.5">
+              <span aria-hidden className={cn("mt-[7px] size-1.5 shrink-0 rounded-full", dot)} />
+              <div>
+                <p className="text-[13.5px] text-ink">{p.title}</p>
+                <p className="text-[12px] leading-snug text-ink-3">{p.detail}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function RepoCopy({ stack, hiddenDeps = 0 }: { stack: RepoStack; hiddenDeps?: number }) {
+  return (
+    <CopyInline
+      text={repoBrief(stack, hiddenDeps)}
+      label="copy for agent"
+      onCopy={() => posthog.capture("builder_report_copy", { scope: "repo", repo: stack.repo })}
+    />
+  );
+}
+
+function StackHead({ stack, hiddenDeps }: { stack: RepoStack; hiddenDeps: number }) {
   const untracked = stack.depsDeclared - stack.depsTracked;
   return (
     <div className="flex h-11 items-center gap-3 border-b border-edge px-[var(--panel-px)]">
@@ -448,9 +558,10 @@ function StackHead({ stack }: { stack: RepoStack }) {
         {stack.repo}
       </a>
       {/* Said every time: the root manifest is not the whole repo. */}
-      <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-3">
+      <span className="ml-auto hidden shrink-0 font-mono text-[11px] text-ink-3 min-[560px]:inline">
         root package.json{untracked > 0 ? ` · ${untracked} not indexed yet` : ""}
       </span>
+      <RepoCopy stack={stack} hiddenDeps={hiddenDeps} />
     </div>
   );
 }
