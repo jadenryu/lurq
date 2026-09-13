@@ -372,15 +372,45 @@ export function buildProgram(): Command {
     );
 
   program
+    .command('mcp-scan')
+    .argument('[dir]', 'project directory (defaults to the current one)')
+    .description(
+      'connect to every MCP server you have configured and read what it really exposes: its tools, what they do, anything steering your agent, and what changed since the last scan',
+    )
+    .option('--project-only', 'read only config files in the project')
+    .option('--trust-project', 'launch servers committed to the repository without asking')
+    .option('--only <aliases>', 'comma-separated server names to scan')
+    .option('--timeout <seconds>', 'per-server connect deadline (default 60)')
+    .option('--concurrency <n>', 'servers scanned at once (default 4)')
+    .option(
+      '--fail-on <severity>',
+      'exit 1 when anything this severe is found: critical | high | moderate | low | none',
+      'none',
+    )
+    .option('--no-history', 'do not compare with, or record, the previous scan')
+    .option('--json', 'output JSON instead of a report')
+    .action(async (dir: string | undefined, opts: import('./mcpScan').McpScanCliOpts) => {
+      const { runMcpScan } = await import('./mcpScan');
+      await runMcpScan(dir, opts);
+    });
+
+  program
     .command('mcp-stack')
     .argument('[dir]', 'project directory (defaults to the current one)')
-    .description('do your configured MCP servers coexist? checks for tool-name collisions')
+    .description('do your configured MCP servers coexist? checks tool-name collisions and shadowing, live')
     .option('--project-only', 'read only config files in the project')
+    .option('--trust-project', 'launch servers committed to the repository without asking')
+    .option('--timeout <seconds>', 'per-server connect deadline (default 60)')
     .option('--json', 'output JSON instead of a table')
-    .action(async (dir: string | undefined, opts: { json?: boolean; projectOnly?: boolean }) => {
-      const { runMcpStack } = await import('./commands');
-      await runMcpStack(dir, opts);
-    });
+    .action(
+      async (
+        dir: string | undefined,
+        opts: { json?: boolean; projectOnly?: boolean; trustProject?: boolean; timeout?: string },
+      ) => {
+        const { runMcpStack } = await import('./commands');
+        await runMcpStack(dir, opts);
+      },
+    );
 
   program
     .command('mcp-surface')

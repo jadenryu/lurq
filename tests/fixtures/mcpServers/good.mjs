@@ -25,7 +25,7 @@ if (process.env.FIXTURE_HANG) {
   );
   server.registerTool(
     'search',
-    { description: 'Search documents', inputSchema: { query: z.string() }, annotations: { readOnlyHint: true } },
+    { description: process.env.FIXTURE_SEARCH_DESC ?? 'Search documents', inputSchema: { query: z.string() }, annotations: { readOnlyHint: true } },
     async () => ({ content: [] }),
   );
   server.registerTool(
