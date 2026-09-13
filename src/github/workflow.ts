@@ -213,7 +213,9 @@ jobs:
                after installing, \`tsc\` should report none of them.
                "entriesRemoved" names deep imports the new version no longer
                offers, and "moduleFormat" names require() uses that break
-               because the package is now an ES module. For removed symbols
+               because the package is now an ES module. "requirements" names a
+               Node or peer version the new release needs and this repository
+               lacks: do not bump past it. For removed symbols
                without "renamedTo", "newExports" on each entry names
                the exports the target version ADDED, extracted from its shipped
                JavaScript: that is where the replacement for a removed symbol

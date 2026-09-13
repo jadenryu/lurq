@@ -407,6 +407,7 @@ describe('arity changes judged at the call site', () => {
             broken: [{ file: 'src/log.js', line: 3, why: '`red` is not an export of the ES module, so it reads as undefined' }],
             olderNode: [{ file: 'src/log.js', line: 1 }],
           },
+          requirements: [{ kind: 'engines', name: 'node', needs: '>=18', has: '>=14 (package.json engines)' }],
         },
       ],
       ok: [],
@@ -416,6 +417,7 @@ describe('arity changes judged at the call site', () => {
     expect(out).toContain("require('chalk') now loads an ES module (was CommonJS)");
     expect(out).toContain('src/log.js:3  `red` is not an export');
     expect(out).toContain('ERR_REQUIRE_ESM on Node before 20.19 / 22.12: src/log.js:1');
+    expect(out).toContain('Requires node >=18; this project has >=14 (package.json engines)');
   });
 
   it('prints the broken calls and their argument counts', () => {

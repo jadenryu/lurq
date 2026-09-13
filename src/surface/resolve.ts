@@ -19,7 +19,10 @@ export interface PackageManifest {
   types?: string;
   typings?: string;
   exports?: unknown;
+  type?: string;
+  engines?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 }
 
 export function readManifest(pkgDir: string): PackageManifest | null {

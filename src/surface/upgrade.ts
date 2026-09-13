@@ -23,7 +23,14 @@ import { extractUnpacked, unpackPackage, type Unpacked } from './fetch';
 import { diffSurfaces, type ArityChange } from './diff';
 import { SURFACE_CLAIM_KINDS } from './references';
 import type { PackageReferences, SymbolReference } from './references';
-import { judgeRequires, readRepoRuntime, type RepoRuntime, type RequireBreak } from './requirements';
+import {
+  judgeRequirements,
+  judgeRequires,
+  readRepoRuntime,
+  type RepoRuntime,
+  type RequireBreak,
+  type Requirement,
+} from './requirements';
 import { readManifest, requireFormat, resolveEntryCandidates, subpathWithdrawn } from './resolve';
 import type { TypeCheck, TypeCheckFn, TypeDiagnostic } from './typecheck';
 import { runtimeSymbols, type ExtractedSurface, type SymbolKind } from './types';
@@ -96,6 +103,8 @@ export interface BreakingFinding {
   entriesRemoved?: { specifier: string; refs: SymbolReference[] }[];
   /** `require()` of a package that stopped being CommonJS. See requirements.ts. */
   moduleFormat?: RequireBreak;
+  /** Node or peer versions the new release needs and this project lacks. See requirements.ts. */
+  requirements?: Requirement[];
 }
 
 /** How many candidate replacements travel with one finding. Enough to contain
@@ -479,6 +488,12 @@ async function compareVersions(
     { fromExports: exportNames(from.surface), toExports: exportNames(to.surface), runtime: opts.runtime ?? {} },
   );
 
+  const requirements = judgeRequirements(
+    readManifest(fromPkg.pkgDir),
+    readManifest(toPkg.pkgDir),
+    opts.runtime ?? {},
+  );
+
   const unverified = blind.length ? blind.join('; ') : undefined;
   const typeErrors = types?.checked ? types.introduced : [];
   const extras = { ...(unverified ? { unverified } : {}), ...(types ? { types } : {}) };
@@ -487,7 +502,8 @@ async function compareVersions(
     !arityChanged.length &&
     !typeErrors.length &&
     !entriesRemoved.length &&
-    !moduleFormat
+    !moduleFormat &&
+    !requirements.length
   ) {
     return extras;
   }
@@ -547,6 +563,7 @@ async function compareVersions(
       ...(typeErrors.length ? { typeErrors } : {}),
       ...(entriesRemoved.length ? { entriesRemoved } : {}),
       ...(moduleFormat ? { moduleFormat } : {}),
+      ...(requirements.length ? { requirements } : {}),
     },
     ...extras,
   };
@@ -653,6 +670,9 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
         );
       }
     }
+    for (const r of b.requirements ?? []) {
+      out.push(`  Requires ${r.name} ${r.needs}; this project has ${r.has}`);
+    }
     for (const a of b.arityChanged) {
       out.push(
         `  Arity change: ${a.specifier ?? b.package}.${a.symbol} ${params(a.from, a.fromMax)} → ${params(a.to, a.toMax)} params`,
@@ -712,7 +732,10 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
   }
   if (unchecked.length) {
     out.push(`TYPES     not checked for ${unchecked.length} package(s):`);
-    for (const t of unchecked) out.push(`    · ${t.package}: ${t.reason}`);
+    // Grouped by reason: a JavaScript project gives every package the same one.
+    const byReason = new Map<string, string[]>();
+    for (const t of unchecked) byReason.set(t.reason, [...(byReason.get(t.reason) ?? []), t.package]);
+    for (const [reason, names] of byReason) out.push(`    · ${names.join(', ')}: ${reason}`);
   }
   if (typed.length) out.push('');
 

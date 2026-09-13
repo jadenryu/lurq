@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { scanReferences, type SymbolReference } from '../src/surface/references';
-import { judgeRequires } from '../src/surface/requirements';
+import { judgeRequirements, judgeRequires } from '../src/surface/requirements';
 
 const ref = (over: Partial<SymbolReference>): SymbolReference => ({
   symbol: 'default',
@@ -117,6 +117,68 @@ describe('the scanner marks require() loads', () => {
       expect(get('node-fetch', 'default').calls).toContainEqual({ line: 5, args: 1 });
       expect(get('uuid', 'v4')).toMatchObject({ via: 'destructured', loader: 'require' });
       expect(get('cookie', 'parse').loader).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('what the new version requires of the project', () => {
+  const manifest = (over: object = {}) => ({ name: 'x', version: '1.0.0', ...over });
+
+  it('reports a Node floor above what the project declares', () => {
+    expect(
+      judgeRequirements(manifest({ engines: { node: '>=14' } }), manifest({ engines: { node: '>=20' } }), { engines: '>=18' }),
+    ).toEqual([{ kind: 'engines', name: 'node', needs: '>=20', has: '>=18 (package.json engines)' }]);
+  });
+
+  it('does not blame the upgrade for a floor the old version already had', () => {
+    expect(
+      judgeRequirements(manifest({ engines: { node: '>=20' } }), manifest({ engines: { node: '>=20.5' } }), { engines: '>=18' }),
+    ).toEqual([]);
+  });
+
+  // `.nvmrc` "20" is some Node 20. A floor inside that line is reachable.
+  it('judges a pinned Node line as a line, not as its .0 floor', () => {
+    const pinned = { nodeVersionFile: { name: '.nvmrc', value: '20' } };
+    expect(judgeRequirements(manifest(), manifest({ engines: { node: '^20.19.0 || >=22.12.0' } }), pinned)).toEqual([]);
+    expect(judgeRequirements(manifest(), manifest({ engines: { node: '>=22' } }), pinned)).toEqual([
+      { kind: 'engines', name: 'node', needs: '>=22', has: '20 (.nvmrc)' },
+    ]);
+  });
+
+  it('reports a peer the installed version no longer satisfies, and skips peers the project lacks', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-peers-'));
+    try {
+      mkdirSync(join(dir, '.git'));
+      mkdirSync(join(dir, 'node_modules/react'), { recursive: true });
+      writeFileSync(join(dir, 'node_modules/react/package.json'), JSON.stringify({ name: 'react', version: '18.3.1' }));
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { react: '^18.2.0' } }));
+      const found = judgeRequirements(
+        manifest({ peerDependencies: { react: '^18.0.0' } }),
+        manifest({ peerDependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' } }),
+        { root: dir },
+      );
+      expect(found).toEqual([{ kind: 'peer', name: 'react', needs: '^19.0.0', has: '18.3.1 (installed)' }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the declared range, and skips optional peers', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-peers-'));
+    try {
+      mkdirSync(join(dir, '.git'));
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { vue: '^2.7.0', sass: '^1.0.0' } }));
+      const found = judgeRequirements(
+        manifest(),
+        manifest({
+          peerDependencies: { vue: '^3.0.0', sass: '^2.0.0' },
+          peerDependenciesMeta: { sass: { optional: true } },
+        }),
+        { root: dir },
+      );
+      expect(found).toEqual([{ kind: 'peer', name: 'vue', needs: '^3.0.0', has: '^2.7.0 (package.json)' }]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
