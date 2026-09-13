@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { buttonVariants } from "@/components/ui/button";
 import { GettingStarted } from "@/components/dashboard/getting-started";
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel";
@@ -25,9 +25,9 @@ export default async function DashboardOverviewPage() {
   // Repos are read for the setup checklist's fourth step. In parallel, and it
   // already degrades to an empty list on failure, so a repo-service outage
   // costs this page a row rather than the whole render.
-  const [{ data, demo, failed }, { userId }, repos] = await Promise.all([
+  const [{ data, demo, failed }, owner, repos] = await Promise.all([
     loadOverview(BASELINE_DAYS),
-    auth(),
+    currentOwner(),
     loadRepos(),
   ]);
 
@@ -66,7 +66,7 @@ export default async function DashboardOverviewPage() {
             hasKey={activeKeys.length > 0}
             keyPrefix={activeKeys[0]?.prefix}
             connected={data.keys.some((k) => k.lastUsedAt)}
-            installUrl={repos.data.configured && userId ? installUrl(userId) : null}
+            installUrl={repos.data.configured && owner ? installUrl(owner.ownerId) : null}
             repoCount={repos.data.repos.length}
           />
         ) : (

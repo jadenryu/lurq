@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { currentOwner } from "@/lib/owner";
 import { EmptyState, InlineError, eyebrow } from "@/components/dashboard/panel";
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { ReposPanel } from "@/components/dashboard/repos-panel";
@@ -32,7 +32,7 @@ export default async function ReposPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { userId } = await auth();
+  const owner = await currentOwner();
   const [
     { data, demo, failed },
     { data: impact },
@@ -66,7 +66,7 @@ export default async function ReposPage({
   const alreadyTracked =
     scanned !== null && data.repos.some((r) => r.fullName.toLowerCase() === scanned.toLowerCase());
 
-  const url = userId ? installUrl(userId) : null;
+  const url = owner ? installUrl(owner.ownerId) : null;
 
   // Totals across every connected repo. These are the numbers that answer "what
   // is lurq doing for me", so they lead the page rather than sitting under the table.

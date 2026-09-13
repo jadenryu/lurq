@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { ADMIN_ONLY, currentOwner } from "@/lib/owner";
 import { LurqIssuerError, openBillingPortal } from "@/lib/lurq-issuer";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -13,12 +13,21 @@ import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
  * re-implementing them buys nothing a customer would notice.
  */
 export async function POST() {
-  const { userId } = await auth();
-  if (!userId) {
+  const owner = await currentOwner();
+  if (!owner) {
     return NextResponse.json({ error: "Sign in to manage billing." }, { status: 401 });
   }
 
-  const limit = checkRateLimit(`billing:portal:${userId}`, 10, 60_000);
+  // The plan belongs to the whole organization, so only an admin may buy or change it.
+
+  if (!owner.canManage) {
+
+    return NextResponse.json({ error: ADMIN_ONLY }, { status: 403 });
+
+  }
+
+
+  const limit = checkRateLimit(`billing:portal:${owner.ownerId}`, 10, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -27,7 +36,7 @@ export async function POST() {
   }
 
   try {
-    const url = await openBillingPortal(userId);
+    const url = await openBillingPortal(owner.ownerId);
     if (!url) {
       return NextResponse.json({ error: "You don't have a paid plan yet." }, { status: 404 });
     }
