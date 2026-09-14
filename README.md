@@ -82,6 +82,16 @@ Gemini CLI · Google Antigravity · Kiro
 **Check it worked:** ask your agent to *"add zod to this project"*. It should call lurq's `verify`
 before installing anything.
 
+**Claude Code plugin**, no terminal needed:
+
+```text
+/plugin marketplace add jadenryu/lurq
+/plugin install lurq@lurq
+```
+
+One-click links for Cursor and VS Code are in the
+[quickstart](https://www.lurq.run/docs/quickstart#one-click-install).
+
 The package is published as **`lurqrun`** (the bare name was taken). The command is `lurq`:
 
 ```bash
