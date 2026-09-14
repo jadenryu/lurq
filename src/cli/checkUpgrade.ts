@@ -138,6 +138,18 @@ async function reportOutcome(
   }
 }
 
+/**
+ * One line after a readable report that found a break, on a machine that has not
+ * connected lurq: what ran, and how to have the agent run it before the next
+ * upgrade is written. An agent relays what a tool printed, so this is where a
+ * person hears about it. Never on --json, where a program is reading, and never
+ * once a key exists, where it would be a pitch to someone already using it.
+ */
+export function connectHint(o: { json?: boolean; breaking: number; hasKey: boolean }): string | null {
+  if (o.json || o.breaking === 0 || o.hasKey) return null;
+  return 'This check ran locally with lurq. To have your coding agent run checks like this before it writes an upgrade, connect it once: npx lurqrun setup (free plan).';
+}
+
 export async function runCheckUpgrade(dir: string, opts: CheckUpgradeOpts): Promise<void> {
   const { scanReferences } = await import('../surface/references');
   const { checkUpgrade, formatUpgradeReport } = await import('../surface/upgrade');
@@ -182,6 +194,9 @@ export async function runCheckUpgrade(dir: string, opts: CheckUpgradeOpts): Prom
       ? JSON.stringify(report, null, 2)
       : formatUpgradeReport(report, `upgrade check on ${dir}`),
   );
+  const { resolveApiKey } = await import('../core/userConfig');
+  const hint = connectHint({ json: opts.json, breaking: report.breaking.length, hasKey: Boolean(resolveApiKey(opts.apiKey)) });
+  if (hint) console.log(`\n${hint}`);
   // Before the exit code, so the report lands even on a run this gate fails —
   // a blocked upgrade is the single most useful row the dashboard can show.
   if (opts.report) await reportOutcome(report, targets, opts);
