@@ -5,13 +5,23 @@
  * `/scan/profile` computed, after a signed-in scan. The body is still
  * shape-checked, because a malformed row would break the report every time the
  * account reopened it, not just once.
+ *
+ * Both routes a signed-in report goes through (reopen, save) answer with the
+ * builder's standing, so percentiles cost the web app no extra round trip.
  */
 import type { Express, Request, RequestHandler, Response } from 'express';
 import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
-import { getBuilderScan, listBuilderScans, saveBuilderScan } from '../db/builderScans';
+import {
+  builderPopulation,
+  getBuilderScan,
+  listBuilderScans,
+  saveBuilderScan,
+  type PopulationRow,
+} from '../db/builderScans';
 import type { Database } from '../db/client';
 import type { BuilderProfile } from '../github/builderProfile';
+import { builderMetrics, standing, type BuilderMetrics, type BuilderStanding } from '../github/builderStanding';
 import { parseTarget } from '../github/publicScan';
 
 export interface BuilderScanRouteDeps {
@@ -22,6 +32,13 @@ export interface BuilderScanRouteDeps {
 
 /** Six stack scans with their dependency rows come to tens of KB; this is headroom, not a target. */
 export const MAX_PROFILE_BYTES = 512_000;
+
+/**
+ * ponytail: the whole population in memory, reloaded every five minutes per
+ * process. Seven integers a builder, so fine into the tens of thousands; past
+ * that, rank in SQL (a count per metric column) instead of shipping every row.
+ */
+const POPULATION_TTL_MS = 5 * 60_000;
 
 const ARCHETYPES = new Set(['shipper', 'architect', 'explorer', 'steward']);
 
@@ -54,6 +71,31 @@ function asProfile(value: unknown): BuilderProfile | null {
 export function registerBuilderScanRoutes(app: Express, deps: BuilderScanRouteDeps): void {
   const { db, requireIssuerSecret, ownerFrom } = deps;
 
+  let population: { at: number; rows: Promise<PopulationRow[]> } | null = null;
+  const loadPopulation = (): Promise<PopulationRow[]> => {
+    if (!population || Date.now() - population.at > POPULATION_TTL_MS) {
+      const rows = builderPopulation(db);
+      population = { at: Date.now(), rows };
+      // A failed load must not be served for five minutes.
+      rows.catch(() => {
+        if (population?.rows === rows) population = null;
+      });
+    }
+    return population.rows;
+  };
+
+  /** Never fails the route: a report without percentiles is still the report. */
+  const standingFor = async (login: string, metrics: BuilderMetrics): Promise<BuilderStanding | null> => {
+    try {
+      const self = login.toLowerCase();
+      const others = (await loadPopulation()).filter((r) => r.login !== self);
+      return standing(metrics, others);
+    } catch (err) {
+      logger.error('builder standing failed:', formatError(err));
+      return null;
+    }
+  };
+
   app.get('/builder-scans', requireIssuerSecret, async (req: Request, res: Response) => {
     const ownerId = ownerFrom(req);
     if (!ownerId) {
@@ -81,7 +123,8 @@ export function registerBuilderScanRoutes(app: Express, deps: BuilderScanRouteDe
         res.status(404).json({ error: 'No saved scan for that target.' });
         return;
       }
-      res.json({ scan: { target, ...scan } });
+      const { profile, scannedAt, metrics } = scan;
+      res.json({ scan: { target, profile, scannedAt, standing: await standingFor(profile.login, metrics) } });
     } catch (err) {
       logger.error('builder scan read failed:', formatError(err));
       res.status(500).json({ error: 'Could not read that saved scan.' });
@@ -103,7 +146,7 @@ export function registerBuilderScanRoutes(app: Express, deps: BuilderScanRouteDe
     }
     try {
       const scannedAt = await saveBuilderScan(db, ownerId, target, profile);
-      res.json({ target, scannedAt });
+      res.json({ target, scannedAt, standing: await standingFor(profile.login, builderMetrics(profile)) });
     } catch (err) {
       logger.error('builder scan save failed:', formatError(err));
       res.status(500).json({ error: 'Could not save that scan.' });

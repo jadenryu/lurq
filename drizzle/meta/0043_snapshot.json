@@ -1,5 +1,5 @@
 {
-  "id": "4c16f146-ef36-446a-8812-fa63c93a4544",
+  "id": "ed661b28-d15b-453b-b9c5-ecce08709dbb",
   "prevId": "6c0bcdc8-024b-4a4e-bec9-5a425f925db8",
   "version": "7",
   "dialect": "postgresql",
@@ -241,6 +241,48 @@
         "avatar_url": {
           "name": "avatar_url",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "repos": {
+          "name": "repos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active_90": {
+          "name": "active_90",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stars": {
+          "name": "stars",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deps_tracked": {
+          "name": "deps_tracked",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deps_behind": {
+          "name": "deps_behind",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deps_major": {
+          "name": "deps_major",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "advisories": {
+          "name": "advisories",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },

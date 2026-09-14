@@ -8,6 +8,7 @@
  */
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { BuilderProfile, Trait } from '../github/builderProfile';
+import { builderMetrics, type BuilderMetrics } from '../github/builderStanding';
 import type { Database } from './client';
 import { builderScans } from './schema';
 
@@ -29,7 +30,12 @@ export async function saveBuilderScan(
   profile: BuilderProfile,
 ): Promise<Date> {
   const scannedAt = new Date();
-  const listing = { login: profile.login, archetype: profile.archetype, avatarUrl: profile.avatarUrl };
+  const listing = {
+    login: profile.login,
+    archetype: profile.archetype,
+    avatarUrl: profile.avatarUrl,
+    ...builderMetrics(profile),
+  };
   await db
     .insert(builderScans)
     .values({ ownerId, target, ...listing, profile, scannedAt })
@@ -64,15 +70,47 @@ export async function listBuilderScans(db: Database, ownerId: string, limit = 24
     .limit(limit);
 }
 
+const METRIC_COLUMNS = {
+  repos: builderScans.repos,
+  active90: builderScans.active90,
+  stars: builderScans.stars,
+  depsTracked: builderScans.depsTracked,
+  depsBehind: builderScans.depsBehind,
+  depsMajor: builderScans.depsMajor,
+  advisories: builderScans.advisories,
+};
+
 export async function getBuilderScan(
   db: Database,
   ownerId: string,
   target: string,
-): Promise<{ profile: BuilderProfile; scannedAt: Date } | null> {
+): Promise<{ profile: BuilderProfile; scannedAt: Date; metrics: BuilderMetrics } | null> {
   const rows = await db
-    .select({ profile: builderScans.profile, scannedAt: builderScans.scannedAt })
+    .select({ profile: builderScans.profile, scannedAt: builderScans.scannedAt, ...METRIC_COLUMNS })
     .from(builderScans)
     .where(and(eq(builderScans.ownerId, ownerId), eq(builderScans.target, target)))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  const { profile, scannedAt, ...metrics } = row;
+  return { profile, scannedAt, metrics };
+}
+
+export interface PopulationRow extends BuilderMetrics {
+  /** Lowercased, so the caller can leave the subject out. */
+  login: string;
+}
+
+/**
+ * Everyone to rank against: one row per GitHub login, its most recent save by
+ * any account. Without the dedupe, a builder three accounts looked at would
+ * count three times, and a popular profile would drag every percentile toward
+ * itself.
+ */
+export async function builderPopulation(db: Database): Promise<PopulationRow[]> {
+  const login = sql<string>`lower(${builderScans.login})`;
+  return db
+    .selectDistinctOn([login], { login, ...METRIC_COLUMNS })
+    .from(builderScans)
+    .orderBy(login, desc(builderScans.scannedAt));
 }

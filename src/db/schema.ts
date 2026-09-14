@@ -1380,6 +1380,15 @@ export const builderScans = pgTable(
     login: text('login').notNull(),
     archetype: text('archetype').$type<ArchetypeId>().notNull(),
     avatarUrl: text('avatar_url').notNull(),
+    // What builderStanding.ts ranks on, copied out of `profile` at save, so
+    // ranking reads seven integers per builder instead of every whole report.
+    repos: integer('repos').notNull(),
+    active90: integer('active_90').notNull(),
+    stars: integer('stars').notNull(),
+    depsTracked: integer('deps_tracked').notNull(),
+    depsBehind: integer('deps_behind').notNull(),
+    depsMajor: integer('deps_major').notNull(),
+    advisories: integer('advisories').notNull(),
     profile: jsonb('profile').$type<BuilderProfile>().notNull(),
     scannedAt: ts('scanned_at').notNull().defaultNow(),
     createdAt: ts('created_at').notNull().defaultNow(),
