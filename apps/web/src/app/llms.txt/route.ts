@@ -99,6 +99,7 @@ ${faqs
 - [Docs](${SITE_ORIGIN}/docs)
 - [Docs as one markdown file](${SITE_ORIGIN}/docs/llms-full.txt)
 - [Package summaries](${SITE_ORIGIN}/npm/react): lurq's score, verdict and alternatives for popular npm packages, at ${SITE_ORIGIN}/npm/<package-name>
+- [Upgrade guides](${SITE_ORIGIN}/npm/react): what a major version removed, renamed or re-signatured, for popular npm packages, at ${SITE_ORIGIN}/npm/<package-name>/<from-major>-to-<to-major> (linked from each package page). JSON: https://api.lurq.run/public/upgrade?name=<package-name>&from=<from-major>&to=<to-major>. To check your own code against an upgrade without an account: \`npx lurqrun check-upgrade --upgrade <package>@<from-version>..<to-version>\`
 - [MCP Registry entry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.jadenryu/lurq)
 - [npm](https://www.npmjs.com/package/lurqrun)
 `;

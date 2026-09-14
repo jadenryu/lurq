@@ -8,8 +8,11 @@ import {
   PACKAGE_REVALIDATE,
   fetchPublicPackage,
   packagePath,
+  parseNpmPath,
+  upgradePath,
   type PublicPackageSummary,
 } from "@/lib/public-packages";
+import { UpgradePage, upgradeMetadata } from "./upgrade-page";
 
 /**
  * One public page per popular npm package.
@@ -22,6 +25,10 @@ import {
  *
  * Rendered on first request and revalidated daily; nothing is prebuilt, so a
  * deploy does not fan out five thousand API calls.
+ *
+ * The same route serves /npm/<name>/<from>-to-<to>, the upgrade pages
+ * (upgrade-page.tsx): a catch-all cannot have a sibling segment route, and
+ * parseNpmPath decides which one a path is.
  */
 
 export const revalidate = 86400;
@@ -32,13 +39,14 @@ export async function generateStaticParams() {
 
 type Props = { params: Promise<{ name: string[] }> };
 
-async function load(params: Props["params"]): Promise<PublicPackageSummary | null> {
-  const { name } = await params;
-  return fetchPublicPackage(name.map((s) => decodeURIComponent(s)).join("/"));
+async function load(name: string): Promise<PublicPackageSummary | null> {
+  return fetchPublicPackage(name);
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const pkg = await load(params);
+  const path = parseNpmPath((await params).name);
+  if (path.kind === "upgrade") return upgradeMetadata(path);
+  const pkg = await load(path.name);
   if (!pkg) return { title: "Package not found | lurq", robots: { index: false } };
   const title = `${pkg.name}: health score, advisories and alternatives | lurq`;
   const description = [
@@ -71,7 +79,9 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default async function PackagePage({ params }: Props) {
-  const pkg = await load(params);
+  const path = parseNpmPath((await params).name);
+  if (path.kind === "upgrade") return <UpgradePage {...path} />;
+  const pkg = await load(path.name);
   if (!pkg) notFound();
 
   const flags = [
@@ -149,6 +159,29 @@ export default async function PackagePage({ params }: Props) {
           </Link>
         </p>
       </section>
+
+      {pkg.upgrades && pkg.upgrades.length > 0 ? (
+        <section className="mt-12">
+          <h2 className="text-[18px] font-medium text-ink">Upgrading {pkg.name}</h2>
+          <p className="mt-2 max-w-[62ch] text-[14px] leading-[1.6] text-ink-2">
+            What each major version removed, renamed or re-signatured, from lurq&apos;s extraction of the published
+            packages.
+          </p>
+          <ul className="mt-4 divide-y divide-edge border-y border-edge">
+            {[...pkg.upgrades].reverse().map((u) => (
+              <li key={`${u.fromMajor}-${u.toMajor}`} className="flex items-baseline justify-between gap-4 py-3">
+                <Link
+                  href={upgradePath(pkg.name, u.fromMajor, u.toMajor)}
+                  className="font-mono text-[14px] text-ink hover:underline"
+                >
+                  {u.fromVersion} → {u.toVersion}
+                </Link>
+                <span className="text-[13px] text-ink-3">{u.ready ? "diff ready" : "being extracted"}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {pkg.alternatives.length > 0 ? (
         <section className="mt-12">
