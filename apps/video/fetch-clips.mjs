@@ -8,15 +8,11 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
+// Candid close-ups only (hands, screens, a desk): no posed people, no faces to the camera.
 const CLIPS = {
-  office: 918,
-  laugh: 4872,
-  typing: 1781,
-  late: 41647,
-  focus: 42624,
-  coffee: 1730,
-  hands: 4938,
   screens: 41639,
+  coffee: 1730,
+  typing: 1781,
 };
 
 async function fetchClip([name, id]) {

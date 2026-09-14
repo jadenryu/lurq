@@ -33,24 +33,33 @@ function useExit(): number {
   return last ? 0 : progress(frame, frames - cut - 8, cut + 8, Easing.inOut(Easing.quad));
 }
 
+/** The site's dark ground with its two blooms, drifting so a held frame never looks frozen. */
+export function Ground() {
+  const frame = useCurrentFrame();
+  const d = Math.sin(frame / 90) * 4;
+  return (
+    <AbsoluteFill
+      style={{
+        background: `radial-gradient(circle at ${22 + d}% ${18 - d}%, ${color.bloomFrom}, transparent 55%), radial-gradient(circle at ${80 - d}% ${86 + d}%, ${color.bloomTo}, transparent 55%), ${color.ground}`,
+      }}
+    />
+  );
+}
+
 /**
- * Footage, full bleed, with a slow push-in and a shade toward the bottom so white type
- * reads over a bright office. No CSS filters here: each one is a repaint per frame.
- * `zoom` and `origin` reframe a shot, e.g. to keep hardware brand names out of frame.
+ * Footage as mood, not as subject: slowed down, pushed in slowly, and put under one cool
+ * grade so every clip reads as the same film instead of three stock shots. The grade is a
+ * blend layer (composited), not a CSS filter (repainted every frame).
  */
-export function Clip({ name, shade = 0.45, focus = "center", zoom = 1, origin = "50% 50%" }: { name: string; shade?: number; focus?: string; zoom?: number; origin?: string }) {
+export function Clip({ name, shade = 0.5, focus = "center", zoom = 1, origin = "50% 50%", rate = 0.7 }: { name: string; shade?: number; focus?: string; zoom?: number; origin?: string; rate?: number }) {
   const frame = useCurrentFrame();
   return (
     <AbsoluteFill style={{ backgroundColor: color.ground, overflow: "hidden" }}>
-      <AbsoluteFill style={{ transform: `scale(${(1.04 + frame * 0.00035) * zoom})`, transformOrigin: origin }}>
-        <OffthreadVideo muted src={staticFile(`clips/${name}.mp4`)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: focus }} />
+      <AbsoluteFill style={{ transform: `scale(${(1.06 + frame * 0.0003) * zoom})`, transformOrigin: origin }}>
+        <OffthreadVideo muted playbackRate={rate} src={staticFile(`clips/${name}.mp4`)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: focus }} />
       </AbsoluteFill>
-      <AbsoluteFill
-        style={{
-          background: `linear-gradient(180deg, rgba(8,8,10,${shade * 0.35}) 0%, rgba(8,8,10,${shade * 0.7}) 55%, rgba(8,8,10,${Math.min(0.95, shade + 0.32)}) 100%)`,
-          boxShadow: "inset 0 0 240px rgba(0,0,0,0.5)",
-        }}
-      />
+      <AbsoluteFill style={{ backgroundColor: "#16203a", mixBlendMode: "color", opacity: 0.4 }} />
+      <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 42%, rgba(8,8,10,${shade * 0.25}) 0%, rgba(8,8,10,${shade}) 72%, rgba(8,8,10,${Math.min(0.95, shade + 0.35)}) 100%)` }} />
     </AbsoluteFill>
   );
 }
@@ -68,7 +77,7 @@ export function Frame({ children, justify = "flex-end", align = "flex-start", st
         justifyContent: justify,
         alignItems: align,
         padding: `${(square ? 90 : 120) * u}px ${(square ? 76 : 140) * u}px`,
-        transform: `translateY(${(-frame * 0.04 - exit * 16) * u}px)`,
+        transform: `translateY(${(-frame * 0.03 - exit * 12) * u}px)`,
         opacity: 1 - exit,
         ...style,
       }}
@@ -83,7 +92,7 @@ export function Words({ text, at, size, weight = 600, tone = "ink", stagger = 7,
   const frame = useCurrentFrame();
   const u = useUnit();
   return (
-    <div style={{ fontFamily: SANS, fontWeight: weight, fontSize: size * u, lineHeight: 1.04, letterSpacing: "-0.04em", color: color[tone], textWrap: "balance", textShadow: "0 2px 40px rgba(0,0,0,0.35)", ...style }}>
+    <div style={{ fontFamily: SANS, fontWeight: weight, fontSize: size * u, lineHeight: 1.06, letterSpacing: "-0.04em", color: color[tone], textWrap: "balance", ...style }}>
       {text.split(" ").map((word, i) => {
         const p = progress(frame, at + i * stagger, 40);
         return (
@@ -97,27 +106,15 @@ export function Words({ text, at, size, weight = 600, tone = "ink", stagger = 7,
   );
 }
 
-/** A number that counts up and settles. */
-export function Counter({ to, at, size, duration = 80 }: { to: number; at: number; size: number; duration?: number }) {
-  const frame = useCurrentFrame();
-  const u = useUnit();
-  const p = progress(frame, at, duration, Easing.bezier(0.16, 1, 0.3, 1));
-  return (
-    <div style={{ opacity: progress(frame, at, 24), fontFamily: SANS, fontWeight: 600, fontSize: size * u, lineHeight: 0.9, letterSpacing: "-0.055em", color: color.ink, fontVariantNumeric: "tabular-nums", textShadow: "0 2px 60px rgba(0,0,0,0.4)" }}>
-      {Math.round(to * p).toLocaleString("en-US")}
-    </div>
-  );
-}
-
-/** The source of a number, small along the bottom edge, as ads footnote a claim. */
+/** The source of a claim, small along the bottom edge, as ads footnote one. */
 export function Footnote({ children, at }: { children: ReactNode; at: number }) {
   const frame = useCurrentFrame();
   const u = useUnit();
   const square = useSquare();
   const exit = useExit();
   return (
-    <div style={{ position: "absolute", left: (square ? 76 : 140) * u, bottom: (square ? 40 : 52) * u, opacity: progress(frame, at, 30) * 0.75 * (1 - exit), fontFamily: SANS, fontSize: 18 * u, color: color.ink2 }}>
-      Source: {children}
+    <div style={{ position: "absolute", left: (square ? 76 : 140) * u, bottom: (square ? 40 : 52) * u, opacity: progress(frame, at, 30) * 0.7 * (1 - exit), fontFamily: SANS, fontSize: 18 * u, color: color.ink2 }}>
+      {children}
     </div>
   );
 }
@@ -164,7 +161,7 @@ export function Chip({ children, at, tone }: { children: ReactNode; at: number; 
         alignItems: "center",
         gap: 14 * u,
         opacity: s,
-        transform: `scale(${0.92 + 0.08 * s})`,
+        transform: `scale(${0.94 + 0.06 * s})`,
         transformOrigin: "left center",
         padding: `${12 * u}px ${24 * u}px`,
         borderRadius: 999,
@@ -191,39 +188,62 @@ export function Sweep({ at, duration = 60 }: { at: number; duration?: number }) 
 }
 
 /**
- * The product shot: lurq's output on a floating glass panel that rises into place and
- * turns slowly in 3D, the way launch films frame a UI. CSS 3D only, so it stays cheap.
+ * The product shot: a glass panel that rises and tilts back flat as it settles, with a
+ * soft glow under it. One continuous move, no drift afterwards, so nothing feels jittery.
+ * `agent` titles it as the coding agent's terminal instead of lurq's.
  */
-export function ProductCard({ at, label, children }: { at: number; label: string; children: ReactNode }) {
+export function ProductCard({ at, label, agent = false, children }: { at: number; label: string; agent?: boolean; children: ReactNode }) {
   const frame = useCurrentFrame();
   const u = useUnit();
   const square = useSquare();
-  const p = progress(frame, at, 54);
+  const p = progress(frame, at, 70, Easing.bezier(0.16, 1, 0.3, 1));
   return (
-    <div style={{ perspective: 2400 * u }}>
+    <div style={{ position: "relative", perspective: 2400 * u }}>
+      <div style={{ position: "absolute", inset: `${-80 * u}px`, background: `radial-gradient(ellipse at 50% 60%, ${agent ? "rgba(255,255,255,0.05)" : color.bloomTo}, transparent 65%)`, opacity: p }} />
       <div
         style={{
+          position: "relative",
           width: (square ? 940 : 1180) * u,
           opacity: p,
-          transform: `translateY(${(1 - p) * 90 * u}px) rotateX(${(1 - p) * 20 + 3}deg) rotateY(${-6 + frame * 0.03}deg) scale(${0.92 + 0.08 * p})`,
+          transform: `translateY(${(1 - p) * 60 * u}px) rotateX(${(1 - p) * 14}deg) scale(${0.96 + 0.04 * p})`,
           transformOrigin: "50% 100%",
-          background: "linear-gradient(180deg, rgba(32,32,36,0.95) 0%, rgba(14,14,17,0.97) 100%)",
+          background: "linear-gradient(180deg, rgba(30,30,34,0.96) 0%, rgba(14,14,17,0.98) 100%)",
           border: "1px solid rgba(255,255,255,0.08)",
-          borderTopColor: "rgba(255,255,255,0.22)",
+          borderTopColor: "rgba(255,255,255,0.2)",
           borderRadius: 28 * u,
-          boxShadow: `0 ${60 * u}px ${160 * u}px rgba(0,0,0,0.6)`,
+          boxShadow: `0 ${50 * u}px ${140 * u}px rgba(0,0,0,0.55)`,
           overflow: "hidden",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${22 * u}px ${36 * u}px`, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 * u }}>
-            <Mark size={24} at={-100} />
-            <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 22 * u, color: color.ink }}>{WORDMARK}</span>
-          </div>
+          {agent ? (
+            <span style={{ fontFamily: MONO, fontSize: 22 * u, color: color.ink2 }}>coding agent</span>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 * u }}>
+              <Mark size={24} at={-100} />
+              <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 22 * u, color: color.ink }}>{WORDMARK}</span>
+            </div>
+          )}
           <span style={{ fontFamily: MONO, fontSize: 20 * u, letterSpacing: "0.12em", textTransform: "uppercase", color: color.ink3 }}>{label}</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 26 * u, padding: `${40 * u}px ${44 * u}px ${48 * u}px` }}>{children}</div>
       </div>
+    </div>
+  );
+}
+
+/** A line of terminal input typing out at a human pace, with a blinking caret while it types. */
+export function Typed({ text, at, size, until }: { text: string; at: number; size: number; until: number }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const u = useUnit();
+  const shown = text.slice(0, Math.max(0, Math.floor(((frame - at) / fps) * 28)));
+  const caret = frame < until && Math.floor(frame / 14) % 2 === 0;
+  return (
+    <div style={{ fontFamily: MONO, fontSize: size * u, color: color.ink, whiteSpace: "nowrap" }}>
+      <span style={{ color: color.ink3 }}>$ </span>
+      {shown}
+      <span style={{ opacity: caret ? 1 : 0, color: color.ink2 }}>▍</span>
     </div>
   );
 }

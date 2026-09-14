@@ -1,82 +1,64 @@
-import { AbsoluteFill, Easing, Img, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Easing, Img, staticFile, useCurrentFrame } from "remotion";
 import { AGENT_LOGOS, color, HEADLINE_LINE_1, HEADLINE_LINE_2, IDE_HEADING, INSTALL_COMMAND, MONO, SANS, WORDMARK } from "./brand";
-import { Chip, Clip, Counter, Footnote, Frame, Icon, Mark, ProductCard, progress, Sweep, useSquare, useUnit, Words } from "./components";
+import { Chip, Clip, Footnote, Frame, Ground, Icon, Mark, ProductCard, progress, Sweep, Typed, useSquare, useUnit, Words } from "./components";
 import { arrowRight, shieldCheck, triangleAlert } from "./icons";
 
 /*
- * The two numbers are quoted from their sources, which are footnoted on screen:
- * - Spracklen et al., "We Have a Package for You!", USENIX Security 2025: open-source code models
- *   hallucinated at least 21.7% of the packages they suggested, on average (so "more than 1 in 5").
- * - Sonatype, 2026 State of the Software Supply Chain: 454,600+ new malicious packages found in 2025.
+ * The one number is quoted from its source, footnoted on screen: Spracklen et al., "We Have a
+ * Package for You!", USENIX Security 2025. Open-source code models hallucinated at least 21.7%
+ * of the packages they suggested, on average, which is "more than 1 in 5".
  */
 
 // A name that is not on npm (checked against the registry). The verdict lines are
 // lurq's real `verify` output for it.
 const FAKE_PACKAGE = "next-auth-session-helpers";
 
-/** Size of a full-frame super. */
+/** Size of a full-frame super over footage. */
 function useSuperSize(): number {
-  return useSquare() ? 80 : 108;
+  return useSquare() ? 84 : 112;
 }
 
-export function Office() {
+export function Open() {
   const u = useUnit();
   return (
     <AbsoluteFill>
-      {/* Framed up and left of the monitor brand names in this shot. */}
-      <Clip name="office" shade={0.4} zoom={1.3} origin="0% 55%" />
+      <Clip name="screens" shade={0.5} />
       <Frame>
-        <Words text="Your team ships faster than ever." at={18} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
+        <Words text="Your agent writes the code." at={24} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
       </Frame>
     </AbsoluteFill>
   );
 }
 
-export function Agents() {
+export function Picks() {
   const u = useUnit();
   return (
     <AbsoluteFill>
-      {/* A cut on the action, from the team to the keyboard. */}
-      <Sequence durationInFrames={78}>
-        <Clip name="laugh" shade={0.4} />
-      </Sequence>
-      <Sequence from={78}>
-        <Clip name="typing" shade={0.45} />
-      </Sequence>
+      {/* Framed toward the cup, pushing the laptop's model name on the bezel out of frame. */}
+      <Clip name="coffee" shade={0.5} zoom={1.5} origin="0% 20%" />
       <Frame>
-        <Words text="Because agents write the code now." at={16} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
+        <Words text="It picks the packages, too." at={16} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
       </Frame>
     </AbsoluteFill>
   );
 }
 
 export function Guess() {
+  const frame = useCurrentFrame();
   const u = useUnit();
   const square = useSquare();
   return (
     <AbsoluteFill>
-      {/* Framed above the monitor maker's name along the bottom edge. */}
-      <Clip name="late" shade={0.55} zoom={1.12} origin="50% 0%" />
-      <Frame>
-        <Words text="But agents guess." at={14} size={useSuperSize()} />
-        <Words text="More than 1 in 5 packages suggested by open-source models don't exist." at={66} size={square ? 44 : 54} weight={500} tone="ink2" stagger={4} style={{ marginTop: 28 * u, maxWidth: 1150 * u }} />
+      <Ground />
+      <Frame justify="center" align="center" style={{ gap: 48 * u }}>
+        <Words text="Some of them don't exist." at={100} size={square ? 64 : 84} style={{ textAlign: "center" }} />
+        <ProductCard at={4} label="install" agent>
+          <div style={{ fontFamily: MONO, fontSize: (square ? 24 : 28) * u, color: color.ink2 }}>● I'll add a helper package for sessions.</div>
+          <Typed text={`npm install ${FAKE_PACKAGE}`} at={40} size={square ? 30 : 38} until={100} />
+        </ProductCard>
+        <Words text="More than 1 in 5 packages suggested by open-source models are made up." at={128} size={square ? 30 : 36} weight={500} tone="ink2" stagger={3} style={{ textAlign: "center", maxWidth: 1100 * u, opacity: frame < 128 ? 0 : 1 }} />
       </Frame>
-      <Footnote at={80}>Spracklen et al., USENIX Security 2025</Footnote>
-    </AbsoluteFill>
-  );
-}
-
-export function Threat() {
-  const u = useUnit();
-  const square = useSquare();
-  return (
-    <AbsoluteFill>
-      <Clip name="focus" shade={0.62} />
-      <Frame>
-        <Counter to={454600} at={12} size={square ? 190 : 260} />
-        <Words text="malicious open-source packages were found in 2025." at={44} size={square ? 48 : 60} weight={500} style={{ marginTop: 22 * u, maxWidth: 1150 * u }} />
-      </Frame>
-      <Footnote at={70}>Sonatype, 2026 State of the Software Supply Chain</Footnote>
+      <Footnote at={140}>Spracklen et al., USENIX Security 2025</Footnote>
     </AbsoluteFill>
   );
 }
@@ -87,13 +69,14 @@ export function Meet() {
   const square = useSquare();
   const word = progress(frame, 34, 50);
   return (
-    <AbsoluteFill style={{ backgroundColor: color.ground }}>
+    <AbsoluteFill>
+      <Ground />
       <Sweep at={50} duration={80} />
       <Frame justify="center" align="center" style={{ gap: 28 * u }}>
         <Words text="Meet" at={4} size={square ? 44 : 52} weight={500} tone="ink3" />
         <div style={{ display: "flex", alignItems: "center", gap: 36 * u }}>
           <Mark size={square ? 130 : 170} at={14} />
-          <div style={{ opacity: word, filter: word < 1 ? `blur(${(1 - word) * 10}px)` : undefined, letterSpacing: `${-0.01 + (1 - word) * 0.2}em`, fontFamily: MONO, fontWeight: 700, fontSize: (square ? 140 : 180) * u, color: color.ink }}>{WORDMARK}</div>
+          <div style={{ opacity: word, letterSpacing: `${-0.01 + (1 - word) * 0.2}em`, fontFamily: MONO, fontWeight: 700, fontSize: (square ? 140 : 180) * u, color: color.ink }}>{WORDMARK}</div>
         </div>
       </Frame>
     </AbsoluteFill>
@@ -102,40 +85,32 @@ export function Meet() {
 
 export function VerifyShot() {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
   const u = useUnit();
   const square = useSquare();
-  const command = `lurq verify ${FAKE_PACKAGE}`;
-  const typed = command.slice(0, Math.max(0, Math.floor(((frame - 60) / fps) * 30)));
-  const caret = frame < 116 && Math.floor(frame / 14) % 2 === 0;
   return (
     <AbsoluteFill>
-      <Clip name="coffee" shade={0.72} />
+      <Ground />
       <Frame justify="center" align="center" style={{ gap: 56 * u }}>
         <Words text="It checks every package before it's installed." at={10} size={square ? 54 : 70} style={{ textAlign: "center", maxWidth: 1300 * u }} />
         <ProductCard at={34} label="verify">
-          <div style={{ fontFamily: MONO, fontSize: (square ? 30 : 38) * u, color: color.ink, whiteSpace: "nowrap" }}>
-            <span style={{ color: color.ink3 }}>$ </span>
-            {typed}
-            <span style={{ opacity: caret ? 1 : 0, color: color.ink2 }}>▍</span>
-          </div>
-          <Chip at={118} tone="bad">
-            <Icon node={triangleAlert} at={122} size={30} tone="bad" strokeWidth={2} />
+          <Typed text={`lurq verify ${FAKE_PACKAGE}`} at={60} size={square ? 30 : 38} until={118} />
+          <Chip at={120} tone="bad">
+            <Icon node={triangleAlert} at={124} size={30} tone="bad" strokeWidth={2} />
             NOT A REAL PACKAGE
           </Chip>
-          <div style={{ opacity: progress(frame, 132, 30), fontFamily: MONO, fontSize: (square ? 22 : 26) * u, color: color.ink2 }}>No such package on npm. This name does not exist.</div>
+          <div style={{ opacity: progress(frame, 136, 30), fontFamily: MONO, fontSize: (square ? 22 : 26) * u, color: color.ink2 }}>No such package on npm. This name does not exist.</div>
         </ProductCard>
       </Frame>
     </AbsoluteFill>
   );
 }
 
-export function Install() {
+export function Interlude() {
   return (
     <AbsoluteFill>
-      <Clip name="hands" shade={0.45} />
+      <Clip name="typing" shade={0.5} />
       <Frame>
-        <Words text="Every install, verified." at={16} size={useSuperSize()} />
+        <Words text="So you can keep moving fast." at={16} size={useSuperSize()} />
       </Frame>
     </AbsoluteFill>
   );
@@ -150,9 +125,9 @@ export function UpgradeShot() {
   const renamed = progress(frame, 120, 36);
   return (
     <AbsoluteFill>
-      <Clip name="screens" shade={0.72} />
+      <Ground />
       <Frame justify="center" align="center" style={{ gap: 56 * u }}>
-        <Words text="Every upgrade, checked before it ships." at={10} size={square ? 54 : 70} style={{ textAlign: "center", maxWidth: 1300 * u }} />
+        <Words text="And every upgrade, checked before it ships." at={10} size={square ? 54 : 70} style={{ textAlign: "center", maxWidth: 1300 * u }} />
         <ProductCard at={34} label="check-upgrade">
           <Chip at={62} tone="bad">BLOCKING · cookie 1.1.1 → 2.0.1</Chip>
           <div style={{ display: "flex", alignItems: "center", gap: 20 * u, fontFamily: MONO, fontSize: (square ? 34 : 42) * u, whiteSpace: "nowrap" }}>
@@ -177,7 +152,7 @@ export function Everywhere() {
   const size = (square ? 116 : 96) * u;
   return (
     <AbsoluteFill>
-      <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 0%, ${color.bloomTo}, transparent 65%), ${color.ground}` }} />
+      <Ground />
       <Frame justify="center" align="center" style={{ gap: 80 * u }}>
         <Words text={IDE_HEADING} at={10} size={square ? 58 : 72} style={{ textAlign: "center", maxWidth: 1400 * u }} />
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${square ? 3 : AGENT_LOGOS.length}, ${size * 1.9}px)`, rowGap: 48 * u, justifyContent: "center" }}>
@@ -206,7 +181,8 @@ export function End() {
   const wordmark = progress(frame, 26, 40);
   const pill = progress(frame, 110, 40);
   return (
-    <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 120%, ${color.bloomTo}, transparent 60%), ${color.ground}` }}>
+    <AbsoluteFill>
+      <Ground />
       <Frame justify="center" align="center" style={{ gap: 60 * u }}>
         <div style={{ display: "flex", alignItems: "center", gap: 18 * u }}>
           <Mark size={64} at={6} />
