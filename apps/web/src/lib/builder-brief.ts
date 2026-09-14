@@ -294,134 +294,140 @@ export type CardTier = "gold" | "silver" | "bronze";
 
 export interface CardStats {
   overall: number;
-  /** Three letters, like a position. */
+  /** The archetype's code, the same one that labels its trait row on the card. */
   position: string;
   tier: CardTier;
-  stats: { label: string; value: string }[];
 }
 
-const POSITION: Record<ArchetypeId, string> = {
+/** One code per trait. A trait IS an archetype's score, so it gets one name, not two. */
+export const TRAIT_CODE: Record<ArchetypeId, string> = {
   shipper: "SHP",
   architect: "ARC",
   explorer: "EXP",
   steward: "STW",
 };
 
+const TRAIT_ORDER: ArchetypeId[] = ["shipper", "architect", "explorer", "steward"];
+
 function compact(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n);
 }
 
 /**
- * The card's numbers, from a signed-in report (traits required).
+ * The card's rating, from a signed-in report (traits required).
  *
  * Overall is position-weighted, the way a player's is: the archetype trait
  * counts 60%, the mean of the other scored traits 40%. A plain mean would put
- * every specialist in the 40s, which is accurate about nothing.
- * FIFA's own tier cut-offs: 75 gold, 65 silver.
+ * every specialist in the 40s, which is accurate about nothing. The archetype
+ * is the top trait, so overall never exceeds it. A trait with nothing to
+ * measure (stack health with no indexed dependencies) is left out of the mean,
+ * not counted as a zero. FIFA's own tier cut-offs: 75 gold, 65 silver.
  */
 export function cardStats(report: BuilderReport): CardStats | null {
   if (!report.traits) return null;
-  const score = (id: ArchetypeId) => report.traits!.find((t) => t.id === id)?.score ?? null;
-  const main = score(report.archetype) ?? 0;
+  const main = report.traits.find((t) => t.id === report.archetype)?.score ?? 0;
   const others = report.traits
     .filter((t) => t.id !== report.archetype && t.score !== null)
     .map((t) => t.score!);
   const overall = others.length
     ? Math.round(0.6 * main + 0.4 * (others.reduce((a, b) => a + b, 0) / others.length))
     : main;
-  const show = (id: ArchetypeId) => {
-    const s = score(id);
-    return s === null ? "--" : String(s);
-  };
-
   return {
     overall,
-    position: POSITION[report.archetype],
+    position: TRAIT_CODE[report.archetype],
     tier: overall >= 75 ? "gold" : overall >= 65 ? "silver" : "bronze",
-    stats: [
-      { label: "SHP", value: show("shipper") },
-      { label: "LON", value: show("architect") },
-      { label: "RNG", value: show("explorer") },
-      { label: "HLT", value: show("steward") },
-      { label: "STR", value: compact(report.stats.stars) },
-      { label: "ACT", value: String(report.stats.active90) },
-    ],
   };
 }
 
 export interface CardProfile {
-  /** Stable per login: the scan id printed on the card. */
+  /** Stable per login. An identifier, not a measurement. */
   id: string;
-  traits: { id: ArchetypeId; label: string; name: string; score: number | null }[];
-  /** The top four, as a share of every repo with a language. */
+  traits: { id: ArchetypeId; code: string; name: string; score: number | null }[];
+  /** Top four, each as a share of the owned repos (so they need not sum to 1). */
   languages: { name: string; share: number }[];
+  github: { label: string; value: string }[];
+  /** Stacks read, and the counts the stack health score is computed from. */
+  stacks: number;
   stack: { label: string; value: string; alert: boolean }[];
-  /** Most-declared packages across the repos read. */
+  /**
+   * Tracked dependencies split three ways, from exact per-repo counts. `null`
+   * when nothing was tracked, which is "unmeasured", not "all current".
+   */
+  freshness: { current: number; behind: number; major: number } | null;
+  /** Packages declared in the most repos. */
   packages: string[];
-  /** Bar heights in 0.2–1, seeded by the login. */
-  signal: number[];
 }
-
-const TRAIT_ROWS: { id: ArchetypeId; label: string }[] = [
-  { id: "shipper", label: "SHP" },
-  { id: "architect", label: "LON" },
-  { id: "explorer", label: "RNG" },
-  { id: "steward", label: "HLT" },
-];
 
 /**
  * Everything else the card prints, from a signed-in report (traits required).
  *
- * The id and signal strip are decoration and are derived from the login alone:
- * FNV-1a over it seeds an xorshift, so the same person always gets the same
- * card, and the strip never pretends to be a measurement.
+ * WHY COUNTS AND NOT THE DEP ROWS. Each repo's `deps` is capped and sorted worst
+ * first, so a split computed from the rows overstates the problems on any stack
+ * past the cap. The per-repo counts are exact. `anyDrift` includes `majorDrift`
+ * (a major behind is behind), which is what makes the three-way split disjoint.
+ *
+ * Stack counts are summed over repos, the same way the stack health trait sums
+ * them: a package used in two repos is two dependencies to keep current.
+ *
+ * ponytail: `packages` ranks from the capped rows, so on a stack past the cap a
+ * widely used, perfectly current package can be missed. Rank from the manifest
+ * names if the card ever needs to be exact about it.
  */
-export function cardProfile(report: BuilderReport, bars = 44): CardProfile | null {
+export function cardProfile(report: BuilderReport): CardProfile | null {
   if (!report.traits) return null;
   const traits = report.traits;
-  const total = (pick: (s: BuilderReport["repos"][number]) => number) =>
+  const sum = (pick: (s: BuilderReport["repos"][number]) => number) =>
     report.repos.reduce((n, s) => n + pick(s), 0);
-  const majors = total((s) => s.majorDrift);
-  const advisories = total((s) => s.advisories);
+  const tracked = sum((s) => s.depsTracked);
+  const drifted = sum((s) => s.anyDrift);
+  const major = sum((s) => s.majorDrift);
+  const deprecated = sum((s) => s.deprecated);
+  const advisories = sum((s) => s.advisories);
+  const conflicts = sum((s) => s.conflicts);
+  const { repos, active90, stars, languages } = report.stats;
 
-  const langRepos = report.stats.languages.reduce((n, l) => n + l.repos, 0);
   const uses = new Map<string, number>();
   for (const s of report.repos) for (const d of s.deps) uses.set(d.name, (uses.get(d.name) ?? 0) + 1);
 
+  // FNV-1a: short, stable, and the same for any casing of the login.
   let h = 0x811c9dc5;
   for (const ch of report.login.toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
-  const id = (h >>> 0).toString(16).padStart(8, "0").toUpperCase();
-  h ||= 1; // xorshift never leaves zero
-  const signal = Array.from({ length: bars }, () => {
-    h ^= h << 13;
-    h ^= h >>> 17;
-    h ^= h << 5;
-    return 0.2 + ((h >>> 0) % 1000) / 1250;
-  });
 
   return {
-    id,
-    traits: TRAIT_ROWS.map((r) => ({
-      ...r,
-      name: ARCHETYPES[r.id].trait,
-      score: traits.find((t) => t.id === r.id)?.score ?? null,
+    id: (h >>> 0).toString(16).padStart(8, "0").toUpperCase(),
+    traits: TRAIT_ORDER.map((id) => ({
+      id,
+      code: TRAIT_CODE[id],
+      name: ARCHETYPES[id].trait,
+      score: traits.find((t) => t.id === id)?.score ?? null,
     })),
-    languages: langRepos
-      ? report.stats.languages.slice(0, 4).map((l) => ({ name: l.name, share: l.repos / langRepos }))
-      : [],
-    stack: [
-      { label: "repos read", value: String(report.repos.length), alert: false },
-      { label: "deps tracked", value: compact(total((s) => s.depsTracked)), alert: false },
-      { label: "majors behind", value: String(majors), alert: majors > 0 },
-      { label: "advisories", value: String(advisories), alert: advisories > 0 },
-      { label: "stars", value: compact(report.stats.stars), alert: false },
-      { label: "active, 90 days", value: String(report.stats.active90), alert: false },
+    languages: repos ? languages.slice(0, 4).map((l) => ({ name: l.name, share: l.repos / repos })) : [],
+    github: [
+      { label: "repos", value: compact(repos) },
+      { label: "active 90d", value: String(active90) },
+      { label: "stars", value: compact(stars) },
     ],
+    stacks: report.repos.length,
+    stack: [
+      { label: "deps tracked", value: compact(tracked), alert: false },
+      { label: "a major behind", value: String(major), alert: major > 0 },
+      { label: "deprecated", value: String(deprecated), alert: deprecated > 0 },
+      { label: "advisories", value: String(advisories), alert: advisories > 0 },
+      { label: "conflicts at latest", value: String(conflicts), alert: conflicts > 0 },
+    ],
+    freshness: tracked
+      ? {
+          // Clamped: counts from different queries can disagree by a row, and a
+          // negative segment would draw nothing and skew the rest.
+          current: Math.max(0, tracked - Math.max(drifted, major)),
+          behind: Math.max(0, drifted - major),
+          major: Math.min(major, tracked),
+        }
+      : null,
     packages: [...uses]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
       .slice(0, 6)
       .map(([name]) => name),
-    signal,
   };
 }
 

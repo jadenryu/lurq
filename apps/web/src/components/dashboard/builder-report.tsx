@@ -4,9 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
-import { ChevronRight, Download, Lock, RefreshCw } from "lucide-react";
+import { ChevronRight, Download, Eye, Lock, RefreshCw } from "lucide-react";
 import posthog from "posthog-js";
 import { buttonVariants } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { INSTALL_COMMAND } from "@/content/copy";
 import { CopyButton, CopyInline } from "@/components/dashboard/copy-button";
@@ -555,6 +556,7 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
  * The report's two exports: everything as a brief for a coding agent, and the
  * stats card. The card is signed-in only because it is the trait scores; the
  * brief is whatever this session was sent, so it needs no gate of its own.
+ * The card opens in a viewer first, and is downloaded from there.
  */
 function ReportActions({ report, target, back }: { report: BuilderReport; target: string; back: string }) {
   return (
@@ -568,24 +570,84 @@ function ReportActions({ report, target, back }: { report: BuilderReport; target
         <SignUpButton mode="modal" fallbackRedirectUrl={back} signInFallbackRedirectUrl={back}>
           <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}>
             <Lock aria-hidden className="size-3.5" />
-            Export stats card
+            View stats card
           </button>
         </SignUpButton>
       ) : (
-        <a
-          href={`/api/scan/card?target=${encodeURIComponent(target)}`}
-          download={`lurq-${report.login}.png`}
-          onClick={() => posthog.capture("builder_card_export", { login: report.login, archetype: report.archetype })}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-        >
-          <Download aria-hidden className="size-3.5" />
-          Export stats card
-        </a>
+        <CardViewer report={report} target={target} />
       )}
       <p className="text-[11.5px] text-ink-3">
         Paste it into Claude, ChatGPT or Cursor: repos worst first, the steps to fix each, and how to check the fix with lurq.
       </p>
     </div>
+  );
+}
+
+/**
+ * The stats card, seen before it is saved.
+ *
+ * The image IS the export (same route, minus the attachment header), so the
+ * preview is exactly the file they download; a React copy of the card would be
+ * a second design to keep in step with the first. The save time is in the URL,
+ * so reopening is cached and a rescan is a new image.
+ */
+function CardViewer({ report, target }: { report: BuilderReport; target: string }) {
+  const qs = new URLSearchParams({ target });
+  if (report.savedAt) qs.set("v", report.savedAt);
+  const src = `/api/scan/card?${qs.toString()}`;
+  /** Which image finished, and how. Keyed by src so a new report starts loading again. */
+  const [settled, setSettled] = useState<{ src: string; ok: boolean } | null>(null);
+  const done = settled?.src === src;
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (open) posthog.capture("builder_card_view", { login: report.login, archetype: report.archetype });
+      }}
+    >
+      <DialogTrigger
+        render={<button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")} />}
+      >
+        <Eye aria-hidden className="size-3.5" />
+        View stats card
+      </DialogTrigger>
+      <DialogContent className="w-auto gap-3 p-3 sm:max-w-none">
+        <DialogTitle className="sr-only">Builder card for @{report.login}</DialogTitle>
+        {/* Height-led, so the 4:5 card fits a laptop screen and a phone alike. */}
+        <div className="relative aspect-[4/5] h-[min(78vh,calc((100vw_-_3.5rem)*1.25))] overflow-hidden rounded-lg bg-[#09090b]">
+          {!done && <div aria-hidden className="absolute inset-0 animate-pulse bg-surface-2/40 motion-reduce:animate-none" />}
+          {done && !settled.ok && (
+            <p className="absolute inset-0 grid place-items-center px-6 text-center text-[13px] text-ink-2">
+              Could not render the card. Close and try again.
+            </p>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`Builder stats card for @${report.login}`}
+            onLoad={() => setSettled({ src, ok: true })}
+            onError={() => setSettled({ src, ok: false })}
+            className={cn(
+              "size-full object-contain transition-opacity duration-300 motion-reduce:transition-none",
+              done && settled.ok ? "opacity-100" : "opacity-0",
+            )}
+          />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+          <p className="text-[11.5px] text-ink-3">1080 × 1350 PNG, the crop X, LinkedIn and Instagram show uncut.</p>
+          <a
+            href={`${src}&download=1`}
+            download={`lurq-${report.login}.png`}
+            aria-disabled={!(done && settled.ok)}
+            onClick={() => posthog.capture("builder_card_export", { login: report.login, archetype: report.archetype })}
+            className={cn(buttonVariants({ size: "sm" }), "gap-1.5", !(done && settled.ok) && "pointer-events-none opacity-60")}
+          >
+            <Download aria-hidden className="size-3.5" />
+            Download PNG
+          </a>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
