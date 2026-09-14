@@ -76,10 +76,17 @@ function forVisitor(profile: BuilderProfile): BuilderReport {
     ...profile,
     traits: null,
     repos: first ? [{ ...first, deps: first.deps.slice(0, FREE_DEPS), conflictDetail: [] }] : [],
+    // The first MCP config and the first server built, like the first repo: the rest are the ask.
+    mcp: profile.mcp
+      ? { ...profile.mcp, configs: profile.mcp.configs.slice(0, 1), builds: profile.mcp.builds.slice(0, 1) }
+      : undefined,
     locked: {
       repos: rest.length,
       deps: first ? Math.max(0, first.deps.length - FREE_DEPS) : 0,
       conflicts: first?.conflictDetail.length ?? 0,
+      mcp: profile.mcp
+        ? Math.max(0, profile.mcp.configs.length - 1) + Math.max(0, profile.mcp.builds.length - 1)
+        : 0,
     },
   };
 }

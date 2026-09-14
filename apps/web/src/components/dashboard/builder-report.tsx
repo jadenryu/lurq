@@ -21,6 +21,7 @@ import {
   sharedPackages,
   summarize,
   archetypeLine,
+  mcpServerLabel,
   depLabel,
   depStatus,
   savedDaysAgo,
@@ -453,6 +454,8 @@ function Report({
           </ul>
         </Panel>
       )}
+
+      <McpSection report={report} />
 
       <SharedPackages report={report} />
 
@@ -1352,6 +1355,87 @@ function Conflicts({
         </li>
       ))}
     </ul>
+  );
+}
+
+const MCP_TONE: Record<string, string> = {
+  probed: "text-ink-2",
+  "handshake-failed": "text-bad",
+  queued: "text-warn",
+  "needs-config": "text-warn",
+};
+
+/**
+ * MCP servers in the repos read: what they commit to their agents' configs, and
+ * the repos that are MCP servers. Evidence from those files and lurq's index of
+ * probed servers only; anything lurq cannot probe says so. Absent when the repos
+ * read have neither, so a profile with no MCP gets no empty panel.
+ */
+function McpSection({ report }: { report: BuilderReport }) {
+  const mcp = report.mcp;
+  const hidden = report.locked?.mcp ?? 0;
+  if (!mcp || (mcp.configs.length === 0 && mcp.builds.length === 0 && mcp.unreadFiles === 0)) return null;
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="mcp servers"
+        trailing={<span className="text-[11.5px] text-ink-3">from committed configs and lurq&apos;s probes</span>}
+      />
+      {mcp.builds.length > 0 && (
+        <div>
+          <p className={microLabel}>built here</p>
+          <ul className="mt-1.5 space-y-1">
+            {mcp.builds.map((b) => (
+              <li key={b.repo} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
+                <span className="font-mono text-ink">{b.repo}</span>
+                <span className="font-mono text-ink-3">{b.packageName}</span>
+                <span className={cn("ml-auto text-[12px]", MCP_TONE[b.status] ?? "text-ink-3")}>
+                  {mcpServerLabel(b)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {mcp.configs.map((c) => (
+        <div key={c.repo} className={cn(mcp.builds.length > 0 || c !== mcp.configs[0] ? "mt-5" : "")}>
+          <p className={microLabel}>
+            {c.repo} · {c.files.join(", ")}
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {c.servers.map((s) => (
+              <li key={`${s.alias}-${s.packageName ?? s.endpoint ?? ""}`} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
+                <span className="font-mono text-ink">{s.alias}</span>
+                <span className="break-all font-mono text-ink-3">{s.packageName ?? s.endpoint ?? ""}</span>
+                <span className={cn("ml-auto text-[12px]", MCP_TONE[s.status] ?? "text-ink-3")}>{mcpServerLabel(s)}</span>
+              </li>
+            ))}
+          </ul>
+          {c.collisions.map((x) => (
+            <p key={x.tool} className="mt-2 text-[12.5px] leading-snug text-bad">
+              <span className="font-mono">{x.tool}</span> is exposed by {x.servers.join(" and ")}: the agent cannot say
+              which one it means{x.writes ? ", and one of them can write" : ""}.
+            </p>
+          ))}
+          <p className="mt-2 text-[11.5px] text-ink-3">
+            {c.totalTools !== null
+              ? `${plural(c.totalTools, "tool")} in total, about ${c.estimatedContextTokens?.toLocaleString()} tokens of schema in every request.`
+              : "Total tools unknown: not every server here is probed."}
+          </p>
+        </div>
+      ))}
+      {mcp.unreadFiles > 0 && (
+        <p className="mt-3 text-[12px] text-warn">
+          GitHub didn&rsquo;t answer for {plural(mcp.unreadFiles, "MCP file")}, so servers in them are missing.
+        </p>
+      )}
+      {hidden > 0 && (
+        <div className="mt-3">
+          <LockedRow>{plural(hidden, "more MCP config or server", "more MCP configs or servers")} with a free account.</LockedRow>
+        </div>
+      )}
+    </Panel>
   );
 }
 

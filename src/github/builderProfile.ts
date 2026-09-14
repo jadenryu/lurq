@@ -25,6 +25,7 @@ import {
   scanManifest,
   type PublicScan,
 } from './publicScan';
+import { profileMcp, type ProfileMcp } from './builderMcp';
 
 export type ArchetypeId = 'shipper' | 'architect' | 'explorer' | 'steward';
 
@@ -53,6 +54,8 @@ export interface BuilderProfile {
   repos: PublicScan[];
   /** What the read covered, so a report never states more than it saw. */
   coverage: ProfileCoverage;
+  /** MCP servers the repos read commit to agent configs, and repos that are MCP servers (builderMcp.ts). */
+  mcp: ProfileMcp;
 }
 
 export interface ProfileCoverage {
@@ -280,9 +283,21 @@ export async function builderProfile(
   const found = tries
     .flatMap((name, i) => (reads[i]!.data ? [{ name, manifest: reads[i]!.data }] : []))
     .slice(0, STACK_REPOS);
-  const stacks = await Promise.all(
-    found.map((f) => scanManifest(db, canonical, f.name, f.manifest)),
-  );
+  const [stacks, mcp] = await Promise.all([
+    Promise.all(found.map((f) => scanManifest(db, canonical, f.name, f.manifest))),
+    // The same repos, read for committed MCP configs and for being MCP servers.
+    profileMcp(
+      canonical,
+      tries.map((name, i) => ({ name, manifest: reads[i]!.data })),
+      {
+        read: (repo, path) =>
+          readGitHub<unknown>(`https://raw.githubusercontent.com/${canonical}/${repo}/HEAD/${path}`, {
+            headers: { Accept: 'application/json' },
+          }),
+        surface: async (server) => (await import('../mcp/mcpHandlers')).handleMcpSurface(db, { server }),
+      },
+    ),
+  ]);
 
   const now = Date.now();
   const traits = scoreTraits(repos, stacks, now);
@@ -308,5 +323,6 @@ export async function builderProfile(
     },
     repos: stacks,
     coverage: { reposListed: repos.length, reposCapped: capped, unreadManifests },
+    mcp,
   };
 }
