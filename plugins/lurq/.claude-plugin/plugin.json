@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "lurq",
+  "displayName": "lurq",
+  "version": "0.1.7",
+  "description": "Verify npm packages before Claude installs them: hallucinated and typosquatted names, advisories, API drift between versions, and version conflicts, from live evidence instead of training data.",
+  "author": {
+    "name": "lurq",
+    "url": "https://www.lurq.run"
+  },
+  "homepage": "https://www.lurq.run/docs",
+  "repository": "https://github.com/jadenryu/lurq",
+  "license": "MIT",
+  "keywords": [
+    "npm",
+    "dependencies",
+    "supply-chain",
+    "mcp",
+    "upgrades",
+    "breaking-changes"
+  ],
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "lurq API key",
+      "description": "Free at https://www.lurq.run/dashboard/keys. Starts with lurq_.",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "lurq": {
+      "type": "http",
+      "url": "https://api.lurq.run/mcp",
+      "headers": {
+        "Authorization": "Bearer ${user_config.api_key}",
+        "X-Lurq-Client": "claude-code-plugin"
+      }
+    }
+  }
+}

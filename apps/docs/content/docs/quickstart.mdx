@@ -101,6 +101,30 @@ for one. With `--yes`, the key can also come from `LURQ_API_KEY`. The wizard nee
 a terminal, so without one and without a key, setup uses the sign-in link above
 instead, except in CI, where this form is the one to use.
 
+## One-click install
+
+### Claude Code plugin
+
+Inside Claude Code, no terminal needed:
+
+```text
+/plugin marketplace add jadenryu/lurq
+/plugin install lurq@lurq
+```
+
+Claude Code asks for your API key once and keeps it in your system keychain.
+The plugin connects the hosted MCP server and adds the lurq skill. Run
+`/reload-plugins`, or restart, to load it.
+
+### Cursor and VS Code
+
+<a href="cursor://anysphere.cursor-deeplink/mcp/install?name=lurq&config=eyJ1cmwiOiJodHRwczovL2FwaS5sdXJxLnJ1bi9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiJCZWFyZXIgPHlvdXItbHVycS1hcGkta2V5PiIsIlgtTHVycS1DbGllbnQiOiJjdXJzb3IifX0%3D">Add lurq to Cursor</a> · <a href="vscode:mcp/install?%7B%22name%22%3A%22lurq%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapi.lurq.run%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20%3Cyour-lurq-api-key%3E%22%2C%22X-Lurq-Client%22%3A%22copilot%22%7D%7D">Install lurq in VS Code</a>
+
+Each opens the editor with the lurq server filled in. Replace
+`<your-lurq-api-key>` in the new entry with a key from
+[Dashboard → API keys](https://www.lurq.run/dashboard/keys). `npx lurqrun` does
+the same without the paste, and also installs standing instructions.
+
 ## Per-agent configuration
 
 Setup writes one `lurq` entry into each agent's own MCP config, merged into what
