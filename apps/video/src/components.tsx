@@ -5,6 +5,17 @@ import { check, type IconNode } from "./icons";
 
 type Tone = "ink" | "ink2" | "ink3" | "bad" | "good";
 
+/** The frame rate every timing in this project is authored at. Video.tsx picks the output rate. */
+export const BASE_FPS = 30;
+
+/**
+ * The current frame in 30fps units (fractional at higher output rates), so each animation keeps
+ * its authored timing at 60 or 120fps and simply gets more in-between frames.
+ */
+export function useFrame(): number {
+  return (useCurrentFrame() * BASE_FPS) / useVideoConfig().fps;
+}
+
 /** Height-relative unit: 1 at 1080px tall, so wide and square share one scale. */
 export function useUnit(): number {
   return useVideoConfig().height / 1080;
@@ -30,14 +41,14 @@ export const SceneTiming = createContext({ frames: 0, cut: 0, last: true });
 
 /** 0 while the scene holds, easing to 1 across the transition into the next one. */
 function useExit(): number {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const { frames, cut, last } = useContext(SceneTiming);
   return last ? 0 : progress(frame, frames - cut - 8, cut + 8, Easing.inOut(Easing.quad));
 }
 
 /** The site's dark ground with its two blooms, drifting so a held frame never looks frozen. */
 export function Ground() {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const d = Math.sin(frame / 90) * 4;
   return (
     <AbsoluteFill
@@ -54,12 +65,12 @@ export function Ground() {
  * the frame once. The grade and leak are blend layers (composited), not CSS filters.
  */
 export function Clip({ name, shade = 0.5, focus = "center", zoom = 1, origin = "50% 50%", rate = 0.8, letterbox = false, drift = 1 }: { name: string; shade?: number; focus?: string; zoom?: number; origin?: string; rate?: number; letterbox?: boolean; drift?: number }) {
-  const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const frame = useFrame();
+  const { durationInFrames, fps } = useVideoConfig();
   const u = useUnit();
   const square = useSquare();
   const bars = letterbox && !square ? progress(frame, 0, 40) * 100 * u : 0;
-  const leak = progress(frame, 0, Math.max(60, durationInFrames), Easing.inOut(Easing.sin));
+  const leak = progress(frame, 0, Math.max(60, (durationInFrames * BASE_FPS) / fps), Easing.inOut(Easing.sin));
   return (
     <AbsoluteFill style={{ backgroundColor: color.ground, overflow: "hidden" }}>
       <AbsoluteFill style={{ transform: `translateX(${letterbox ? frame * 0.25 * drift * u : 0}px) scale(${(1.1 + frame * 0.0005) * zoom})`, transformOrigin: origin }}>
@@ -80,7 +91,7 @@ export function Clip({ name, shade = 0.5, focus = "center", zoom = 1, origin = "
 
 /** The content layer: a slow upward drift while it holds, then a fade across the transition. */
 export function Frame({ children, justify = "flex-end", align = "flex-start", style }: { children: ReactNode; justify?: CSSProperties["justifyContent"]; align?: CSSProperties["alignItems"]; style?: CSSProperties }) {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   const exit = useExit();
@@ -103,7 +114,7 @@ export function Frame({ children, justify = "flex-end", align = "flex-start", st
 
 /** A super: each word swings up into place in 3D, out of a soft blur, and then holds. */
 export function Words({ text, at, size, weight = 600, tone = "ink", stagger = 6, style }: { text: string; at: number; size: number; weight?: number; tone?: Tone; stagger?: number; style?: CSSProperties }) {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   return (
     <div style={{ fontFamily: SANS, fontWeight: weight, fontSize: size * u, lineHeight: 1.06, letterSpacing: "-0.04em", color: color[tone], textWrap: "balance", ...style }}>
@@ -132,7 +143,7 @@ export function Words({ text, at, size, weight = 600, tone = "ink", stagger = 6,
 
 /** The source of a claim, small along the bottom edge, as ads footnote one. */
 export function Footnote({ children, at }: { children: ReactNode; at: number }) {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   const exit = useExit();
@@ -145,7 +156,7 @@ export function Footnote({ children, at }: { children: ReactNode; at: number }) 
 
 /** A Lucide icon that draws its strokes in. */
 export function Icon({ node, at, size, tone = "ink", strokeWidth = 1.5 }: { node: IconNode; at: number; size: number; tone?: Tone; strokeWidth?: number }) {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const p = progress(frame, at, 44, Easing.inOut(Easing.cubic));
   return (
@@ -182,7 +193,7 @@ export function LogoMark({ size, front = color.ink, back = MARK_GREY }: { size: 
  * lit face), swinging round to face the camera and then turning gently, like a product hero.
  */
 export function Logo3D({ size, at = 0 }: { size: number; at?: number }) {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const p = progress(frame, at, 80, GLIDE);
   const t = Math.max(0, frame - at);
@@ -205,10 +216,9 @@ export function Logo3D({ size, at = 0 }: { size: number; at?: number }) {
 
 /** A verdict badge: settles in from slightly small, with no bounce. */
 export function Chip({ children, at, tone }: { children: ReactNode; at: number; tone: Tone }) {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
   const u = useUnit();
-  const s = frame < at ? 0 : spring({ frame: frame - at, fps, config: { damping: 200, mass: 1.4 } });
+  const s = frame < at ? 0 : spring({ frame: frame - at, fps: BASE_FPS, config: { damping: 200, mass: 1.4 } });
   return (
     <div
       style={{
@@ -235,12 +245,31 @@ export function Chip({ children, at, tone }: { children: ReactNode; at: number; 
   );
 }
 
-/** A soft band of light crossing the frame once, like a reflection off glass. */
-export function Sweep({ at, duration = 60 }: { at: number; duration?: number }) {
-  const frame = useCurrentFrame();
-  const p = progress(frame, at, duration, Easing.inOut(Easing.sin));
-  if (p <= 0 || p >= 1) return null;
-  return <AbsoluteFill style={{ background: `linear-gradient(105deg, transparent ${p * 140 - 40}%, rgba(255,255,255,0.08) ${p * 140 - 20}%, transparent ${p * 140}%)` }} />;
+/**
+ * Light behind the brand reveal: a soft bloom opens up and faint rays turn slowly around it,
+ * like a stage light coming up on the logo.
+ */
+export function LightBurst({ at }: { at: number }) {
+  const frame = useFrame();
+  const u = useUnit();
+  const p = progress(frame, at, 70, GLIDE);
+  return (
+    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          position: "absolute",
+          width: 1800 * u,
+          height: 1800 * u,
+          opacity: p,
+          transform: `scale(${0.55 + 0.45 * p}) rotate(${frame * 0.06}deg)`,
+          background: "repeating-conic-gradient(from 0deg, rgba(255,255,255,0.055) 0deg 2.5deg, transparent 2.5deg 14deg)",
+          maskImage: "radial-gradient(circle, #000 0%, rgba(0,0,0,0.6) 25%, transparent 58%)",
+          WebkitMaskImage: "radial-gradient(circle, #000 0%, rgba(0,0,0,0.6) 25%, transparent 58%)",
+        }}
+      />
+      <div style={{ position: "absolute", width: 1000 * u, height: 1000 * u, borderRadius: "50%", opacity: p, transform: `scale(${0.5 + 0.5 * p})`, background: "radial-gradient(circle, rgba(120,150,255,0.22), transparent 62%)" }} />
+    </AbsoluteFill>
+  );
 }
 
 /** Where a card's satellite tags float, as [x, y] offsets from the card's centre (1080p units). */
@@ -249,24 +278,40 @@ const SATELLITES_WIDE = [[-700, -80], [740, -20], [-700, 170], [740, 210]];
 const SATELLITES_SQUARE = [[-230, 240], [240, 260], [-220, 350], [250, 370]];
 
 /**
+ * How a card reacts to its own story beat, so no two cards light the same way:
+ * - `danger`: the glow under the card and its edge turn red and pulse (the agent's bad install).
+ * - `trace`: a point of light runs once around the card's edge while lurq checks.
+ * - `resolve`: the glow turns red at the blocking verdict, then green once the fix is proven.
+ */
+export type Accent = { kind: "danger"; at: number } | { kind: "trace"; at: number } | { kind: "resolve"; at: number; resolvedAt: number };
+
+const RED = "248,113,113";
+const GREEN = "74,222,128";
+
+/**
  * The product shot, staged in 3D: a glass panel flies in from depth and swings round to face
  * the camera, then keeps turning slowly while the named checks float in around it on their own
  * depth planes. `agent` titles it as the coding agent's terminal instead of lurq's.
  */
-export function ProductCard({ at, label, agent = false, checks = [], children }: { at: number; label: string; agent?: boolean; checks?: string[]; children: ReactNode }) {
-  const frame = useCurrentFrame();
+export function ProductCard({ at, label, agent = false, checks = [], accent, children }: { at: number; label: string; agent?: boolean; checks?: string[]; accent?: Accent; children: ReactNode }) {
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   const p = progress(frame, at, 84, GLIDE);
   const t = Math.max(0, frame - at);
   const ry = (1 - p) * -34 + Math.sin(t / 80) * 6 * p;
   const rx = (1 - p) * 20 + 3 + Math.cos(t / 100) * 2 * p;
-  const sheen = progress(frame, at + 60, 60, Easing.inOut(Easing.sin));
+  const lit = accent && accent.kind !== "trace" ? progress(frame, accent.at, 30) : 0;
+  const green = accent?.kind === "resolve" ? progress(frame, accent.resolvedAt, 36) : 0;
+  const red = accent?.kind === "danger" ? lit * (0.75 + 0.25 * Math.sin((frame - accent.at) / 8)) : lit * (1 - green);
+  const trace = accent?.kind === "trace" ? progress(frame, accent.at, 60, Easing.inOut(Easing.cubic)) : 0;
   const spots = square ? SATELLITES_SQUARE : SATELLITES_WIDE;
   return (
     <div style={{ perspective: 2200 * u }}>
       <div style={{ position: "relative", transformStyle: "preserve-3d", transform: `translateZ(${(1 - p) * -700 * u}px) rotateX(${rx}deg) rotateY(${ry}deg)`, opacity: Math.min(1, p * 1.6) }}>
-        <div style={{ position: "absolute", inset: `${-120 * u}px`, transform: `translateZ(${-120 * u}px)`, background: `radial-gradient(ellipse at 50% 55%, ${agent ? "rgba(255,255,255,0.06)" : color.bloomTo}, transparent 65%)` }} />
+        <div style={{ position: "absolute", inset: `${-120 * u}px`, transform: `translateZ(${-120 * u}px)`, opacity: 1 - Math.max(red, green) * 0.8, background: `radial-gradient(ellipse at 50% 55%, ${agent ? "rgba(255,255,255,0.06)" : color.bloomTo}, transparent 65%)` }} />
+        {red > 0 && <div style={{ position: "absolute", inset: `${-140 * u}px`, transform: `translateZ(${-120 * u}px)`, opacity: red, background: `radial-gradient(ellipse at 50% 55%, rgba(${RED},0.45), transparent 62%)` }} />}
+        {green > 0 && <div style={{ position: "absolute", inset: `${-140 * u}px`, transform: `translateZ(${-120 * u}px)`, opacity: green, background: `radial-gradient(ellipse at 50% 55%, rgba(${GREEN},0.28), transparent 62%)` }} />}
         <div
           style={{
             position: "relative",
@@ -291,8 +336,14 @@ export function ProductCard({ at, label, agent = false, checks = [], children }:
             <span style={{ fontFamily: MONO, fontSize: 20 * u, letterSpacing: "0.12em", textTransform: "uppercase", color: color.ink3 }}>{label}</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 26 * u, padding: `${40 * u}px ${44 * u}px ${48 * u}px` }}>{children}</div>
-          {sheen > 0 && sheen < 1 && <AbsoluteFill style={{ background: `linear-gradient(115deg, transparent ${sheen * 160 - 60}%, rgba(255,255,255,0.07) ${sheen * 160 - 35}%, transparent ${sheen * 160 - 10}%)` }} />}
+          {red > 0 && <AbsoluteFill style={{ borderRadius: 28 * u, boxShadow: `inset 0 0 0 ${2 * u}px rgba(${RED},${red * 0.55})` }} />}
+          {green > 0 && <AbsoluteFill style={{ borderRadius: 28 * u, boxShadow: `inset 0 0 0 ${2 * u}px rgba(${GREEN},${green * 0.55})` }} />}
         </div>
+        {trace > 0 && trace < 1 && (
+          <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, overflow: "visible", filter: `drop-shadow(0 0 ${8 * u}px rgba(140,170,255,0.9))` }}>
+            <rect x="0" y="0" width="100%" height="100%" rx={28 * u} fill="none" stroke="rgba(190,210,255,0.95)" strokeWidth={3 * u} pathLength={1} strokeDasharray="0.14 0.86" strokeDashoffset={-trace} strokeLinecap="round" opacity={Math.min(1, trace * 8, (1 - trace) * 8)} />
+          </svg>
+        )}
         {checks.map((text, i) => {
           const q = progress(frame, at + 70 + i * 10, 50, GLIDE);
           const [x, y] = spots[i % spots.length];
@@ -332,10 +383,9 @@ export function ProductCard({ at, label, agent = false, checks = [], children }:
 
 /** A line of terminal input typing out at a human pace, with a blinking caret while it types. */
 export function Typed({ text, at, size, until }: { text: string; at: number; size: number; until: number }) {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
   const u = useUnit();
-  const shown = text.slice(0, Math.max(0, Math.floor(((frame - at) / fps) * 28)));
+  const shown = text.slice(0, Math.max(0, Math.floor(((frame - at) / BASE_FPS) * 28)));
   const caret = frame < until && Math.floor(frame / 14) % 2 === 0;
   return (
     <div style={{ fontFamily: MONO, fontSize: size * u, color: color.ink, whiteSpace: "nowrap" }}>
@@ -352,7 +402,7 @@ export function Typed({ text, at, size, until }: { text: string; at: number; siz
  * nothing overlaps.
  */
 export function Carousel3D({ at, items }: { at: number; items: { file: string; name: string }[] }) {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   const radius = (square ? 380 : 620) * u;

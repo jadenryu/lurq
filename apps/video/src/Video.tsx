@@ -3,22 +3,29 @@ import { fade } from "@remotion/transitions/fade";
 import { flip } from "@remotion/transitions/flip";
 import { pushCut } from "@remotion/transitions/push-cut";
 import { Fragment } from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, interpolate } from "remotion";
 import { color, MONO, WORDMARK } from "./brand";
-import { LogoMark, SceneTiming, useUnit } from "./components";
+import { BASE_FPS, LogoMark, SceneTiming, useFrame, useUnit } from "./components";
 import { CloseUp, End, Everywhere, Flyover, Guess, Keep, Meet, Skyline, Teams, UpgradeShot, VerifyShot } from "./scenes";
 
-export const FPS = 30;
+/**
+ * The output frame rate. 60 is the most YouTube, X and LinkedIn play back; 120 renders fine too,
+ * since all timing below is authored at BASE_FPS and converted here.
+ */
+export const FPS = 60;
+
+/** A duration authored in 30fps frames, in output frames. */
+const out = (frames: number) => Math.round((frames * FPS) / BASE_FPS);
 
 type Join = { presentation: TransitionPresentation<Record<string, unknown>>; timing: TransitionTiming; frames: number };
 
-const dissolve = (frames: number): Join => ({ presentation: fade() as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: frames }), frames });
+const dissolve = (frames: number): Join => ({ presentation: fade() as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: out(frames) }), frames });
 /** A punch-in cut with a faint flash, for the beats that turn the story. */
-const punch = (): Join => ({ presentation: pushCut({ flashColor: "#ffffff", flashOpacity: 0.18 }) as never, timing: linearTiming({ durationInFrames: 20 }), frames: 20 });
+const punch = (): Join => ({ presentation: pushCut({ flashColor: "#ffffff", flashOpacity: 0.18 }) as never, timing: linearTiming({ durationInFrames: out(20) }), frames: 20 });
 /** A 3D card flip, between two product shots on the same stage. */
-const turn = (): Join => ({ presentation: flip({ direction: "from-right", perspective: 2400 }) as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: 34 }), frames: 34 });
+const turn = (): Join => ({ presentation: flip({ direction: "from-right", perspective: 2400 }) as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: out(34) }), frames: 34 });
 
-/** Each scene's length in frames, and how it hands over to the next one. */
+/** Each scene's length in 30fps frames, and how it hands over to the next one. */
 const SCENES = [
   { id: "skyline", Component: Skyline, frames: 150 },
   { id: "teams", Component: Teams, frames: 130, join: dissolve(30) },
@@ -34,14 +41,15 @@ const SCENES = [
 ];
 
 const cutBefore = (i: number) => SCENES[i].join?.frames ?? 0;
+/** Where each scene starts, in 30fps frames. */
 const starts = SCENES.map((_, i) => SCENES.slice(0, i).reduce((sum, s) => sum + s.frames, 0) - SCENES.slice(1, i + 1).reduce((sum, s) => sum + (s.join?.frames ?? 0), 0));
-export const DURATION = starts[SCENES.length - 1] + SCENES[SCENES.length - 1].frames;
+export const DURATION = SCENES.reduce((sum, s) => sum + out(s.frames) - (s.join ? out(s.join.frames) : 0), 0);
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 
 /** A small lurq mark in the corner, like a broadcast bug; it steps aside where the brand is the subject. */
 function Bug() {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const i = SCENES.findIndex((s) => s.id === "meet");
   const meet = starts[i];
@@ -67,7 +75,7 @@ export function LurqVideo() {
         {SCENES.map(({ id, Component, frames, join }, i) => (
           <Fragment key={id}>
             {join && <TransitionSeries.Transition presentation={join.presentation} timing={join.timing} />}
-            <TransitionSeries.Sequence durationInFrames={frames}>
+            <TransitionSeries.Sequence durationInFrames={out(frames)}>
               <SceneTiming.Provider value={{ frames, cut: cutBefore(i + 1 < SCENES.length ? i + 1 : i), last: i === SCENES.length - 1 }}>
                 <Component />
               </SceneTiming.Provider>

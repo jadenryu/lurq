@@ -33,7 +33,7 @@ async function fetchClip([name, id]) {
   const source = `public/clips/${name}.source.mp4`;
   await writeFile(source, Buffer.from(await res.arrayBuffer()));
   // Remotion ships its own ffmpeg, so this needs nothing installed.
-  await run("npx", ["--no-install", "remotion", "ffmpeg", "-y", "-loglevel", "error", "-i", source, "-vf", "scale=-2:1440", "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", file]);
+  await run("npx", ["--no-install", "remotion", "ffmpeg", "-y", "-loglevel", "error", "-i", source, "-vf", "scale=-2:2160", "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", file]);
   await rm(source);
   console.log(`fetched ${name}`);
 }

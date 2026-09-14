@@ -7,6 +7,8 @@ import { Config } from "@remotion/cli/config";
 
 Config.setRspack(true);
 Config.setVideoImageFormat("jpeg");
+// A 4K ad: keep compression artifacts out of gradients and fine type.
+Config.setJpegQuality(95);
 Config.setOverwriteOutput(true);
 
 // `@/` resolves into the web app, so the video reads its headline and install

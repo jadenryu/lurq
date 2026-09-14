@@ -1,6 +1,6 @@
-import { AbsoluteFill, Easing, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Easing } from "remotion";
 import { AGENT_LOGOS, color, HEADLINE_LINE_1, HEADLINE_LINE_2, IDE_HEADING, INSTALL_COMMAND, MONO, SANS, WORDMARK } from "./brand";
-import { Carousel3D, Chip, Clip, Footnote, Frame, Ground, Icon, Logo3D, ProductCard, progress, Sweep, Typed, useSquare, useUnit, Words } from "./components";
+import { Carousel3D, Chip, Clip, Footnote, Frame, Ground, Icon, LightBurst, Logo3D, ProductCard, progress, Typed, useFrame, useSquare, useUnit, Words } from "./components";
 import { arrowRight, shieldCheck, triangleAlert } from "./icons";
 
 /*
@@ -79,7 +79,7 @@ export function Guess() {
       <Ground />
       <Frame justify="center" align="center" style={{ gap: 48 * u }}>
         <Words text="But agents guess." at={108} size={square ? 70 : 92} style={{ textAlign: "center" }} />
-        <ProductCard at={4} label="install" agent>
+        <ProductCard at={4} label="install" agent accent={{ kind: "danger", at: 104 }}>
           <div style={{ fontFamily: MONO, fontSize: (square ? 24 : 28) * u, color: color.ink2 }}>● I'll add a helper package for sessions.</div>
           <Typed text={`npm install ${FAKE_PACKAGE}`} at={40} size={square ? 30 : 38} until={104} />
         </ProductCard>
@@ -91,14 +91,14 @@ export function Guess() {
 }
 
 export function Meet() {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   const word = progress(frame, 46, 60, Easing.bezier(0.16, 1, 0.3, 1));
   return (
     <AbsoluteFill>
       <Ground />
-      <Sweep at={80} duration={80} />
+      <LightBurst at={8} />
       <Frame justify="center" align="center" style={{ gap: 36 * u }}>
         <Words text="Meet" at={4} size={square ? 44 : 52} weight={500} tone="ink3" />
         <div style={{ display: "flex", alignItems: "center", gap: 48 * u }}>
@@ -113,7 +113,7 @@ export function Meet() {
 }
 
 export function VerifyShot() {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   return (
@@ -121,7 +121,7 @@ export function VerifyShot() {
       <Ground />
       <Frame justify="center" align="center" style={{ gap: 70 * u }}>
         <Words text="It checks every package before it's installed." at={8} size={square ? 52 : 66} style={{ textAlign: "center", maxWidth: 1300 * u }} />
-        <ProductCard at={30} label="verify" checks={["made-up names", "typosquats", "advisories", "deprecations"]}>
+        <ProductCard at={30} label="verify" checks={["made-up names", "typosquats", "advisories", "deprecations"]} accent={{ kind: "trace", at: 62 }}>
           <Typed text={`lurq verify ${FAKE_PACKAGE}`} at={60} size={square ? 30 : 38} until={118} />
           <Chip at={120} tone="bad">
             <Icon node={triangleAlert} at={124} size={30} tone="bad" strokeWidth={2} />
@@ -148,7 +148,7 @@ export function Flyover() {
 
 // lurq's real `check-upgrade` report for a file that imports `parse` from cookie.
 export function UpgradeShot() {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   const strike = progress(frame, 92, 30, Easing.inOut(Easing.cubic));
@@ -158,7 +158,7 @@ export function UpgradeShot() {
       <Ground />
       <Frame justify="center" align="center" style={{ gap: 70 * u }}>
         <Words text="Every upgrade, checked before it ships." at={8} size={square ? 52 : 66} style={{ textAlign: "center", maxWidth: 1300 * u }} />
-        <ProductCard at={30} label="check-upgrade" checks={["proven renames", "removed symbols", "call arity", "type check"]}>
+        <ProductCard at={30} label="check-upgrade" checks={["proven renames", "removed symbols", "call arity", "type check"]} accent={{ kind: "resolve", at: 62, resolvedAt: 120 }}>
           <Chip at={62} tone="bad">BLOCKING · cookie 1.1.1 → 2.0.1</Chip>
           <div style={{ display: "flex", alignItems: "center", gap: 20 * u, fontFamily: MONO, fontSize: (square ? 34 : 42) * u, whiteSpace: "nowrap" }}>
             <span style={{ position: "relative", color: color.ink, opacity: 1 - strike * 0.55 }}>
@@ -202,7 +202,7 @@ export function Everywhere() {
 }
 
 export function End() {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
   const headline = square ? 64 : 100;
