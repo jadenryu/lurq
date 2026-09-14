@@ -83,7 +83,7 @@ import {
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
-import { parseTarget, publicScan, type PublicScan } from '../github/publicScan';
+import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
 import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
 import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
@@ -163,7 +163,10 @@ export function scanTtl(scan: PublicScan | null): number {
 
 /** A builder profile holds only as long as its least settled repo. */
 export function profileTtl(profile: BuilderProfile | null): number {
-  return profile ? Math.min(SCAN_TTL_MS, ...profile.repos.map(scanTtl)) : SCAN_PROVISIONAL_TTL_MS;
+  if (!profile) return SCAN_PROVISIONAL_TTL_MS;
+  // Repos GitHub did not answer for: the next read may get them, so hold briefly.
+  if (profile.coverage?.unreadManifests.length) return SCAN_PROVISIONAL_TTL_MS;
+  return Math.min(SCAN_TTL_MS, ...profile.repos.map(scanTtl));
 }
 
 /**
@@ -528,6 +531,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       if (!profile) missing();
       else res.json(profile);
     } catch (err) {
+      if (err instanceof GitHubUnavailableError) {
+        // Not cached: the next request may get through, and a cached failure
+        // would turn one rate-limited minute into a quarter hour of "try again".
+        logger.warn(`profile scan: ${err.message}`);
+        res.status(503).json({
+          error: "GitHub didn't answer (a rate limit or a timeout), so nothing could be read. Try again in a minute.",
+        });
+        return;
+      }
       logger.error('profile scan failed:', formatError(err));
       res.status(502).json({ error: 'Could not read that profile.' });
     }

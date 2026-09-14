@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { declaredDeps, depDrift } from '../src/github/drift';
+import { declaredDeps, depDrift, driftStatus } from '../src/github/drift';
 import { manifestPaths, parseManifest } from '../src/github/manifests';
 import { appJwt } from '../src/github/app';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
@@ -46,6 +46,29 @@ describe('depDrift', () => {
     const dep = depDrift('request', declared('^2.88.0'), indexed('2.88.2', { deprecated: true, advisories: 3 }), ['2.88.0', '2.88.2']);
     expect(dep.deprecated).toBe(true);
     expect(dep.advisories).toBe(3);
+  });
+});
+
+describe('driftStatus', () => {
+  it('is current only when the resolved version is at or past latest', () => {
+    expect(driftStatus('19.1.0', '19.1.0')).toBe('current');
+    expect(driftStatus('19.2.0', '19.1.0')).toBe('current');
+  });
+
+  it('says behind for a minor or patch gap instead of current', () => {
+    expect(driftStatus('1.2.0', '1.5.0')).toBe('behind');
+    expect(driftStatus('1.2.0', '1.2.3')).toBe('behind');
+  });
+
+  it('treats a major bump, and a 0.x minor bump, as breaking', () => {
+    expect(driftStatus('18.3.1', '19.0.0')).toBe('major');
+    expect(driftStatus('0.3.1', '0.9.0')).toBe('major');
+  });
+
+  it('is unknown, never current, when either side is missing or not a version', () => {
+    expect(driftStatus(null, '1.0.0')).toBe('unknown');
+    expect(driftStatus('1.0.0', null)).toBe('unknown');
+    expect(driftStatus('next', '1.0.0')).toBe('unknown');
   });
 });
 

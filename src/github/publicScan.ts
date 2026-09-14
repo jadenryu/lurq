@@ -77,18 +77,42 @@ function headers(): Record<string, string> {
 /** Give up rather than hold a visitor's request open on a slow origin. */
 const TIMEOUT_MS = 6_000;
 
-export async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+/**
+ * GitHub said it could not answer: a rate limit, a timeout, an outage. Distinct
+ * from "not found" on purpose. The two used to be the same `null`, so a
+ * rate-limited scan told a real user their profile did not exist.
+ */
+export class GitHubUnavailableError extends Error {
+  constructor(public status: number) {
+    super(`GitHub did not answer (${status === 0 ? 'timeout or network error' : `HTTP ${status}`})`);
+    this.name = 'GitHubUnavailableError';
+  }
+}
+
+/** A GitHub read with what `getJson` throws away: the status (0 for a timeout or network error) and the Link header. */
+export interface GitHubRead<T> {
+  data: T | null;
+  status: number;
+  link: string | null;
+}
+
+export async function readGitHub<T>(url: string, init?: RequestInit): Promise<GitHubRead<T>> {
   try {
     const res = await fetch(url, {
       ...init,
       headers: { ...headers(), ...(init?.headers ?? {}) },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
+    const link = res.headers.get('link');
+    if (!res.ok) return { data: null, status: res.status, link };
+    return { data: (await res.json()) as T, status: res.status, link };
   } catch {
-    return null;
+    return { data: null, status: 0, link: null };
   }
+}
+
+export async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+  return (await readGitHub<T>(url, init)).data;
 }
 
 /**
@@ -100,10 +124,14 @@ export async function getJson<T>(url: string, init?: RequestInit): Promise<T | n
  * the whole reason this path avoids the API for the common case.
  */
 export async function rootManifest(owner: string, name: string): Promise<unknown | null> {
-  return getJson<unknown>(
-    `https://raw.githubusercontent.com/${owner}/${name}/HEAD/package.json`,
-    { headers: { Accept: 'application/json' } },
-  );
+  return (await rootManifestRead(owner, name)).data;
+}
+
+/** The same read, keeping the status, so a failed read is not mistaken for a repo with no package.json. */
+export function rootManifestRead(owner: string, name: string): Promise<GitHubRead<unknown>> {
+  return readGitHub<unknown>(`https://raw.githubusercontent.com/${owner}/${name}/HEAD/package.json`, {
+    headers: { Accept: 'application/json' },
+  });
 }
 
 /** How many of a profile's repos to try before giving up on finding a JS one. */
@@ -157,6 +185,8 @@ export interface PublicScan {
   anyDrift: number;
   deprecated: number;
   advisories: number;
+  /** Advisories were checked at each resolved version. Absent on scans from before that check. */
+  advisoriesExact?: boolean;
   /** Peer/engine conflicts if the repo took every available upgrade. */
   conflicts: number;
   /** Worst-first, capped. The evidence under the counts. */
@@ -257,6 +287,7 @@ export async function scanManifest(
       anyDrift: 0,
       deprecated: 0,
       advisories: 0,
+      advisoriesExact: true,
       conflicts: 0,
       deps: [],
       conflictDetail: [],
@@ -276,6 +307,7 @@ export async function scanManifest(
     anyDrift: drift.anyDrift,
     deprecated: drift.deprecated,
     advisories: drift.advisories,
+    advisoriesExact: drift.advisoriesExact,
     conflicts: drift.conflictsAtLatest?.length ?? 0,
     deps: drift.deps.slice(0, Math.min(SCAN_DEPS, REPO_DRIFT_DETAIL_CAP)).map(wireDep),
     conflictDetail: (drift.conflictsAtLatest ?? [])

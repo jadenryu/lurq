@@ -40,8 +40,23 @@ export interface DepDrift {
   /** Major versions between `resolved` and `latest`. 0 = current. */
   majorsBehind: number;
   deprecated: boolean;
-  /** Count of known advisories on the package. */
+  /** Known advisories; `advisoriesAt` says for which version. */
   advisories: number;
+  /**
+   * How `resolved` compares to `latest`. `major` includes a 0.x minor bump, which
+   * semver treats as breaking. `unknown` when either side is missing or not a
+   * valid version, and it is never shown as current.
+   */
+  status: 'current' | 'behind' | 'major' | 'unknown';
+  /** Where `resolved` came from: the index's version list, or the range's own floor when the index has none. */
+  resolvedFrom: 'index' | 'range-floor';
+  /**
+   * What `advisories` counts. `resolved`: OSV advisories affecting that exact
+   * version. `package`: deps.dev's advisories for the package's latest release,
+   * kept only when the version check could not run, and not evidence about the
+   * version this repo uses.
+   */
+  advisoriesAt: 'resolved' | 'package';
 }
 
 /** A resolved transitive dependency carrying a risk signal worth reporting. */
@@ -133,6 +148,8 @@ export interface RepoDrift {
   deprecated: number;
   /** Total advisories across tracked deps. */
   advisories: number;
+  /** Every tracked dep's advisories were checked at its resolved version (none fell back to the package-level count). */
+  advisoriesExact: boolean;
   /** Per-dep detail, worst-drift first. Capped — see REPO_DRIFT_DETAIL_CAP. */
   deps: DepDrift[];
   /**

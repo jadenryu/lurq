@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  archetypeLine,
   cardProfile,
+  depLabel,
+  depStatus,
+  savedDaysAgo,
   cardStats,
   conflictBrief,
   depBrief,
@@ -95,7 +99,8 @@ describe('briefs', () => {
   it('puts the worst repo first and names what was not checked', () => {
     const text = reportBrief(report);
     expect(text.indexOf('## ada/vulnerable')).toBeLessThan(text.indexOf('## ada/clean'));
-    expect(text).toContain('| lodash | 4.17.10 | 4.17.10 | 4.17.21 | 1 advisory |');
+    // The fixture's advisory was never checked at 4.17.10, so the brief says which release it is known for.
+    expect(text).toContain('| lodash | 4.17.10 | 4.17.10 | 4.17.21 | 1 advisory on the latest release |');
     expect(text).toContain('[peer-deps] eslint + eslint-plugin-x');
     expect(text).toContain('2 not indexed yet, so unchecked (not clean)');
   });
@@ -258,5 +263,76 @@ describe('drill-down', () => {
     expect(text).toContain('`diff_surface`');
     expect(text).toContain('npx lurqrun');
     expect(text).toContain('/dashboard/report?target=ada%2Fdrifted');
+  });
+});
+
+describe('dependency labels', () => {
+  const d = (over: Partial<RepoStack['deps'][number]> = {}) => ({
+    name: 'pkg',
+    range: '^1.2.0',
+    resolved: '1.2.0',
+    latest: '1.5.0',
+    majorsBehind: 0,
+    deprecated: false,
+    advisories: 0,
+    ...over,
+  });
+
+  it('never calls a dependency current when it is behind or unknown', () => {
+    expect(depLabel(d({ status: 'behind' }))).toBe('behind latest');
+    expect(depLabel(d({ status: 'major', majorsBehind: 0, resolved: '0.3.0', latest: '0.9.0' }))).toBe(
+      'breaking 0.x release behind',
+    );
+    expect(depLabel(d({ status: 'unknown', latest: null }))).toBe('version unknown');
+    expect(depLabel(d({ status: 'current', resolved: '1.5.0' }))).toBe('current');
+  });
+
+  it('works out a saved scan without a status, and only calls it current when the versions match', () => {
+    expect(depStatus(d())).toBe('behind');
+    expect(depStatus(d({ latest: null }))).toBe('unknown');
+    expect(depStatus(d({ resolved: '1.5.0' }))).toBe('current');
+    expect(depStatus(d({ majorsBehind: 2 }))).toBe('major');
+  });
+
+  it('says which version advisories are about', () => {
+    expect(depLabel(d({ advisories: 1, advisoriesAt: 'resolved' }))).toBe('1 advisory at 1.2.0');
+    expect(depLabel(d({ advisories: 2, advisoriesAt: 'package' }))).toBe('2 advisories on the latest release');
+    expect(depLabel(d({ advisories: 2 }))).toBe('2 advisories on the latest release');
+  });
+});
+
+describe('summary accuracy', () => {
+  it('titles a deprecated-only gap as deprecated, not as 0 majors behind', () => {
+    const s = summarize({ ...report, repos: [stack('ada/old', { deprecated: 2, advisoriesExact: true })] })!;
+    expect(s.gaps.map((g) => g.title)).toContain('2 deprecated dependencies');
+    expect(s.gaps.some((g) => g.title.startsWith('0 '))).toBe(false);
+  });
+
+  it('shows majors behind alongside advisories instead of hiding them', () => {
+    const s = summarize({ ...report, repos: [stack('ada/x', { advisories: 1, majorDrift: 3 })] })!;
+    expect(s.gaps.map((g) => g.title)).toEqual(expect.arrayContaining(['1 known advisory', '3 dependencies a major behind']));
+  });
+
+  it('claims no known advisories only when every repo was checked at its resolved versions', () => {
+    const exact = summarize({ ...report, repos: [stack('ada/a', { advisoriesExact: true })] })!;
+    const inexact = summarize({ ...report, repos: [stack('ada/a', { advisoriesExact: false })] })!;
+    expect(exact.strengths.map((p) => p.title)).toContain('No known advisories or conflicts');
+    expect(inexact.strengths.map((p) => p.title)).not.toContain('No known advisories or conflicts');
+  });
+});
+
+describe('archetypeLine', () => {
+  it('describes only when the top trait clears the floor', () => {
+    expect(archetypeLine(report)).toMatch(/push them out/);
+    const quiet = report.traits!.map((t) => ({ ...t, score: 5 }));
+    expect(archetypeLine({ ...report, traits: quiet })).toMatch(/closest fit/);
+  });
+});
+
+describe('savedDaysAgo', () => {
+  it('counts whole days', () => {
+    const now = Date.parse('2026-09-14T12:00:00Z');
+    expect(savedDaysAgo('2026-09-14T01:00:00Z', now)).toBe(0);
+    expect(savedDaysAgo('2026-09-11T12:00:00Z', now)).toBe(3);
   });
 });

@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { cardProfile, cardStats, type CardTier } from "@/lib/builder-brief";
+import { archetypeLine, cardProfile, cardStats, type CardTier } from "@/lib/builder-brief";
 import { ARCHETYPES, type BuilderProfile } from "@/lib/builder-profile";
 import { fetchBuilderScan } from "@/lib/lurq-issuer";
 import { ogFonts } from "@/lib/og-fonts";
@@ -172,7 +172,7 @@ export async function GET(req: Request) {
           </div>
         </div>
 
-        <span style={{ fontSize: 23, lineHeight: 1.45, color: INK_2, marginTop: 24, maxWidth: 900 }}>{type.line}</span>
+        <span style={{ fontSize: 23, lineHeight: 1.45, color: INK_2, marginTop: 24, maxWidth: 900 }}>{archetypeLine(report)}</span>
 
         {/* traits */}
         <div style={{ display: "flex", flexDirection: "column", marginTop: 30, paddingTop: 26, borderTop: `1px solid ${EDGE}` }}>

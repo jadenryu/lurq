@@ -26,6 +26,9 @@ function dep(over: Partial<DepDrift> = {}): DepDrift {
     majorsBehind: 1,
     deprecated: false,
     advisories: 0,
+    status: 'major',
+    resolvedFrom: 'index',
+    advisoriesAt: 'resolved',
     ...over,
   };
 }
@@ -38,6 +41,7 @@ function drift(deps: DepDrift[]): RepoDrift {
     anyDrift: 0,
     deprecated: 0,
     advisories: 0,
+    advisoriesExact: true,
     deps,
     transitive: null,
   };

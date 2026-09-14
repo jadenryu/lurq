@@ -16,6 +16,12 @@ export interface ScanDep {
   majorsBehind: number;
   deprecated: boolean;
   advisories: number;
+  /** Absent on scans saved before these existed; see depStatus/depLabel in builder-brief.ts for the fallback. */
+  status?: "current" | "behind" | "major" | "unknown";
+  /** `range-floor`: the index had no versions, so this is the range's minimum, not what an install picks. */
+  resolvedFrom?: "index" | "range-floor";
+  /** `resolved`: advisories affecting that exact version. `package`: advisories on the package's latest release. */
+  advisoriesAt?: "resolved" | "package";
 }
 
 export interface ScanConflict {
@@ -34,6 +40,8 @@ export interface RepoStack {
   anyDrift: number;
   deprecated: number;
   advisories: number;
+  /** Every tracked dependency's advisories were checked at its resolved version. */
+  advisoriesExact?: boolean;
   conflicts: number;
   deps: ScanDep[];
   conflictDetail: ScanConflict[];
@@ -59,6 +67,14 @@ export interface BuilderProfile {
     languages: { name: string; repos: number }[];
   };
   repos: RepoStack[];
+  /** What the GitHub read covered. Absent on profiles saved before it existed. */
+  coverage?: {
+    reposListed: number;
+    /** GitHub had more repos than were read: counts cover the most recently pushed. */
+    reposCapped: boolean;
+    /** Repos whose package.json could not be read (rate limit, timeout), not repos without one. */
+    unreadManifests: string[];
+  };
 }
 
 /**

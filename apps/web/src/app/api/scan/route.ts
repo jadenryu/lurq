@@ -167,7 +167,12 @@ export async function POST(req: Request) {
 
     // Saved before answering, so the report can say it is saved and how it
     // ranks. Never fatal, for the reason the saved lookup above gives.
-    const stored = await saveBuilderScan(owner.ownerId, target, profile).catch((err: unknown) => {
+    // A read GitHub cut short (rate limit, timeout) is not saved: reopening it
+    // later would serve the gaps as the answer, with no GitHub call to fill them.
+    const stored =
+      (profile.coverage?.unreadManifests.length ?? 0) > 0
+        ? null
+        : await saveBuilderScan(owner.ownerId, target, profile).catch((err: unknown) => {
       console.error("scan: could not save the report:", err instanceof Error ? err.message : String(err));
       return null;
     });
