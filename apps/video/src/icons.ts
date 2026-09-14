@@ -24,6 +24,8 @@ export const shieldCheck: IconNode = [
   ["path", { d: "m9 12 2 2 4-4" }],
 ];
 
+export const check: IconNode = [["path", { d: "M20 6 9 17l-5-5" }]];
+
 export const arrowRight: IconNode = [
   ["path", { d: "M5 12h14" }],
   ["path", { d: "m12 5 7 7-7 7" }],

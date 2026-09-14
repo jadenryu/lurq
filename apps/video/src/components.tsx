@@ -1,7 +1,7 @@
 import { createContext, Fragment, useContext, type CSSProperties, type ReactNode } from "react";
-import { AbsoluteFill, Easing, interpolate, OffthreadVideo, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
-import { color, MONO, SANS, WORDMARK } from "./brand";
-import type { IconNode } from "./icons";
+import { AbsoluteFill, Easing, Img, interpolate, OffthreadVideo, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { color, MONO, SANS } from "./brand";
+import { check, type IconNode } from "./icons";
 
 type Tone = "ink" | "ink2" | "ink3" | "bad" | "good";
 
@@ -17,6 +17,8 @@ export function useSquare(): boolean {
 
 /** A long, soft ease-out: things arrive and then take their time settling. */
 const EASE = Easing.bezier(0.25, 1, 0.5, 1);
+/** A steeper ease for 3D moves: quick off the mark, a long glide into place. */
+const GLIDE = Easing.bezier(0.16, 1, 0.3, 1);
 
 /** 0 → 1 over `duration` frames starting at `start`, eased and clamped. */
 export function progress(frame: number, start: number, duration = 36, easing = EASE): number {
@@ -47,19 +49,31 @@ export function Ground() {
 }
 
 /**
- * Footage as mood, not as subject: slowed down, pushed in slowly, and put under one cool
- * grade so every clip reads as the same film instead of three stock shots. The grade is a
- * blend layer (composited), not a CSS filter (repainted every frame).
+ * Footage under one cool grade, so every clip reads as the same film. `letterbox` draws
+ * scope bars in on the wide cut and adds a lateral drone drift; a warm light leak crosses
+ * the frame once. The grade and leak are blend layers (composited), not CSS filters.
  */
-export function Clip({ name, shade = 0.5, focus = "center", zoom = 1, origin = "50% 50%", rate = 0.7 }: { name: string; shade?: number; focus?: string; zoom?: number; origin?: string; rate?: number }) {
+export function Clip({ name, shade = 0.5, focus = "center", zoom = 1, origin = "50% 50%", rate = 0.8, letterbox = false, drift = 1 }: { name: string; shade?: number; focus?: string; zoom?: number; origin?: string; rate?: number; letterbox?: boolean; drift?: number }) {
   const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  const u = useUnit();
+  const square = useSquare();
+  const bars = letterbox && !square ? progress(frame, 0, 40) * 100 * u : 0;
+  const leak = progress(frame, 0, Math.max(60, durationInFrames), Easing.inOut(Easing.sin));
   return (
     <AbsoluteFill style={{ backgroundColor: color.ground, overflow: "hidden" }}>
-      <AbsoluteFill style={{ transform: `scale(${(1.06 + frame * 0.0003) * zoom})`, transformOrigin: origin }}>
+      <AbsoluteFill style={{ transform: `translateX(${letterbox ? frame * 0.25 * drift * u : 0}px) scale(${(1.1 + frame * 0.0005) * zoom})`, transformOrigin: origin }}>
         <OffthreadVideo muted playbackRate={rate} src={staticFile(`clips/${name}.mp4`)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: focus }} />
       </AbsoluteFill>
-      <AbsoluteFill style={{ backgroundColor: "#16203a", mixBlendMode: "color", opacity: 0.4 }} />
+      <AbsoluteFill style={{ backgroundColor: "#16203a", mixBlendMode: "color", opacity: 0.35 }} />
+      <AbsoluteFill style={{ background: `radial-gradient(circle at ${-20 + leak * 140}% 30%, rgba(245,120,40,0.35), transparent 45%)`, mixBlendMode: "screen" }} />
       <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 42%, rgba(8,8,10,${shade * 0.25}) 0%, rgba(8,8,10,${shade}) 72%, rgba(8,8,10,${Math.min(0.95, shade + 0.35)}) 100%)` }} />
+      {bars > 0 && (
+        <>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: bars, background: "#000" }} />
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: bars, background: "#000" }} />
+        </>
+      )}
     </AbsoluteFill>
   );
 }
@@ -87,18 +101,28 @@ export function Frame({ children, justify = "flex-end", align = "flex-start", st
   );
 }
 
-/** A super: words arrive one at a time, rising out of a soft blur, and then hold. */
-export function Words({ text, at, size, weight = 600, tone = "ink", stagger = 7, style }: { text: string; at: number; size: number; weight?: number; tone?: Tone; stagger?: number; style?: CSSProperties }) {
+/** A super: each word swings up into place in 3D, out of a soft blur, and then holds. */
+export function Words({ text, at, size, weight = 600, tone = "ink", stagger = 6, style }: { text: string; at: number; size: number; weight?: number; tone?: Tone; stagger?: number; style?: CSSProperties }) {
   const frame = useCurrentFrame();
   const u = useUnit();
   return (
     <div style={{ fontFamily: SANS, fontWeight: weight, fontSize: size * u, lineHeight: 1.06, letterSpacing: "-0.04em", color: color[tone], textWrap: "balance", ...style }}>
       {text.split(" ").map((word, i) => {
-        const p = progress(frame, at + i * stagger, 40);
+        const p = progress(frame, at + i * stagger, 44, GLIDE);
         return (
           <Fragment key={i}>
             {i > 0 && " "}
-            <span style={{ display: "inline-block", opacity: p, transform: `translateY(${(1 - p) * 0.3}em)`, filter: p < 1 ? `blur(${(1 - p) * 8}px)` : undefined }}>{word}</span>
+            <span
+              style={{
+                display: "inline-block",
+                opacity: p,
+                transformOrigin: "50% 100%",
+                transform: `perspective(${900 * u}px) rotateX(${(1 - p) * -80}deg) translateY(${(1 - p) * 0.2}em)`,
+                filter: p < 1 ? `blur(${(1 - p) * 6}px)` : undefined,
+              }}
+            >
+              {word}
+            </span>
           </Fragment>
         );
       })}
@@ -133,17 +157,49 @@ export function Icon({ node, at, size, tone = "ink", strokeWidth = 1.5 }: { node
   );
 }
 
-/** The lurq mark (apps/web wordmark.tsx), its two chevrons drawing in one after the other. */
-export function Mark({ size, at = 0 }: { size: number; at?: number }) {
+// The lurq mark as filled shapes, measured corner by corner off apps/web/public/logos/logo.png
+// (a 2000px raster) in its own pixel space. The two chevrons tile exactly: the grey one's
+// top end sits on the white one's inner corner, and its inner corner on the white one's lower end.
+const MARK_BOX = { x: 623, y: 465, w: 685, h: 1002 };
+const MARK_FRONT = "991,465 1097,571 835,833 1097,1097 991,1203 623,833";
+const MARK_BACK = "941,728 1308,1097 941,1467 835,1361 1097,1097 835,834";
+/** logo.png's grey on its black ground. */
+const MARK_GREY = "#8a8a8a";
+
+/** The lurq mark, flat, at `size` px tall (in 1080p units). */
+export function LogoMark({ size, front = color.ink, back = MARK_GREY }: { size: number; front?: string; back?: string }) {
+  const u = useUnit();
+  return (
+    <svg width={((size * MARK_BOX.w) / MARK_BOX.h) * u} height={size * u} viewBox={`${MARK_BOX.x} ${MARK_BOX.y} ${MARK_BOX.w} ${MARK_BOX.h}`} style={{ display: "block" }}>
+      <polygon points={MARK_BACK} fill={back} />
+      <polygon points={MARK_FRONT} fill={front} />
+    </svg>
+  );
+}
+
+/**
+ * The lurq mark as a solid object: copies of the flat mark stacked back in depth (dark sides,
+ * lit face), swinging round to face the camera and then turning gently, like a product hero.
+ */
+export function Logo3D({ size, at = 0 }: { size: number; at?: number }) {
   const frame = useCurrentFrame();
   const u = useUnit();
-  const front = progress(frame, at, 40, Easing.inOut(Easing.cubic));
-  const back = progress(frame, at + 14, 40, Easing.inOut(Easing.cubic));
+  const p = progress(frame, at, 80, GLIDE);
+  const t = Math.max(0, frame - at);
+  const ry = (1 - p) * -120 + Math.sin(t / 50) * 10 * p;
+  const rx = (1 - p) * 30 + Math.cos(t / 70) * 4 * p;
+  const layers = 16;
+  const step = (size * u) / 90;
   return (
-    <svg width={((size * 22) / 30) * u} height={size * u} viewBox="0 0 22 30" fill="none">
-      <path d="M7.72 9.1 16.84 18.24 7.72 27.4" stroke={color.ink} strokeOpacity={0.52} strokeWidth={3.72} pathLength={1} strokeDasharray={1} strokeDashoffset={1 - back} />
-      <path d="M14.24 2.56 5.12 11.72 14.24 20.88" stroke={color.ink} strokeWidth={3.72} pathLength={1} strokeDasharray={1} strokeDashoffset={1 - front} />
-    </svg>
+    <div style={{ perspective: 1400 * u, opacity: progress(frame, at, 20) }}>
+      <div style={{ position: "relative", width: ((size * MARK_BOX.w) / MARK_BOX.h) * u, height: size * u, transformStyle: "preserve-3d", transform: `rotateX(${rx}deg) rotateY(${ry}deg) scale(${0.6 + 0.4 * p})` }}>
+        {Array.from({ length: layers }, (_, k) => layers - 1 - k).map((i) => (
+          <div key={i} style={{ position: "absolute", inset: 0, transform: `translateZ(${(layers / 2 - i) * step}px)` }}>
+            {i === 0 ? <LogoMark size={size} /> : <LogoMark size={size} front={`rgb(${70 - i * 2},${70 - i * 2},${76 - i * 2})`} back={`rgb(${44 - i},${44 - i},${48 - i})`} />}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -184,49 +240,91 @@ export function Sweep({ at, duration = 60 }: { at: number; duration?: number }) 
   const frame = useCurrentFrame();
   const p = progress(frame, at, duration, Easing.inOut(Easing.sin));
   if (p <= 0 || p >= 1) return null;
-  return <AbsoluteFill style={{ background: `linear-gradient(105deg, transparent ${p * 140 - 40}%, rgba(255,255,255,0.07) ${p * 140 - 20}%, transparent ${p * 140}%)` }} />;
+  return <AbsoluteFill style={{ background: `linear-gradient(105deg, transparent ${p * 140 - 40}%, rgba(255,255,255,0.08) ${p * 140 - 20}%, transparent ${p * 140}%)` }} />;
 }
 
+/** Where a card's satellite tags float, as [x, y] offsets from the card's centre (1080p units). */
+// Wide: beside the card, clear of the headline above it. Square: in two rows under the card.
+const SATELLITES_WIDE = [[-700, -80], [740, -20], [-700, 170], [740, 210]];
+const SATELLITES_SQUARE = [[-230, 240], [240, 260], [-220, 350], [250, 370]];
+
 /**
- * The product shot: a glass panel that rises and tilts back flat as it settles, with a
- * soft glow under it. One continuous move, no drift afterwards, so nothing feels jittery.
- * `agent` titles it as the coding agent's terminal instead of lurq's.
+ * The product shot, staged in 3D: a glass panel flies in from depth and swings round to face
+ * the camera, then keeps turning slowly while the named checks float in around it on their own
+ * depth planes. `agent` titles it as the coding agent's terminal instead of lurq's.
  */
-export function ProductCard({ at, label, agent = false, children }: { at: number; label: string; agent?: boolean; children: ReactNode }) {
+export function ProductCard({ at, label, agent = false, checks = [], children }: { at: number; label: string; agent?: boolean; checks?: string[]; children: ReactNode }) {
   const frame = useCurrentFrame();
   const u = useUnit();
   const square = useSquare();
-  const p = progress(frame, at, 70, Easing.bezier(0.16, 1, 0.3, 1));
+  const p = progress(frame, at, 84, GLIDE);
+  const t = Math.max(0, frame - at);
+  const ry = (1 - p) * -34 + Math.sin(t / 80) * 6 * p;
+  const rx = (1 - p) * 20 + 3 + Math.cos(t / 100) * 2 * p;
+  const sheen = progress(frame, at + 60, 60, Easing.inOut(Easing.sin));
+  const spots = square ? SATELLITES_SQUARE : SATELLITES_WIDE;
   return (
-    <div style={{ position: "relative", perspective: 2400 * u }}>
-      <div style={{ position: "absolute", inset: `${-80 * u}px`, background: `radial-gradient(ellipse at 50% 60%, ${agent ? "rgba(255,255,255,0.05)" : color.bloomTo}, transparent 65%)`, opacity: p }} />
-      <div
-        style={{
-          position: "relative",
-          width: (square ? 940 : 1180) * u,
-          opacity: p,
-          transform: `translateY(${(1 - p) * 60 * u}px) rotateX(${(1 - p) * 14}deg) scale(${0.96 + 0.04 * p})`,
-          transformOrigin: "50% 100%",
-          background: "linear-gradient(180deg, rgba(30,30,34,0.96) 0%, rgba(14,14,17,0.98) 100%)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderTopColor: "rgba(255,255,255,0.2)",
-          borderRadius: 28 * u,
-          boxShadow: `0 ${50 * u}px ${140 * u}px rgba(0,0,0,0.55)`,
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${22 * u}px ${36 * u}px`, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-          {agent ? (
-            <span style={{ fontFamily: MONO, fontSize: 22 * u, color: color.ink2 }}>coding agent</span>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 12 * u }}>
-              <Mark size={24} at={-100} />
-              <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 22 * u, color: color.ink }}>{WORDMARK}</span>
-            </div>
-          )}
-          <span style={{ fontFamily: MONO, fontSize: 20 * u, letterSpacing: "0.12em", textTransform: "uppercase", color: color.ink3 }}>{label}</span>
+    <div style={{ perspective: 2200 * u }}>
+      <div style={{ position: "relative", transformStyle: "preserve-3d", transform: `translateZ(${(1 - p) * -700 * u}px) rotateX(${rx}deg) rotateY(${ry}deg)`, opacity: Math.min(1, p * 1.6) }}>
+        <div style={{ position: "absolute", inset: `${-120 * u}px`, transform: `translateZ(${-120 * u}px)`, background: `radial-gradient(ellipse at 50% 55%, ${agent ? "rgba(255,255,255,0.06)" : color.bloomTo}, transparent 65%)` }} />
+        <div
+          style={{
+            position: "relative",
+            width: (square ? 940 : 1180) * u,
+            background: "linear-gradient(180deg, rgba(30,30,34,0.96) 0%, rgba(14,14,17,0.98) 100%)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderTopColor: "rgba(255,255,255,0.22)",
+            borderRadius: 28 * u,
+            boxShadow: `0 ${60 * u}px ${160 * u}px rgba(0,0,0,0.6)`,
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${22 * u}px ${36 * u}px`, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+            {agent ? (
+              <span style={{ fontFamily: MONO, fontSize: 22 * u, color: color.ink2 }}>coding agent</span>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 * u }}>
+                <LogoMark size={26} />
+                <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 22 * u, color: color.ink }}>lurq</span>
+              </div>
+            )}
+            <span style={{ fontFamily: MONO, fontSize: 20 * u, letterSpacing: "0.12em", textTransform: "uppercase", color: color.ink3 }}>{label}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 26 * u, padding: `${40 * u}px ${44 * u}px ${48 * u}px` }}>{children}</div>
+          {sheen > 0 && sheen < 1 && <AbsoluteFill style={{ background: `linear-gradient(115deg, transparent ${sheen * 160 - 60}%, rgba(255,255,255,0.07) ${sheen * 160 - 35}%, transparent ${sheen * 160 - 10}%)` }} />}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 26 * u, padding: `${40 * u}px ${44 * u}px ${48 * u}px` }}>{children}</div>
+        {checks.map((text, i) => {
+          const q = progress(frame, at + 70 + i * 10, 50, GLIDE);
+          const [x, y] = spots[i % spots.length];
+          const bob = Math.sin((frame + i * 40) / 40) * 8;
+          return (
+            <div
+              key={text}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                opacity: q,
+                transform: `translate(-50%, -50%) translate3d(${x * u}px, ${(y + bob) * u}px, ${(180 - (1 - q) * 500) * u}px)`,
+                display: "flex",
+                alignItems: "center",
+                gap: 10 * u,
+                padding: `${12 * u}px ${20 * u}px`,
+                borderRadius: 999,
+                background: "rgba(28,28,32,0.9)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                boxShadow: `0 ${20 * u}px ${50 * u}px rgba(0,0,0,0.5)`,
+                fontFamily: MONO,
+                fontSize: 22 * u,
+                color: color.ink2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Icon node={check} at={at + 90 + i * 10} size={22} tone="ink" strokeWidth={2.2} />
+              {text}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -244,6 +342,56 @@ export function Typed({ text, at, size, until }: { text: string; at: number; siz
       <span style={{ color: color.ink3 }}>$ </span>
       {shown}
       <span style={{ opacity: caret ? 1 : 0, color: color.ink2 }}>▍</span>
+    </div>
+  );
+}
+
+/**
+ * The agent logos on a real 3D ring, tilted slightly toward the camera and turning. Each logo faces
+ * outward with its back hidden, so only the front arc shows and logos fade as they turn edge-on:
+ * nothing overlaps.
+ */
+export function Carousel3D({ at, items }: { at: number; items: { file: string; name: string }[] }) {
+  const frame = useCurrentFrame();
+  const u = useUnit();
+  const square = useSquare();
+  const radius = (square ? 380 : 620) * u;
+  const intro = progress(frame, at, 60, GLIDE);
+  const step = 360 / items.length;
+  // Fast enough that most of the ring passes the front while the scene holds.
+  const turn = -(frame - at) * 1.1 - (1 - intro) * 70;
+  const logo = (square ? 110 : 100) * u;
+  return (
+    <div style={{ perspective: 2000 * u, width: radius * 2.6, height: 320 * u, opacity: intro }}>
+      <div style={{ position: "relative", width: "100%", height: "100%", transformStyle: "preserve-3d", transform: `translateZ(${-radius}px) rotateX(-10deg) rotateY(${turn}deg)` }}>
+        {items.map((item, i) => {
+          const facing = Math.cos(((i * step + turn) * Math.PI) / 180);
+          return (
+            <div
+              key={item.file}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: 260 * u,
+                marginLeft: -130 * u,
+                marginTop: -100 * u,
+                transform: `rotateY(${i * step}deg) translateZ(${radius}px)`,
+                backfaceVisibility: "hidden",
+                opacity: Math.max(0, Math.min(1, facing * 1.8)),
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 18 * u,
+              }}
+            >
+              {/* One tone for every mark, the way the site shows them. */}
+              <Img src={staticFile(`logos/${item.file}.svg`)} style={{ width: logo * 0.62, height: logo * 0.62, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
+              <div style={{ fontFamily: SANS, fontSize: 26 * u, color: color.ink, whiteSpace: "nowrap" }}>{item.name}</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

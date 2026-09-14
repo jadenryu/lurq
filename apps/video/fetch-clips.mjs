@@ -8,11 +8,15 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
-// Candid close-ups only (hands, screens, a desk): no posed people, no faces to the camera.
+// Drone and skyline shots of one city at dusk and night (Mixkit's 4K Austin set where it exists),
+// plus one candid close-up. No posed people, no faces to the camera.
 const CLIPS = {
+  night: 49848,
+  tower: 49871,
+  flyover: 49860,
+  aerial: 40640,
+  dusk: 41375,
   screens: 41639,
-  coffee: 1730,
-  typing: 1781,
 };
 
 async function fetchClip([name, id]) {
