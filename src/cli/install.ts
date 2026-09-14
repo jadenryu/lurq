@@ -243,6 +243,7 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
       const handoff = await keyViaBrowser({
         noOpen: opts.noOpen,
         signal: skip.signal,
+        via: 'terminal',
         // Printed rather than only opened: the browser may not have launched,
         // and a spinner pointing at a URL nobody can see is a hung flow.
         onUrl: (link) =>
@@ -427,6 +428,7 @@ async function waitForSigninAndFinish(opts: WizardOptions): Promise<void> {
   const handoff = await keyViaBrowser({
     noOpen: opts.noOpen,
     deadlineMs: LINK_WAIT_MS,
+    via: 'agent',
     onUrl: (link) => {
       process.stdout.write(`${LINK_PREFIX}${link}\n`);
       console.log = () => {};
