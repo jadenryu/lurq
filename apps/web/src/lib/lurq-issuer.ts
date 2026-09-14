@@ -5,6 +5,8 @@
  * the shared LURQ_ISSUER_SECRET. Never import this from a "use client" file.
  */
 
+import type { BuilderProfile, SavedBuilderScan } from "@/lib/builder-profile";
+
 export interface DashboardKey {
   id: number;
   prefix: string;
@@ -977,4 +979,34 @@ export async function removeChannel(ownerId: string, id: number): Promise<void> 
     body: JSON.stringify({ ownerId }),
   });
   if (!res.ok) throw await apiError(res, "Could not remove the channel.");
+}
+
+// ── Builder reports ─────────────────────────────────────────────────────────
+
+export async function fetchBuilderScans(ownerId: string): Promise<SavedBuilderScan[]> {
+  const res = await issuerFetch(`/builder-scans?${new URLSearchParams({ ownerId }).toString()}`);
+  if (!res.ok) throw new LurqIssuerError("Could not load saved scans.", 502);
+  return ((await res.json()) as { scans?: SavedBuilderScan[] }).scans ?? [];
+}
+
+/** Null when nothing is saved for that target, including on an API that predates saved scans (404 either way). */
+export async function fetchBuilderScan(
+  ownerId: string,
+  target: string,
+): Promise<{ profile: BuilderProfile; scannedAt: string } | null> {
+  const res = await issuerFetch(`/builder-scans/one?${new URLSearchParams({ ownerId, target }).toString()}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not load that saved scan.", 502);
+  return ((await res.json()) as { scan: { profile: BuilderProfile; scannedAt: string } }).scan;
+}
+
+/** Saves (or overwrites) the account's copy for this target; resolves to when it was taken. */
+export async function saveBuilderScan(ownerId: string, target: string, profile: BuilderProfile): Promise<string> {
+  const res = await issuerFetch("/builder-scans", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, target, profile }),
+  });
+  if (!res.ok) throw new LurqIssuerError("Could not save that scan.", 502);
+  return ((await res.json()) as { scannedAt: string }).scannedAt;
 }

@@ -69,6 +69,19 @@ export interface BuilderProfile {
 export interface BuilderReport extends Omit<BuilderProfile, "traits"> {
   traits: Trait[] | null;
   locked: { repos: number; deps: number; conflicts: number } | null;
+  /** When the account's saved copy was taken. Absent for a visitor; null when saving failed. */
+  savedAt?: string | null;
+}
+
+/** One row of the saved list: enough for a card, never the dependency rows. */
+export interface SavedBuilderScan {
+  target: string;
+  login: string;
+  archetype: ArchetypeId;
+  avatarUrl: string;
+  traits: Trait[];
+  stats: BuilderProfile["stats"];
+  scannedAt: string;
 }
 
 /** Dependency rows a signed-out visitor reads on the one repo they get. */

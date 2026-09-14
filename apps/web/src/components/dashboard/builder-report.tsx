@@ -38,9 +38,11 @@ import {
   type DepDiff,
   type RepoStack,
   type ScanConflict,
+  type SavedBuilderScan,
   type ScanDep,
   type Trait,
 } from "@/lib/builder-profile";
+import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -108,7 +110,9 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
         const res = await fetch("/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target }),
+          // Signed in, the first read of a target is its saved copy; "scan
+          // again" (run > 0) asks for a live one, which replaces it.
+          body: JSON.stringify({ target, fresh: run > 0 }),
         });
         const data = (await res.json()) as BuilderReport & { error?: unknown };
         if (stale) return;
@@ -136,16 +140,20 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
     return () => {
       stale = true;
     };
-  }, [key, target, isLoaded]);
+  }, [key, target, isLoaded, run]);
+
+  function open(value: string) {
+    // In the URL, so a refresh, a shared link and the sign-up redirect all
+    // come back to this report.
+    router.replace(`/dashboard/report?target=${encodeURIComponent(value)}`, { scroll: false });
+    setInput(value);
+    setTarget(value);
+  }
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const value = input.trim().replace(/^[/@]+/, "");
-    if (!value) return;
-    // In the URL, so a refresh, a shared link and the sign-up redirect all
-    // come back to this report.
-    router.replace(`/dashboard/report?target=${encodeURIComponent(value)}`, { scroll: false });
-    setTarget(value);
+    if (value) open(value);
   }
 
   const running = state.kind === "running";
@@ -174,6 +182,14 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
         </button>
       </form>
 
+      {isSignedIn && (
+        <SavedScans
+          current={target}
+          version={state.kind === "done" ? state.report.savedAt : undefined}
+          onOpen={open}
+        />
+      )}
+
       {state.kind === "idle" && (
         <EmptyState title="Scan a GitHub profile">
           Type a username, or a repo to put that repo first. Public repos only.
@@ -185,6 +201,70 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
         <Report report={state.report} target={target} onRescan={() => setRun((n) => n + 1)} />
       )}
     </>
+  );
+}
+
+/**
+ * The account's saved reports, most recent first. Each opens from its saved
+ * copy with no scan; "scan again" on the report is what refreshes one.
+ *
+ * `version` is the open report's save time, so a scan that just saved shows up
+ * here without a reload.
+ */
+function SavedScans({
+  current,
+  version,
+  onOpen,
+}: {
+  current: string;
+  version: string | null | undefined;
+  onOpen: (target: string) => void;
+}) {
+  const [scans, setScans] = useState<SavedBuilderScan[]>([]);
+
+  useEffect(() => {
+    let stale = false;
+    fetch("/api/scan/saved")
+      .then((res) => (res.ok ? (res.json() as Promise<{ scans?: SavedBuilderScan[] }>) : { scans: [] }))
+      .then((data) => !stale && setScans(data.scans ?? []))
+      // The list is a shortcut; without it the scan box still works.
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [version]);
+
+  if (scans.length === 0) return null;
+  const active = current.trim().replace(/^[/@]+/, "").toLowerCase();
+
+  return (
+    <nav aria-label="Saved scans" className="mt-4">
+      <p className={microLabel}>saved scans</p>
+      <ul className="mt-2 flex gap-2 overflow-x-auto pb-1">
+        {scans.map((s) => (
+          <li key={s.target} className="shrink-0">
+            <button
+              type="button"
+              onClick={() => onOpen(s.target)}
+              aria-current={s.target === active ? "true" : undefined}
+              className={cn(
+                "flex w-[220px] items-center gap-3 rounded-[var(--radius-panel)] border border-edge px-3 py-2.5 text-left transition-colors hover:bg-surface-2/70",
+                s.target === active && "bg-surface-2",
+              )}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={s.avatarUrl} alt="" className="size-9 shrink-0 rounded-[6px] border border-edge bg-surface-2" />
+              <span className="min-w-0">
+                <span className="block truncate font-mono text-[12.5px] text-ink">{s.target}</span>
+                <span className="block truncate text-[11.5px] text-ink-3">
+                  {ARCHETYPES[s.archetype].name} · {relativeTime(s.scannedAt)}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 
@@ -243,14 +323,27 @@ function Report({
             </h2>
             <p className="mt-2 max-w-[62ch] text-[13.5px] leading-relaxed text-ink-2">{type.line}</p>
           </div>
-          <a
-            href={report.url}
-            target="_blank"
-            rel="noopener"
-            className="font-mono text-[12.5px] text-ink-3 transition-colors hover:text-ink"
-          >
-            @{report.login}
-          </a>
+          <div className="flex flex-col items-end gap-1.5">
+            <a
+              href={report.url}
+              target="_blank"
+              rel="noopener"
+              className="font-mono text-[12.5px] text-ink-3 transition-colors hover:text-ink"
+            >
+              @{report.login}
+            </a>
+            {report.savedAt && (
+              <button
+                type="button"
+                onClick={onRescan}
+                title="Scan again"
+                className="inline-flex items-center gap-1.5 font-mono text-[11.5px] text-ink-3 transition-colors hover:text-ink"
+              >
+                <RefreshCw aria-hidden className="size-3" />
+                saved {relativeTime(report.savedAt)}
+              </button>
+            )}
+          </div>
         </div>
         <ReportActions report={report} target={target} back={back} />
       </Panel>

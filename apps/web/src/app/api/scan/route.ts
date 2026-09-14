@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { FREE_DEPS, type BuilderProfile, type BuilderReport } from "@/lib/builder-profile";
+import { fetchBuilderScan, saveBuilderScan } from "@/lib/lurq-issuer";
+import { currentOwner } from "@/lib/owner";
 
 /**
  * The builder report's data, forwarded from the backend's profile scan.
@@ -89,6 +90,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Scanning isn't available right now." }, { status: 503 });
   }
 
+  const body = (await req.json().catch(() => ({}))) as { target?: unknown; fresh?: unknown };
+  const target = typeof body.target === "string" ? body.target.slice(0, 200) : "";
+  if (!target.trim()) {
+    return NextResponse.json({ error: "Enter a GitHub username or repo." }, { status: 400 });
+  }
+
+  /**
+   * SIGNED IN, A REPORT OPENED AGAIN IS THE SAVED ONE.
+   *
+   * No GitHub calls, no scan spent against the limit, and the numbers they saw
+   * last time rather than a quietly different set. "Scan again" sends `fresh`.
+   * A failed lookup (an API without the route, issuer not configured) falls
+   * through to a live scan: saving is a convenience and must never cost someone
+   * the report itself.
+   */
+  const owner = await currentOwner();
+  if (owner && body.fresh !== true) {
+    const saved = await fetchBuilderScan(owner.ownerId, target).catch(() => null);
+    if (saved) {
+      const report: BuilderReport = { ...saved.profile, locked: null, savedAt: saved.scannedAt };
+      return NextResponse.json(report, { headers: { "Cache-Control": "private, no-store" } });
+    }
+  }
+
   const limit = checkRateLimit(`scan:${clientIp(req)}`, PER_MINUTE);
   if (!limit.ok) {
     return NextResponse.json(
@@ -97,25 +122,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as { target?: unknown };
-  const target = typeof body.target === "string" ? body.target.slice(0, 200) : "";
-  if (!target.trim()) {
-    return NextResponse.json({ error: "Enter a GitHub username or repo." }, { status: 400 });
-  }
-
   try {
-    const [res, { userId }] = await Promise.all([
-      fetch(`${base.replace(/\/$/, "")}/scan/profile`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target }),
-        // Reads GitHub, several manifests, then the index. Longer than a page
-        // load should take, short enough that a hung origin does not hold the
-        // report open.
-        signal: AbortSignal.timeout(25_000),
-      }),
-      auth(),
-    ]);
+    const res = await fetch(`${base.replace(/\/$/, "")}/scan/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+      // Reads GitHub, several manifests, then the index. Longer than a page
+      // load should take, short enough that a hung origin does not hold the
+      // report open.
+      signal: AbortSignal.timeout(25_000),
+    });
 
     /**
      * A NON-JSON BODY IS A SERVICE PROBLEM, NEVER A PROFILE PROBLEM.
@@ -142,7 +158,15 @@ export async function POST(req: Request) {
     if (!res.ok) return NextResponse.json(data, { status: res.status, headers });
 
     const profile = data as BuilderProfile;
-    const report: BuilderReport = userId ? { ...profile, locked: null } : forVisitor(profile);
+    if (!owner) return NextResponse.json(forVisitor(profile), { headers });
+
+    // Saved before answering, so the report can say it is saved. Never fatal,
+    // for the reason the saved lookup above gives.
+    const savedAt = await saveBuilderScan(owner.ownerId, target, profile).catch((err: unknown) => {
+      console.error("scan: could not save the report:", err instanceof Error ? err.message : String(err));
+      return null;
+    });
+    const report: BuilderReport = { ...profile, locked: null, savedAt };
     return NextResponse.json(report, { headers });
   } catch {
     return NextResponse.json({ error: "Could not reach the index." }, { status: 502 });
