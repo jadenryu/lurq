@@ -7,23 +7,22 @@
  *
  * DELIBERATELY A SUMMARY. The index is the asset, so the public shape carries
  * the headline (score, confidence, verdict, flags, alternatives) and never the
- * score breakdown, usage guide, API surfaces or compatibility edges. Those stay
- * behind a key. And only packages inside the top PUBLIC_TOP_LIMIT by weekly
- * downloads are served, so the public surface is the set people actually search
- * for rather than all 46k rows waiting to be enumerated.
+ * score breakdown, usage guide or compatibility edges. Those stay behind a key.
+ * API surfaces too, with one bounded exception: the major-version upgrade pages
+ * in publicUpgrades.ts, listed here as `upgrades`. Only packages in the public
+ * set (publicSet.ts) are served at all.
  */
 import { and, desc, eq, gte, isNotNull, ne } from 'drizzle-orm';
 import type { Express, Request, RequestHandler, Response } from 'express';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
-import { getPackageByName } from '../db/packages';
+import type { getPackageByName } from '../db/packages';
 import { packages } from '../db/schema';
 import { assessVerdict } from '../security/verdict';
+import { PUBLIC_TOP_LIMIT, publicDownloadFloor, publicPackageRow, validPackageName } from './publicSet';
+import { upgradePairsFor, type PublicUpgradePair } from './publicUpgrades';
 
-export const PUBLIC_TOP_LIMIT = 5_000;
-
-/** npm's own name rules, loosely: optional scope, url-safe, 214 chars max. */
-const NPM_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/i;
+export { PUBLIC_TOP_LIMIT };
 
 type PackageRow = NonNullable<Awaited<ReturnType<typeof getPackageByName>>>;
 
@@ -52,12 +51,15 @@ export interface PublicPackageSummary {
   advisories: { total: number; severe: number } | null;
   verdict: { level: string; reasons: string[] };
   alternatives: PublicAlternative[];
+  /** Major-version jumps that have an upgrade page; `ready` ones have a diff to show. */
+  upgrades: PublicUpgradePair[];
   dataAsOf: string | null;
 }
 
 export function toPublicSummary(
   row: PackageRow,
   alternatives: PublicAlternative[],
+  upgrades: PublicUpgradePair[] = [],
 ): PublicPackageSummary {
   const advisories = row.advisories ?? null;
   const verdict = assessVerdict({
@@ -92,6 +94,7 @@ export function toPublicSummary(
           },
     verdict: { level: verdict.level, reasons: verdict.reasons.slice(0, 3) },
     alternatives,
+    upgrades,
     dataAsOf: row.dataAsOf?.toISOString() ?? null,
   };
 }
@@ -124,41 +127,28 @@ export function registerPublicPackageRoutes(
   db: Database,
   limiter: RequestHandler,
 ): void {
-  // The weekly-download count of the PUBLIC_TOP_LIMIT-th package, refreshed
-  // hourly, so "is this inside the public set" is one comparison per request
-  // instead of a rank query. ponytail: per-instance cache; share it if the API
-  // ever runs more than a couple of replicas.
-  let floor: { at: number; value: number } | null = null;
-  const downloadFloor = async (): Promise<number> => {
-    if (floor && Date.now() - floor.at < 3_600_000) return floor.value;
-    const rows = await db
-      .select({ downloads: packages.weeklyDownloads })
-      .from(packages)
-      .where(and(isNotNull(packages.weeklyDownloads), isNotNull(packages.healthScore)))
-      .orderBy(desc(packages.weeklyDownloads))
-      .offset(PUBLIC_TOP_LIMIT - 1)
-      .limit(1);
-    floor = { at: Date.now(), value: Number(rows[0]?.downloads ?? 0) };
-    return floor.value;
-  };
-
   const cacheable = (res: Response) =>
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
 
   app.get('/public/package', limiter, async (req: Request, res: Response) => {
     const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
-    if (!name || name.length > 214 || !NPM_NAME.test(name)) {
+    if (!validPackageName(name)) {
       res.status(400).json({ error: 'Give an npm package name.' });
       return;
     }
     try {
-      const [row, min] = await Promise.all([getPackageByName(db, name), downloadFloor()]);
-      if (!row || row.healthScore === null || (row.weeklyDownloads ?? 0) < min) {
+      const row = await publicPackageRow(db, name);
+      if (!row) {
         res.status(404).json({ error: 'No public summary for that package.' });
         return;
       }
+      const [alternatives, upgrades] = await Promise.all([
+        alternativesFor(db, row),
+        // The upgrade links are an extra, never a reason the summary fails.
+        upgradePairsFor(db, row.name).catch(() => []),
+      ]);
       cacheable(res);
-      res.json(toPublicSummary(row, await alternativesFor(db, row)));
+      res.json(toPublicSummary(row, alternatives, upgrades));
     } catch (err) {
       logger.error('public package read failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not read that package.' });
@@ -167,7 +157,7 @@ export function registerPublicPackageRoutes(
 
   app.get('/public/packages', limiter, async (_req: Request, res: Response) => {
     try {
-      const min = await downloadFloor();
+      const min = await publicDownloadFloor(db);
       const rows = await db
         .select({ name: packages.name, dataAsOf: packages.dataAsOf })
         .from(packages)

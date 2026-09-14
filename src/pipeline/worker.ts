@@ -103,6 +103,19 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: compat-verify drain failed: ${String(err)}`));
+    // Popular packages' upgrade pages (src/mcp/publicUpgrades.ts): a few
+    // unextracted sides, queued only while the queue has headroom, so this can
+    // never delay the demand-driven misses drained just below.
+    await (async () => {
+      const handle = createDb({ max: 2 });
+      try {
+        const { enqueuePublicUpgrades } = await import('../mcp/publicUpgrades');
+        const queued = await enqueuePublicUpgrades(handle.db);
+        if (queued) logger.info(`worker: queued ${queued} surface(s) for public upgrade pages`);
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: upgrade page queue failed: ${String(err)}`));
     // Service surface-extraction misses (v1 §6.1). Query misses are revealed
     // demand and rank highest, so this runs every cycle; without it
     // resolve_surface answers UNKNOWN forever and the queue only grows.
