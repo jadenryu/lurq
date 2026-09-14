@@ -27,6 +27,12 @@ function useAboveBars(): number {
   return (useSquare() ? 90 : 190) * useUnit();
 }
 
+/*
+ * The footage tells one story in two kinds of shot. City clips are the scale (the world runs on
+ * software) and always play letterboxed. Office clips are the people (the teams who build it) and
+ * play full frame and close. They alternate around the product shots, never two cities in a row.
+ */
+
 export function Skyline() {
   const u = useUnit();
   return (
@@ -39,25 +45,27 @@ export function Skyline() {
   );
 }
 
-export function Agents() {
+export function Teams() {
   const u = useUnit();
   return (
     <AbsoluteFill>
-      <Clip name="tower" shade={0.35} letterbox />
-      <Frame style={{ paddingBottom: useAboveBars() }}>
-        <Words text="Now agents write it." at={14} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
+      {/* Framed to cut the PC case badge along the bottom edge and the monitor makers' names. */}
+      <Clip name="office" shade={0.5} zoom={1.35} origin="0% 30%" />
+      <Frame>
+        <Words text="Built by teams that ship every day." at={16} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
       </Frame>
     </AbsoluteFill>
   );
 }
 
 export function CloseUp() {
+  const u = useUnit();
   return (
     <AbsoluteFill>
       {/* Framed tight on the code, pushing both monitor makers' names (left edge, lower right) out of frame. */}
       <Clip name="screens" shade={0.5} rate={0.7} zoom={1.6} origin="45% 0%" />
       <Frame>
-        <Words text="Fast." at={10} size={useSuperSize()} />
+        <Words text="Now agents write the code." at={10} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
       </Frame>
     </AbsoluteFill>
   );
@@ -130,7 +138,7 @@ export function Flyover() {
   const u = useUnit();
   return (
     <AbsoluteFill>
-      <Clip name="flyover" shade={0.35} letterbox drift={-1} />
+      <Clip name="tower" shade={0.35} letterbox drift={-1} />
       <Frame style={{ paddingBottom: useAboveBars() }}>
         <Words text="Every install, verified." at={14} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
       </Frame>
@@ -167,12 +175,24 @@ export function UpgradeShot() {
   );
 }
 
+export function Keep() {
+  const u = useUnit();
+  return (
+    <AbsoluteFill>
+      <Clip name="typing" shade={0.45} rate={0.75} zoom={1.2} origin="0% 100%" />
+      <Frame>
+        <Words text="So your team keeps shipping." at={14} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
+      </Frame>
+    </AbsoluteFill>
+  );
+}
+
 export function Everywhere() {
   const u = useUnit();
   const square = useSquare();
   return (
     <AbsoluteFill>
-      <Clip name="aerial" shade={0.72} />
+      <Clip name="aerial" shade={0.72} letterbox />
       <Frame justify="center" align="center" style={{ gap: 60 * u }}>
         <Words text={IDE_HEADING} at={10} size={square ? 58 : 72} style={{ textAlign: "center", maxWidth: 1400 * u }} />
         <Carousel3D at={36} items={AGENT_LOGOS} />
@@ -191,7 +211,7 @@ export function End() {
   const pill = progress(frame, 120, 40);
   return (
     <AbsoluteFill>
-      <Clip name="dusk" shade={0.66} />
+      <Clip name="dusk" shade={0.66} letterbox />
       <Frame justify="center" align="center" style={{ gap: 56 * u }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24 * u }}>
           <Logo3D size={90} at={4} />
