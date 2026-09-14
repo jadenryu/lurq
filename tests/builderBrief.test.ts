@@ -3,6 +3,7 @@ import {
   archetypeLine,
   cardProfile,
   depLabel,
+  mcpServerLabel,
   depStatus,
   savedDaysAgo,
   cardStats,
@@ -334,5 +335,29 @@ describe('savedDaysAgo', () => {
     const now = Date.parse('2026-09-14T12:00:00Z');
     expect(savedDaysAgo('2026-09-14T01:00:00Z', now)).toBe(0);
     expect(savedDaysAgo('2026-09-11T12:00:00Z', now)).toBe(3);
+  });
+});
+
+describe('mcpServerLabel', () => {
+  const server = (over: Record<string, unknown> = {}) =>
+    ({
+      alias: 'x',
+      kind: 'npm-stdio',
+      packageName: 'x',
+      endpoint: null,
+      status: 'probed',
+      tools: 3,
+      writes: 2,
+      destroys: 1,
+      requiredConfig: [],
+      ...over,
+    }) as Parameters<typeof mcpServerLabel>[0];
+
+  it('states probed counts and never calls an unprobed server fine', () => {
+    expect(mcpServerLabel(server())).toBe('3 tools, 2 can write, 1 destructive');
+    expect(mcpServerLabel(server({ status: 'queued' }))).toBe('not probed yet, queued');
+    expect(mcpServerLabel(server({ status: 'needs-config', requiredConfig: ['GITHUB_TOKEN'] }))).toBe('needs GITHUB_TOKEN to probe');
+    expect(mcpServerLabel(server({ status: 'not-probed', kind: 'remote' }))).toBe('remote endpoint, not probed by lurq');
+    expect(mcpServerLabel(server({ status: 'not-probed', kind: 'other-registry' }))).toBe('PyPI or Docker, not probed by lurq');
   });
 });

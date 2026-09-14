@@ -8,6 +8,7 @@ import {
   type RepoStack,
   type ScanConflict,
   type ScanDep,
+  type ProfileMcpServer,
 } from "./builder-profile";
 import { siteUrl } from "./site";
 
@@ -198,6 +199,39 @@ export function depLabel(d: ScanDep): string {
 /** An issue worth flagging: an advisory, a deprecation, or a breaking release behind. */
 function depIssue(d: ScanDep): string | null {
   return d.advisories > 0 || d.deprecated || depStatus(d) === "major" ? depLabel(d) : null;
+}
+
+/**
+ * What the report says about one MCP server. Only what the configs and lurq's
+ * probes show; a server lurq cannot probe says why, and is never called fine.
+ */
+export function mcpServerLabel(s: ProfileMcpServer): string {
+  switch (s.status) {
+    case "probed": {
+      const parts = [plural(s.tools, "tool")];
+      if (s.writes > 0) parts.push(`${s.writes} can write`);
+      if (s.destroys > 0) parts.push(`${s.destroys} destructive`);
+      return parts.join(", ");
+    }
+    case "queued":
+      return "not probed yet, queued";
+    case "handshake-failed":
+      return "did not start in a clean install";
+    case "needs-config":
+      return s.requiredConfig.length > 0 ? `needs ${s.requiredConfig.join(", ")} to probe` : "needs config to probe";
+    case "undeclared":
+      return "started, listed no tools";
+    case "remote-only":
+      return "published as a remote endpoint only, not probed";
+    default:
+      return s.kind === "remote"
+        ? "remote endpoint, not probed by lurq"
+        : s.kind === "local"
+          ? "local command, not probed by lurq"
+          : s.kind === "other-registry"
+            ? "PyPI or Docker, not probed by lurq"
+            : "not checked in this scan";
+  }
 }
 
 /** Below this top-trait score the archetype is the closest fit, not a description, and its line would overclaim. */

@@ -75,6 +75,8 @@ export interface BuilderProfile {
     /** Repos whose package.json could not be read (rate limit, timeout), not repos without one. */
     unreadManifests: string[];
   };
+  /** Absent on profiles from before the MCP section. */
+  mcp?: ProfileMcp;
 }
 
 /**
@@ -82,9 +84,45 @@ export interface BuilderProfile {
  * cut of it, which keeps the archetype and the first repo's head and counts
  * what it dropped so the ask can be stated in the visitor's own numbers.
  */
+/** Mirrors src/github/builderMcp.ts; what each status means is there. */
+export type McpServerStatus =
+  | "probed"
+  | "queued"
+  | "handshake-failed"
+  | "needs-config"
+  | "undeclared"
+  | "remote-only"
+  | "not-probed";
+
+export interface ProfileMcpServer {
+  alias: string;
+  kind: "npm-stdio" | "remote" | "local" | "other-registry";
+  packageName: string | null;
+  endpoint: string | null;
+  status: McpServerStatus;
+  tools: number;
+  writes: number;
+  destroys: number;
+  requiredConfig: string[];
+}
+
+export interface ProfileMcp {
+  configs: {
+    repo: string;
+    files: string[];
+    servers: ProfileMcpServer[];
+    collisions: { tool: string; servers: string[]; writes: boolean }[];
+    totalTools: number | null;
+    estimatedContextTokens: number | null;
+  }[];
+  builds: (ProfileMcpServer & { repo: string })[];
+  unreadFiles: number;
+}
+
 export interface BuilderReport extends Omit<BuilderProfile, "traits"> {
   traits: Trait[] | null;
-  locked: { repos: number; deps: number; conflicts: number } | null;
+  /** `mcp`: MCP configs and servers left out of a signed-out report. */
+  locked: { repos: number; deps: number; conflicts: number; mcp?: number } | null;
   /** When the account's saved copy was taken. Absent for a visitor; null when saving failed. */
   savedAt?: string | null;
   /** Percentile ranks against other scanned builders. Signed-in reports only; null when unavailable. */
