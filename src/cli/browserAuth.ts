@@ -74,6 +74,10 @@ export function keyViaBrowser(opts: {
   onUrl: (url: string) => void;
   /** Stop waiting now and resolve null (the user chose to paste instead). */
   signal?: AbortSignal;
+  /** How long to hold the port. Defaults to DEADLINE_MS; the agent link flow waits longer. */
+  deadlineMs?: number;
+  /** Where the link was started, carried to the dashboard so its connect event can tell agent sign-ups apart. */
+  via?: 'terminal' | 'agent';
 }): Promise<BrowserAuthResult | null> {
   return new Promise((resolve) => {
     const nonce = randomBytes(18).toString('base64url');
@@ -131,7 +135,7 @@ export function keyViaBrowser(opts: {
       });
     });
 
-    const timer = setTimeout(() => finish(null), DEADLINE_MS);
+    const timer = setTimeout(() => finish(null), opts.deadlineMs ?? DEADLINE_MS);
     // Never hold the process open on its own account: if something else has
     // already resolved setup, this must not keep node alive for three minutes.
     timer.unref?.();
@@ -140,7 +144,8 @@ export function keyViaBrowser(opts: {
     opts.signal?.addEventListener('abort', () => finish(null), { once: true });
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as AddressInfo;
-      const url = `${WEB_ORIGIN}/dashboard/cli?port=${port}&nonce=${encodeURIComponent(nonce)}`;
+      const via = opts.via ? `&via=${opts.via}` : '';
+      const url = `${WEB_ORIGIN}/dashboard/cli?port=${port}&nonce=${encodeURIComponent(nonce)}${via}`;
       opts.onUrl(url);
       if (!opts.noOpen) openInBrowser(url);
     });

@@ -178,7 +178,8 @@ describe('indexSource', () => {
   });
 
   it('points an unconfigured machine at setup rather than at a stack trace', () => {
-    expect(() => indexSource()).toThrow(/lurq setup/);
+    // Runnable as written without a global install, and an agent learns setup hands it a link.
+    expect(() => indexSource()).toThrow(/npx lurqrun setup.*sign-in link/);
   });
 });
 

@@ -40,6 +40,7 @@ import {
   type AgentSpec,
   type InstallMode,
 } from './installSkill';
+import { LINK_PREFIX, LINK_WAIT_MS, setupMode, startAgentLink } from './agentLink';
 import { MissingKeyError } from './remote';
 
 /**
@@ -82,6 +83,8 @@ export interface WizardOptions {
   yes?: boolean;
   /** Skip launching a browser (headless boxes, SSH sessions, CI). */
   noOpen?: boolean;
+  /** Internal: the detached half of the agent link flow (agentLink.ts). */
+  waitForSignin?: boolean;
 }
 
 /**
@@ -164,23 +167,35 @@ function installGlobally(): void {
 }
 
 export async function runSetup(opts: WizardOptions): Promise<void> {
-  const interactive = !opts.yes;
-  if (interactive && !(process.stdin.isTTY && process.stdout.isTTY)) {
-    // The prompts need a terminal. Without one (CI, a pipe, an agent's shell)
-    // this printed raw escape codes and died with "User force closed the prompt
-    // with 0 null". Say what works there instead, before writing a single byte.
-    throw new Error(
-      'lurq setup asks questions, and this is not an interactive terminal (CI, a pipe, or an agent shell).\n' +
-        `Run it non-interactively:  npx ${PACKAGE_NAME} setup --yes --api-key <key>\n` +
-        `Get a key at ${KEYS_URL}`,
-    );
-  }
+  if (opts.waitForSignin) return waitForSigninAndFinish(opts);
+
   // Both of these fall back to what an earlier run stored, so re-running setup
   // to add a newly-installed editor neither asks for the key again nor quietly
   // moves a self-hoster off their own endpoint and back onto ours.
   const url = resolveEndpoint(opts.url) ?? DEFAULT_ENDPOINT;
   let apiKey = resolveApiKey(opts.apiKey);
   const selfHosted = url !== DEFAULT_ENDPOINT;
+
+  const mode = setupMode({
+    yes: Boolean(opts.yes),
+    tty: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    ci: Boolean(process.env.CI),
+    hasKey: Boolean(apiKey),
+    selfHosted,
+  });
+  if (mode === 'agent-link') return runAgentLink(opts);
+  if (mode === 'needs-key' && !opts.yes) {
+    // The prompts need a terminal. Without one this printed raw escape codes and
+    // died with "User force closed the prompt with 0 null". CI and self-hosted
+    // endpoints cannot use the sign-in link, so say what works there instead,
+    // before writing a single byte.
+    throw new Error(
+      'lurq setup asks questions, and this is not an interactive terminal (CI, a pipe, or an agent shell).\n' +
+        `Run it non-interactively:  npx ${PACKAGE_NAME} setup --yes --api-key <key>\n` +
+        `Get a key at ${KEYS_URL}`,
+    );
+  }
+  const interactive = mode === 'interactive';
 
   if (interactive) {
     const { input, checkbox, confirm, select } = await import('@inquirer/prompts');
@@ -228,6 +243,7 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
       const handoff = await keyViaBrowser({
         noOpen: opts.noOpen,
         signal: skip.signal,
+        via: 'terminal',
         // Printed rather than only opened: the browser may not have launched,
         // and a spinner pointing at a URL nobody can see is a hung flow.
         onUrl: (link) =>
@@ -371,6 +387,60 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
     ? resolveAgents(opts.agent)
     : agentSpecs().filter((s) => s.detected);
   await finish(selected, { url, apiKey });
+}
+
+/**
+ * The agent's half of the link flow (agentLink.ts): start the detached copy,
+ * print the link for the agent to hand on, and return at once.
+ */
+async function runAgentLink(opts: WizardOptions): Promise<void> {
+  const link = await startAgentLink({ agent: opts.agent, noOpen: opts.noOpen });
+  if (!link) {
+    throw new Error(
+      'Could not start the sign-in listener on this machine.\n' +
+        `Run it non-interactively instead:  npx ${PACKAGE_NAME} setup --yes --api-key <key>\n` +
+        `Get a key at ${KEYS_URL}`,
+    );
+  }
+  const selected = opts.agent ? resolveAgents(opts.agent) : agentSpecs().filter((s) => s.detected);
+  console.log('lurq needs a one-time sign-in to connect this machine. Open this link on this computer:\n');
+  console.log(`  ${link}\n`);
+  console.log(
+    `Signing in finishes setup by itself: the key is stored${
+      selected.length
+        ? ` and lurq is connected to ${selected.map((s) => s.label).join(', ')}`
+        : ' for the lurq CLI (no coding agents detected)'
+    }. The link works for ${LINK_WAIT_MS / 60_000} minutes.`,
+  );
+  console.log('Afterwards, restart your coding agent so it loads lurq.');
+}
+
+/**
+ * The detached half: wait for the sign-in, then finish the way `--yes` does.
+ *
+ * Nobody reads this process after the link: the agent's command has returned and
+ * closed the pipe. So output after the link is dropped rather than written into a
+ * closed pipe, where the first console.log would kill the process mid-setup.
+ */
+async function waitForSigninAndFinish(opts: WizardOptions): Promise<void> {
+  process.stdout.on('error', () => {});
+  const { keyViaBrowser } = await import('./browserAuth');
+  const handoff = await keyViaBrowser({
+    noOpen: opts.noOpen,
+    deadlineMs: LINK_WAIT_MS,
+    via: 'agent',
+    onUrl: (link) => {
+      process.stdout.write(`${LINK_PREFIX}${link}\n`);
+      console.log = () => {};
+    },
+  });
+  if (!handoff) return;
+  // Just minted by our own dashboard, so anything but valid means this machine is
+  // offline or the key was revoked in the meantime; storing it would wire every
+  // agent to a key that cannot work.
+  if ((await validateKey(DEFAULT_ENDPOINT, handoff.key)) !== 'valid') return;
+  const selected = opts.agent ? resolveAgents(opts.agent) : agentSpecs().filter((s) => s.detected);
+  await finish(selected, { url: DEFAULT_ENDPOINT, apiKey: handoff.key });
 }
 
 /**

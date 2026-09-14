@@ -73,6 +73,8 @@ export function buildProgram(): Command {
     .option('--agent <agent>', AGENT_CHOICES)
     .option('--yes', 'non-interactive: use flags/env and detected agents without prompting')
     .option('--no-open', "don't launch a browser (headless boxes, SSH, CI)")
+    // The detached half of setup from an agent's shell (agentLink.ts). Not for people.
+    .addOption(new Option('--wait-for-signin').hideHelp())
     .action(
       async (opts: {
         apiKey?: string;
@@ -80,6 +82,7 @@ export function buildProgram(): Command {
         agent?: string;
         yes?: boolean;
         open?: boolean;
+        waitForSignin?: boolean;
       }) => {
         const { runSetup } = await import('./install');
         await runSetup({ ...opts, noOpen: opts.open === false });

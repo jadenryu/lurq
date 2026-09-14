@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Panel, eyebrow } from "@/components/dashboard/panel";
 
@@ -34,7 +35,16 @@ function label(): string {
   return `cli · ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 }
 
-export function CliHandoff({ port, nonce }: { port: number | null; nonce: string | null }) {
+export function CliHandoff({
+  port,
+  nonce,
+  via,
+}: {
+  port: number | null;
+  nonce: string | null;
+  /** Who started this sign-in, for the connect event: the setup wizard, or a coding agent's shell. */
+  via: "terminal" | "agent";
+}) {
   const [state, setState] = useState<State>({ kind: "ready" });
   const running = useRef(false);
 
@@ -78,6 +88,8 @@ export function CliHandoff({ port, nonce }: { port: number | null; nonce: string
       });
       if (!handed.ok) throw new Error("rejected");
 
+      // The one moment a machine is actually connected, so it is where agent-driven sign-ups are counted.
+      posthog.capture("cli_connected", { via });
       setState({ kind: "done" });
     } catch {
       setState({
@@ -95,7 +107,8 @@ export function CliHandoff({ port, nonce }: { port: number | null; nonce: string
       <Panel padding="tight">
         <p className={eyebrow}>connected</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Your key is in that terminal and setup is carrying on there. You can close this tab.
+          Your key is on that machine and setup is finishing there. If a coding agent sent you here,
+          restart it so it loads lurq. You can close this tab.
         </p>
       </Panel>
     );

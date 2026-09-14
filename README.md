@@ -95,12 +95,19 @@ lurq --version
 
 If you are an AI coding agent and your user asked you to set up lurq, follow these steps.
 
-**1. Get an API key from the user.** Keys come from
-[lurq.run/dashboard/keys](https://www.lurq.run/dashboard/keys) and are free to create. Never invent
-one. If the user has no key, run `npx lurqrun` so they can sign in through the browser, and let them
-finish the wizard.
+**1. Run setup.**
 
-**2. Configure non-interactively** once you have a key:
+```bash
+npx lurqrun setup
+```
+
+In your shell it does not prompt: it prints a one-time sign-in link and exits right away. Give the
+user that link. When they sign in on this computer, lurq stores a key and connects every detected
+coding agent by itself. Never invent a key.
+
+**2. Or configure non-interactively** when the user already has a key from
+[lurq.run/dashboard/keys](https://www.lurq.run/dashboard/keys), or on a cloud, SSH or CI machine, where
+a sign-in link on this computer can't work:
 
 ```bash
 npx lurqrun setup --yes --no-open --api-key <key> --agent <id>
@@ -118,6 +125,9 @@ npx lurqrun setup --yes --no-open --api-key <key> --agent <id>
 | Kiro | `kiro` |
 
 `--agent all` configures every detected agent. With `--yes`, the key can also come from `LURQ_API_KEY`.
+
+Some checks need no key at all. `npx lurqrun check-upgrade --upgrade <package>@<from>..<to>` compares an
+upgrade against the names your code actually imports, locally.
 
 **3. Tell the user to restart the agent**, then confirm `lurq` appears in its MCP tool list.
 
