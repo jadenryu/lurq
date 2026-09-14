@@ -76,6 +76,17 @@ If the agent doesn't call lurq, confirm it was restarted and that `lurq` shows u
 in its MCP tool list. More in
 [troubleshooting](/plans-and-troubleshooting#my-agent-never-calls-lurq).
 
+## From a coding agent
+
+An AI agent can set lurq up for you. When `npx lurqrun setup` runs in an agent's
+shell, where there is no terminal to prompt in, it prints a one-time sign-in link
+and exits. Open the link on the same computer and sign in: lurq stores the key
+and connects every detected agent in the background. The link works for 15
+minutes. Restart the agent afterwards.
+
+The sign-in has to happen on the machine the agent runs on. For a cloud or SSH
+agent, use the non-interactive form below.
+
 ## Non-interactive setup
 
 For scripted setups (CI, dotfiles, provisioning), skip the prompts and the
@@ -87,7 +98,8 @@ lurq setup --yes --no-open --api-key <key>
 
 Use `--agent all` to configure every detected assistant, or `--agent claude-code`
 for one. With `--yes`, the key can also come from `LURQ_API_KEY`. The wizard needs
-a terminal, so this is also the form to use anywhere there isn't one.
+a terminal, so without one and without a key, setup uses the sign-in link above
+instead, except in CI, where this form is the one to use.
 
 ## Per-agent configuration
 

@@ -74,6 +74,8 @@ npx lurqrun
 
 That detects installed assistants (Claude Code, Cursor, VS Code and others), writes a keyed MCP entry and a skill file for each, and stores the key for the CLI. Nothing else is needed afterwards.
 
+From an AI agent's shell, \`npx lurqrun setup\` prints a one-time sign-in link and exits. Give the user the link: signing in on that computer finishes setup by itself, then restart the agent. Without any account, \`npx lurqrun check-upgrade --upgrade <package>@<from>..<to>\` checks an upgrade against your code locally.
+
 The hosted MCP endpoint is \`https://api.lurq.run/mcp\` (JSON-RPC over HTTP, \`Authorization: Bearer <key>\`). Keys are self-serve at ${SITE_ORIGIN}/dashboard/keys.
 
 ## Tools
