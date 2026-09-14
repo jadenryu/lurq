@@ -120,9 +120,12 @@ export default function PrivacyPage() {
             without being tied to your account. Linked to your account we keep
             daily counts of which tools you called, the packages your selection
             policy blocked or warned about, and any outcomes you report back
-            (including the need you described). The CLI and MCP server do not send
-            us any separate analytics or telemetry beyond the requests needed to
-            serve you.
+            (including the need you described), and which coding agent each call
+            came from: the agent name that setup writes into that agent&rsquo;s lurq
+            connection (for example <code>cursor</code>), and the name and version
+            the agent&rsquo;s MCP client reports when it connects. The CLI and MCP
+            server do not send us any separate analytics or telemetry beyond the
+            requests needed to serve you.
           </li>
         </ul>
 

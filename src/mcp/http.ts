@@ -64,6 +64,7 @@ import {
   createPortalSession,
 } from '../billing/stripe';
 import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
+import { agentClient, initializeInfo } from './clientInfo';
 import { registerPublicPackageRoutes } from './publicPackages';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
@@ -1692,7 +1693,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     if (!ownerId) return;
     try {
       res.status(200).json({ notice: await agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, '')) });
-      capture(ownerId, 'agent_session_start', {});
+      capture(ownerId, 'agent_session_start', { agent: agentClient(req.query.agent) });
       void recordUsage(db, ownerId, SESSION_START_USAGE);
     } catch (err) {
       logger.error('alerts read failed:', err instanceof Error ? err.message : String(err));
@@ -1922,8 +1923,16 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     // and it cannot reach a tool that would use either.
     const authed = req as AuthedRequest;
     const ownerId = authed.lurqKey?.ownerId ?? null;
+    // Which agent this is (clientInfo.ts): the id setup wrote into its config,
+    // and on the handshake, the client's own name, which covers hand-written
+    // configs too. Keyless discovery has no owner, so capture sends nothing.
+    const client = agentClient(req.headers['x-lurq-client']);
+    const handshake = initializeInfo(req.body);
+    if (handshake) {
+      capture(ownerId, 'mcp_initialized', { client, clientName: handshake.name, clientVersion: handshake.version });
+    }
     const notices = [quotaNotice(authed.entitlement), await alertNotice(ownerId, req.body)];
-    const server = buildMcpServer(db, { ownerId, notice: notices.filter(Boolean).join('\n\n') || null });
+    const server = buildMcpServer(db, { ownerId, client, notice: notices.filter(Boolean).join('\n\n') || null });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

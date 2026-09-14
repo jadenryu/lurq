@@ -88,6 +88,8 @@ export interface ServerContext {
   ownerId?: string | null;
   /** Appended to every tool result: the quota notice once an account is past its pool. */
   notice?: string | null;
+  /** The coding agent this connection belongs to, when its config names one (clientInfo.ts). */
+  client?: string | null;
 }
 
 /**
@@ -130,7 +132,7 @@ export function buildMcpServer(
   // usage counter for the dashboard (§ dashboard v1 phase 2). The counter is
   // recorded in a finally so an errored call still counts; recordUsage no-ops
   // when ctx.ownerId is null (stdio/local or operator keys with no account).
-  // The PostHog event carries the tool name and outcome only, never arguments,
+  // The PostHog event carries the tool name, outcome and calling agent only, never arguments,
   // and no-ops under the same null-owner rule (src/core/analytics.ts).
   const run = <T>(tool: string, fn: () => Promise<T>): Promise<T> =>
     (async () => {
@@ -141,7 +143,7 @@ export function buildMcpServer(
         return result;
       } finally {
         void recordUsage(db, ctx.ownerId ?? null, tool);
-        capture(ctx.ownerId, 'tool_called', { tool, ok });
+        capture(ctx.ownerId, 'tool_called', { tool, ok, client: ctx.client ?? null });
       }
     })();
 
