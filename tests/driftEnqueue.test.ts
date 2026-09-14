@@ -6,6 +6,11 @@ vi.mock('../src/pipeline/single', () => ({
   syncOnePackage: vi.fn().mockResolvedValue({ confidence: 'unproven', category: null }),
 }));
 vi.mock('../src/db/packages', () => ({ ensureSeedEntry: vi.fn().mockResolvedValue(undefined) }));
+// computeDrift checks advisories at each resolved version against OSV; keep that off the network here.
+vi.mock('../src/ingestion/sources/osv', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/ingestion/sources/osv')>()),
+  queryVulnerableInstalls: vi.fn().mockResolvedValue({ affected: new Map(), complete: true }),
+}));
 
 import { computeDrift } from '../src/github/drift';
 import { resetIngestQueue, ingestQueueDepth } from '../src/pipeline/ingestQueue';

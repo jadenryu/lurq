@@ -182,7 +182,8 @@ export function depDrift(
   const latest = indexed.latestVersion;
   // `maxSatisfying` needs the candidate list; when the index has no timeline yet,
   // fall back to the range's own floor rather than reporting no drift at all.
-  const resolved = bestSatisfying(knownVersions, range) ?? rangeFloor(range);
+  const fromIndex = bestSatisfying(knownVersions, range);
+  const resolved = fromIndex ?? rangeFloor(range);
 
   let majorsBehind = 0;
   if (resolved && latest && semver.valid(resolved) && semver.valid(latest)) {
@@ -198,7 +199,28 @@ export function depDrift(
     majorsBehind,
     deprecated: indexed.deprecated,
     advisories: indexed.advisories,
+    status: driftStatus(resolved, latest),
+    resolvedFrom: fromIndex ? 'index' : 'range-floor',
+    // Until computeDrift checks the resolved version against OSV, this is the
+    // package-level count, and says so.
+    advisoriesAt: 'package',
   };
+}
+
+/**
+ * Where `resolved` stands against `latest`, for the label a report prints.
+ *
+ * `major` covers a 0.x minor bump too: semver makes 0.3 → 0.4 breaking, so
+ * calling it merely "behind" would undersell it. A missing or unparseable side
+ * is `unknown`, never `current`: not knowing is not the same as being up to date.
+ */
+export function driftStatus(resolved: string | null, latest: string | null): DepDrift['status'] {
+  if (!resolved || !latest || !semver.valid(resolved) || !semver.valid(latest)) return 'unknown';
+  if (!semver.lt(resolved, latest)) return 'current';
+  const breaking =
+    semver.major(latest) > semver.major(resolved) ||
+    (semver.major(resolved) === 0 && semver.major(latest) === 0 && semver.minor(latest) > semver.minor(resolved));
+  return breaking ? 'major' : 'behind';
 }
 
 /** True when `resolved` is behind `latest` at any semver level. */
@@ -458,6 +480,7 @@ export async function computeDrift(
       anyDrift: 0,
       deprecated: 0,
       advisories: 0,
+      advisoriesExact: true,
       deps: [],
       transitive,
       conflictsAtLatest: [],
@@ -485,6 +508,21 @@ export async function computeDrift(
     deps.push(depDrift(name, entry, row, versions.get(name) ?? []));
   }
 
+  // Advisories at the version each range resolves to, not the package's latest
+  // release. deps.dev's count is for latest, so on its own it misses an old
+  // vulnerable pin and flags a repo already on a patched version. When OSV cannot
+  // answer in full, every dep keeps the package-level count and says so, rather
+  // than half the list meaning one thing and half another. Before the sort,
+  // because severity ranks on advisories.
+  const checkable = deps.filter((d) => d.resolved && semver.valid(d.resolved));
+  const exact = await queryVulnerableInstalls(checkable.map((d) => ({ name: d.name, version: d.resolved! })));
+  if (exact.complete) {
+    for (const d of checkable) {
+      d.advisories = exact.affected.get(installKey(d.name, d.resolved!))?.length ?? 0;
+      d.advisoriesAt = 'resolved';
+    }
+  }
+
   deps.sort((a, b) => severity(b) - severity(a) || a.name.localeCompare(b.name));
 
   // Tracked names only. An untracked one would send `assembleMembers` to the npm
@@ -502,6 +540,7 @@ export async function computeDrift(
     anyDrift: deps.filter(isBehind).length,
     deprecated: deps.filter((d) => d.deprecated).length,
     advisories: deps.reduce((sum, d) => sum + d.advisories, 0),
+    advisoriesExact: deps.every((d) => d.advisoriesAt === 'resolved'),
     deps: deps.slice(0, REPO_DRIFT_DETAIL_CAP),
     transitive,
     conflictsAtLatest: conflicts,
