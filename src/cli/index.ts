@@ -534,6 +534,16 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('hook')
+    .argument('<event>', 'the agent event being handled: session-start, prompt, pre-tool-use, post-tool-use')
+    .option('--agent <agent>', 'whose hook format to read and write: claude, codex or cursor', 'claude')
+    .description('run as an agent hook: verify installs and suggest lurq where it helps (set up by `lurq setup`)')
+    .action(async (event: string, opts: { agent: string }) => {
+      const { runHook } = await import('./hook');
+      await runHook(event, opts.agent);
+    });
+
+  program
     .command('serve')
     .description('start the MCP server over stdio (for agent integration)')
     .action(async () => {

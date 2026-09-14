@@ -39,7 +39,7 @@ describe('lurqInvocation', () => {
     writeFileSync(bin, '#!/bin/sh\necho 0.0.0\n');
     chmodSync(bin, 0o755);
     process.env.PATH = dir;
-    expect(lurqInvocation()).toEqual({ command: 'lurq', onPath: true });
+    expect(lurqInvocation()).toEqual({ command: 'lurq', onPath: true, path: bin });
   });
 
   it('does not count a non-executable file as an installed command', () => {

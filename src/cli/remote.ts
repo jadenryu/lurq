@@ -293,6 +293,11 @@ export function reportUpgradeRuns(
   return post<{ recorded: number; rejected: number }>('/upgrade-runs', { runs }, opts);
 }
 
+/** The account's open urgent changes, worded for an agent. Null when there are none. */
+export async function getAlerts(opts: RemoteOptions = {}): Promise<string | null> {
+  return (await request<{ notice: string | null }>('GET', '/alerts', undefined, opts)).notice;
+}
+
 /** The account's selection policy, as the dashboard would save it. */
 export async function getPolicy(opts: RemoteOptions = {}): Promise<SelectionPolicy> {
   return (await request<{ policy: SelectionPolicy }>('GET', '/policy', undefined, opts)).policy;

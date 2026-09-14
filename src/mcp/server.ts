@@ -222,7 +222,13 @@ export function buildMcpServer(
         package: npmName.describe('npm package name to verify'),
       },
     },
-    async (args) => reply(await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null))),
+    async (args) => {
+      const result = await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null));
+      // A package worth installing is a package about to be coded against, from memory.
+      const usable = result.exists && result.verdict.level !== 'invalid' && result.verdict.level !== 'high';
+      const next = `Before writing code against ${args.package}, call usage with it (and knownVersion if you remember one): its API may have moved since your training.`;
+      return reply(usable ? { ...result, next } : result);
+    },
   );
 
   server.registerTool(

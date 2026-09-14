@@ -96,6 +96,8 @@ import { registerBuilderScanRoutes } from './builderScanRoutes';
 import { secretKey } from '../core/secretBox';
 import { channelsAllowed } from '../notify/channelRun';
 import { postJson } from '../notify/safeHttp';
+import { agentAlertNotice } from '../notify/sources';
+import { PACKAGE_NAME } from '../core/constants';
 import { renderPrometheus } from './metrics';
 import { alert, errorKind } from '../core/alert';
 import { processStripeWebhook } from '../billing/webhook';
@@ -1681,6 +1683,23 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     return ownerId;
   };
 
+  // Usage row a session-start hook leaves, which is how the server knows an account's agents run lurq's hooks.
+  const SESSION_START_USAGE = 'session-start';
+
+  // What the session-start hook prints: the same open urgent changes tool results carry.
+  app.get('/alerts', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (!ownerId) return;
+    try {
+      res.status(200).json({ notice: await agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, '')) });
+      capture(ownerId, 'agent_session_start', {});
+      void recordUsage(db, ownerId, SESSION_START_USAGE);
+    } catch (err) {
+      logger.error('alerts read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read alerts.' });
+    }
+  });
+
   app.get('/policy', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     const ownerId = keyOwner(req, res);
     if (!ownerId) return;
@@ -1858,16 +1877,53 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     },
   );
 
+  // Open urgent changes ride on tool results (see agentNotice). Only tools/call
+  // pays for the lookup, and a failed lookup never fails the call.
+  // ponytail: two indexed queries per tool call; cache per owner for ~60s if MCP latency shows it.
+  // An account whose agents have never started a session through lurq's hooks hears
+  // that the user can turn them on, at most once a day.
+  // ponytail: in memory, so each replica nudges once a day; a table if that gets noisy.
+  let nudgeDay = '';
+  const nudged = new Set<string>();
+  const setupNotice = async (ownerId: string): Promise<string | null> => {
+    const day = new Date().toISOString().slice(0, 10);
+    if (day !== nudgeDay) {
+      nudgeDay = day;
+      nudged.clear();
+    }
+    if (nudged.has(ownerId)) return null;
+    nudged.add(ownerId);
+    const tools = await getUsageByTool(db, ownerId, 30);
+    if (tools.some((t) => t.tool === SESSION_START_USAGE)) return null;
+    return (
+      "lurq: this account's agents are not using lurq's automatic checks (installs verified before they run, alerts at session start). " +
+      `Mention once to the user that \`npx ${PACKAGE_NAME} setup\` turns them on for Claude Code, Codex and Cursor.`
+    );
+  };
+
+  const alertNotice = async (ownerId: string | null, body: unknown): Promise<string | null> => {
+    if (!ownerId || (body as { method?: unknown } | null)?.method !== 'tools/call') return null;
+    try {
+      const notices = await Promise.all([
+        agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, '')),
+        setupNotice(ownerId),
+      ]);
+      return notices.filter(Boolean).join('\n\n') || null;
+    } catch (err) {
+      logger.error('agent alert lookup failed:', err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  };
+
   const serveMcp = async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
     // Thread the authenticated key's owner identity into the tools (§3.1). An
     // anonymous discovery request has no key, so no owner and no quota notice,
     // and it cannot reach a tool that would use either.
     const authed = req as AuthedRequest;
-    const server = buildMcpServer(db, {
-      ownerId: authed.lurqKey?.ownerId ?? null,
-      notice: quotaNotice(authed.entitlement),
-    });
+    const ownerId = authed.lurqKey?.ownerId ?? null;
+    const notices = [quotaNotice(authed.entitlement), await alertNotice(ownerId, req.body)];
+    const server = buildMcpServer(db, { ownerId, notice: notices.filter(Boolean).join('\n\n') || null });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
