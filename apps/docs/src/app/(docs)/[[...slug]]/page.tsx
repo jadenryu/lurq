@@ -43,5 +43,11 @@ export async function generateMetadata(props: {
   return {
     title: page.data.title,
     description: page.data.description,
+    // The page as markdown (app/llms.mdx), for agents that fetch it. Absolute,
+    // because metadata links do not get the /docs basePath added. The docs root
+    // has no .md path, so it advertises none.
+    ...(page.url === '/'
+      ? {}
+      : { alternates: { types: { 'text/markdown': `https://www.lurq.run/docs${page.url}.md` } } }),
   };
 }
