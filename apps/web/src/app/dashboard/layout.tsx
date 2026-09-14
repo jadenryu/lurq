@@ -21,7 +21,7 @@ export default async function DashboardLayout({
     // Padding steps down on mobile (px-6 → px-4) because at 390px the old value
     // spent 12% of the screen on gutters, which is what pushed tables and the
     // stat row into a horizontal scroll.
-    <div className="dashboard-type flex min-h-screen flex-col md:flex-row">
+    <div className="dashboard-type dashboard-enter flex min-h-screen flex-col md:flex-row">
       <DashboardNav locked={!userId} />
       <main id="content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 sm:px-6 md:px-8 md:py-7">
         {/* Was max-w-5xl. A 1024px column of cards centred in a 2560px window is

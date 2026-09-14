@@ -9,7 +9,9 @@ const hairline = "1px solid rgba(255,255,255,0.28)"; // light border on near-bla
 
 export const borderlessAppearance = {
   elements: {
-    rootBox: { width: "100%" },
+    // A class, not a style object: globals.css gives it the full width and the
+    // fade-in, so Clerk's form arrives instead of popping in once its script loads.
+    rootBox: "auth-clerk-root",
     cardBox: {
       width: "100%",
       border: "none",

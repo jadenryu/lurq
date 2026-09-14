@@ -12,7 +12,10 @@
  * `dashboard-data.ts` already degrades a failed READ to the new-user state, so
  * anything reaching here is the narrower case: the session lookup itself, a
  * render-time throw, or a bug. All three are recoverable by trying again, which
- * is why `reset()` is the primary action rather than a link home.
+ * is why `retry()` is the primary action rather than a link home. It has to be
+ * `retry`: `reset()` only re-renders what already failed without fetching it
+ * again, so for a server-side throw "Try again" did nothing and people reached for
+ * the refresh button.
  *
  * Deliberately does not print `error.message`. A server-side message on this
  * boundary can carry an upstream URL or a config hint, and the digest is what
@@ -25,10 +28,10 @@ import { buttonVariants } from "@/components/ui/button";
 
 export default function DashboardError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[lurq] dashboard render failed:", error);
@@ -47,7 +50,7 @@ export default function DashboardError({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <button type="button" onClick={reset} className={buttonVariants()}>
+        <button type="button" onClick={retry} className={buttonVariants()}>
           Try again
         </button>
         <Link href="/dashboard/keys" className={buttonVariants({ variant: "outline" })}>
