@@ -302,6 +302,13 @@
       "when": 1789322771718,
       "tag": "0042_alert_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789416803276,
+      "tag": "0043_builder_scans",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@
  * automatically by Drizzle).
  */
 import { sql } from 'drizzle-orm';
+import type { ArchetypeId, BuilderProfile } from '../github/builderProfile';
 import {
   bigint,
   boolean,
@@ -1354,3 +1355,48 @@ export const notificationChannels = pgTable(
 );
 
 export type NotificationChannelRow = typeof notificationChannels.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Builder reports, saved per account.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The last builder report an account ran for each target.
+ *
+ * One row per (owner, target), overwritten by a rescan: this is a snapshot to
+ * come back to, not a history. A scan's drift and advisories go stale in days,
+ * so keeping every past copy would be storing numbers nobody should act on.
+ * `target` is the normalized key (`login` or `login/repo`, lowercased), so a
+ * pasted URL and a typed name land on the same row.
+ *
+ * The listing columns are copied out of `profile` so the saved list never has
+ * to read the whole report.
+ */
+export const builderScans = pgTable(
+  'builder_scans',
+  {
+    ownerId: text('owner_id').notNull(),
+    target: text('target').notNull(),
+    login: text('login').notNull(),
+    archetype: text('archetype').$type<ArchetypeId>().notNull(),
+    avatarUrl: text('avatar_url').notNull(),
+    // What builderStanding.ts ranks on, copied out of `profile` at save, so
+    // ranking reads seven integers per builder instead of every whole report.
+    repos: integer('repos').notNull(),
+    active90: integer('active_90').notNull(),
+    stars: integer('stars').notNull(),
+    depsTracked: integer('deps_tracked').notNull(),
+    depsBehind: integer('deps_behind').notNull(),
+    depsMajor: integer('deps_major').notNull(),
+    advisories: integer('advisories').notNull(),
+    profile: jsonb('profile').$type<BuilderProfile>().notNull(),
+    scannedAt: ts('scanned_at').notNull().defaultNow(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.target] }),
+    index('builder_scans_owner_recent_idx').on(table.ownerId, table.scannedAt),
+  ],
+);
+
+export type BuilderScanRow = typeof builderScans.$inferSelect;

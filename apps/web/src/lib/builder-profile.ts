@@ -69,6 +69,41 @@ export interface BuilderProfile {
 export interface BuilderReport extends Omit<BuilderProfile, "traits"> {
   traits: Trait[] | null;
   locked: { repos: number; deps: number; conflicts: number } | null;
+  /** When the account's saved copy was taken. Absent for a visitor; null when saving failed. */
+  savedAt?: string | null;
+  /** Percentile ranks against other scanned builders. Signed-in reports only; null when unavailable. */
+  standing?: BuilderStanding | null;
+}
+
+/** Mirrors src/github/builderStanding.ts; the reasoning for each metric is there. */
+export type StandingMetricId = "repos" | "active90" | "stars" | "behindShare" | "majorShare" | "advisoryRate";
+
+export interface StandingMetric {
+  id: StandingMetricId;
+  better: "higher" | "lower";
+  /** A count, a 0–1 share, or advisories per 100 dependencies. */
+  value: number;
+  /** 0–100: the share of compared builders this one is ahead of, ties counting half. */
+  percentile: number;
+  population: number;
+}
+
+export interface BuilderStanding {
+  population: number;
+  minimum: number;
+  /** Only metrics with enough builders to rank against; empty means not enough scans yet. */
+  metrics: StandingMetric[];
+}
+
+/** One row of the saved list: enough for a card, never the dependency rows. */
+export interface SavedBuilderScan {
+  target: string;
+  login: string;
+  archetype: ArchetypeId;
+  avatarUrl: string;
+  traits: Trait[];
+  stats: BuilderProfile["stats"];
+  scannedAt: string;
 }
 
 /** Dependency rows a signed-out visitor reads on the one repo they get. */

@@ -92,6 +92,7 @@ import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashbo
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
 import { registerNotificationRoutes } from './notificationRoutes';
 import { registerChannelRoutes } from './channelRoutes';
+import { registerBuilderScanRoutes } from './builderScanRoutes';
 import { secretKey } from '../core/secretBox';
 import { channelsAllowed } from '../notify/channelRun';
 import { postJson } from '../notify/safeHttp';
@@ -1751,6 +1752,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     allowed: (ownerId) => channelsAllowed(db, ownerId),
     post: (url, m) => postJson(url, m.payload, m.headers),
   });
+
+  registerBuilderScanRoutes(app, { db, requireIssuerSecret, ownerFrom });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
   //

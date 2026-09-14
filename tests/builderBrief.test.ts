@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cardProfile,
   cardStats,
   conflictBrief,
   depBrief,
@@ -116,13 +117,84 @@ describe('briefs', () => {
 describe('cardStats', () => {
   it('weights the archetype trait and picks a tier', () => {
     // 0.6 * 90 + 0.4 * mean(20, 50, 70)=46.67 → 72.7 → 73, silver.
+    expect(cardStats(report)).toEqual({ overall: 73, position: 'SHP', tier: 'silver' });
+  });
+
+  it('leaves an unmeasured trait out of the mean instead of counting it as zero', () => {
+    const traits = report.traits!.map((t) => (t.id === 'steward' ? { ...t, score: null } : t));
+    // 0.6 * 90 + 0.4 * mean(20, 50)=35 → 68.
+    expect(cardStats({ ...report, traits })!.overall).toBe(68);
+  });
+
+  it('never rates above the top trait', () => {
     const card = cardStats(report)!;
-    expect(card).toMatchObject({ overall: 73, position: 'SHP', tier: 'silver' });
-    expect(card.stats.find((s) => s.label === 'STR')?.value).toBe('1.2k');
+    expect(card.overall).toBeLessThanOrEqual(90);
   });
 
   it('is locked when traits are', () => {
     expect(cardStats({ ...report, traits: null })).toBeNull();
+  });
+});
+
+describe('cardProfile', () => {
+  it('labels each trait with the code its archetype uses', () => {
+    const d = cardProfile(report)!;
+    expect(d.traits.map((t) => [t.code, t.score])).toEqual([['SHP', 90], ['ARC', 20], ['EXP', 50], ['STW', 70]]);
+  });
+
+  it('reads languages as a share of owned repos, not of the languages listed', () => {
+    const d = cardProfile({ ...report, stats: { ...report.stats, repos: 12, languages: [{ name: 'TypeScript', repos: 8 }, { name: 'Go', repos: 2 }] } })!;
+    expect(d.languages).toEqual([{ name: 'TypeScript', share: 8 / 12 }, { name: 'Go', share: 2 / 12 }]);
+    expect(d.github).toEqual([
+      { label: 'repos', value: '12' },
+      { label: 'active 90d', value: '9' },
+      { label: 'stars', value: '1.2k' },
+    ]);
+  });
+
+  it('splits tracked dependencies into disjoint current / behind / a-major-behind counts', () => {
+    const d = cardProfile({
+      ...report,
+      repos: [
+        stack('ada/a', { depsTracked: 40, anyDrift: 12, majorDrift: 5, deprecated: 1, advisories: 2 }),
+        stack('ada/b', { depsTracked: 10, anyDrift: 3, majorDrift: 0, conflicts: 1 }),
+      ],
+    })!;
+    expect(d.freshness).toEqual({ current: 35, behind: 10, major: 5 });
+    const { current, behind, major } = d.freshness!;
+    expect(current + behind + major).toBe(50);
+    expect(d.stack).toEqual([
+      { label: 'deps tracked', value: '50', alert: false },
+      { label: 'a major behind', value: '5', alert: true },
+      { label: 'deprecated', value: '1', alert: true },
+      { label: 'advisories', value: '2', alert: true },
+      { label: 'conflicts at latest', value: '1', alert: true },
+    ]);
+    expect(d.stacks).toBe(2);
+  });
+
+  it('never draws a negative segment when counts disagree, and calls nothing tracked unmeasured', () => {
+    // The shared fixture has a major-drift count with no any-drift count.
+    expect(cardProfile(report)!.freshness).toEqual({ current: 28, behind: 0, major: 2 });
+    expect(cardProfile({ ...report, repos: [] })!.freshness).toBeNull();
+  });
+
+  it('ranks packages by how many repos declare them', () => {
+    const dep = (name: string) => ({ name, range: '^1', resolved: '1.0.0', latest: '1.0.0', majorsBehind: 0, deprecated: false, advisories: 0 });
+    const d = cardProfile({
+      ...report,
+      repos: [stack('ada/a', { deps: [dep('zod'), dep('react')] }), stack('ada/b', { deps: [dep('react')] })],
+    })!;
+    expect(d.packages).toEqual(['react', 'zod']);
+  });
+
+  it('gives one login one id whatever the case', () => {
+    expect(cardProfile({ ...report, login: 'ADA' })!.id).toBe(cardProfile(report)!.id);
+    expect(cardProfile({ ...report, login: 'grace' })!.id).not.toBe(cardProfile(report)!.id);
+  });
+
+  it('is locked when traits are', () => {
+    expect(cardProfile({ ...report, traits: null })).toBeNull();
   });
 });
 

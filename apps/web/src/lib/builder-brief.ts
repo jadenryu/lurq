@@ -294,58 +294,140 @@ export type CardTier = "gold" | "silver" | "bronze";
 
 export interface CardStats {
   overall: number;
-  /** Three letters, like a position. */
+  /** The archetype's code, the same one that labels its trait row on the card. */
   position: string;
   tier: CardTier;
-  stats: { label: string; value: string }[];
 }
 
-const POSITION: Record<ArchetypeId, string> = {
+/** One code per trait. A trait IS an archetype's score, so it gets one name, not two. */
+export const TRAIT_CODE: Record<ArchetypeId, string> = {
   shipper: "SHP",
   architect: "ARC",
   explorer: "EXP",
   steward: "STW",
 };
 
+const TRAIT_ORDER: ArchetypeId[] = ["shipper", "architect", "explorer", "steward"];
+
 function compact(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n);
 }
 
 /**
- * The card's numbers, from a signed-in report (traits required).
+ * The card's rating, from a signed-in report (traits required).
  *
  * Overall is position-weighted, the way a player's is: the archetype trait
  * counts 60%, the mean of the other scored traits 40%. A plain mean would put
- * every specialist in the 40s, which is accurate about nothing.
- * FIFA's own tier cut-offs: 75 gold, 65 silver.
+ * every specialist in the 40s, which is accurate about nothing. The archetype
+ * is the top trait, so overall never exceeds it. A trait with nothing to
+ * measure (stack health with no indexed dependencies) is left out of the mean,
+ * not counted as a zero. FIFA's own tier cut-offs: 75 gold, 65 silver.
  */
 export function cardStats(report: BuilderReport): CardStats | null {
   if (!report.traits) return null;
-  const score = (id: ArchetypeId) => report.traits!.find((t) => t.id === id)?.score ?? null;
-  const main = score(report.archetype) ?? 0;
+  const main = report.traits.find((t) => t.id === report.archetype)?.score ?? 0;
   const others = report.traits
     .filter((t) => t.id !== report.archetype && t.score !== null)
     .map((t) => t.score!);
   const overall = others.length
     ? Math.round(0.6 * main + 0.4 * (others.reduce((a, b) => a + b, 0) / others.length))
     : main;
-  const show = (id: ArchetypeId) => {
-    const s = score(id);
-    return s === null ? "--" : String(s);
-  };
-
   return {
     overall,
-    position: POSITION[report.archetype],
+    position: TRAIT_CODE[report.archetype],
     tier: overall >= 75 ? "gold" : overall >= 65 ? "silver" : "bronze",
-    stats: [
-      { label: "SHP", value: show("shipper") },
-      { label: "LON", value: show("architect") },
-      { label: "RNG", value: show("explorer") },
-      { label: "HLT", value: show("steward") },
-      { label: "STR", value: compact(report.stats.stars) },
-      { label: "ACT", value: String(report.stats.active90) },
+  };
+}
+
+export interface CardProfile {
+  /** Stable per login. An identifier, not a measurement. */
+  id: string;
+  traits: { id: ArchetypeId; code: string; name: string; score: number | null }[];
+  /** Top four, each as a share of the owned repos (so they need not sum to 1). */
+  languages: { name: string; share: number }[];
+  github: { label: string; value: string }[];
+  /** Stacks read, and the counts the stack health score is computed from. */
+  stacks: number;
+  stack: { label: string; value: string; alert: boolean }[];
+  /**
+   * Tracked dependencies split three ways, from exact per-repo counts. `null`
+   * when nothing was tracked, which is "unmeasured", not "all current".
+   */
+  freshness: { current: number; behind: number; major: number } | null;
+  /** Packages declared in the most repos. */
+  packages: string[];
+}
+
+/**
+ * Everything else the card prints, from a signed-in report (traits required).
+ *
+ * WHY COUNTS AND NOT THE DEP ROWS. Each repo's `deps` is capped and sorted worst
+ * first, so a split computed from the rows overstates the problems on any stack
+ * past the cap. The per-repo counts are exact. `anyDrift` includes `majorDrift`
+ * (a major behind is behind), which is what makes the three-way split disjoint.
+ *
+ * Stack counts are summed over repos, the same way the stack health trait sums
+ * them: a package used in two repos is two dependencies to keep current.
+ *
+ * ponytail: `packages` ranks from the capped rows, so on a stack past the cap a
+ * widely used, perfectly current package can be missed. Rank from the manifest
+ * names if the card ever needs to be exact about it.
+ */
+export function cardProfile(report: BuilderReport): CardProfile | null {
+  if (!report.traits) return null;
+  const traits = report.traits;
+  const sum = (pick: (s: BuilderReport["repos"][number]) => number) =>
+    report.repos.reduce((n, s) => n + pick(s), 0);
+  const tracked = sum((s) => s.depsTracked);
+  const drifted = sum((s) => s.anyDrift);
+  const major = sum((s) => s.majorDrift);
+  const deprecated = sum((s) => s.deprecated);
+  const advisories = sum((s) => s.advisories);
+  const conflicts = sum((s) => s.conflicts);
+  const { repos, active90, stars, languages } = report.stats;
+
+  const uses = new Map<string, number>();
+  for (const s of report.repos) for (const d of s.deps) uses.set(d.name, (uses.get(d.name) ?? 0) + 1);
+
+  // FNV-1a: short, stable, and the same for any casing of the login.
+  let h = 0x811c9dc5;
+  for (const ch of report.login.toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
+
+  return {
+    id: (h >>> 0).toString(16).padStart(8, "0").toUpperCase(),
+    traits: TRAIT_ORDER.map((id) => ({
+      id,
+      code: TRAIT_CODE[id],
+      name: ARCHETYPES[id].trait,
+      score: traits.find((t) => t.id === id)?.score ?? null,
+    })),
+    languages: repos ? languages.slice(0, 4).map((l) => ({ name: l.name, share: l.repos / repos })) : [],
+    github: [
+      { label: "repos", value: compact(repos) },
+      { label: "active 90d", value: String(active90) },
+      { label: "stars", value: compact(stars) },
     ],
+    stacks: report.repos.length,
+    stack: [
+      { label: "deps tracked", value: compact(tracked), alert: false },
+      { label: "a major behind", value: String(major), alert: major > 0 },
+      { label: "deprecated", value: String(deprecated), alert: deprecated > 0 },
+      { label: "advisories", value: String(advisories), alert: advisories > 0 },
+      { label: "conflicts at latest", value: String(conflicts), alert: conflicts > 0 },
+    ],
+    freshness: tracked
+      ? {
+          // Clamped: counts from different queries can disagree by a row, and a
+          // negative segment would draw nothing and skew the rest.
+          current: Math.max(0, tracked - Math.max(drifted, major)),
+          behind: Math.max(0, drifted - major),
+          major: Math.min(major, tracked),
+        }
+      : null,
+    packages: [...uses]
+      .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+      .slice(0, 6)
+      .map(([name]) => name),
   };
 }
 

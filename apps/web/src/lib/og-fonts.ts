@@ -23,18 +23,25 @@ import { join } from "node:path";
  * Source is google/fonts `ofl/geist` (OFL, same family the site already uses).
  * 88KB each, read once per process at module scope rather than per render.
  *
- * ponytail: two static weights, not the variable axis. Cut another instance
+ * Geist Mono is cut the same way, at 500 only, from google/fonts `ofl/geistmono`
+ * (OFL): the builder card sets its labels and readouts in it.
+ *
+ *   fonttools varLib.instancer "GeistMono[wght].ttf" wght=500 -o GeistMono-500.ttf
+ *
+ * ponytail: static weights, not the variable axis. Cut another instance
  * when a card genuinely needs a third weight — never reach for the woff2.
  */
 
 /** Loaded at module scope: these never change, and a card should not pay for them. */
-const [medium, bold] = await Promise.all([
+const [medium, bold, mono] = await Promise.all([
   readFile(join(process.cwd(), "fonts/geist/Geist-500.ttf")),
   readFile(join(process.cwd(), "fonts/geist/Geist-700.ttf")),
+  readFile(join(process.cwd(), "fonts/geist-mono/GeistMono-500.ttf")),
 ]);
 
 /** Drop into any `ImageResponse`'s `fonts` option. */
 export const ogFonts = [
   { name: "Geist", data: medium, weight: 500 as const, style: "normal" as const },
   { name: "Geist", data: bold, weight: 700 as const, style: "normal" as const },
+  { name: "Geist Mono", data: mono, weight: 500 as const, style: "normal" as const },
 ];

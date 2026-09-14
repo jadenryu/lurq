@@ -4,9 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
-import { ChevronRight, Download, Lock, RefreshCw } from "lucide-react";
+import { ChevronRight, Download, Eye, Lock, RefreshCw } from "lucide-react";
 import posthog from "posthog-js";
 import { buttonVariants } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { INSTALL_COMMAND } from "@/content/copy";
 import { CopyButton, CopyInline } from "@/components/dashboard/copy-button";
@@ -38,9 +39,13 @@ import {
   type DepDiff,
   type RepoStack,
   type ScanConflict,
+  type BuilderStanding,
+  type SavedBuilderScan,
+  type StandingMetricId,
   type ScanDep,
   type Trait,
 } from "@/lib/builder-profile";
+import { compact, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -108,7 +113,9 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
         const res = await fetch("/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target }),
+          // Signed in, the first read of a target is its saved copy; "scan
+          // again" (run > 0) asks for a live one, which replaces it.
+          body: JSON.stringify({ target, fresh: run > 0 }),
         });
         const data = (await res.json()) as BuilderReport & { error?: unknown };
         if (stale) return;
@@ -136,16 +143,20 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
     return () => {
       stale = true;
     };
-  }, [key, target, isLoaded]);
+  }, [key, target, isLoaded, run]);
+
+  function open(value: string) {
+    // In the URL, so a refresh, a shared link and the sign-up redirect all
+    // come back to this report.
+    router.replace(`/dashboard/report?target=${encodeURIComponent(value)}`, { scroll: false });
+    setInput(value);
+    setTarget(value);
+  }
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const value = input.trim().replace(/^[/@]+/, "");
-    if (!value) return;
-    // In the URL, so a refresh, a shared link and the sign-up redirect all
-    // come back to this report.
-    router.replace(`/dashboard/report?target=${encodeURIComponent(value)}`, { scroll: false });
-    setTarget(value);
+    if (value) open(value);
   }
 
   const running = state.kind === "running";
@@ -174,6 +185,14 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
         </button>
       </form>
 
+      {isSignedIn && (
+        <SavedScans
+          current={target}
+          version={state.kind === "done" ? state.report.savedAt : undefined}
+          onOpen={open}
+        />
+      )}
+
       {state.kind === "idle" && (
         <EmptyState title="Scan a GitHub profile">
           Type a username, or a repo to put that repo first. Public repos only.
@@ -185,6 +204,70 @@ export function BuilderReportView({ initialTarget }: { initialTarget: string }) 
         <Report report={state.report} target={target} onRescan={() => setRun((n) => n + 1)} />
       )}
     </>
+  );
+}
+
+/**
+ * The account's saved reports, most recent first. Each opens from its saved
+ * copy with no scan; "scan again" on the report is what refreshes one.
+ *
+ * `version` is the open report's save time, so a scan that just saved shows up
+ * here without a reload.
+ */
+function SavedScans({
+  current,
+  version,
+  onOpen,
+}: {
+  current: string;
+  version: string | null | undefined;
+  onOpen: (target: string) => void;
+}) {
+  const [scans, setScans] = useState<SavedBuilderScan[]>([]);
+
+  useEffect(() => {
+    let stale = false;
+    fetch("/api/scan/saved")
+      .then((res) => (res.ok ? (res.json() as Promise<{ scans?: SavedBuilderScan[] }>) : { scans: [] }))
+      .then((data) => !stale && setScans(data.scans ?? []))
+      // The list is a shortcut; without it the scan box still works.
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [version]);
+
+  if (scans.length === 0) return null;
+  const active = current.trim().replace(/^[/@]+/, "").toLowerCase();
+
+  return (
+    <nav aria-label="Saved scans" className="mt-4">
+      <p className={microLabel}>saved scans</p>
+      <ul className="mt-2 flex gap-2 overflow-x-auto pb-1">
+        {scans.map((s) => (
+          <li key={s.target} className="shrink-0">
+            <button
+              type="button"
+              onClick={() => onOpen(s.target)}
+              aria-current={s.target === active ? "true" : undefined}
+              className={cn(
+                "flex w-[220px] items-center gap-3 rounded-[var(--radius-panel)] border border-edge px-3 py-2.5 text-left transition-colors hover:bg-surface-2/70",
+                s.target === active && "bg-surface-2",
+              )}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={s.avatarUrl} alt="" className="size-9 shrink-0 rounded-[6px] border border-edge bg-surface-2" />
+              <span className="min-w-0">
+                <span className="block truncate font-mono text-[12.5px] text-ink">{s.target}</span>
+                <span className="block truncate text-[11.5px] text-ink-3">
+                  {ARCHETYPES[s.archetype].name} · {relativeTime(s.scannedAt)}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 
@@ -243,14 +326,27 @@ function Report({
             </h2>
             <p className="mt-2 max-w-[62ch] text-[13.5px] leading-relaxed text-ink-2">{type.line}</p>
           </div>
-          <a
-            href={report.url}
-            target="_blank"
-            rel="noopener"
-            className="font-mono text-[12.5px] text-ink-3 transition-colors hover:text-ink"
-          >
-            @{report.login}
-          </a>
+          <div className="flex flex-col items-end gap-1.5">
+            <a
+              href={report.url}
+              target="_blank"
+              rel="noopener"
+              className="font-mono text-[12.5px] text-ink-3 transition-colors hover:text-ink"
+            >
+              @{report.login}
+            </a>
+            {report.savedAt && (
+              <button
+                type="button"
+                onClick={onRescan}
+                title="Scan again"
+                className="inline-flex items-center gap-1.5 font-mono text-[11.5px] text-ink-3 transition-colors hover:text-ink"
+              >
+                <RefreshCw aria-hidden className="size-3" />
+                saved {relativeTime(report.savedAt)}
+              </button>
+            )}
+          </div>
         </div>
         <ReportActions report={report} target={target} back={back} />
       </Panel>
@@ -265,6 +361,8 @@ function Report({
           hint={languages.length > 1 ? `then ${languages.slice(1, 3).map((l) => l.name).join(", ")}` : undefined}
         />
       </StatRow>
+
+      {report.standing && <Standing standing={report.standing} />}
 
       <Summary report={report} />
 
@@ -462,6 +560,7 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
  * The report's two exports: everything as a brief for a coding agent, and the
  * stats card. The card is signed-in only because it is the trait scores; the
  * brief is whatever this session was sent, so it needs no gate of its own.
+ * The card opens in a viewer first, and is downloaded from there.
  */
 function ReportActions({ report, target, back }: { report: BuilderReport; target: string; back: string }) {
   return (
@@ -475,24 +574,154 @@ function ReportActions({ report, target, back }: { report: BuilderReport; target
         <SignUpButton mode="modal" fallbackRedirectUrl={back} signInFallbackRedirectUrl={back}>
           <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}>
             <Lock aria-hidden className="size-3.5" />
-            Export stats card
+            View stats card
           </button>
         </SignUpButton>
       ) : (
-        <a
-          href={`/api/scan/card?target=${encodeURIComponent(target)}`}
-          download={`lurq-${report.login}.png`}
-          onClick={() => posthog.capture("builder_card_export", { login: report.login, archetype: report.archetype })}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-        >
-          <Download aria-hidden className="size-3.5" />
-          Export stats card
-        </a>
+        <CardViewer report={report} target={target} />
       )}
       <p className="text-[11.5px] text-ink-3">
         Paste it into Claude, ChatGPT or Cursor: repos worst first, the steps to fix each, and how to check the fix with lurq.
       </p>
     </div>
+  );
+}
+
+/**
+ * The stats card, seen before it is saved.
+ *
+ * The image IS the export (same route, minus the attachment header), so the
+ * preview is exactly the file they download; a React copy of the card would be
+ * a second design to keep in step with the first. The save time is in the URL,
+ * so reopening is cached and a rescan is a new image.
+ */
+function CardViewer({ report, target }: { report: BuilderReport; target: string }) {
+  const qs = new URLSearchParams({ target });
+  if (report.savedAt) qs.set("v", report.savedAt);
+  const src = `/api/scan/card?${qs.toString()}`;
+  /** Which image finished, and how. Keyed by src so a new report starts loading again. */
+  const [settled, setSettled] = useState<{ src: string; ok: boolean } | null>(null);
+  const done = settled?.src === src;
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (open) posthog.capture("builder_card_view", { login: report.login, archetype: report.archetype });
+      }}
+    >
+      <DialogTrigger
+        render={<button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")} />}
+      >
+        <Eye aria-hidden className="size-3.5" />
+        View stats card
+      </DialogTrigger>
+      <DialogContent className="w-auto gap-3 p-3 sm:max-w-none">
+        <DialogTitle className="sr-only">Builder card for @{report.login}</DialogTitle>
+        {/* Height-led, so the 4:5 card fits a laptop screen and a phone alike. */}
+        <div className="relative aspect-[4/5] h-[min(78vh,calc((100vw_-_3.5rem)*1.25))] overflow-hidden rounded-lg bg-[#09090b]">
+          {!done && <div aria-hidden className="absolute inset-0 animate-pulse bg-surface-2/40 motion-reduce:animate-none" />}
+          {done && !settled.ok && (
+            <p className="absolute inset-0 grid place-items-center px-6 text-center text-[13px] text-ink-2">
+              Could not render the card. Close and try again.
+            </p>
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`Builder stats card for @${report.login}`}
+            onLoad={() => setSettled({ src, ok: true })}
+            onError={() => setSettled({ src, ok: false })}
+            className={cn(
+              "size-full object-contain transition-opacity duration-300 motion-reduce:transition-none",
+              done && settled.ok ? "opacity-100" : "opacity-0",
+            )}
+          />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+          <p className="text-[11.5px] text-ink-3">1080 × 1350 PNG, the crop X, LinkedIn and Instagram show uncut.</p>
+          <a
+            href={`${src}&download=1`}
+            download={`lurq-${report.login}.png`}
+            aria-disabled={!(done && settled.ok)}
+            onClick={() => posthog.capture("builder_card_export", { login: report.login, archetype: report.archetype })}
+            className={cn(buttonVariants({ size: "sm" }), "gap-1.5", !(done && settled.ok) && "pointer-events-none opacity-60")}
+          >
+            <Download aria-hidden className="size-3.5" />
+            Download PNG
+          </a>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const percent = (v: number) => `${Math.round(v * 100)}%`;
+
+/** How each ranked metric reads. Direction is already in the percentile; the label says which way is good. */
+const STANDING: Record<StandingMetricId, { label: string; show: (v: number) => string }> = {
+  repos: { label: "repos", show: compact },
+  active90: { label: "active in 90 days", show: String },
+  stars: { label: "stars", show: compact },
+  behindShare: { label: "deps behind latest", show: percent },
+  majorShare: { label: "deps a major behind", show: percent },
+  advisoryRate: { label: "advisories per 100 deps", show: (v) => v.toFixed(1) },
+};
+
+/**
+ * Percentile ranks against the other builders lurq has a saved scan of.
+ *
+ * The API only ranks a metric with enough builders behind it, so an empty list
+ * means "not enough scans yet", and that is what this says instead of showing
+ * a percentile of a handful of people.
+ */
+function Standing({ standing }: { standing: BuilderStanding }) {
+  const ranked = standing.metrics.length > 0;
+  return (
+    <Panel>
+      <PanelHeader
+        title="how you compare"
+        trailing={
+          ranked ? (
+            <span className="text-[11.5px] text-ink-3">
+              vs {plural(standing.population, "builder")} scanned on lurq
+            </span>
+          ) : null
+        }
+      />
+      {ranked ? (
+        <ul className="space-y-3">
+          {standing.metrics.map((m) => {
+            const row = STANDING[m.id];
+            return (
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1"
+                title={`Ranked against ${plural(m.population, "builder")}; ties count half.`}
+              >
+                <span className="w-full text-[13px] text-ink sm:w-48 sm:shrink-0">
+                  {row.label}
+                  {m.better === "lower" && <span className="ml-1.5 text-[11px] text-ink-3">lower is better</span>}
+                </span>
+                <span className="w-14 shrink-0 font-mono text-[12px] tabular-nums text-ink-2 sm:text-right">
+                  {row.show(m.value)}
+                </span>
+                <div className="relative h-1.5 min-w-20 flex-1 overflow-hidden rounded-full bg-muted/40">
+                  <div className="absolute inset-y-0 left-0 rounded-full bg-ink-3" style={{ width: `${m.percentile}%` }} />
+                </div>
+                <span className="w-28 shrink-0 text-right text-[12px] text-ink-2">
+                  ahead of <span className="font-mono tabular-nums text-ink">{m.percentile}%</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-[13px] leading-relaxed text-ink-2">
+          Percentiles appear once {standing.minimum} builders have been scanned on lurq.{" "}
+          {plural(standing.population, "builder")} so far.
+        </p>
+      )}
+    </Panel>
   );
 }
 
