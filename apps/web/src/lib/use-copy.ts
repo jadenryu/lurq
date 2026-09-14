@@ -25,6 +25,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * confirmation that is only claimed when the write succeeded, and a cleared
  * timer. Callers render the label; `role="status"` belongs next to it in the
  * component, which is why that part is not in here.
+ *
+ * `resetAfter: null` keeps the confirmation until the page reloads, for a copy
+ * the reader should be able to glance back at and know they already took.
  */
 
 /** Returns whether the fallback actually put the text on the clipboard. */
@@ -49,7 +52,7 @@ function legacyCopy(text: string): boolean {
   }
 }
 
-export function useCopy(resetAfter = 1600): {
+export function useCopy(resetAfter: number | null = 1600): {
   copied: boolean;
   /** False when nothing reached the clipboard — callers must not claim success. */
   copy: (text: string) => Promise<boolean>;
@@ -78,7 +81,7 @@ export function useCopy(resetAfter = 1600): {
 
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), resetAfter);
+      if (resetAfter !== null) timer.current = setTimeout(() => setCopied(false), resetAfter);
       return true;
     },
     [resetAfter],

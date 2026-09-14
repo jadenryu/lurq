@@ -17,6 +17,10 @@ import { cn } from "@/lib/utils";
  * assembled on the server where the data already is: a client component that
  * fetches in order to copy is a second source of truth for what the page says.
  *
+ * `sticky` keeps "copied" until the page reloads instead of reverting after a
+ * moment, for a payload someone pastes elsewhere and comes back from (a fix
+ * prompt): the button still saying copied is how they know they took it.
+ *
  * The live region sits *outside* the button. Inside, it would be folded into the
  * accessible name, and the button would announce itself as "copy for agent
  * copied" forever after the first click.
@@ -31,6 +35,7 @@ export function CopyButton({
   /** Announced instead of the visible label, when the label is only a glyph. */
   srLabel,
   onCopy,
+  sticky = false,
 }: {
   text: string;
   label?: string;
@@ -41,8 +46,10 @@ export function CopyButton({
   srLabel?: string;
   /** Called after a copy that actually reached the clipboard. */
   onCopy?: () => void;
+  /** Stay "copied" until the page reloads. */
+  sticky?: boolean;
 }) {
-  const { copied, copy } = useCopy();
+  const { copied, copy } = useCopy(sticky ? null : undefined);
   return (
     <>
       <Button
@@ -73,13 +80,16 @@ export function CopyInline({
   label,
   className,
   onCopy,
+  sticky = false,
 }: {
   text: string;
   label: string;
   className?: string;
   onCopy?: () => void;
+  /** Stay "copied" until the page reloads. */
+  sticky?: boolean;
 }) {
-  const { copied, copy } = useCopy();
+  const { copied, copy } = useCopy(sticky ? null : undefined);
   return (
     <>
       <button

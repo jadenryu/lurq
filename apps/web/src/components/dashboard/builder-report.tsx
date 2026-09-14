@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
 import { ChevronRight, Download, Eye, Lock, RefreshCw } from "lucide-react";
 import posthog from "posthog-js";
@@ -372,7 +372,7 @@ function Report({
 
       {first ? (
         <Panel padding="none">
-          <StackHead stack={first} hiddenDeps={report.locked?.deps ?? 0} />
+          <StackHead stack={first} hiddenDeps={report.locked?.deps ?? 0} locked={report.locked !== null} />
           <StackBody stack={first} report={report} />
           {report.locked && (report.locked.deps > 0 || report.locked.conflicts > 0) && (
             <LockedRow>
@@ -558,18 +558,24 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
 
 /**
  * The report's two exports: everything as a brief for a coding agent, and the
- * stats card. The card is signed-in only because it is the trait scores; the
- * brief is whatever this session was sent, so it needs no gate of its own.
+ * stats card. Both are signed-in only: the card is the trait scores, and the
+ * fix prompts are what a free account is for. A signed-out visitor still sees
+ * every finding they were sent; the prompt that fixes them is the ask.
  * The card opens in a viewer first, and is downloaded from there.
  */
 function ReportActions({ report, target, back }: { report: BuilderReport; target: string; back: string }) {
   return (
     <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-edge pt-4">
-      <CopyButton
-        text={reportBrief(report)}
-        label="Copy fix prompt for your AI"
-        onCopy={() => posthog.capture("builder_report_copy", { scope: "report", login: report.login })}
-      />
+      {report.locked ? (
+        <LockedCopy label="Copy fix prompt for your AI" />
+      ) : (
+        <CopyButton
+          sticky
+          text={reportBrief(report)}
+          label="Copy fix prompt for your AI"
+          onCopy={() => posthog.capture("builder_report_copy", { scope: "report", login: report.login })}
+        />
+      )}
       {report.locked ? (
         <SignUpButton mode="modal" fallbackRedirectUrl={back} signInFallbackRedirectUrl={back}>
           <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}>
@@ -778,9 +784,40 @@ function SummaryList({
   );
 }
 
-function RepoCopy({ stack, hiddenDeps = 0 }: { stack: RepoStack; hiddenDeps?: number }) {
+/**
+ * A fix prompt, locked for a signed-out visitor. Sign-up opens in place and
+ * returns to this same report (the target is in the URL), where the prompt is
+ * then one click away.
+ *
+ * This is a conversion gate, not a secret: everything the prompt is built from
+ * is already on the page they were sent.
+ */
+function LockedCopy({ label, inline = false }: { label: string; inline?: boolean }) {
+  const params = useSearchParams();
+  const back = `/dashboard/report${params.size > 0 ? `?${params.toString()}` : ""}`;
+  return (
+    <SignUpButton mode="modal" fallbackRedirectUrl={back} signInFallbackRedirectUrl={back}>
+      <button
+        type="button"
+        title="Free account"
+        className={
+          inline
+            ? "inline-flex shrink-0 items-center gap-1.5 text-[12px] text-ink-3 transition-colors hover:text-ink"
+            : cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")
+        }
+      >
+        <Lock aria-hidden className={inline ? "size-3" : "size-3.5"} />
+        {label}
+      </button>
+    </SignUpButton>
+  );
+}
+
+function RepoCopy({ stack, hiddenDeps = 0, locked = false }: { stack: RepoStack; hiddenDeps?: number; locked?: boolean }) {
+  if (locked) return <LockedCopy label="copy for agent" inline />;
   return (
     <CopyInline
+      sticky
       text={repoBrief(stack, hiddenDeps)}
       label="copy for agent"
       onCopy={() => posthog.capture("builder_report_copy", { scope: "repo", repo: stack.repo })}
@@ -788,7 +825,7 @@ function RepoCopy({ stack, hiddenDeps = 0 }: { stack: RepoStack; hiddenDeps?: nu
   );
 }
 
-function StackHead({ stack, hiddenDeps }: { stack: RepoStack; hiddenDeps: number }) {
+function StackHead({ stack, hiddenDeps, locked }: { stack: RepoStack; hiddenDeps: number; locked: boolean }) {
   const untracked = stack.depsDeclared - stack.depsTracked;
   return (
     <div className="flex h-11 items-center gap-3 border-b border-edge px-[var(--panel-px)]">
@@ -804,7 +841,7 @@ function StackHead({ stack, hiddenDeps }: { stack: RepoStack; hiddenDeps: number
       <span className="ml-auto hidden shrink-0 font-mono text-[11px] text-ink-3 min-[560px]:inline">
         root package.json{untracked > 0 ? ` · ${untracked} not indexed yet` : ""}
       </span>
-      <RepoCopy stack={stack} hiddenDeps={hiddenDeps} />
+      <RepoCopy stack={stack} hiddenDeps={hiddenDeps} locked={locked} />
     </div>
   );
 }
@@ -1004,11 +1041,16 @@ function DepDrawer({ dep, report }: { dep: ScanDep; report: BuilderReport }) {
         ))}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <CopyButton
-          text={depBrief(report, dep.name, detail)}
-          label="Copy fix prompt"
-          onCopy={() => posthog.capture("builder_report_copy", { scope: "dep", package: dep.name })}
-        />
+        {signedIn ? (
+          <CopyButton
+            sticky
+            text={depBrief(report, dep.name, detail)}
+            label="Copy fix prompt"
+            onCopy={() => posthog.capture("builder_report_copy", { scope: "dep", package: dep.name })}
+          />
+        ) : (
+          <LockedCopy label="Copy fix prompt" />
+        )}
         <span className="text-[11.5px] text-ink-3">
           {detail?.diff && !detail.diff.inconclusive
             ? "Includes what changed, so your agent can search your code for each name."
@@ -1266,6 +1308,7 @@ function Conflicts({
                 })}
               </ul>
               <CopyButton
+                sticky
                 text={conflictBrief(report, repo, c)}
                 label="Copy fix prompt"
                 onCopy={() => posthog.capture("builder_report_copy", { scope: "conflict", repo })}
@@ -1324,6 +1367,7 @@ function SharedPackages({ report }: { report: BuilderReport }) {
                   })}
                 </ul>
                 <CopyButton
+                  sticky
                   text={depBrief(report, p.name)}
                   label="Copy fix prompt"
                   onCopy={() => posthog.capture("builder_report_copy", { scope: "shared", package: p.name })}
