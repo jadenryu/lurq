@@ -65,6 +65,7 @@ import {
 } from '../billing/stripe';
 import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
 import { registerPublicPackageRoutes } from './publicPackages';
+import { registerPublicUpgradeRoutes } from './publicUpgrades';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
@@ -404,6 +405,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // Public, keyless package summaries for the lurq.run/npm pages. Behind the IP
   // limiter only; publicPackages.ts keeps them to a summary of the top packages.
   registerPublicPackageRoutes(app, db, ipLimiter);
+  registerPublicUpgradeRoutes(app, db, ipLimiter);
 
   app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
