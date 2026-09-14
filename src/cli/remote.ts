@@ -296,8 +296,9 @@ export function reportUpgradeRuns(
 }
 
 /** The account's open urgent changes, worded for an agent. Null when there are none. */
-export async function getAlerts(opts: RemoteOptions = {}): Promise<string | null> {
-  return (await request<{ notice: string | null }>('GET', '/alerts', undefined, opts)).notice;
+export async function getAlerts(opts: RemoteOptions & { agent?: string } = {}): Promise<string | null> {
+  const path = opts.agent ? `/alerts?agent=${encodeURIComponent(opts.agent)}` : '/alerts';
+  return (await request<{ notice: string | null }>('GET', path, undefined, opts)).notice;
 }
 
 /** The account's selection policy, as the dashboard would save it. */

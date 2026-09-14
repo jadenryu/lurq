@@ -57,7 +57,7 @@ describe('buildRemoteServerEntry (hosted)', () => {
       expect(entry).toEqual({
         type: 'http',
         url: 'https://api.lurq.run/mcp',
-        headers: { Authorization: 'Bearer lurq_live_abc' },
+        headers: { Authorization: 'Bearer lurq_live_abc', 'X-Lurq-Client': id },
       });
       expect(JSON.stringify(entry)).not.toContain('DATABASE_URL');
       expect(entry.command).toBeUndefined();
@@ -67,7 +67,7 @@ describe('buildRemoteServerEntry (hosted)', () => {
   it('omits type for Cursor (transport inferred from url)', () => {
     expect(buildRemoteServerEntry('cursor', opts)).toEqual({
       url: 'https://api.lurq.run/mcp',
-      headers: { Authorization: 'Bearer lurq_live_abc' },
+      headers: { Authorization: 'Bearer lurq_live_abc', 'X-Lurq-Client': 'cursor' },
     });
   });
 
@@ -75,7 +75,7 @@ describe('buildRemoteServerEntry (hosted)', () => {
     for (const id of ['windsurf', 'antigravity']) {
       expect(buildRemoteServerEntry(id, opts)).toEqual({
         serverUrl: 'https://api.lurq.run/mcp',
-        headers: { Authorization: 'Bearer lurq_live_abc' },
+        headers: { Authorization: 'Bearer lurq_live_abc', 'X-Lurq-Client': id },
       });
     }
   });
@@ -83,7 +83,7 @@ describe('buildRemoteServerEntry (hosted)', () => {
   it('omits type for Kiro (transport inferred from url)', () => {
     expect(buildRemoteServerEntry('kiro', opts)).toEqual({
       url: 'https://api.lurq.run/mcp',
-      headers: { Authorization: 'Bearer lurq_live_abc' },
+      headers: { Authorization: 'Bearer lurq_live_abc', 'X-Lurq-Client': 'kiro' },
     });
   });
 
@@ -93,7 +93,7 @@ describe('buildRemoteServerEntry (hosted)', () => {
     const entry = buildRemoteServerEntry('gemini-cli', opts);
     expect(entry).toEqual({
       httpUrl: 'https://api.lurq.run/mcp',
-      headers: { Authorization: 'Bearer lurq_live_abc' },
+      headers: { Authorization: 'Bearer lurq_live_abc', 'X-Lurq-Client': 'gemini-cli' },
     });
     expect(entry.url).toBeUndefined();
   });
@@ -253,7 +253,7 @@ describe('buildRemoteTomlBlock (hosted)', () => {
     expect(toml).toContain('[mcp_servers.lurq]');
     expect(toml).toContain('url = "https://api.lurq.run/mcp"');
     // Codex expects an inline `http_headers` table, NOT a `[...headers]` subtable.
-    expect(toml).toContain('http_headers = { Authorization = "Bearer lurq_live_abc" }');
+    expect(toml).toContain('http_headers = { Authorization = "Bearer lurq_live_abc", X-Lurq-Client = "codex" }');
     expect(toml).not.toContain('[mcp_servers.lurq.headers]');
     expect(toml).not.toContain('command');
     expect(toml).not.toContain('DATABASE_URL');

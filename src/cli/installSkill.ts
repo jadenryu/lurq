@@ -321,7 +321,10 @@ export function buildRemoteServerEntry(
   agentId: string,
   opts: { url: string; apiKey: string },
 ): Record<string, any> {
-  const headers = { Authorization: `Bearer ${opts.apiKey}` };
+  // X-Lurq-Client names the agent this entry belongs to, so the server can say
+  // which agents calls come from without the CLI sending anything of its own
+  // (src/mcp/clientInfo.ts).
+  const headers = { Authorization: `Bearer ${opts.apiKey}`, 'X-Lurq-Client': agentId };
   switch (agentId) {
     case 'cursor':
     case 'kiro':
@@ -359,7 +362,7 @@ export function buildRemoteTomlBlock(opts: { url: string; apiKey: string }): str
     [
       '[mcp_servers.lurq]',
       `url = ${JSON.stringify(opts.url)}`,
-      `http_headers = { Authorization = ${JSON.stringify(`Bearer ${opts.apiKey}`)} }`,
+      `http_headers = { Authorization = ${JSON.stringify(`Bearer ${opts.apiKey}`)}, X-Lurq-Client = "codex" }`,
     ].join('\n') + '\n'
   );
 }

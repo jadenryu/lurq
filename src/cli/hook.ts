@@ -388,7 +388,10 @@ const brief = (agent: HookAgent) =>
 async function sessionStart(input: Record<string, any>, agent: HookAgent): Promise<Outcome | null> {
   const { apiKey, getAlerts } = await import('./remote');
   apiKey(); // No key, no lurq tools: say nothing rather than advertise ones that will fail.
-  const alerts = await getAlerts({ timeoutMs: 3_000 }).catch(() => null);
+  // The agent rides along so session starts can be told apart by agent, named the way setup names it.
+  const alerts = await getAlerts({ timeoutMs: 3_000, agent: agent === 'claude' ? 'claude-code' : agent }).catch(
+    () => null,
+  );
   const text = [isJsProject(input.cwd) ? brief(agent) : null, alerts].filter(Boolean).join('\n\n');
   return text ? { context: text } : null;
 }
