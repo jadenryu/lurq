@@ -18,6 +18,14 @@ export interface UserConfig {
   apiKey?: string;
   /** Only stored when it differs from the built-in default (self-hosted service). */
   endpoint?: string;
+  /**
+   * Agent hooks lurq installed, with the lurq command each was written with
+   * (cli/autoHooks.ts). A recorded agent whose hooks are gone had them removed
+   * by the user, and they are not put back.
+   */
+  hooks?: Partial<Record<'claude' | 'codex' | 'cursor', { command: string }>>;
+  /** false: never add or refresh agent hooks outside `lurq setup`. */
+  autoHooks?: boolean;
 }
 
 /** `~/.lurq`, also where the agent instruction template is copied. */

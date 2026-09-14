@@ -37,7 +37,7 @@ import { delimiter, dirname, join } from 'node:path';
 import { DEFAULT_ENDPOINT, PACKAGE_NAME } from '../core/constants';
 import { logger } from '../core/logger';
 import { packageRoot } from '../core/paths';
-import { lurqHome, resolveApiKey } from '../core/userConfig';
+import { lurqHome, readUserConfig, resolveApiKey, writeUserConfig } from '../core/userConfig';
 
 const ENV_KEYS = [
   'DATABASE_URL',
@@ -610,22 +610,37 @@ export function withLurqHooks(config: Record<string, any>, agent: HookAgent, lur
   return target.flat ? { version: 1, ...base, hooks } : { ...base, hooks };
 }
 
+/** The lurq command an agent's hooks run. Cursor is a GUI app that may not inherit the shell's PATH, so it gets the absolute path. */
+export function lurqCommandFor(agent: HookAgent, invocation: { command: string; path?: string }): string {
+  if (agent !== 'cursor' || !invocation.path) return invocation.command;
+  return /\s/.test(invocation.path) ? JSON.stringify(invocation.path) : invocation.path;
+}
+
+/** Whether setup's lurq MCP entry is in this agent's config: the consent automatic hooks ride on. */
+export function hasLurqEntry(spec: AgentSpec): boolean {
+  try {
+    if (!existsSync(spec.path)) return false;
+    if (spec.format === 'toml') return readFileSync(spec.path, 'utf8').includes('[mcp_servers.lurq]');
+    const servers = readJsonObject(spec.path)[spec.format === 'servers' ? 'servers' : 'mcpServers'];
+    return !!servers && typeof servers === 'object' && Object.hasOwn(servers, 'lurq');
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Install lurq's hooks for one agent (see hook.ts). Null when `lurq` is not on
- * PATH, since the hooks run on every prompt and tool call and resolving `npx` each
- * time costs more than they are worth, and for Codex when the user already keeps
- * hooks inline in config.toml (Codex warns when one layer has both).
+ * Install lurq's hooks for one agent (see hook.ts) and record that lurq did. Null
+ * when `lurq` is not on PATH, since the hooks run on every prompt and tool call and
+ * resolving `npx` each time costs more than they are worth, and for Codex when the
+ * user already keeps hooks inline in config.toml (Codex warns when one layer has both).
  */
 export function installHooks(agent: HookAgent, path = hooksPath(agent), invocation = lurqInvocation()): string | null {
   if (!invocation.onPath) return null;
   const codexToml = home('.codex', 'config.toml');
   if (agent === 'codex' && existsSync(codexToml) && /^\s*\[\[?hooks[.\]]/m.test(readFileSync(codexToml, 'utf8'))) return null;
-  // Cursor is a GUI app that may not inherit the shell's PATH, so it gets the binary's absolute path.
-  const lurq =
-    agent === 'cursor' && invocation.path
-      ? /\s/.test(invocation.path) ? JSON.stringify(invocation.path) : invocation.path
-      : invocation.command;
+  const lurq = lurqCommandFor(agent, invocation);
   writeJson(path, withLurqHooks(readJsonObject(path), agent, lurq));
+  writeUserConfig({ hooks: { ...readUserConfig().hooks, [agent]: { command: lurq } } });
   return path;
 }
 
