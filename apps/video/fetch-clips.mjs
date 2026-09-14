@@ -1,31 +1,40 @@
 // Stock footage from Mixkit (Stock Video Free License: commercial use, no attribution).
 // The files are large, so they stay out of git; this fetches any that are missing.
-import { access, mkdir, writeFile } from "node:fs/promises";
+// Each clip is downloaded at the best size Mixkit serves and re-encoded to 1440p:
+// headroom for reframing, and still light enough for Studio to play smoothly.
+import { execFile } from "node:child_process";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
+
+const run = promisify(execFile);
 
 const CLIPS = {
-  curve: 49833,
-  towers: 49875,
-  dusk: 49848,
-  highway: 42048,
-  spire: 49871,
-  street: 41161,
-  tower: 49836,
-  map: 12748,
-  night: 40640,
-  horizon: 41375,
+  office: 918,
+  laugh: 4872,
+  typing: 1781,
+  late: 41647,
+  focus: 42624,
+  coffee: 1730,
+  hands: 4938,
+  screens: 41639,
 };
 
-await mkdir("public/clips", { recursive: true });
-for (const [name, id] of Object.entries(CLIPS)) {
+async function fetchClip([name, id]) {
   const file = `public/clips/${name}.mp4`;
-  if (await access(file).then(() => true, () => false)) continue;
-  // The best Mixkit serves for this clip: 4K, then 1080p, then 720p.
+  if (await access(file).then(() => true, () => false)) return;
   let res;
   for (const quality of [2160, 1080, 720]) {
     res = await fetch(`https://assets.mixkit.co/videos/${id}/${id}-${quality}.mp4`);
     if (res.ok) break;
   }
   if (!res.ok) throw new Error(`clip ${name} (${id}): HTTP ${res.status}`);
-  await writeFile(file, Buffer.from(await res.arrayBuffer()));
+  const source = `public/clips/${name}.source.mp4`;
+  await writeFile(source, Buffer.from(await res.arrayBuffer()));
+  // Remotion ships its own ffmpeg, so this needs nothing installed.
+  await run("npx", ["--no-install", "remotion", "ffmpeg", "-y", "-loglevel", "error", "-i", source, "-vf", "scale=-2:1440", "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", file]);
+  await rm(source);
   console.log(`fetched ${name}`);
 }
+
+await mkdir("public/clips", { recursive: true });
+await Promise.all(Object.entries(CLIPS).map(fetchClip));
