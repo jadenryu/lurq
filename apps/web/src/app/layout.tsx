@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { clerkOptions, githubFirstElements } from "@/components/auth/clerk-appearance";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PostHogIdentify } from "@/components/common/posthog-identify";
@@ -93,6 +94,9 @@ export default function RootLayout({
         // Site is monochrome: override Clerk's default purple accent so its
         // buttons/links match the white CTA (and kill the purple load flash).
         variables: { colorPrimary: "#fafafa" },
+        // GitHub as the primary way in, on every modal (clerk-appearance.ts).
+        options: clerkOptions,
+        elements: githubFirstElements,
       }}
     >
       <html
