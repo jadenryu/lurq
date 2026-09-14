@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cardProfile,
   cardStats,
   conflictBrief,
   depBrief,
@@ -123,6 +124,32 @@ describe('cardStats', () => {
 
   it('is locked when traits are', () => {
     expect(cardStats({ ...report, traits: null })).toBeNull();
+  });
+});
+
+describe('cardProfile', () => {
+  it('totals the stacks, ranks packages, and flags what needs fixing', () => {
+    const d = cardProfile(report)!;
+    expect(d.traits.map((t) => [t.label, t.score])).toEqual([['SHP', 90], ['LON', 20], ['RNG', 50], ['HLT', 70]]);
+    expect(d.stack.find((s) => s.label === 'deps tracked')?.value).toBe('30');
+    expect(d.stack.find((s) => s.label === 'advisories')).toMatchObject({ value: '1', alert: true });
+    expect(d.stack.find((s) => s.label === 'majors behind')).toMatchObject({ value: '2', alert: true });
+    expect(d.languages).toEqual([{ name: 'TypeScript', share: 1 }]);
+    expect(d.packages).toEqual(['lodash', 'react']);
+  });
+
+  it('gives one login one id and strip whatever the case, and another login different ones', () => {
+    const a = cardProfile(report)!;
+    const b = cardProfile({ ...report, login: 'ADA' })!;
+    const c = cardProfile({ ...report, login: 'grace' })!;
+    expect(b.id).toBe(a.id);
+    expect(b.signal).toEqual(a.signal);
+    expect(c.id).not.toBe(a.id);
+    expect(a.signal.every((v) => v >= 0.2 && v <= 1)).toBe(true);
+  });
+
+  it('is locked when traits are', () => {
+    expect(cardProfile({ ...report, traits: null })).toBeNull();
   });
 });
 

@@ -349,6 +349,82 @@ export function cardStats(report: BuilderReport): CardStats | null {
   };
 }
 
+export interface CardProfile {
+  /** Stable per login: the scan id printed on the card. */
+  id: string;
+  traits: { id: ArchetypeId; label: string; name: string; score: number | null }[];
+  /** The top four, as a share of every repo with a language. */
+  languages: { name: string; share: number }[];
+  stack: { label: string; value: string; alert: boolean }[];
+  /** Most-declared packages across the repos read. */
+  packages: string[];
+  /** Bar heights in 0.2–1, seeded by the login. */
+  signal: number[];
+}
+
+const TRAIT_ROWS: { id: ArchetypeId; label: string }[] = [
+  { id: "shipper", label: "SHP" },
+  { id: "architect", label: "LON" },
+  { id: "explorer", label: "RNG" },
+  { id: "steward", label: "HLT" },
+];
+
+/**
+ * Everything else the card prints, from a signed-in report (traits required).
+ *
+ * The id and signal strip are decoration and are derived from the login alone:
+ * FNV-1a over it seeds an xorshift, so the same person always gets the same
+ * card, and the strip never pretends to be a measurement.
+ */
+export function cardProfile(report: BuilderReport, bars = 44): CardProfile | null {
+  if (!report.traits) return null;
+  const traits = report.traits;
+  const total = (pick: (s: BuilderReport["repos"][number]) => number) =>
+    report.repos.reduce((n, s) => n + pick(s), 0);
+  const majors = total((s) => s.majorDrift);
+  const advisories = total((s) => s.advisories);
+
+  const langRepos = report.stats.languages.reduce((n, l) => n + l.repos, 0);
+  const uses = new Map<string, number>();
+  for (const s of report.repos) for (const d of s.deps) uses.set(d.name, (uses.get(d.name) ?? 0) + 1);
+
+  let h = 0x811c9dc5;
+  for (const ch of report.login.toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
+  const id = (h >>> 0).toString(16).padStart(8, "0").toUpperCase();
+  h ||= 1; // xorshift never leaves zero
+  const signal = Array.from({ length: bars }, () => {
+    h ^= h << 13;
+    h ^= h >>> 17;
+    h ^= h << 5;
+    return 0.2 + ((h >>> 0) % 1000) / 1250;
+  });
+
+  return {
+    id,
+    traits: TRAIT_ROWS.map((r) => ({
+      ...r,
+      name: ARCHETYPES[r.id].trait,
+      score: traits.find((t) => t.id === r.id)?.score ?? null,
+    })),
+    languages: langRepos
+      ? report.stats.languages.slice(0, 4).map((l) => ({ name: l.name, share: l.repos / langRepos }))
+      : [],
+    stack: [
+      { label: "repos read", value: String(report.repos.length), alert: false },
+      { label: "deps tracked", value: compact(total((s) => s.depsTracked)), alert: false },
+      { label: "majors behind", value: String(majors), alert: majors > 0 },
+      { label: "advisories", value: String(advisories), alert: advisories > 0 },
+      { label: "stars", value: compact(report.stats.stars), alert: false },
+      { label: "active, 90 days", value: String(report.stats.active90), alert: false },
+    ],
+    packages: [...uses]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([name]) => name),
+    signal,
+  };
+}
+
 // ---------------------------------------------------------------- drill-down
 
 /** A conflict lists packages as `name` or `name@version`; does this entry mean `name`? */
