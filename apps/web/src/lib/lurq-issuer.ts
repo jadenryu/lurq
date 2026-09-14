@@ -5,7 +5,9 @@
  * the shared LURQ_ISSUER_SECRET. Never import this from a "use client" file.
  */
 
-import type { BuilderProfile, SavedBuilderScan } from "@/lib/builder-profile";
+// Relative: root tests reach this file through other web modules, where `@/`
+// does not resolve.
+import type { BuilderProfile, BuilderStanding, SavedBuilderScan } from "./builder-profile";
 
 export interface DashboardKey {
   id: number;
@@ -983,6 +985,12 @@ export async function removeChannel(ownerId: string, id: number): Promise<void> 
 
 // ── Builder reports ─────────────────────────────────────────────────────────
 
+export interface SavedBuilderReport {
+  profile: BuilderProfile;
+  scannedAt: string;
+  standing: BuilderStanding | null;
+}
+
 export async function fetchBuilderScans(ownerId: string): Promise<SavedBuilderScan[]> {
   const res = await issuerFetch(`/builder-scans?${new URLSearchParams({ ownerId }).toString()}`);
   if (!res.ok) throw new LurqIssuerError("Could not load saved scans.", 502);
@@ -993,20 +1001,27 @@ export async function fetchBuilderScans(ownerId: string): Promise<SavedBuilderSc
 export async function fetchBuilderScan(
   ownerId: string,
   target: string,
-): Promise<{ profile: BuilderProfile; scannedAt: string } | null> {
+): Promise<SavedBuilderReport | null> {
   const res = await issuerFetch(`/builder-scans/one?${new URLSearchParams({ ownerId, target }).toString()}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new LurqIssuerError("Could not load that saved scan.", 502);
-  return ((await res.json()) as { scan: { profile: BuilderProfile; scannedAt: string } }).scan;
+  const { scan } = (await res.json()) as { scan: SavedBuilderReport };
+  // An API from before standings sends none: "no comparison", not an error.
+  return { ...scan, standing: scan.standing ?? null };
 }
 
-/** Saves (or overwrites) the account's copy for this target; resolves to when it was taken. */
-export async function saveBuilderScan(ownerId: string, target: string, profile: BuilderProfile): Promise<string> {
+/** Saves (or overwrites) the account's copy for this target; resolves to when it was taken, and the standing. */
+export async function saveBuilderScan(
+  ownerId: string,
+  target: string,
+  profile: BuilderProfile,
+): Promise<{ scannedAt: string; standing: BuilderStanding | null }> {
   const res = await issuerFetch("/builder-scans", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ownerId, target, profile }),
   });
   if (!res.ok) throw new LurqIssuerError("Could not save that scan.", 502);
-  return ((await res.json()) as { scannedAt: string }).scannedAt;
+  const data = (await res.json()) as { scannedAt: string; standing?: BuilderStanding | null };
+  return { scannedAt: data.scannedAt, standing: data.standing ?? null };
 }

@@ -39,11 +39,13 @@ import {
   type DepDiff,
   type RepoStack,
   type ScanConflict,
+  type BuilderStanding,
   type SavedBuilderScan,
+  type StandingMetricId,
   type ScanDep,
   type Trait,
 } from "@/lib/builder-profile";
-import { relativeTime } from "@/lib/format";
+import { compact, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -360,6 +362,8 @@ function Report({
         />
       </StatRow>
 
+      {report.standing && <Standing standing={report.standing} />}
+
       <Summary report={report} />
 
       <Traits traits={report.traits} archetype={report.archetype} back={back} />
@@ -648,6 +652,76 @@ function CardViewer({ report, target }: { report: BuilderReport; target: string 
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const percent = (v: number) => `${Math.round(v * 100)}%`;
+
+/** How each ranked metric reads. Direction is already in the percentile; the label says which way is good. */
+const STANDING: Record<StandingMetricId, { label: string; show: (v: number) => string }> = {
+  repos: { label: "repos", show: compact },
+  active90: { label: "active in 90 days", show: String },
+  stars: { label: "stars", show: compact },
+  behindShare: { label: "deps behind latest", show: percent },
+  majorShare: { label: "deps a major behind", show: percent },
+  advisoryRate: { label: "advisories per 100 deps", show: (v) => v.toFixed(1) },
+};
+
+/**
+ * Percentile ranks against the other builders lurq has a saved scan of.
+ *
+ * The API only ranks a metric with enough builders behind it, so an empty list
+ * means "not enough scans yet", and that is what this says instead of showing
+ * a percentile of a handful of people.
+ */
+function Standing({ standing }: { standing: BuilderStanding }) {
+  const ranked = standing.metrics.length > 0;
+  return (
+    <Panel>
+      <PanelHeader
+        title="how you compare"
+        trailing={
+          ranked ? (
+            <span className="text-[11.5px] text-ink-3">
+              vs {plural(standing.population, "builder")} scanned on lurq
+            </span>
+          ) : null
+        }
+      />
+      {ranked ? (
+        <ul className="space-y-3">
+          {standing.metrics.map((m) => {
+            const row = STANDING[m.id];
+            return (
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1"
+                title={`Ranked against ${plural(m.population, "builder")}; ties count half.`}
+              >
+                <span className="w-full text-[13px] text-ink sm:w-48 sm:shrink-0">
+                  {row.label}
+                  {m.better === "lower" && <span className="ml-1.5 text-[11px] text-ink-3">lower is better</span>}
+                </span>
+                <span className="w-14 shrink-0 font-mono text-[12px] tabular-nums text-ink-2 sm:text-right">
+                  {row.show(m.value)}
+                </span>
+                <div className="relative h-1.5 min-w-20 flex-1 overflow-hidden rounded-full bg-muted/40">
+                  <div className="absolute inset-y-0 left-0 rounded-full bg-ink-3" style={{ width: `${m.percentile}%` }} />
+                </div>
+                <span className="w-28 shrink-0 text-right text-[12px] text-ink-2">
+                  ahead of <span className="font-mono tabular-nums text-ink">{m.percentile}%</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-[13px] leading-relaxed text-ink-2">
+          Percentiles appear once {standing.minimum} builders have been scanned on lurq.{" "}
+          {plural(standing.population, "builder")} so far.
+        </p>
+      )}
+    </Panel>
   );
 }
 

@@ -109,7 +109,12 @@ export async function POST(req: Request) {
   if (owner && body.fresh !== true) {
     const saved = await fetchBuilderScan(owner.ownerId, target).catch(() => null);
     if (saved) {
-      const report: BuilderReport = { ...saved.profile, locked: null, savedAt: saved.scannedAt };
+      const report: BuilderReport = {
+        ...saved.profile,
+        locked: null,
+        savedAt: saved.scannedAt,
+        standing: saved.standing,
+      };
       return NextResponse.json(report, { headers: { "Cache-Control": "private, no-store" } });
     }
   }
@@ -160,13 +165,18 @@ export async function POST(req: Request) {
     const profile = data as BuilderProfile;
     if (!owner) return NextResponse.json(forVisitor(profile), { headers });
 
-    // Saved before answering, so the report can say it is saved. Never fatal,
-    // for the reason the saved lookup above gives.
-    const savedAt = await saveBuilderScan(owner.ownerId, target, profile).catch((err: unknown) => {
+    // Saved before answering, so the report can say it is saved and how it
+    // ranks. Never fatal, for the reason the saved lookup above gives.
+    const stored = await saveBuilderScan(owner.ownerId, target, profile).catch((err: unknown) => {
       console.error("scan: could not save the report:", err instanceof Error ? err.message : String(err));
       return null;
     });
-    const report: BuilderReport = { ...profile, locked: null, savedAt };
+    const report: BuilderReport = {
+      ...profile,
+      locked: null,
+      savedAt: stored?.scannedAt ?? null,
+      standing: stored?.standing ?? null,
+    };
     return NextResponse.json(report, { headers });
   } catch {
     return NextResponse.json({ error: "Could not reach the index." }, { status: 502 });
