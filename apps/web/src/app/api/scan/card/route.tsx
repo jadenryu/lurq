@@ -123,7 +123,7 @@ export async function GET(req: Request) {
         </div>
 
         {/* identity */}
-        <div style={{ display: "flex", alignItems: "center", marginTop: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", marginTop: 36 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={profile.avatarUrl.replace(/([?&])s(ize)?=\d+/, "$1s=400")}
@@ -160,12 +160,12 @@ export async function GET(req: Request) {
           </div>
         </div>
 
-        <span style={{ fontSize: 23, lineHeight: 1.45, color: INK_2, marginTop: 28, maxWidth: 900 }}>{type.line}</span>
+        <span style={{ fontSize: 23, lineHeight: 1.45, color: INK_2, marginTop: 24, maxWidth: 900 }}>{type.line}</span>
 
         {/* traits */}
-        <div style={{ display: "flex", flexDirection: "column", marginTop: 38, paddingTop: 30, borderTop: `1px solid ${EDGE}` }}>
+        <div style={{ display: "flex", flexDirection: "column", marginTop: 30, paddingTop: 26, borderTop: `1px solid ${EDGE}` }}>
           <Label>TRAITS</Label>
-          <div style={{ display: "flex", flexDirection: "column", marginTop: 22, gap: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", marginTop: 18, gap: 16 }}>
             {detail.traits.map((t) => {
               const lead = t.id === profile.archetype;
               return (
@@ -204,7 +204,7 @@ export async function GET(req: Request) {
         </div>
 
         {/* languages / stack */}
-        <div style={{ display: "flex", marginTop: 36, gap: 20 }}>
+        <div style={{ display: "flex", marginTop: 30, gap: 20 }}>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, padding: "24px 26px", borderRadius: 20, border: `1px solid ${EDGE}`, backgroundColor: PANEL }}>
             <Label>LANGUAGES</Label>
             <div style={{ display: "flex", flexDirection: "column", marginTop: 18, gap: 16 }}>
@@ -230,7 +230,7 @@ export async function GET(req: Request) {
             <Label>STACK</Label>
             <div style={{ display: "flex", flexDirection: "column", marginTop: 14 }}>
               {detail.stack.map((s) => (
-                <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "7px 0" }}>
+                <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0" }}>
                   <span style={{ fontSize: 20, color: INK_2 }}>{s.label}</span>
                   <span style={{ fontFamily: MONO, fontSize: 24, color: s.alert ? ALERT : INK }}>{s.value}</span>
                 </div>
@@ -241,7 +241,7 @@ export async function GET(req: Request) {
 
         {/* what they build with */}
         {detail.packages.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", marginTop: 30 }}>
+          <div style={{ display: "flex", flexDirection: "column", marginTop: 26 }}>
             <Label>BUILDS WITH</Label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
               {detail.packages.map((name) => (
@@ -257,7 +257,7 @@ export async function GET(req: Request) {
         )}
 
         {/* footer: their signal, and where to get one */}
-        <div style={{ display: "flex", flexDirection: "column", marginTop: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", paddingTop: 32 }}>
           <div style={{ display: "flex", alignItems: "flex-end", height: 46, gap: 5 }}>
             {detail.signal.map((v, i) => (
               <div
