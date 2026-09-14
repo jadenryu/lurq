@@ -26,7 +26,9 @@ export class RemoteError extends Error {
  * must not trigger that: re-running setup will not fix a revoked key.
  */
 export class MissingKeyError extends RemoteError {
-  constructor(message = 'No API key configured. Run `lurq setup` to connect this machine.') {
+  constructor(
+    message = 'No API key configured. Run `npx lurqrun setup` to connect this machine; from an agent\'s shell it prints a sign-in link to give the user.',
+  ) {
     super(message, 401);
     this.name = 'MissingKeyError';
   }

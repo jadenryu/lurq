@@ -95,7 +95,8 @@ export function CliHandoff({ port, nonce }: { port: number | null; nonce: string
       <Panel padding="tight">
         <p className={eyebrow}>connected</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Your key is in that terminal and setup is carrying on there. You can close this tab.
+          Your key is on that machine and setup is finishing there. If a coding agent sent you here,
+          restart it so it loads lurq. You can close this tab.
         </p>
       </Panel>
     );

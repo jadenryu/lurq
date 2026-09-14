@@ -74,6 +74,8 @@ export function keyViaBrowser(opts: {
   onUrl: (url: string) => void;
   /** Stop waiting now and resolve null (the user chose to paste instead). */
   signal?: AbortSignal;
+  /** How long to hold the port. Defaults to DEADLINE_MS; the agent link flow waits longer. */
+  deadlineMs?: number;
 }): Promise<BrowserAuthResult | null> {
   return new Promise((resolve) => {
     const nonce = randomBytes(18).toString('base64url');
@@ -131,7 +133,7 @@ export function keyViaBrowser(opts: {
       });
     });
 
-    const timer = setTimeout(() => finish(null), DEADLINE_MS);
+    const timer = setTimeout(() => finish(null), opts.deadlineMs ?? DEADLINE_MS);
     // Never hold the process open on its own account: if something else has
     // already resolved setup, this must not keep node alive for three minutes.
     timer.unref?.();

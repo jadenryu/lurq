@@ -31,9 +31,17 @@ describe('setup guards', () => {
     process.env.LURQ_HOME = savedLurqHome;
   });
 
-  it('refuses to prompt without a terminal, and says how to run non-interactively', async () => {
-    // vitest's stdin is not a TTY, exactly like CI or `npx lurqrun </dev/null`.
-    await expect(runSetup({})).rejects.toThrow(/setup --yes --api-key <key>[\s\S]*dashboard\/keys/);
+  it('refuses to prompt without a terminal in CI, and says how to run non-interactively', async () => {
+    // vitest's stdin is not a TTY. Outside CI that is the agent link flow
+    // (setupAgentLink.test.ts); in CI nobody could open a link, so it refuses.
+    const savedCi = process.env.CI;
+    process.env.CI = '1';
+    try {
+      await expect(runSetup({})).rejects.toThrow(/setup --yes --api-key <key>[\s\S]*dashboard\/keys/);
+    } finally {
+      if (savedCi === undefined) delete process.env.CI;
+      else process.env.CI = savedCi;
+    }
     expect(readUserConfig().apiKey).toBeUndefined();
   });
 
