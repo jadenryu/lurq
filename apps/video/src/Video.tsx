@@ -1,7 +1,6 @@
-import { linearTiming, springTiming, TransitionSeries, type TransitionPresentation, type TransitionTiming } from "@remotion/transitions";
+import { springTiming, TransitionSeries, type TransitionPresentation, type TransitionTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 import { flip } from "@remotion/transitions/flip";
-import { pushCut } from "@remotion/transitions/push-cut";
 import { Fragment } from "react";
 import { AbsoluteFill, interpolate } from "remotion";
 import { color, MONO, WORDMARK } from "./brand";
@@ -20,8 +19,6 @@ const out = (frames: number) => Math.round((frames * FPS) / BASE_FPS);
 type Join = { presentation: TransitionPresentation<Record<string, unknown>>; timing: TransitionTiming; frames: number };
 
 const dissolve = (frames: number): Join => ({ presentation: fade() as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: out(frames) }), frames });
-/** A punch-in cut with a faint flash, for the beats that turn the story. */
-const punch = (): Join => ({ presentation: pushCut({ flashColor: "#ffffff", flashOpacity: 0.18 }) as never, timing: linearTiming({ durationInFrames: out(20) }), frames: 20 });
 /** A 3D card flip, between two product shots on the same stage. */
 const turn = (): Join => ({ presentation: flip({ direction: "from-right", perspective: 2400 }) as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: out(34) }), frames: 34 });
 
@@ -30,14 +27,14 @@ const SCENES = [
   { id: "skyline", Component: Skyline, frames: 150 },
   { id: "teams", Component: Teams, frames: 130, join: dissolve(30) },
   { id: "closeup", Component: CloseUp, frames: 110, join: dissolve(24) },
-  { id: "guess", Component: Guess, frames: 220, join: punch() },
-  { id: "meet", Component: Meet, frames: 170, join: punch() },
+  { id: "guess", Component: Guess, frames: 220, join: dissolve(24) },
+  { id: "meet", Component: Meet, frames: 170, join: dissolve(24) },
   { id: "verify", Component: VerifyShot, frames: 230, join: dissolve(30) },
   { id: "flyover", Component: Flyover, frames: 110, join: dissolve(30) },
   { id: "upgrade", Component: UpgradeShot, frames: 220, join: turn() },
   { id: "keep", Component: Keep, frames: 110, join: dissolve(30) },
   { id: "everywhere", Component: Everywhere, frames: 170, join: dissolve(30) },
-  { id: "end", Component: End, frames: 220, join: punch() },
+  { id: "end", Component: End, frames: 220, join: dissolve(24) },
 ];
 
 const cutBefore = (i: number) => SCENES[i].join?.frames ?? 0;

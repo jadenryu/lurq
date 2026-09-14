@@ -1,6 +1,6 @@
 import { AbsoluteFill, Easing } from "remotion";
 import { AGENT_LOGOS, color, HEADLINE_LINE_1, HEADLINE_LINE_2, IDE_HEADING, INSTALL_COMMAND, MONO, SANS, WORDMARK } from "./brand";
-import { Carousel3D, Chip, Clip, Footnote, Frame, Ground, Icon, LightBurst, Logo3D, ProductCard, progress, Typed, useFrame, useSquare, useUnit, Words } from "./components";
+import { Carousel3D, Chip, Clip, Footnote, Frame, Ground, Icon, Logo3D, ProductCard, progress, Typed, useFrame, useSquare, useUnit, Words } from "./components";
 import { arrowRight, shieldCheck, triangleAlert } from "./icons";
 
 /*
@@ -98,7 +98,6 @@ export function Meet() {
   return (
     <AbsoluteFill>
       <Ground />
-      <LightBurst at={8} />
       <Frame justify="center" align="center" style={{ gap: 36 * u }}>
         <Words text="Meet" at={4} size={square ? 44 : 52} weight={500} tone="ink3" />
         <div style={{ display: "flex", alignItems: "center", gap: 48 * u }}>

@@ -61,23 +61,20 @@ export function Ground() {
 
 /**
  * Footage under one cool grade, so every clip reads as the same film. `letterbox` draws
- * scope bars in on the wide cut and adds a lateral drone drift; a warm light leak crosses
- * the frame once. The grade and leak are blend layers (composited), not CSS filters.
+ * scope bars in on the wide cut and adds a lateral drone drift. The grade is a blend layer
+ * (composited), not a CSS filter.
  */
 export function Clip({ name, shade = 0.5, focus = "center", zoom = 1, origin = "50% 50%", rate = 0.8, letterbox = false, drift = 1 }: { name: string; shade?: number; focus?: string; zoom?: number; origin?: string; rate?: number; letterbox?: boolean; drift?: number }) {
   const frame = useFrame();
-  const { durationInFrames, fps } = useVideoConfig();
   const u = useUnit();
   const square = useSquare();
   const bars = letterbox && !square ? progress(frame, 0, 40) * 100 * u : 0;
-  const leak = progress(frame, 0, Math.max(60, (durationInFrames * BASE_FPS) / fps), Easing.inOut(Easing.sin));
   return (
     <AbsoluteFill style={{ backgroundColor: color.ground, overflow: "hidden" }}>
       <AbsoluteFill style={{ transform: `translateX(${letterbox ? frame * 0.25 * drift * u : 0}px) scale(${(1.1 + frame * 0.0005) * zoom})`, transformOrigin: origin }}>
         <OffthreadVideo muted playbackRate={rate} src={staticFile(`clips/${name}.mp4`)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: focus }} />
       </AbsoluteFill>
       <AbsoluteFill style={{ backgroundColor: "#16203a", mixBlendMode: "color", opacity: 0.35 }} />
-      <AbsoluteFill style={{ background: `radial-gradient(circle at ${-20 + leak * 140}% 30%, rgba(245,120,40,0.35), transparent 45%)`, mixBlendMode: "screen" }} />
       <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 42%, rgba(8,8,10,${shade * 0.25}) 0%, rgba(8,8,10,${shade}) 72%, rgba(8,8,10,${Math.min(0.95, shade + 0.35)}) 100%)` }} />
       {bars > 0 && (
         <>
@@ -242,33 +239,6 @@ export function Chip({ children, at, tone }: { children: ReactNode; at: number; 
     >
       {children}
     </div>
-  );
-}
-
-/**
- * Light behind the brand reveal: a soft bloom opens up and faint rays turn slowly around it,
- * like a stage light coming up on the logo.
- */
-export function LightBurst({ at }: { at: number }) {
-  const frame = useFrame();
-  const u = useUnit();
-  const p = progress(frame, at, 70, GLIDE);
-  return (
-    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
-      <div
-        style={{
-          position: "absolute",
-          width: 1800 * u,
-          height: 1800 * u,
-          opacity: p,
-          transform: `scale(${0.55 + 0.45 * p}) rotate(${frame * 0.06}deg)`,
-          background: "repeating-conic-gradient(from 0deg, rgba(255,255,255,0.055) 0deg 2.5deg, transparent 2.5deg 14deg)",
-          maskImage: "radial-gradient(circle, #000 0%, rgba(0,0,0,0.6) 25%, transparent 58%)",
-          WebkitMaskImage: "radial-gradient(circle, #000 0%, rgba(0,0,0,0.6) 25%, transparent 58%)",
-        }}
-      />
-      <div style={{ position: "absolute", width: 1000 * u, height: 1000 * u, borderRadius: "50%", opacity: p, transform: `scale(${0.5 + 0.5 * p})`, background: "radial-gradient(circle, rgba(120,150,255,0.22), transparent 62%)" }} />
-    </AbsoluteFill>
   );
 }
 
