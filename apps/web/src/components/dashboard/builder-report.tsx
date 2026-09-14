@@ -20,6 +20,10 @@ import {
   reportBrief,
   sharedPackages,
   summarize,
+  archetypeLine,
+  depLabel,
+  depStatus,
+  savedDaysAgo,
   type PackageImpact,
   type SummaryPoint,
 } from "@/lib/builder-brief";
@@ -324,7 +328,7 @@ function Report({
             <h2 className="mt-1.5 text-[1.9rem] font-medium leading-none tracking-[-0.03em] text-ink">
               {type.name}
             </h2>
-            <p className="mt-2 max-w-[62ch] text-[13.5px] leading-relaxed text-ink-2">{type.line}</p>
+            <p className="mt-2 max-w-[62ch] text-[13.5px] leading-relaxed text-ink-2">{archetypeLine(report)}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <a
@@ -346,13 +350,27 @@ function Report({
                 saved {relativeTime(report.savedAt)}
               </button>
             )}
+            {report.savedAt && savedDaysAgo(report.savedAt) >= 1 && (
+              <span className="max-w-[26ch] text-right text-[11px] leading-snug text-warn">
+                Numbers from {plural(savedDaysAgo(report.savedAt), "day")} ago. Scan again for current versions and
+                advisories.
+              </span>
+            )}
           </div>
         </div>
         <ReportActions report={report} target={target} back={back} />
       </Panel>
 
       <StatRow>
-        <StatTile label="repos" value={report.stats.repos} hint="owned, not forks" />
+        <StatTile
+          label="repos"
+          value={report.stats.repos}
+          hint={
+            report.coverage?.reposCapped
+              ? `owned, from the ${report.coverage.reposListed} most recently pushed`
+              : "owned, not forks"
+          }
+        />
         <StatTile label="active" value={report.stats.active90} hint="pushed in the last 90 days" />
         <StatTile label="stars" value={report.stats.stars} />
         <StatTile
@@ -361,6 +379,14 @@ function Report({
           hint={languages.length > 1 ? `then ${languages.slice(1, 3).map((l) => l.name).join(", ")}` : undefined}
         />
       </StatRow>
+
+      {report.coverage && report.coverage.unreadManifests.length > 0 && (
+        <InlineError>
+          GitHub didn&rsquo;t answer for {plural(report.coverage.unreadManifests.length, "repo")} (
+          {report.coverage.unreadManifests.join(", ")}), so their package.json was not read and they are left out
+          of everything below. This report was not saved. Scan again in a minute.
+        </InlineError>
+      )}
 
       {report.standing && <Standing standing={report.standing} />}
 
@@ -852,7 +878,8 @@ function Counts({ stack }: { stack: RepoStack }) {
       <Chip>{plural(stack.depsTracked, "dep")}</Chip>
       {stack.majorDrift > 0 && <Chip tone="warn">{stack.majorDrift} major behind</Chip>}
       {stack.advisories > 0 && <Chip tone="bad">{plural(stack.advisories, "advisory", "advisories")}</Chip>}
-      {stack.conflicts > 0 && <Chip tone="bad">{plural(stack.conflicts, "conflict")}</Chip>}
+      {/* At latest versions, which is what the count measures: not a claim the repo is broken today. */}
+      {stack.conflicts > 0 && <Chip tone="bad">{plural(stack.conflicts, "conflict")} at latest</Chip>}
     </span>
   );
 }
@@ -869,8 +896,9 @@ function StackBody({
   if (stack.depsTracked === 0) {
     return (
       <p className="px-[var(--panel-px)] py-4 text-[13px] leading-relaxed text-ink-2">
-        Nothing in this manifest is in the index yet. It has been queued, so the same scan in a few
-        minutes will have something to say.
+        {stack.depsDeclared === 0
+          ? "This package.json declares no registry dependencies (workspace or local packages only, or none), so there is nothing here to check."
+          : "Nothing in this manifest is in the index yet. It has been queued, so the same scan in a few minutes will have something to say."}
       </p>
     );
   }
@@ -894,13 +922,14 @@ function StackBody({
 }
 
 /** The worst thing true about one dependency, in the fewest words. */
+/** The row label and its tone. The words come from depLabel, so the page and the briefs never disagree. */
 function verdict(dep: ScanDep): { text: string; tone: string } {
-  if (dep.advisories > 0) {
-    return { text: plural(dep.advisories, "advisory", "advisories"), tone: "text-bad" };
-  }
-  if (dep.deprecated) return { text: "deprecated", tone: "text-bad" };
-  if (dep.majorsBehind > 0) return { text: `${dep.majorsBehind} major behind`, tone: "text-warn" };
-  return { text: "current", tone: "text-ink-3" };
+  const text = depLabel(dep);
+  if (dep.advisories > 0 || dep.deprecated) return { text, tone: "text-bad" };
+  const status = depStatus(dep);
+  if (status === "major") return { text, tone: "text-warn" };
+  if (status === "behind") return { text, tone: "text-ink-2" };
+  return { text, tone: "text-ink-3" };
 }
 
 const ROW_OPEN =
@@ -1076,7 +1105,12 @@ function Impact({ name, impact }: { name: string; impact: PackageImpact }) {
               <span className="text-ink-2">{repo}</span>
               <span className="break-all text-ink-3">
                 {dep.range}
-                {dep.resolved ? ` · resolves ${dep.resolved}` : ""}
+                {/* Inferred from the declared range: no lockfile is read. */}
+                {dep.resolved
+                  ? dep.resolvedFrom === "range-floor"
+                    ? ` · range minimum ${dep.resolved}`
+                    : ` · range resolves ${dep.resolved}`
+                  : ""}
               </span>
               <span className={cn("ml-auto text-[11px]", v.tone)}>{v.text}</span>
             </li>

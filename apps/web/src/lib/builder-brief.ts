@@ -123,14 +123,31 @@ export function summarize(report: BuilderReport): { strengths: SummaryPoint[]; g
       detail: "packages that would break each other at their latest versions",
     });
   }
-  if (sum("majorDrift") + sum("deprecated") > 0 && sum("advisories") === 0) {
-    gaps.push({
-      title: `${plural(sum("majorDrift"), "dependency", "dependencies")} a major behind`,
-      detail: `${sum("deprecated")} deprecated${worst ? `, most in ${worst.repo}` : ""}`,
-    });
+  // Shown alongside advisories, not instead of them, and titled by what is
+  // actually there: a report with only deprecated packages used to read
+  // "0 dependencies a major behind".
+  if (sum("majorDrift") + sum("deprecated") > 0) {
+    gaps.push(
+      sum("majorDrift") > 0
+        ? {
+            title: `${plural(sum("majorDrift"), "dependency", "dependencies")} a major behind`,
+            detail: `${sum("deprecated")} deprecated${worst ? `, most in ${worst.repo}` : ""}`,
+          }
+        : {
+            title: `${plural(sum("deprecated"), "deprecated dependency", "deprecated dependencies")}`,
+            detail: `none a major behind${worst ? `, most in ${worst.repo}` : ""}`,
+          },
+    );
   }
-  // Scoped to what was read, never "your code is safe".
-  if (read.length > 0 && sum("advisories") === 0 && sum("conflicts") === 0) {
+  // Scoped to what was read, never "your code is safe", and only when every repo's
+  // advisories were checked at the versions it resolves to. A count taken from
+  // the latest release is not evidence about the version in use.
+  if (
+    read.length > 0 &&
+    read.every((r) => r.advisoriesExact === true) &&
+    sum("advisories") === 0 &&
+    sum("conflicts") === 0
+  ) {
     const deps = read.reduce((n, s) => n + s.depsTracked, 0);
     strengths.push({
       title: "No known advisories or conflicts",
@@ -143,11 +160,60 @@ export function summarize(report: BuilderReport): { strengths: SummaryPoint[]; g
 
 // ---------------------------------------------------------------- briefs
 
-function depIssue(d: ScanDep): string | null {
-  if (d.advisories > 0) return plural(d.advisories, "advisory", "advisories");
+/**
+ * Where a dependency stands. The API sends it; a scan saved before that did not,
+ * so it is worked out from what that scan did carry. The fallback never says
+ * current unless the two versions are the same string.
+ */
+export function depStatus(d: ScanDep): NonNullable<ScanDep["status"]> {
+  if (d.status) return d.status;
+  if (d.majorsBehind > 0) return "major";
+  if (!d.resolved || !d.latest) return "unknown";
+  return d.resolved === d.latest ? "current" : "behind";
+}
+
+/**
+ * The words for a dependency's state, worst first. Advisories say which version
+ * they are about: counted at the resolved version, or (older scans, or when the
+ * exact check could not run) only known for the latest release.
+ */
+export function depLabel(d: ScanDep): string {
+  if (d.advisories > 0) {
+    const where = d.advisoriesAt === "resolved" && d.resolved ? ` at ${d.resolved}` : " on the latest release";
+    return `${plural(d.advisories, "advisory", "advisories")}${where}`;
+  }
   if (d.deprecated) return "deprecated";
-  if (d.majorsBehind > 0) return `${plural(d.majorsBehind, "major")} behind`;
-  return null;
+  switch (depStatus(d)) {
+    case "major":
+      return d.majorsBehind > 0 ? `${plural(d.majorsBehind, "major")} behind` : "breaking 0.x release behind";
+    case "behind":
+      return "behind latest";
+    case "unknown":
+      return "version unknown";
+    default:
+      return "current";
+  }
+}
+
+/** An issue worth flagging: an advisory, a deprecation, or a breaking release behind. */
+function depIssue(d: ScanDep): string | null {
+  return d.advisories > 0 || d.deprecated || depStatus(d) === "major" ? depLabel(d) : null;
+}
+
+/** Below this top-trait score the archetype is the closest fit, not a description, and its line would overclaim. */
+export const ARCHETYPE_FLOOR = 30;
+
+export function archetypeLine(report: Pick<BuilderReport, "archetype" | "traits">): string {
+  const top = report.traits?.find((t) => t.id === report.archetype)?.score ?? null;
+  if (report.traits && (top === null || top < ARCHETYPE_FLOOR)) {
+    return "There is not much public activity to read yet, so this is the closest fit rather than a description.";
+  }
+  return ARCHETYPES[report.archetype].line;
+}
+
+/** Whole days since a saved report was taken; 0 for less than a day. */
+export function savedDaysAgo(savedAt: string, now = Date.now()): number {
+  return Math.max(0, Math.floor((now - Date.parse(savedAt)) / 86_400_000));
 }
 
 function cell(s: string): string {
@@ -510,7 +576,7 @@ export function depBrief(report: BuilderReport, name: string, detail?: DepDetail
     "| --- | --- | --- | --- | --- |",
     ...uses.map(
       (u) =>
-        `| ${u.repo} | ${cell(u.dep.range)} | ${u.dep.resolved ?? "?"} | ${u.dep.latest ?? "?"} | ${depIssue(u.dep) ?? "current"} |`,
+        `| ${u.repo} | ${cell(u.dep.range)} | ${u.dep.resolved ?? "?"} | ${u.dep.latest ?? "?"} | ${depLabel(u.dep)} |`,
     ),
     "",
   ];
