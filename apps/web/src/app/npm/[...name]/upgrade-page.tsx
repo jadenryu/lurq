@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PageShell } from "@/components/common/page-shell";
 import { DOCS_URL } from "@/lib/site-links";
 import { siteUrl } from "@/lib/site";
+import { upgradeErrors } from "@/lib/upgrade-errors";
 import {
   fetchPublicUpgrade,
   packagePath,
@@ -95,6 +96,8 @@ export async function UpgradePage({ name, from, to }: Jump) {
   const { fromVersion, toVersion } = u.pair;
   const check = `npx lurqrun check-upgrade --upgrade ${name}@${fromVersion}..${toVersion}`;
   const ready = u.status === "ready";
+  // The literal messages an agent searches after a broken upgrade (lib/upgrade-errors.ts).
+  const errors = ready ? upgradeErrors(name, u) : [];
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -211,6 +214,30 @@ export async function UpgradePage({ name, from, to }: Jump) {
             <Row key={d}>{d}</Row>
           ))}
         </Section>
+      ) : null}
+
+      {errors.length > 0 ? (
+        <section className="mt-10">
+          <h2 className="text-[16px] font-medium text-ink">Errors this upgrade causes</h2>
+          <p className="mt-1 text-[13px] text-ink-3">
+            What each tool prints when code still imports one of these names after upgrading to {toVersion}.
+          </p>
+          <ul className="mt-3 space-y-4">
+            {errors.map((e) => (
+              <li key={e.name}>
+                <p className="font-mono text-[13px] text-ink">{e.name}</p>
+                <ul className="mt-1 space-y-1">
+                  {e.errors.map((x) => (
+                    <li key={x.tool} className="flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
+                      <span className="w-28 shrink-0 text-ink-3">{x.tool}</span>
+                      <code className="min-w-0 break-all font-mono text-ink-2">{x.message}</code>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {u.truncated ? (

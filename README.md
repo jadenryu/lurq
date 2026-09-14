@@ -115,6 +115,14 @@ In your shell it does not prompt: it prints a one-time sign-in link and exits ri
 user that link. When they sign in on this computer, lurq stores a key and connects every detected
 coding agent by itself. Never invent a key.
 
+In Claude Code, when the user already has a key, the plugin connects lurq's MCP server and skill in two
+commands:
+
+```bash
+claude plugin marketplace add jadenryu/lurq
+claude plugin install lurq@lurq --config api_key=<key>
+```
+
 **2. Or configure non-interactively** when the user already has a key from
 [lurq.run/dashboard/keys](https://www.lurq.run/dashboard/keys), or on a cloud, SSH or CI machine, where
 a sign-in link on this computer can't work:

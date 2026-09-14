@@ -51,6 +51,8 @@ That detects installed assistants (Claude Code, Cursor, VS Code and others), wri
 
 From an AI agent's shell, \`npx lurqrun setup\` prints a one-time sign-in link and exits. Give the user the link: signing in on that computer finishes setup by itself, then restart the agent. Without any account, \`npx lurqrun check-upgrade --upgrade <package>@<from>..<to>\` checks an upgrade against your code locally.
 
+In Claude Code, with a key: \`claude plugin marketplace add jadenryu/lurq\`, then \`claude plugin install lurq@lurq --config api_key=<key>\`.
+
 The hosted MCP endpoint is \`https://api.lurq.run/mcp\` (JSON-RPC over HTTP, \`Authorization: Bearer <key>\`). Keys are self-serve at ${SITE_ORIGIN}/dashboard/keys.
 
 ## Tools
