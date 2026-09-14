@@ -19,6 +19,7 @@
  */
 import { and, count, desc, gte, isNotNull, sql } from 'drizzle-orm';
 import type { Express, Request, RequestHandler, Response } from 'express';
+import semver from 'semver';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { packages, surfaceQueue } from '../db/schema';
@@ -245,6 +246,35 @@ export async function latestOfMajors(db: Database, names: string[]): Promise<Map
 
 export async function upgradePairsFor(db: Database, name: string): Promise<PublicUpgradePair[]> {
   return majorPairs((await latestOfMajors(db, [name])).get(name) ?? []);
+}
+
+/**
+ * The public page for a diff's major jump, when that page has a diff to show.
+ *
+ * Attached to `diff_surface` results, so an agent explaining a break can hand
+ * the user the complete list for that jump. Only a ready page: a link to a
+ * pending one would be a link to "come back later". The page compares the
+ * latest release of each major, so it names its own versions; a diff between
+ * other patch releases of the same majors is usually, not always, the same.
+ *
+ * ponytail: two small indexed reads on every diff_surface call, uncached; cache
+ * per package if that tool's latency ever shows it.
+ */
+export async function upgradeGuideFor(
+  db: Database,
+  pkg: string,
+  fromVersion: string,
+  toVersion: string,
+  webUrl: string,
+): Promise<{ url: string; fromVersion: string; toVersion: string } | null> {
+  const from = semver.coerce(fromVersion)?.major;
+  const to = semver.coerce(toVersion)?.major;
+  if (from === undefined || to === undefined || to <= from) return null;
+  if (!(await publicPackageRow(db, pkg))) return null;
+  const pair = (await upgradePairsFor(db, pkg)).find((p) => p.fromMajor === from && p.toMajor === to && p.ready);
+  if (!pair) return null;
+  const path = `/npm/${pkg.split('/').map(encodeURIComponent).join('/')}/${from}-to-${to}`;
+  return { url: `${webUrl.replace(/\/$/, '')}${path}`, fromVersion: pair.fromVersion, toVersion: pair.toVersion };
 }
 
 /** The public set, most downloaded first. */

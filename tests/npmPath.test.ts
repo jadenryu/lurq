@@ -4,7 +4,7 @@
  * like a jump still resolves to its own page.
  */
 import { describe, expect, it } from 'vitest';
-import { parseNpmPath, upgradePath } from '../apps/web/src/lib/public-packages';
+import { parseNpmPath, upgradePath } from '../apps/web/src/lib/npm-path';
 
 describe('parseNpmPath', () => {
   it('reads a trailing jump as an upgrade of the package before it', () => {

@@ -306,7 +306,23 @@ export function buildMcpServer(
         toVersion: z.string().describe('Version you are moving to'),
       },
     },
-    async (args) => reply(await run('diff_surface', () => handleDiffSurface(db, args))),
+    async (args) =>
+      reply(
+        await run('diff_surface', async () => {
+          const diff = await handleDiffSurface(db, args);
+          if (diff.verdict === 'unknown') return diff;
+          // The public page for this major jump, when it has one. Never fails the tool.
+          const { upgradeGuideFor } = await import('./publicUpgrades');
+          const guide = await upgradeGuideFor(
+            db,
+            args.package,
+            args.fromVersion,
+            args.toVersion,
+            getConfig().LURQ_WEB_URL,
+          ).catch(() => null);
+          return guide ? { ...diff, upgradeGuide: guide } : diff;
+        }),
+      ),
   );
 
   server.registerTool(
