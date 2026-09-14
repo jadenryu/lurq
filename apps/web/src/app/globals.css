@@ -646,3 +646,26 @@ body:has([data-surface="paper"]) {
 main:focus {
   outline: none;
 }
+
+/* ── Auth ─────────────────────────────────────────────────────────────────────
+   Clerk's form mounts only once its script has loaded, and the dashboard shell
+   replaces the auth shell outright; both were hard cuts. Opacity only, on the
+   site's curve, and under reduced motion nothing moves at all. The rootBox class
+   is set through Clerk's appearance API (clerk-appearance.ts) rather than a
+   structural selector, and is doubled because Clerk's own runtime class sits at
+   the same specificity and is injected later.
+   ─────────────────────────────────────────────────────────────────────────── */
+.auth-clerk-root.auth-clerk-root {
+  width: 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .auth-clerk-root.auth-clerk-root,
+  .auth-fade,
+  .dashboard-enter {
+    animation: room-reveal-opacity var(--dur) var(--ease) backwards;
+  }
+  /* The escape hatch in AuthPending: only worth seeing if the redirect stalls. */
+  .auth-fade-late {
+    animation: room-reveal-opacity var(--dur) var(--ease) 3s backwards;
+  }
+}

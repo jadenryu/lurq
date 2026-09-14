@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Logo } from "@/components/common/logo";
 import { GradientBlob } from "@/components/site/gradient-blob";
 import { HEADLINE_LINE_1, HEADLINE_LINE_2 } from "@/content/copy";
+import { AuthTransition } from "@/components/auth/auth-motion";
 
 /**
  * Split auth layout: the brand panel on the left, the form column on the right.
@@ -22,17 +23,7 @@ import { HEADLINE_LINE_1, HEADLINE_LINE_2 } from "@/content/copy";
  * footer's, and it made a verification claim the marketing page is careful not
  * to make.
  */
-export function AuthShell({
-  children,
-  eyebrow,
-  title,
-  subtitle,
-}: {
-  children: React.ReactNode;
-  eyebrow?: string;
-  title?: string;
-  subtitle?: string;
-}) {
+export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="relative hidden items-center justify-center overflow-hidden bg-ground lg:flex">
@@ -81,23 +72,35 @@ export function AuthShell({
         </div>
         <div className="flex flex-1 flex-col items-center justify-center">
           <div className="w-full max-w-md text-center">
-            {eyebrow && (
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {eyebrow}
-              </span>
-            )}
-            {title && (
-              <h1 className="mt-2 whitespace-nowrap text-2xl font-semibold tracking-tight sm:text-3xl">
-                {title}
-              </h1>
-            )}
-            {subtitle && (
-              <p className="mt-3 text-sm text-muted-foreground">{subtitle}</p>
-            )}
-            <div className="mt-8 w-full">{children}</div>
+            <AuthTransition>{children}</AuthTransition>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** The form column's heading. Rendered by each page, inside the shell's transition. */
+export function AuthHeading({
+  eyebrow,
+  title,
+  subtitle,
+}: {
+  eyebrow?: string;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <>
+      {eyebrow && (
+        <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          {eyebrow}
+        </span>
+      )}
+      <h1 className="mt-2 whitespace-nowrap text-2xl font-semibold tracking-tight sm:text-3xl">
+        {title}
+      </h1>
+      {subtitle && <p className="mt-3 text-sm text-muted-foreground">{subtitle}</p>}
+    </>
   );
 }
