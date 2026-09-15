@@ -9,7 +9,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "How is it different from just asking my model?",
-    a: "Models remember what was popular when they were trained. lurq suggests newer options, flags outdated versions, and hands agents the code they need to craft the strongest stack for you.",
+    a: "A model remembers an API as it was on the day training stopped. lurq reads the version in your project: its exports, its peer ranges and its advisories, each with the date it was read. The model still writes the code. It writes it against the right version.",
   },
   {
     q: "What do you mean by execution-verified?",

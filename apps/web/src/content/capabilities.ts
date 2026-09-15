@@ -67,6 +67,23 @@ export type Call = {
  * two-sentence length. They now vary.
  */
 export const CAPABILITIES: Capability[] = [
+  /* The API card leads because the hero does: a moved export is the failure
+     people hit daily. The grid styles by nth-child, so order is free to change. */
+  {
+    title: "What is the API, exactly?",
+    body: "Exported symbols and signatures, read out of the version's own shipped .d.ts. We hand the delta to your model: what moved, what went, what is new.",
+    backedBy: "usage · resolve_surface · diff_surface",
+    figure: "surface",
+    call: {
+      tool: "diff_surface",
+      body: `{
+  "package": "zod",
+  "fromVersion": "3.23.8",
+  "toVersion": "4.1.12"
+}`,
+      note: "Symbols removed, added and changed between the two, read from shipped JavaScript.",
+    },
+  },
   {
     title: "Is it real, and is it healthy?",
     body: "Downloads, release cadence, open advisories, deprecation flags. We catch the package that does not exist: a name the model produced fluently, spelled the way a real one would be spelled.",
@@ -106,21 +123,6 @@ export const CAPABILITIES: Capability[] = [
   "version": "0.34.4"
 }`,
       note: "Returns the version's declared engines, so its Node floor is read rather than assumed.",
-    },
-  },
-  {
-    title: "What is the API, exactly?",
-    body: "Exported symbols and signatures, read out of the version's own shipped .d.ts. We hand the delta to your model: what moved, what went, what is new.",
-    backedBy: "usage · resolve_surface · diff_surface",
-    figure: "surface",
-    call: {
-      tool: "diff_surface",
-      body: `{
-  "package": "zod",
-  "fromVersion": "3.23.8",
-  "toVersion": "4.1.12"
-}`,
-      note: "Symbols removed, added and changed between the two, read from shipped JavaScript.",
     },
   },
 ];

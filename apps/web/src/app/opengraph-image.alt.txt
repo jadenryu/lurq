@@ -1,1 +1,1 @@
-lurq: The verification layer for everything your agent installs.
+lurq: Your agent writes code for the version it remembers.
