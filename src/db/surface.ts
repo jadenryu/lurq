@@ -289,6 +289,12 @@ export async function getPendingSurfaces(
     .limit(limit);
 }
 
+/** Specs waiting in the surface queue, both kinds, including ones backing off. */
+export async function surfaceQueueDepth(db: Database): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(surfaceQueue);
+  return Number(row?.n ?? 0);
+}
+
 export async function dropSurfaceQueue(db: Database, id: number): Promise<void> {
   await db.delete(surfaceQueue).where(eq(surfaceQueue.id, id));
 }

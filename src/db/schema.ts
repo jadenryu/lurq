@@ -175,6 +175,16 @@ export const packages = pgTable(
      *  dashboard accounts existed. Stamped once via a standalone WHERE ... IS NULL
      *  update kept out of upsertPackage, so re-syncs can never clobber it. */
     firstRequestedByOwnerId: text('first_requested_by_owner_id'),
+    /**
+     * Failed API-surface extractions for `surface_attempted_version`. The worker
+     * stops asking once a version has failed SURFACE_MAX_ATTEMPTS times; a new
+     * latest version starts the count again, since it may ship types the last
+     * one did not. Without this, a package with no extractable surface was
+     * re-attempted at random every hour, forever. Not in upsertPackage's row,
+     * so re-syncs never reset it.
+     */
+    surfaceAttempts: integer('surface_attempts').notNull().default(0),
+    surfaceAttemptedVersion: text('surface_attempted_version'),
   },
   (table) => [
     uniqueIndex('packages_ecosystem_name_idx').on(table.ecosystem, table.name),
