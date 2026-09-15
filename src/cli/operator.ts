@@ -377,6 +377,100 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('registry-sync')
+    .description('sync the official MCP registry: versions, remote endpoints and the headers they declare (incremental)')
+    .option('--full', 'ignore the watermark and read every version')
+    .option('--max-pages <n>', 'stop after n pages', (v) => parseInt(v, 10))
+    .option('--json', 'print raw JSON')
+    .action(async (opts: { full?: boolean; maxPages?: number; json?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { syncRegistry } = await import('../registry/sync');
+      const { db, close } = createDb({ max: 4 });
+      try {
+        const s = await syncRegistry(db, { full: opts.full, maxPages: opts.maxPages });
+        if (opts.json) {
+          console.log(JSON.stringify(s, null, 2));
+          return;
+        }
+        console.log(`registry ${s.since ? `since ${s.since}` : '(full read)'}: ${s.pages} page(s), ${s.versions} version(s), ${s.rejected} rejected`);
+        console.log(
+          `endpoints: ${s.endpointsLinked} linked, ${s.linksRemoved} link(s) removed, ${s.endpointsRemoved} endpoint(s) removed · watermark ${s.watermark ?? '—'}`,
+        );
+      } finally {
+        await close();
+      }
+    });
+
+  program
+    .command('remote-probe')
+    .description('probe due remote MCP endpoints without credentials: contract, sign-in path, spec violations')
+    .option('--limit <n>', 'endpoints to probe (default 200)', (v) => parseInt(v, 10))
+    .option('--concurrency <n>', 'lanes in flight (default 16)', (v) => parseInt(v, 10))
+    .option('--per-host <n>', 'requests in flight per host (default 2)', (v) => parseInt(v, 10))
+    .option('--json', 'print raw JSON')
+    .action(async (opts: { limit?: number; concurrency?: number; perHost?: number; json?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { drainRemoteProbes } = await import('../remoteProbe/drain');
+      const { db, close } = createDb({ max: 6 });
+      try {
+        const s = await drainRemoteProbes(db, { limit: opts.limit, concurrency: opts.concurrency, perHost: opts.perHost });
+        if (opts.json) {
+          console.log(JSON.stringify(s, null, 2));
+          return;
+        }
+        console.log(`claimed ${s.claimed} · probed ${s.probed} · ${s.changes} change(s) · ${s.failed} failed`);
+        for (const [status, n] of Object.entries(s.byStatus).sort((a, b) => b[1] - a[1])) console.log(`  ${status.padEnd(16)} ${n}`);
+      } finally {
+        await close();
+      }
+    });
+
+  program
+    .command('remote-stats')
+    .description('remote MCP endpoints by last probe status')
+    .option('--json', 'print raw JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { endpointStatusCounts } = await import('../db/remoteEndpoints');
+      const { db, close } = createDb({ max: 2 });
+      try {
+        const rows = await endpointStatusCounts(db);
+        if (opts.json) {
+          console.log(JSON.stringify(rows, null, 2));
+          return;
+        }
+        const total = rows.reduce((a, r) => a + r.count, 0);
+        console.log(`${total} live remote endpoint(s)`);
+        for (const r of rows) console.log(`  ${r.status.padEnd(16)} ${String(r.count).padStart(6)}  ${((100 * r.count) / Math.max(total, 1)).toFixed(1)}%`);
+      } finally {
+        await close();
+      }
+    });
+
+  program
+    .command('remote-opt-out')
+    .argument('<host>', 'hostname whose endpoints must never be probed again')
+    .description('honour a maintainer opt-out: stop probing every endpoint on a host')
+    .action(async (host: string) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { optOutHost } = await import('../db/remoteEndpoints');
+      const { db, close } = createDb({ max: 2 });
+      try {
+        console.log(`${await optOutHost(db, host)} endpoint(s) on ${host.trim().toLowerCase()} opted out`);
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('usage-prune')
     .description('report on stale dashboard usage counters (DRY RUN unless --apply)')
     .option('--keep-days <n>', 'days of history to retain (default 90)', (v) => parseInt(v, 10))

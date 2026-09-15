@@ -13,7 +13,7 @@
 import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Severity } from '../audit/types';
 import type { RegistryEntry } from '../registry/official';
-import type { ProbeResult, Violation } from '../remoteProbe/types';
+import type { DeclaredHeader, ProbeResult, Violation } from '../remoteProbe/types';
 import { endpointIdentity } from '../remoteProbe/url';
 import type { Database } from './client';
 import {
@@ -196,8 +196,29 @@ export interface ClaimedEndpoint {
   lastStatus: McpRemoteEndpointRow['lastStatus'];
   lastContentHash: string | null;
   lastAuthHash: string | null;
+  /** The last auth profile read, so an auth change can be described, not just detected. */
+  auth: McpRemoteEndpointRow['auth'];
   consecutiveFailures: number;
   lastChangedAt: Date | null;
+}
+
+/** Declared headers per endpoint, merged across every live registry server naming it. */
+export async function getDeclaredHeaders(db: Database, endpointIds: number[]): Promise<Map<number, DeclaredHeader[]>> {
+  const out = new Map<number, DeclaredHeader[]>();
+  if (endpointIds.length === 0) return out;
+  const rows = await db
+    .select({ endpointId: mcpEndpointServers.endpointId, headers: mcpEndpointServers.headers })
+    .from(mcpEndpointServers)
+    .where(and(inArray(mcpEndpointServers.endpointId, endpointIds), isNull(mcpEndpointServers.removedAt)));
+  for (const r of rows) {
+    const list = out.get(r.endpointId) ?? [];
+    for (const h of r.headers ?? []) {
+      if (list.some((x) => x.name.toLowerCase() === h.name.toLowerCase())) continue;
+      list.push({ name: h.name, required: h.isRequired === true, secret: h.isSecret === true, description: h.description ?? null });
+    }
+    out.set(r.endpointId, list);
+  }
+  return out;
 }
 
 /**
@@ -239,6 +260,7 @@ export async function claimDueEndpoints(
         lastStatus: mcpRemoteEndpoints.lastStatus,
         lastContentHash: mcpRemoteEndpoints.lastContentHash,
         lastAuthHash: mcpRemoteEndpoints.lastAuthHash,
+        auth: mcpRemoteEndpoints.auth,
         consecutiveFailures: mcpRemoteEndpoints.consecutiveFailures,
         lastChangedAt: mcpRemoteEndpoints.lastChangedAt,
       });

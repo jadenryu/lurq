@@ -86,7 +86,10 @@ export interface SafeFetchOptions {
   userAgent?: string;
 }
 
-export type SafeFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export type SafeFetch = ((input: string | URL, init?: RequestInit) => Promise<Response>) & {
+  /** Close the connection pool. Long-lived owners never need it; a `--once` process does, or keep-alive sockets hold it open. */
+  close?: () => Promise<void>;
+};
 
 function parse(input: string | URL): URL {
   try {
@@ -125,7 +128,7 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): SafeFetch {
     bodyTimeout: opts.bodyTimeoutMs ?? SAFE_FETCH_DEFAULTS.bodyTimeoutMs,
   });
 
-  return async (input, init = {}) => {
+  const safeFetch: SafeFetch = async (input, init = {}) => {
     let url = parse(input);
     let method = (init.method ?? 'GET').toUpperCase();
     let body = init.body ?? null;
@@ -166,4 +169,6 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): SafeFetch {
       return final;
     }
   };
+  safeFetch.close = () => dispatcher.close();
+  return safeFetch;
 }
