@@ -8,14 +8,29 @@
  * the problem. Dedup (a package already pending or in-flight is never queued
  * again) + a hard pending cap mean a flood of distinct names can't spawn
  * unbounded syncs or grow memory without limit. Process-local; each instance
- * drains its own queue. Durability is by self-heal: if the process dies with
- * work pending, the next request for that package re-enqueues it.
+ * drains its own queue.
+ *
+ * Durable underneath: every request is also written to `discovery_queue` as a
+ * `reactive` row, and the outcome is written back. The in-memory pool is the
+ * fast path; if the process dies with work pending (every deploy), the hourly
+ * worker ingests whatever is still pending instead of waiting for someone to
+ * ask again.
  */
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
+import { enqueueDemand, recordIngestFailure, setDiscoveryStatus } from '../db/discovery';
 import { ensureSeedEntry } from '../db/packages';
 import type { PackageRow } from '../db/schema';
+import { DISCOVERY } from '../scoring/weights';
 import { syncOnePackage } from './single';
+
+/** Write the request down before doing it. Best-effort: losing the durable
+ *  copy only loses crash-recovery, never the ingest itself. */
+async function persistDemand(db: Database, name: string, owner: string | null): Promise<void> {
+  await enqueueDemand(db, name, owner).catch((err) =>
+    logger.warn(`ingest queue: could not persist request for ${name}: ${String(err)}`),
+  );
+}
 
 const MAX_CONCURRENT = 3;
 const MAX_PENDING = 500;
@@ -83,6 +98,7 @@ export function enqueueIngest(
   queuedNames.add(name);
   owners.set(name, requestedByOwnerId);
   pending.push(name);
+  void persistDemand(db, name, requestedByOwnerId);
   pump(db);
 }
 
@@ -113,6 +129,12 @@ export async function runIngest(
   name: string,
   requestedByOwnerId: string | null = null,
 ): Promise<PackageRow | null> {
+  // The block-on-first-touch path calls this directly, so it records the request
+  // too; for queued work it is a no-op upsert of the row enqueueIngest wrote.
+  // Started, not awaited, so the ingest itself is not delayed behind a write —
+  // but awaited before recording the outcome, or the upsert (which resets the
+  // row to `pending`) could land after it and undo it.
+  const persisted = persistDemand(db, name, requestedByOwnerId);
   try {
     const row = await syncOnePackage(db, name, { requestedByOwnerId });
     // Same roster-promotion bar as the old inline path: only genuinely-trackable
@@ -120,9 +142,15 @@ export async function runIngest(
     if (row.confidence && row.confidence !== 'unproven') {
       await ensureSeedEntry(db, name, row.category).catch(() => {});
     }
+    await persisted;
+    await setDiscoveryStatus(db, name, { status: 'ingested' }).catch(() => {});
     return row;
   } catch (err) {
     logger.warn(`on-demand ingest failed for ${name}: ${String(err)}`);
+    // Counted against the same budget the worker uses, so a package whose
+    // ingest keeps throwing retires instead of being retried every hour.
+    await persisted;
+    await recordIngestFailure(db, name, DISCOVERY.maxIngestAttempts).catch(() => {});
     return null;
   }
 }

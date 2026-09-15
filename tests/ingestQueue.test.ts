@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // The queue drives syncOnePackage + seed promotion in the background.
 vi.mock('../src/pipeline/single', () => ({ syncOnePackage: vi.fn() }));
 vi.mock('../src/db/packages', () => ({ ensureSeedEntry: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../src/db/discovery', () => ({
+  enqueueDemand: vi.fn().mockResolvedValue(undefined),
+  setDiscoveryStatus: vi.fn().mockResolvedValue(undefined),
+  recordIngestFailure: vi.fn().mockResolvedValue(1),
+}));
 
 import {
   drainIngestQueue,

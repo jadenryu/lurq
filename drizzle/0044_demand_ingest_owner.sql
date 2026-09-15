@@ -1,0 +1,1 @@
+ALTER TABLE "discovery_queue" ADD COLUMN "requested_by_owner_id" text;

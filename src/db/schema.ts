@@ -235,6 +235,13 @@ export const discoveryQueue = pgTable(
      *  and never reaching the write that would take it off the queue. Same
      *  treatment `compat_verify_queue.attempts` already gives a failing set. */
     attempts: integer('attempts').notNull().default(0),
+    /**
+     * The account whose query asked for this package (`reactive` rows only),
+     * credited as first requester when it is ingested. Stored here because the
+     * on-demand ingest used to live only in the API process's memory, and a
+     * deploy mid-backlog dropped both the work and the attribution.
+     */
+    requestedByOwnerId: text('requested_by_owner_id'),
     discoveredAt: ts('discovered_at').notNull().defaultNow(),
   },
   (table) => [index('discovery_queue_status_idx').on(table.status)],

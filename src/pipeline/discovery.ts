@@ -221,6 +221,29 @@ function isRecent(date: string | null): boolean {
 
 // ── Orchestration ────────────────────────────────────────────────────────────
 
+export interface IngestPick {
+  name: string;
+  requestedByOwnerId: string | null;
+}
+
+/**
+ * The run's ingest list: user requests first, then gate survivors best-first,
+ * all under one cap. Requests go first because they are revealed demand, and
+ * because the crawler's backlog can run to thousands — ranking them against it
+ * would let a busy crawl starve somebody's explicit ask indefinitely.
+ */
+export function pickIngestOrder(
+  demand: IngestPick[],
+  gated: { name: string; preScore: number }[],
+  cap: number,
+): { ingest: IngestPick[]; deferred: IngestPick[] } {
+  const ranked = [...gated]
+    .sort((a, b) => b.preScore - a.preScore)
+    .map((g) => ({ name: g.name, requestedByOwnerId: null }));
+  const all = [...demand, ...ranked];
+  return { ingest: all.slice(0, cap), deferred: all.slice(cap) };
+}
+
 export async function runDiscovery(opts: DiscoverOptions = {}): Promise<DiscoverSummary> {
   const cap = opts.perRunCap ?? DISCOVERY.perRunCap;
   const handle = createDb({ max: 6 });
@@ -243,7 +266,15 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
     // ── Merit gate: pre-score pending candidates on quality only ──────────────
     const pending = await getPendingCandidates(handle.db, cap * 4);
     const scored: { name: string; preScore: number }[] = [];
+    const demand: IngestPick[] = [];
     for (const cand of pending) {
+      // Somebody asked for this package by name and the API process did not get
+      // to finish it (a deploy, a crash). The merit gate exists to keep the
+      // crawler's guesses out of the index, not to overrule an explicit request.
+      if (cand.discoveredVia === 'reactive') {
+        demand.push({ name: cand.name, requestedByOwnerId: cand.requestedByOwnerId ?? null });
+        continue;
+      }
       // Reuse a stored pre-score: a candidate still 'pending' with a non-null
       // pre-score already cleared the gate on a prior run and was deferred past
       // the per-run cap. Re-fetching + re-scoring it every run is a wasted
@@ -259,12 +290,12 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
       });
       if (passesGate(preScore)) scored.push({ name: cand.name, preScore: preScore! });
     }
-    logger.info(`Discovery: gated ${pending.length}; ${scored.length} cleared the quality bar.`);
+    logger.info(
+      `Discovery: gated ${pending.length - demand.length}; ${scored.length} cleared the quality bar; ${demand.length} requested by users.`,
+    );
 
     // ── Graduate the best, capped; log (don't silently drop) the tail ─────────
-    scored.sort((a, b) => b.preScore - a.preScore);
-    const toIngest = scored.slice(0, cap);
-    const deferred = scored.slice(cap);
+    const { ingest: toIngest, deferred } = pickIngestOrder(demand, scored, cap);
     if (deferred.length > 0) {
       logger.info(
         `Discovery: per-run cap ${cap} reached, ${deferred.length} eligible candidate(s) deferred to the next run: ${deferred.map((d) => d.name).join(', ')}`,
@@ -275,7 +306,7 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
     if (!opts.dryRun) {
       for (const cand of toIngest) {
         try {
-          await syncOnePackage(handle.db, cand.name);
+          await syncOnePackage(handle.db, cand.name, { requestedByOwnerId: cand.requestedByOwnerId });
           await setDiscoveryStatus(handle.db, cand.name, { status: 'ingested' });
           ingested++;
         } catch (err) {

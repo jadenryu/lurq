@@ -45,11 +45,46 @@ export async function enqueueCandidates(
   return inserted.length;
 }
 
+/**
+ * Durably record that a query asked for an untracked package by name.
+ *
+ * The API process ingests these itself within seconds; this row is what makes
+ * the request survive a deploy or crash in between, because the hourly worker
+ * drains any `reactive` row still pending. An upsert, not an insert: a name the
+ * merit gate once rejected is still worth ingesting when a user asks for it,
+ * which is what the in-process path always did. A `failed` row stays failed so
+ * a package whose ingest keeps throwing is not re-bought every hour.
+ */
+export async function enqueueDemand(
+  db: Database,
+  name: string,
+  requestedByOwnerId: string | null,
+): Promise<void> {
+  await db
+    .insert(discoveryQueue)
+    .values({ name, discoveredVia: 'reactive', requestedByOwnerId })
+    .onConflictDoUpdate({
+      target: discoveryQueue.name,
+      set: {
+        discoveredVia: 'reactive',
+        status: sql`case when ${discoveryQueue.status} = 'failed' then 'failed' else 'pending' end`,
+        requestedByOwnerId: sql`coalesce(${discoveryQueue.requestedByOwnerId}, excluded.requested_by_owner_id)`,
+      },
+    });
+}
+
+/** Pending candidates, user-requested (`reactive`) first so a busy crawl never
+ *  pushes someone's explicit request past the per-run cap. */
 export async function getPendingCandidates(
   db: Database,
   limit: number,
 ): Promise<DiscoveryQueueRow[]> {
-  return db.select().from(discoveryQueue).where(eq(discoveryQueue.status, 'pending')).limit(limit);
+  return db
+    .select()
+    .from(discoveryQueue)
+    .where(eq(discoveryQueue.status, 'pending'))
+    .orderBy(sql`${discoveryQueue.discoveredVia} = 'reactive' desc`, discoveryQueue.discoveredAt)
+    .limit(limit);
 }
 
 /**
