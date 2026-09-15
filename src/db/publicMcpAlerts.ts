@@ -168,6 +168,27 @@ export async function loadPublicChanges(db: Database, pairs: { changeId: number;
   return out;
 }
 
+/** Which of these public changes one account has acknowledged. */
+export async function acknowledgedChangeIds(db: Database, ownerId: string, changeIds: number[]): Promise<Set<number>> {
+  if (changeIds.length === 0) return new Set();
+  const rows = await db
+    .select({ changeId: mcpEndpointChangeAcks.changeId })
+    .from(mcpEndpointChangeAcks)
+    .where(and(eq(mcpEndpointChangeAcks.ownerId, ownerId), inArray(mcpEndpointChangeAcks.changeId, changeIds)));
+  return new Set(rows.map((r) => r.changeId));
+}
+
+/** Does a public change with this id exist? Acknowledging a missing one is a 404, not a foreign-key error. */
+export async function publicChangeExists(db: Database, changeId: number): Promise<boolean> {
+  const [row] = await db.select({ id: mcpEndpointChanges.id }).from(mcpEndpointChanges).where(eq(mcpEndpointChanges.id, changeId)).limit(1);
+  return Boolean(row);
+}
+
+/** One account's live pin on an endpoint, measured against what the probe reads now. */
+export async function getPin(db: Database, ownerId: string, endpointId: number): Promise<PinStatus | null> {
+  return (await listPins(db, ownerId)).find((p) => p.endpoint.id === endpointId) ?? null;
+}
+
 /** Mark a public change seen by one account. Idempotent. */
 export async function acknowledgePublicChange(db: Database, ownerId: string, changeId: number): Promise<void> {
   await db.insert(mcpEndpointChangeAcks).values({ ownerId, changeId }).onConflictDoNothing();

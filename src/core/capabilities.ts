@@ -152,6 +152,15 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['connect', 'oauth', 'auth', 'connector', 'setup', 'install', 'config', 'claude.ai', 'chatgpt', 'cursor', 'vscode', 'remote server', '401'],
   },
   {
+    id: 'mcp-pin',
+    title: 'Get alerted when a server changes',
+    question: 'How do I know if a remote MCP server I approved changes its tools or sign-in?',
+    answer:
+      'Pin the server as it is now. lurq re-reads every remote endpoint in the official registry on a schedule and alerts the account (email, Slack, the agent itself) when a pinned server’s tools, sign-in path or availability change — approved keeps meaning what was approved. Servers in your uploaded mcp-scan results are watched the same way without pinning.',
+    cli: 'lurq mcp-pin <url-or-registry-name>',
+    aliases: ['pin', 'approve', 'watch', 'alert', 'rug pull', 'drift', 'changed', 'monitor', 'remote'],
+  },
+  {
     id: 'diagram',
     title: 'Draw the stack',
     question: 'Can I see this as a diagram?',

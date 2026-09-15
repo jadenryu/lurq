@@ -505,6 +505,35 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('mcp-pin')
+    .argument('<server>', 'endpoint URL or official registry name of a remote MCP server')
+    .description('approve a remote MCP server as it is now; you are alerted when its tools or sign-in path change')
+    .option('--note <text>', 'why it was approved, shown with the pin')
+    .option('--json', 'output JSON')
+    .action(async (server: string, opts: { note?: string; json?: boolean }) => {
+      const { runMcpPin } = await import('./commands');
+      await runMcpPin(server, opts);
+    });
+
+  program
+    .command('mcp-unpin')
+    .argument('<server>', 'endpoint URL or official registry name')
+    .description('stop watching a pinned remote MCP server')
+    .action(async (server: string) => {
+      const { runMcpUnpin } = await import('./commands');
+      await runMcpUnpin(server);
+    });
+
+  program
+    .command('mcp-pins')
+    .description('your pinned remote MCP servers, and which changed since you pinned them')
+    .option('--json', 'output JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { runMcpPins } = await import('./commands');
+      await runMcpPins(opts);
+    });
+
+  program
     .command('weights')
     .description('show and explain the scoring weight model (health, quality, composite λ)')
     .option('--json', 'output the weight model as JSON')

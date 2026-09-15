@@ -388,6 +388,31 @@ export async function recordEndpointProbe(db: Database, input: ProbeRecordInput)
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 
+export async function getEndpointById(db: Database, id: number): Promise<McpRemoteEndpointRow | null> {
+  const [row] = await db.select().from(mcpRemoteEndpoints).where(eq(mcpRemoteEndpoints.id, id)).limit(1);
+  return row ?? null;
+}
+
+/** An endpoint's history, newest interval first. */
+export async function listEndpointObservations(db: Database, endpointId: number, limit = 20) {
+  return db
+    .select()
+    .from(mcpEndpointObservations)
+    .where(eq(mcpEndpointObservations.endpointId, endpointId))
+    .orderBy(desc(mcpEndpointObservations.firstSeenAt), desc(mcpEndpointObservations.id))
+    .limit(limit);
+}
+
+/** Registry servers currently naming an endpoint. */
+export async function listServerNamesForEndpoint(db: Database, endpointId: number): Promise<string[]> {
+  const rows = await db
+    .select({ name: mcpEndpointServers.serverName })
+    .from(mcpEndpointServers)
+    .where(and(eq(mcpEndpointServers.endpointId, endpointId), isNull(mcpEndpointServers.removedAt)))
+    .orderBy(asc(mcpEndpointServers.serverName));
+  return rows.map((r) => r.name);
+}
+
 export async function getEndpointByUrl(db: Database, raw: string): Promise<McpRemoteEndpointRow | null> {
   const id = endpointIdentity(raw);
   if (!id) return null;

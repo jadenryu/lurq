@@ -941,6 +941,36 @@ export async function runMcpSurface(
  * gained a required parameter fails loudly on the next call; a tool that quietly
  * stopped being read-only succeeds, and writes.
  */
+function pinLine(p: import('./remote').RemotePin): string {
+  const drift = [p.contractChanged && 'tools changed', p.authChanged && 'sign-in changed'].filter(Boolean).join(', ');
+  const open = p.openChanges ? ` · ${p.openChanges} open change(s)${p.worstOpen ? `, worst ${p.worstOpen}` : ''}` : '';
+  return `${drift ? red(`changed since pinned: ${drift}`) : green('unchanged since pinned')}${open}`;
+}
+
+/** Pins belong to an account, so these always go through the hosted API with the user's key. */
+export async function runMcpPin(server: string, opts: { note?: string; json?: boolean }): Promise<void> {
+  const { pinMcpServer } = await import('./remote');
+  const pin = await pinMcpServer(server, opts.note);
+  if (opts.json) return console.log(JSON.stringify(pin, null, 2));
+  if (!pin) return console.log(yellow(`${server} was pinned, but lurq could not read the pin back.`));
+  console.log(`${green('pinned')} ${bold(pin.url)}${pin.note ? dim(`  "${pin.note}"`) : ''}`);
+  console.log(dim(`status ${pin.status ?? 'not probed yet'} · pinned ${pin.pinnedAt.slice(0, 10)}`));
+  console.log(dim('lurq alerts this account when its tools, its sign-in path or its availability change. Re-run to approve a change you reviewed.'));
+}
+
+export async function runMcpUnpin(server: string): Promise<void> {
+  const { unpinMcpServer } = await import('./remote');
+  console.log((await unpinMcpServer(server)) ? `${green('unpinned')} ${server}` : dim(`${server} was not pinned`));
+}
+
+export async function runMcpPins(opts: { json?: boolean }): Promise<void> {
+  const { listMcpPins } = await import('./remote');
+  const pins = await listMcpPins();
+  if (opts.json) return console.log(JSON.stringify(pins, null, 2));
+  if (!pins.length) return console.log(dim('No pinned MCP servers. Pin one with `lurq mcp-pin <url-or-registry-name>`.'));
+  console.log(table(['Server', 'Status', 'Since pinned'], pins.map((p) => [p.url, p.status ?? '—', pinLine(p)])));
+}
+
 export async function runConnectCheck(server: string, opts: { client?: string; json?: boolean }): Promise<void> {
   type Response = import('../connect/check').ConnectCheckResponse;
   const args: Record<string, unknown> = { server, ...(opts.client ? { client: opts.client } : {}) };

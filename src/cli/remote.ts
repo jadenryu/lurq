@@ -381,3 +381,34 @@ export function uploadMcpScan(
 ): Promise<McpScanUploadResult> {
   return post<McpScanUploadResult>('/mcp-scans', body, { timeoutMs: 120_000, ...opts });
 }
+
+/** One pinned remote MCP endpoint, measured against what lurq's probe reads now. */
+export interface RemotePin {
+  endpointId: number;
+  url: string;
+  note: string | null;
+  pinnedAt: string;
+  status: string | null;
+  lastProbedAt: string | null;
+  contractChanged: boolean;
+  authChanged: boolean;
+  openChanges: number;
+  worstOpen: string | null;
+}
+
+export async function listMcpPins(opts: RemoteOptions = {}): Promise<RemotePin[]> {
+  return (await request<{ pins: RemotePin[] }>('GET', '/mcp-pins', undefined, opts)).pins ?? [];
+}
+
+/** Pin a remote MCP server as it is now; re-pinning approves a change you reviewed. */
+export async function pinMcpServer(server: string, note?: string, opts: RemoteOptions = {}): Promise<RemotePin | null> {
+  return (await post<{ pin: RemotePin | null }>('/mcp-pins', { server, ...(note ? { note } : {}) }, opts)).pin;
+}
+
+export async function unpinMcpServer(server: string, opts: RemoteOptions = {}): Promise<boolean> {
+  return (await post<{ unpinned: boolean }>('/mcp-pins/unpin', { server }, opts)).unpinned;
+}
+
+export async function acknowledgePublicMcpChange(changeId: number, opts: RemoteOptions = {}): Promise<boolean> {
+  return (await post<{ acknowledged: boolean }>(`/mcp-public-changes/${changeId}/acknowledge`, {}, opts)).acknowledged;
+}

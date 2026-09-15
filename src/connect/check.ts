@@ -137,6 +137,23 @@ function headersToRender(remote: RemoteFacts | null): string[] {
   return remote.auth?.mode === 'static' ? ['Authorization'] : [];
 }
 
+/**
+ * The probed endpoint a query means: a URL lurq holds, or the best live endpoint
+ * of a registry server. Null when lurq has neither, which is never evidence the
+ * server does not exist.
+ */
+export async function resolveServerEndpoint(db: Database, query: string): Promise<McpRemoteEndpointRow | null> {
+  const q = query.trim();
+  if (!q) return null;
+  if (/^https?:\/\//i.test(q)) {
+    const row = await getEndpointByUrl(db, q);
+    return row && !row.removedAt ? row : null;
+  }
+  const [server] = await findRegistryServers(db, q, 1);
+  if (!server) return null;
+  return pickEndpoint((await getEndpointsForServer(db, server.name)).map((l) => l.endpoint));
+}
+
 export async function handleConnectCheck(db: Database, input: ConnectCheckInput, deps: ConnectCheckDeps = {}): Promise<ConnectCheckResponse> {
   const query = input.server.trim();
   let resolvedAs: ConnectCheckResponse['resolvedAs'] = null;

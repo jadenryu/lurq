@@ -92,6 +92,7 @@ import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
+import { registerPublicMcpRoutes } from './publicMcpRoutes';
 import { registerNotificationRoutes } from './notificationRoutes';
 import { registerChannelRoutes } from './channelRoutes';
 import { registerBuilderScanRoutes } from './builderScanRoutes';
@@ -1770,6 +1771,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     keyLimiter,
     quota,
     bigJson: express.json({ limit: MCP_SCAN_BODY_LIMIT }),
+    requireIssuerSecret,
+    ownerFrom,
+    keyOwner,
+  });
+
+  // ── Public MCP endpoints: pins and acks (API key), detail pages (issuer) ────
+  registerPublicMcpRoutes(app, {
+    db,
+    ipLimiter,
+    auth: auth as unknown as RequestHandler,
+    keyLimiter,
     requireIssuerSecret,
     ownerFrom,
     keyOwner,
