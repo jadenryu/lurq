@@ -933,6 +933,12 @@ export interface PublicEndpointDetail {
   summary: Record<CompatVerdict, number>;
 }
 
+export async function fetchPinnedEndpoints(ownerId: string): Promise<PublicEndpointPin[]> {
+  const res = await issuerFetch(`/mcp-public/pins?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read pinned servers.", 502);
+  return ((await res.json()) as { pins: PublicEndpointPin[] }).pins ?? [];
+}
+
 export async function fetchPublicEndpoint(ownerId: string, endpointId: number): Promise<PublicEndpointDetail | null> {
   const res = await issuerFetch(`/mcp-public/${endpointId}?ownerId=${encodeURIComponent(ownerId)}`);
   if (res.status === 404) return null;

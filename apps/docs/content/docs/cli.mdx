@@ -159,6 +159,10 @@ lurq mcp-ci                                    # a GitHub Actions workflow that 
 lurq mcp-stack                                 # do your configured servers collide?
 lurq mcp-surface @modelcontextprotocol/server-filesystem
 lurq mcp-drift @modelcontextprotocol/server-filesystem --from <version> --to <version>
+lurq connect-check https://mcp.example.com/mcp --client chatgpt
+lurq mcp-pin io.github.acme/weather            # tell me when this server changes
+lurq mcp-pins                                  # what changed since you pinned it
+lurq mcp-unpin io.github.acme/weather
 ```
 
 `mcp-scan` and `mcp-ci` have their own page: see
@@ -166,6 +170,20 @@ lurq mcp-drift @modelcontextprotocol/server-filesystem --from <version> --to <ve
 server's tool contract as lurq probed it (`--version` for an exact version);
 `mcp-drift` needs both `--from` and `--to`, and reports what moved between them,
 including silent schema changes and tools that stopped being read-only.
+
+`connect-check` takes an endpoint URL, an official registry name or an npm
+package name, and answers for every MCP client lurq has a profile for — or one
+client with `--client` — whether the server works there, what setup it needs (a
+key to send as a header, an OAuth client to pre-register and the redirect URIs
+to allow), or why it is blocked. With `--client` it also prints the config to
+paste in that client's own format. A URL lurq has not probed is read live and
+not stored.
+
+`mcp-pin` records a remote server as it is now, so lurq tells this account when
+its tools, its sign-in path or its availability change; `mcp-pins` lists what
+changed since, and re-running `mcp-pin` approves a change you reviewed. Servers
+in your uploaded `mcp-scan` results are watched the same way without pinning.
+These three need an API key, because a pin belongs to an account.
 
 ## Scoring controls
 

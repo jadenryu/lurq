@@ -46,6 +46,7 @@ import {
   fetchContributions,
   fetchKeys,
   fetchOutcomes,
+  fetchPinnedEndpoints,
   fetchPublicEndpoint,
   fetchRepo,
   fetchRepoBrief,
@@ -58,6 +59,7 @@ import {
   type DashboardRepo,
   type DashboardUsage,
   type PublicEndpointDetail,
+  type PublicEndpointPin,
   type RepoAlert,
   type RepoBrief,
   type RepoDetailPayload,
@@ -408,6 +410,11 @@ export function loadMcpServers(): Promise<Loaded<McpServersPayload>> {
 /** One server's contract, findings and history. Null when it is not this account's. */
 export function loadMcpServer(id: number): Promise<Loaded<McpServerDetail | null>> {
   return load((ownerId) => fetchMcpServer(ownerId, id), () => demoMcpServerDetail(id), null);
+}
+
+/** The account's pinned public MCP servers, and which changed since pinning. */
+export function loadPinnedEndpoints(): Promise<Loaded<PublicEndpointPin[]>> {
+  return load(fetchPinnedEndpoints, () => [], []);
 }
 
 /**

@@ -166,6 +166,16 @@ export function registerPublicMcpRoutes(app: Express, d: PublicMcpRouteDeps): vo
     return ownerId || null;
   };
 
+  app.get('/mcp-public/pins', d.requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = owner(req, res);
+    if (!ownerId) return;
+    try {
+      res.status(200).json({ pins: (await listPins(d.db, ownerId)).map(pinView) });
+    } catch (err) {
+      fail(res, 'list pins', err);
+    }
+  });
+
   app.get('/mcp-public/:endpointId', d.requireIssuerSecret, async (req: Request, res: Response) => {
     const ownerId = owner(req, res);
     if (!ownerId) return;
