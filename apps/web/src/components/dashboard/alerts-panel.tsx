@@ -64,23 +64,43 @@ export function AlertsPanel({ alerts }: { alerts: RepoAlert[] }) {
                 table rather than on the repo. The footnote below has always
                 said to open a repository for the migration brief; it used to
                 leave the actual finding of it as an exercise. */}
-            <Link
-              href={`/dashboard/repos/${alert.repoId}?q=${encodeURIComponent(alert.packageName)}#deps`}
-              className="rounded-[var(--radius-chip)] font-mono text-sm outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
-            >
-              {alert.packageName}
-              <span className="text-ink-2/60">
-                {" "}
-                {alert.fromVersion ?? alert.range} → {alert.toVersion}
+            {alert.repoId === null ? (
+              <span className="font-mono text-sm">
+                {alert.packageName}
+                <span className="text-ink-2/60">
+                  {" "}
+                  {alert.fromVersion ?? alert.range} → {alert.toVersion}
+                </span>
               </span>
-            </Link>
+            ) : (
+              <Link
+                href={`/dashboard/repos/${alert.repoId}?q=${encodeURIComponent(alert.packageName)}#deps`}
+                className="rounded-[var(--radius-chip)] font-mono text-sm outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
+              >
+                {alert.packageName}
+                <span className="text-ink-2/60">
+                  {" "}
+                  {alert.fromVersion ?? alert.range} → {alert.toVersion}
+                </span>
+              </Link>
+            )}
             <RangeCell alert={alert} />
-            <Link
-              href={`/dashboard/repos/${alert.repoId}`}
-              className="rounded-[var(--radius-chip)] font-mono text-xs text-ink-2 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
-            >
-              {alert.repoFullName}
-            </Link>
+            {alert.repoId === null ? (
+              // Heard about from a `check-upgrade` run: there is no repo page yet.
+              <span
+                className="font-mono text-xs text-ink-2"
+                title="Reported by lurq check-upgrade. Connect this repository for its migration brief."
+              >
+                {alert.repoFullName} · not connected
+              </span>
+            ) : (
+              <Link
+                href={`/dashboard/repos/${alert.repoId}`}
+                className="rounded-[var(--radius-chip)] font-mono text-xs text-ink-2 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal/50"
+              >
+                {alert.repoFullName}
+              </Link>
+            )}
             <span className="ml-auto font-mono text-xs text-ink-2/60">
               {relativeTime(alert.createdAt)}
             </span>

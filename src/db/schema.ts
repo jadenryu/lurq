@@ -633,7 +633,10 @@ export const repoAlerts = pgTable(
     id: serial('id').primaryKey(),
     /** Clerk user id, copied from the repo — alerts are read owner-scoped. */
     ownerId: text('owner_id').notNull(),
-    repoId: integer('repo_id').notNull(),
+    /** Null for an account that runs `check-upgrade` on a repo lurq has no
+     *  GitHub App installation for: the alert is keyed by `repo_full_name` from
+     *  its upgrade runs instead, and there is no repo page to link to. */
+    repoId: integer('repo_id'),
     /** Denormalized so the feed renders without a join, as in `upgrade_runs`. */
     repoFullName: text('repo_full_name').notNull(),
     packageName: text('package_name').notNull(),
@@ -661,6 +664,12 @@ export const repoAlerts = pgTable(
     // watcher re-syncs on every publish, including non-latest backports — must
     // not re-notify.
     uniqueIndex('repo_alerts_dedup_idx').on(table.repoId, table.packageName, table.toVersion),
+    // The same rule for alerts with no connected repo. Postgres treats NULLs as
+    // distinct, so the index above can never dedupe those rows; this one covers
+    // exactly them. Partial, so adding it cannot fail on existing rows.
+    uniqueIndex('repo_alerts_cli_dedup_idx')
+      .on(table.ownerId, table.repoFullName, table.packageName, table.toVersion)
+      .where(sql`repo_id is null`),
   ],
 );
 

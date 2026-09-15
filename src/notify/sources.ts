@@ -30,9 +30,21 @@ function alertItem(a: RepoAlertRow, webUrl: string): UrgentItem {
     key: `alert:${a.id}`,
     kind: 'breaking_release',
     title: `${a.packageName} ${a.toVersion} will install on its own in ${a.repoFullName}`,
-    detail: `The range ${a.range} already admits ${a.toVersion}, a new major${a.fromVersion ? ` (it resolves ${a.fromVersion} today)` : ''}. The next clean install takes it unless the range is tightened.`,
-    url: `${webUrl}/dashboard/repos/${a.repoId}?q=${encodeURIComponent(a.packageName)}#deps`,
+    detail:
+      a.repoId === null
+        ? `${a.toVersion} is a new major; ${a.repoFullName} was last upgraded to ${a.range} with lurq check-upgrade. Connect the repo to see which exports it removes.`
+        : a.inRange
+          ? `The range ${a.range} already admits ${a.toVersion}, a new major${a.fromVersion ? ` (it resolves ${a.fromVersion} today)` : ''}. The next clean install takes it unless the range is tightened.`
+          : `${a.repoFullName} is now a major behind (declares ${a.range}).`,
+    url: alertUrl(a, webUrl),
   };
+}
+
+/** A connected repo's drift row for the package; the repo list for a CLI-only alert, which has no repo page. */
+export function alertUrl(a: RepoAlertRow, webUrl: string): string {
+  return a.repoId === null
+    ? `${webUrl}/dashboard/repos`
+    : `${webUrl}/dashboard/repos/${a.repoId}?q=${encodeURIComponent(a.packageName)}#deps`;
 }
 
 interface EventRow {
@@ -219,7 +231,9 @@ export async function buildDigest(db: Database, ownerId: string, now: Date, webU
   ]);
 
   const watchedRepos = repoCount?.n ?? 0;
-  if (deployments.length === 0 && watchedRepos === 0) return null;
+  // An account can watch nothing lurq manages and still have alerts: CLI-only
+  // repos are alerted from their upgrade runs. Those accounts get a digest too.
+  if (deployments.length === 0 && watchedRepos === 0 && (alertTotal[0]?.n ?? 0) === 0) return null;
 
   const staleBefore = new Date(now.getTime() - 7 * DAY_MS);
   return {
