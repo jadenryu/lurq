@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-14T14:20:35.505Z",
+  "generatedAt": "2026-09-15T12:48:45.620Z",
   "source": "live",
-  "dataAsOf": "2026-09-14T14:02:36.932Z",
-  "packages": 47630,
-  "packagesScored": 47630,
+  "dataAsOf": "2026-09-15T12:04:27.390Z",
+  "packages": 48062,
+  "packagesScored": 48062,
   "categories": 23,
-  "versionsTracked": 4236082,
-  "apiSurfaces": 35602,
+  "versionsTracked": 4267848,
+  "apiSurfaces": 36250,
   "coOccurrencePairs": 27121288,
   "stacksResolved": 15,
   "stacksHeld": 15,
@@ -16,15 +16,15 @@
     "latestVersion": "0.1.7",
     "publishedVersions": 17,
     "firstPublishedAt": "2026-06-23T19:08:53.750Z",
-    "downloadsSincePublish": 3037,
+    "downloadsSincePublish": 3086,
     "weeksLive": 11
   },
   "lastSync": {
-    "startedAt": "2026-09-14T06:04:09.118Z",
-    "finishedAt": "2026-09-14T07:02:34.663Z",
-    "packagesSeen": 2410,
-    "packagesUpdated": 2410,
+    "startedAt": "2026-09-15T06:02:48.103Z",
+    "finishedAt": "2026-09-15T07:04:35.996Z",
+    "packagesSeen": 2429,
+    "packagesUpdated": 2429,
     "status": "partial"
   },
-  "syncDays": 60
+  "syncDays": 61
 }
