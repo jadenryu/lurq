@@ -21,7 +21,9 @@ describe('aliasFor', () => {
   it('derives the config key a user would choose', () => {
     expect(aliasFor('io.github.acme/weather-mcp')).toBe('weather');
     expect(aliasFor('@acme/github-mcp-server')).toBe('github');
-    expect(aliasFor('https://mcp.linear.app/mcp')).toBe('mcp');
+    expect(aliasFor('https://mcp.linear.app/mcp')).toBe('linear');
+    expect(aliasFor('https://api.inference.sh/mcp')).toBe('inference');
+    expect(aliasFor('https://my-tool.workers.dev/sse')).toBe('my-tool');
     expect(aliasFor('Some Odd/Name!!')).toBe('name');
     expect(aliasFor('x'.repeat(80))).toHaveLength(30);
   });

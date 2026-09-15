@@ -125,7 +125,9 @@ function evaluateAuth(remote: RemoteFacts, client: ClientProfile, acc: Acc) {
     if (remote.status && !DEAD_STATUSES.has(remote.status)) acc.unknown('auth_unknown', 'how this endpoint authenticates was not established', false);
     return;
   }
-  if (c.note) acc.warn('client_auth_note', c.note);
+  // A note restating a rule already encoded in `strict` would read as a contradiction
+  // of a verdict that has just checked that rule.
+  if (c.note && !c.strict) acc.warn('client_auth_note', c.note);
 
   if (mode === 'static') {
     const step = headerStep(remote.declaredHeaders);

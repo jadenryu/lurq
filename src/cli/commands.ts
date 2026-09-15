@@ -969,8 +969,11 @@ export async function runConnectCheck(server: string, opts: { client?: string; j
 
   const paint = { works: green, needs_setup: yellow, blocked: red, unknown: dim } as const;
   const clients = res.clients ?? [];
+  // For a working client the column only earns ink for a material caveat, never a general note.
   const reason = (c: Response['clients'][number]) =>
-    (c.blockers ?? [])[0] ?? (c.setup ?? [])[0] ?? (c.unknowns ?? []).find((u) => u.decisive) ?? (c.warnings ?? [])[0];
+    c.verdict === 'works'
+      ? (c.warnings ?? []).find((w) => w.code !== 'client_auth_note')
+      : ((c.blockers ?? [])[0] ?? (c.setup ?? [])[0] ?? (c.unknowns ?? []).find((u) => u.decisive) ?? (c.warnings ?? [])[0]);
   console.log(
     table(
       ['Client', 'Verdict', 'Why'],

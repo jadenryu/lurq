@@ -76,7 +76,17 @@ const CLIENT_FACTS_READ = '2026-09-15';
 const LIVE_BUDGET_MS = 8_000;
 
 export function aliasFor(name: string): string {
-  const last = name.replace(/\/+$/, '').split('/').pop() ?? name;
+  let source = name;
+  if (/^https?:\/\//i.test(name)) {
+    // An endpoint's path is usually just `/mcp`; the host names the service.
+    try {
+      const labels = new URL(name).hostname.toLowerCase().split('.').slice(0, -1).filter((l) => !['mcp', 'api', 'www', 'server'].includes(l));
+      source = labels[0] ?? source;
+    } catch {
+      /* keep the raw text */
+    }
+  }
+  const last = source.replace(/\/+$/, '').split('/').pop() ?? source;
   const base = last.replace(/^@[^/]+\//, '').replace(/[-_.]?mcp[-_.]?(server)?$/i, '') || last;
   return (base.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'server').slice(0, 30);
 }
