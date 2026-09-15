@@ -14,6 +14,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-o
 import type { Severity } from '../audit/types';
 import type { RegistryEntry } from '../registry/official';
 import type { DeclaredHeader, ProbeResult, Violation } from '../remoteProbe/types';
+import { serverKeyFor } from '../mcpScan/config';
 import { endpointIdentity } from '../remoteProbe/url';
 import type { Database } from './client';
 import {
@@ -118,10 +119,18 @@ export async function storeRegistryEntries(db: Database, entries: RegistryEntry[
     if (endpoints.size) {
       const rows = await tx
         .insert(mcpRemoteEndpoints)
-        .values([...endpoints].map(([url, v]) => ({ url, host: v.host, transport: v.transport, templated: v.templated })))
+        .values(
+          [...endpoints].map(([url, v]) => ({
+            url,
+            host: v.host,
+            transport: v.transport,
+            templated: v.templated,
+            scanKey: v.templated ? null : serverKeyFor('remote', null, url, ''),
+          })),
+        )
         .onConflictDoUpdate({
           target: mcpRemoteEndpoints.url,
-          set: { transport: sql`excluded.transport`, templated: sql`excluded.templated`, removedAt: null },
+          set: { transport: sql`excluded.transport`, templated: sql`excluded.templated`, scanKey: sql`excluded.scan_key`, removedAt: null },
         })
         .returning({ id: mcpRemoteEndpoints.id, url: mcpRemoteEndpoints.url });
       for (const r of rows) idByUrl.set(r.url, r.id);

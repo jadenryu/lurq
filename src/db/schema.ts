@@ -1485,8 +1485,15 @@ export const mcpRemoteEndpoints = pgTable(
     leaseUntil: ts('lease_until'),
     /** No live registry entry names this URL any more. Kept for history. */
     removedAt: ts('removed_at'),
+    /**
+     * The key an account's own `lurq mcp-scan` gives this server (`remote:<host><path>`,
+     * query dropped). Joining on it is how a change the public probe sees reaches
+     * every account already running the server, without anyone rescanning.
+     */
+    scanKey: text('scan_key'),
   },
   (table) => [
+    index('mcp_remote_endpoints_scan_key_idx').on(table.scanKey),
     index('mcp_remote_endpoints_due_idx')
       .on(table.nextProbeAt)
       .where(sql`${table.optedOut} = false and ${table.templated} = false and ${table.removedAt} is null`),
@@ -1568,6 +1575,47 @@ export const mcpEndpointChanges = pgTable(
   ],
 );
 
+/**
+ * An account's approval of a remote endpoint as it was: its contract and its
+ * sign-in path at the moment of pinning. A later public change is measured
+ * against this, so "approved" keeps meaning what was approved. Unpinning is
+ * marked, not deleted.
+ */
+export const mcpPins = pgTable(
+  'mcp_pins',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    /** Null when the contract was not readable without credentials at pin time. */
+    contentHash: text('content_hash'),
+    authHash: text('auth_hash'),
+    note: text('note'),
+    pinnedAt: ts('pinned_at').notNull().defaultNow(),
+    removedAt: ts('removed_at'),
+  },
+  (table) => [
+    uniqueIndex('mcp_pins_owner_endpoint_idx').on(table.ownerId, table.endpointId),
+    index('mcp_pins_endpoint_idx').on(table.endpointId),
+  ],
+);
+
+/** An account has seen a public endpoint change. Per account: one change, many readers. */
+export const mcpEndpointChangeAcks = pgTable(
+  'mcp_endpoint_change_acks',
+  {
+    ownerId: text('owner_id').notNull(),
+    changeId: integer('change_id')
+      .notNull()
+      .references(() => mcpEndpointChanges.id),
+    acknowledgedAt: ts('acknowledged_at').notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.changeId] })],
+);
+
+export type McpPinRow = typeof mcpPins.$inferSelect;
 export type McpRegistryServerRow = typeof mcpRegistryServers.$inferSelect;
 export type McpRemoteEndpointRow = typeof mcpRemoteEndpoints.$inferSelect;
 export type McpEndpointObservationRow = typeof mcpEndpointObservations.$inferSelect;
