@@ -861,6 +861,109 @@ export async function acknowledgeMcpChange(ownerId: string, eventId: number): Pr
   return true;
 }
 
+// ── Public MCP endpoints (registry-listed, probed without credentials) ──────
+
+export type PublicEndpointStatus =
+  | "open"
+  | "auth_required"
+  | "not_found"
+  | "server_error"
+  | "unreachable"
+  | "dns_failed"
+  | "blocked"
+  | "protocol_error"
+  | "timeout"
+  | "templated";
+
+export type CompatVerdict = "works" | "needs_setup" | "blocked" | "unknown";
+
+export interface PublicEndpointChange {
+  id: number;
+  kind: "contract" | "auth" | "status";
+  severity: ScanSeverity;
+  summary: string;
+  createdAt: string;
+  acknowledged: boolean;
+}
+
+export interface PublicEndpointPin {
+  endpointId: number;
+  url: string;
+  note: string | null;
+  pinnedAt: string;
+  status: PublicEndpointStatus | null;
+  lastProbedAt: string | null;
+  contractChanged: boolean;
+  authChanged: boolean;
+  openChanges: number;
+  worstOpen: ScanSeverity | null;
+}
+
+export interface PublicEndpointDetail {
+  endpoint: {
+    id: number;
+    url: string;
+    host: string;
+    transport: string;
+    status: PublicEndpointStatus | null;
+    httpStatus: number | null;
+    auth: {
+      mode: "none" | "oauth" | "static" | "unknown";
+      oauth: { issuer: string | null; cimd: boolean; dcr: boolean; pkceS256: boolean; authorizationServers: string[] } | null;
+      declaredHeaders: { name: string; required: boolean; secret: boolean }[];
+    } | null;
+    violations: { code: string; detail: string }[];
+    protocolMode: "stateless" | "initialize" | null;
+    protocolVersion: string | null;
+    serverName: string | null;
+    serverVersion: string | null;
+    latencyMs: number | null;
+    lastError: string | null;
+    firstSeenAt: string;
+    lastProbedAt: string | null;
+    lastChangedAt: string | null;
+    removedAt: string | null;
+  };
+  servers: string[];
+  contract: { tools: McpToolInfo[]; analysis: { stats: McpServerStats; findings: McpFinding[] } } | null;
+  observations: { id: number; status: PublicEndpointStatus; httpStatus: number | null; error: string | null; probeCount: number; firstSeenAt: string; lastSeenAt: string }[];
+  changes: PublicEndpointChange[];
+  pin: PublicEndpointPin | null;
+  clients: { client: string; clientName: string; verdict: CompatVerdict; reason: string | null }[];
+  summary: Record<CompatVerdict, number>;
+}
+
+export async function fetchPublicEndpoint(ownerId: string, endpointId: number): Promise<PublicEndpointDetail | null> {
+  const res = await issuerFetch(`/mcp-public/${endpointId}?ownerId=${encodeURIComponent(ownerId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not read the MCP server.", 502);
+  return (await res.json()) as PublicEndpointDetail;
+}
+
+async function publicPost(path: string, ownerId: string, what: string): Promise<Response | null> {
+  const res = await issuerFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError(`Could not ${what}.`, 502);
+  return res;
+}
+
+export async function acknowledgePublicMcpChange(ownerId: string, changeId: number): Promise<boolean> {
+  return (await publicPost(`/mcp-public/changes/${changeId}/acknowledge`, ownerId, "acknowledge the change")) !== null;
+}
+
+export async function pinPublicEndpoint(ownerId: string, endpointId: number): Promise<boolean> {
+  return (await publicPost(`/mcp-public/${endpointId}/pin`, ownerId, "pin the server")) !== null;
+}
+
+export async function unpinPublicEndpoint(ownerId: string, endpointId: number): Promise<boolean> {
+  const res = await publicPost(`/mcp-public/${endpointId}/unpin`, ownerId, "unpin the server");
+  return res ? Boolean(((await res.json()) as { unpinned?: boolean }).unpinned) : false;
+}
+
 // ── Account email ────────────────────────────────────────────────────────────
 
 export interface NotificationPreferences {
