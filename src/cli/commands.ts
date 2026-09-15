@@ -941,6 +941,60 @@ export async function runMcpSurface(
  * gained a required parameter fails loudly on the next call; a tool that quietly
  * stopped being read-only succeeds, and writes.
  */
+export async function runConnectCheck(server: string, opts: { client?: string; json?: boolean }): Promise<void> {
+  type Response = import('../connect/check').ConnectCheckResponse;
+  const args: Record<string, unknown> = { server, ...(opts.client ? { client: opts.client } : {}) };
+  const res = await fromIndex<Response>('connect_check', args, (db) =>
+    Promise.all([import('../connect/check'), import('../core/safeFetch')]).then(([m, f]) =>
+      m.handleConnectCheck(db, { server, client: (opts.client ?? null) as Response['clients'][number]['client'] | null }, { liveProbe: { fetch: f.sharedSafeFetch() } }),
+    ),
+  );
+
+  if (opts.json) return console.log(JSON.stringify(res, null, 2));
+
+  const ev = res.evidence ?? ({} as Partial<Response['evidence']>);
+  console.log(`${bold(res.server?.name ?? server)}${res.server?.url ? dim(`  ${res.server.url}`) : ''}`);
+  const auth = ev.auth
+    ? `auth: ${ev.auth.mode}${ev.auth.mode === 'oauth' ? ` (CIMD ${ev.auth.cimd ? 'yes' : 'no'}, DCR ${ev.auth.dcr ? 'yes' : 'no'}, PKCE S256 ${ev.auth.pkceS256 ? 'yes' : 'no'})` : ''}`
+    : null;
+  const facts = [
+    ev.status ? `endpoint: ${ev.status.replace('_', ' ')}` : 'endpoint: not probed',
+    auth,
+    ev.toolCount != null ? `${ev.toolCount} tool(s)` : null,
+    ev.observedAt ? `observed ${ev.observedAt.slice(0, 10)}` : null,
+  ].filter(Boolean);
+  console.log(dim(facts.join(' · ')));
+  for (const v of ev.violations ?? []) console.log(yellow(`⚠ ${v.detail}`));
+  for (const c of ev.recentChanges ?? []) console.log(dim(`· ${c.at.slice(0, 10)} ${c.kind}: ${c.summary}`));
+
+  const paint = { works: green, needs_setup: yellow, blocked: red, unknown: dim } as const;
+  const clients = res.clients ?? [];
+  const reason = (c: Response['clients'][number]) =>
+    (c.blockers ?? [])[0] ?? (c.setup ?? [])[0] ?? (c.unknowns ?? []).find((u) => u.decisive) ?? (c.warnings ?? [])[0];
+  console.log(
+    table(
+      ['Client', 'Verdict', 'Why'],
+      clients.map((c) => {
+        const why = reason(c)?.detail ?? '—';
+        return [c.clientName, paint[c.verdict](c.verdict.replace('_', ' ')), why.length > 100 ? `${why.slice(0, 99)}…` : why];
+      }),
+    ),
+  );
+
+  if (clients.length === 1) {
+    const c = clients[0]!;
+    for (const b of c.blockers ?? []) console.log(red(`✗ ${b.detail}`));
+    for (const s of c.setup ?? []) console.log(yellow(`→ ${s.detail}`));
+    for (const w of c.warnings ?? []) console.log(dim(`· ${w.detail}`));
+    for (const u of (c.unknowns ?? []).filter((x) => x.decisive)) console.log(dim(`? ${u.detail}`));
+    for (const cfg of c.config ?? []) console.log(`\n${dim(`# ${cfg.kind} · ${cfg.target}`)}\n${cfg.text}`);
+  } else if (clients.length > 1) {
+    const s = res.summary;
+    console.log(dim(`${s?.works ?? 0} works · ${s?.needs_setup ?? 0} needs setup · ${s?.blocked ?? 0} blocked · ${s?.unknown ?? 0} unknown  (--client <id> for steps and config)`));
+  }
+  if (res.coverageNote) console.log(dim(`\n${res.coverageNote}`));
+}
+
 export async function runMcpDrift(
   server: string,
   opts: { from: string; to: string; json?: boolean },

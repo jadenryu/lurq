@@ -84,6 +84,15 @@ reads like a guess.
   can catch it, and the symptom is a malformed call that looks like a model mistake.
   **Privilege widening** is a tool that stopped being read-only or started being
   destructive; nothing breaks, which is what makes it worse than a break.
+- **Add an MCP server to a client, or a remote server will not connect** → `connect_check`
+  with the endpoint URL, registry name or npm package, and the `client` you are wiring it
+  into (`claude-code`, `cursor`, `vscode`, `chatgpt`, `claude-ai`, `codex`, `gemini-cli`, …).
+  Returns `works`, `needs_setup` with the exact steps (a key header, an OAuth client to
+  pre-register and its redirect URIs), `blocked` with the reason, or `unknown`, plus config
+  in that client's own format. Built from a credential-free probe of the server and the
+  client's documented constraints. Use the returned config instead of writing one from
+  memory, put any setup step in front of the user, and never invent a key: header values
+  are placeholders. `unknown` is not "will not work".
 - **Visualize a stack you have already chosen** → `diagram` with the package names. A
   labeled starting point by layer — not a validated architecture.
 - **Unsure whether lurq covers the situation** → `capabilities` with what you are trying

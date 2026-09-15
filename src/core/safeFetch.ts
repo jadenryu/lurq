@@ -172,3 +172,11 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): SafeFetch {
   safeFetch.close = () => dispatcher.close();
   return safeFetch;
 }
+
+let shared: SafeFetch | null = null;
+
+/** One pool for a long-lived process (the hosted server), created on first use and never closed. */
+export function sharedSafeFetch(): SafeFetch {
+  shared ??= createSafeFetch();
+  return shared;
+}

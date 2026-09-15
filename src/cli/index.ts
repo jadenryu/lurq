@@ -494,6 +494,17 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('connect-check')
+    .argument('<server>', 'endpoint URL, official registry name, or npm package name')
+    .description('will this MCP server work in your client, and what does it take? (per-client verdicts + config)')
+    .option('--client <id>', 'one client: claude-code, claude-ai, chatgpt, cursor, vscode, codex, gemini-cli, …')
+    .option('--json', 'output JSON instead of a table')
+    .action(async (server: string, opts: { client?: string; json?: boolean }) => {
+      const { runConnectCheck } = await import('./commands');
+      await runConnectCheck(server, opts);
+    });
+
+  program
     .command('weights')
     .description('show and explain the scoring weight model (health, quality, composite λ)')
     .option('--json', 'output the weight model as JSON')

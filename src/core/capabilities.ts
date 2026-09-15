@@ -142,6 +142,16 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['mcp', 'schema drift', 'tool drift', 'readOnlyHint', 'breaking', 'agent'],
   },
   {
+    id: 'connect-check',
+    title: 'Check a server works in your client',
+    question: 'Will this MCP server work in Claude, ChatGPT, Cursor or VS Code, and what does it need?',
+    answer:
+      'Per-client verdicts (works, needs setup, blocked, unknown) for one MCP server, from a credential-free probe of its endpoint and each client’s documented constraints: how it authenticates and whether that client can sign in to it, spec deviations strict clients refuse, tool names and schemas the client rejects. Returns the setup steps and ready-to-paste config in each client’s own format.',
+    mcp: 'connect_check',
+    cli: 'lurq connect-check <server> --client <client>',
+    aliases: ['connect', 'oauth', 'auth', 'connector', 'setup', 'install', 'config', 'claude.ai', 'chatgpt', 'cursor', 'vscode', 'remote server', '401'],
+  },
+  {
     id: 'diagram',
     title: 'Draw the stack',
     question: 'Can I see this as a diagram?',

@@ -150,6 +150,14 @@ export const TOOLS: GuideTool[] = [
     input: "server \u00b7 fromVersion \u00b7 toVersion",
   },
   {
+    name: "connect_check",
+    group: "check",
+    purpose:
+      "Whether an MCP server will work in your client before you wire it in, and exactly what it takes: works, needs setup (a key header, a pre-registered OAuth client and the redirect URIs to allow), blocked with the reason, or unknown. Read from a credential-free probe of the server and each client\u2019s documented constraints, with config to paste in that client\u2019s own format.",
+    prompt: "will the Linear MCP server work in ChatGPT?",
+    input: "server (URL, registry name or npm package) \u00b7 optional client",
+  },
+  {
     name: "diagram",
     group: "extra",
     purpose:

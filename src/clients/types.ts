@@ -33,6 +33,31 @@ export type ClientId =
   | 'bolt'
   | 'v0';
 
+/** Every client id, for input validation that must not load the profiles themselves. */
+export const CLIENT_IDS = [
+  'claude-code',
+  'claude-desktop',
+  'claude-ai',
+  'claude-api',
+  'chatgpt',
+  'openai-responses',
+  'codex',
+  'gemini-cli',
+  'cursor',
+  'vscode',
+  'windsurf',
+  'zed',
+  'jetbrains-ai',
+  'junie',
+  'cline',
+  'continue',
+  'goose',
+  'lovable',
+  'replit',
+  'bolt',
+  'v0',
+] as const satisfies readonly ClientId[];
+
 export type ClientKind = 'cli' | 'ide' | 'desktop' | 'web' | 'api' | 'app_builder';
 
 export interface ToolNameRule {

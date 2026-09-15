@@ -18,6 +18,7 @@ import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
 import { handleMcpDrift, handleMcpSurface } from './mcpHandlers';
+import { CLIENT_IDS } from '../clients/types';
 import { handleAudit } from './auditHandler';
 import {
   handleCompare,
@@ -411,6 +412,32 @@ export function buildMcpServer(
       },
     },
     async (args) => reply(await run('mcp_drift', () => handleMcpDrift(db, args))),
+  );
+
+  server.registerTool(
+    'connect_check',
+    {
+      title: 'Will this MCP server work in my client?',
+      description:
+        "Before wiring an MCP server into a client, find out whether it will work there and exactly what it takes. Accepts an endpoint URL, an official-registry server name, or an npm package name. Answers per client (Claude Code, Claude.ai, ChatGPT, Cursor, VS Code, Codex, Gemini CLI and more): WORKS; NEEDS_SETUP with the steps (a key to send as a header, an OAuth client to pre-register and the redirect URIs to allow, a URL placeholder to fill); BLOCKED with the reason and which side causes it; or UNKNOWN when a decisive fact is not established. Built from a credential-free probe of the endpoint (whether it answers, how it authenticates, which OAuth registration methods it offers, spec deviations strict clients refuse, tool names and schemas) and from primary-sourced client constraints. Returns ready-to-paste config in each client's own format, with placeholder values. Tell the user what it found, including which client it was checked for. UNKNOWN never means it will not work.",
+      annotations: READ_LIVE,
+      inputSchema: {
+        server: z
+          .string()
+          .trim()
+          .min(1)
+          .max(2048)
+          .describe('Endpoint URL (https://…), official registry name (io.github.acme/weather), or npm package name'),
+        client: z.enum(CLIENT_IDS).optional().describe('One client to check, e.g. claude-code, cursor, chatgpt; omit for every client'),
+      },
+    },
+    async (args) =>
+      reply(
+        await run('connect_check', async () => {
+          const [{ handleConnectCheck }, { sharedSafeFetch }] = await Promise.all([import('../connect/check'), import('../core/safeFetch')]);
+          return handleConnectCheck(db, { server: args.server, client: args.client ?? null }, { liveProbe: { fetch: sharedSafeFetch() } });
+        }),
+      ),
   );
 
   server.registerTool(
