@@ -309,6 +309,13 @@
       "when": 1789416803276,
       "tag": "0043_builder_scans",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1789509214185,
+      "tag": "0044_remote_mcp_contracts",
+      "breakpoints": true
     }
   ]
 }

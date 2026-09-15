@@ -68,6 +68,8 @@ import type { PromptInfo, ResourceTemplateInfo } from '../mcpScan/snapshot';
 import type { ServerAnalysis, SnapshotDiff } from '../mcpScan/analyze';
 import type { Registry } from '../mcpScan/config';
 import type { ScanStatus } from '../mcpScan/errors';
+import type { AuthProfile, EndpointStatus, ProtocolMode, Violation } from '../remoteProbe/types';
+import type { RegistryHeader, RegistryPackageEntry, RegistryRemote } from '../registry/official';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -1400,3 +1402,173 @@ export const builderScans = pgTable(
 );
 
 export type BuilderScanRow = typeof builderScans.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Remote MCP contracts: a public, credential-free read of every remote endpoint
+// the official registry lists. Owner-independent by construction — nothing here
+// ever holds a credential or a value an account supplied — so it can back public
+// answers. Contract bodies are stored in `mcp_contracts`, content-addressed and
+// shared with account scans.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Every version of every server the official registry has published, as last
+ * synced. Kept per version because the registry's `updated_since` feed returns
+ * versions, and a deleted or superseded version is itself a fact worth knowing.
+ */
+export const mcpRegistryServers = pgTable(
+  'mcp_registry_servers',
+  {
+    name: text('name').notNull(),
+    version: text('version').notNull(),
+    title: text('title'),
+    description: text('description'),
+    websiteUrl: text('website_url'),
+    repositoryUrl: text('repository_url'),
+    /** `active`, `deprecated`, `deleted`, … as the registry reports it. */
+    status: text('status').notNull(),
+    isLatest: boolean('is_latest').notNull(),
+    remotes: jsonb('remotes').$type<RegistryRemote[]>().notNull(),
+    packages: jsonb('packages').$type<RegistryPackageEntry[]>().notNull(),
+    publishedAt: ts('published_at'),
+    registryUpdatedAt: ts('registry_updated_at'),
+    syncedAt: ts('synced_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.name, table.version] }),
+    index('mcp_registry_servers_latest_idx').on(table.name).where(sql`${table.isLatest}`),
+    index('mcp_registry_servers_updated_idx').on(table.registryUpdatedAt),
+  ],
+);
+
+/**
+ * One remote endpoint, identified by its URL: current state plus the schedule.
+ *
+ * The table is its own work queue. A drain claims due rows by setting
+ * `lease_until` inside `FOR UPDATE SKIP LOCKED`, so concurrent workers never
+ * probe the same endpoint and a crashed worker's lease simply expires. Backoff
+ * lives in `next_probe_at`, computed from the outcome.
+ */
+export const mcpRemoteEndpoints = pgTable(
+  'mcp_remote_endpoints',
+  {
+    id: serial('id').primaryKey(),
+    url: text('url').notNull().unique(),
+    host: text('host').notNull(),
+    /** Transport the registry declares: `streamable-http` or `sse`. */
+    transport: text('transport').notNull(),
+    /** URL carries `{placeholders}`: never probed, answered as setup-dependent. */
+    templated: boolean('templated').notNull().default(false),
+    /** A maintainer asked not to be probed. Never scheduled again. */
+    optedOut: boolean('opted_out').notNull().default(false),
+    lastStatus: text('last_status').$type<EndpointStatus>(),
+    lastHttpStatus: integer('last_http_status'),
+    /** Content hash of the last contract read (a key into `mcp_contracts`). */
+    lastContentHash: text('last_content_hash'),
+    /** Hash of the auth profile, so an auth change is detectable without a diff. */
+    lastAuthHash: text('last_auth_hash'),
+    auth: jsonb('auth').$type<AuthProfile>(),
+    violations: jsonb('violations').$type<Violation[]>().notNull().default([]),
+    protocolMode: text('protocol_mode').$type<ProtocolMode>(),
+    protocolVersion: text('protocol_version'),
+    serverName: text('server_name'),
+    serverVersion: text('server_version'),
+    finalUrl: text('final_url'),
+    latencyMs: integer('latency_ms'),
+    lastError: text('last_error'),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    probeCount: integer('probe_count').notNull().default(0),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastProbedAt: ts('last_probed_at'),
+    lastChangedAt: ts('last_changed_at'),
+    nextProbeAt: ts('next_probe_at').notNull().defaultNow(),
+    leaseUntil: ts('lease_until'),
+    /** No live registry entry names this URL any more. Kept for history. */
+    removedAt: ts('removed_at'),
+  },
+  (table) => [
+    index('mcp_remote_endpoints_due_idx')
+      .on(table.nextProbeAt)
+      .where(sql`${table.optedOut} = false and ${table.templated} = false and ${table.removedAt} is null`),
+    index('mcp_remote_endpoints_host_idx').on(table.host),
+  ],
+);
+
+/** Which registry servers name which endpoint, with the headers each declares. */
+export const mcpEndpointServers = pgTable(
+  'mcp_endpoint_servers',
+  {
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    serverName: text('server_name').notNull(),
+    headers: jsonb('headers').$type<RegistryHeader[]>().notNull().default([]),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+    /**
+     * The server's latest registry version stopped naming this URL, or the
+     * server was deleted. Marked, never deleted: rows in this schema are history.
+     */
+    removedAt: ts('removed_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.endpointId, table.serverName] }),
+    index('mcp_endpoint_servers_name_idx').on(table.serverName),
+  ],
+);
+
+/**
+ * An endpoint's history, run-length encoded exactly like `mcp_observations`: a
+ * new row only when status, contract, auth or violations move.
+ */
+export const mcpEndpointObservations = pgTable(
+  'mcp_endpoint_observations',
+  {
+    id: serial('id').primaryKey(),
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    status: text('status').$type<EndpointStatus>().notNull(),
+    httpStatus: integer('http_status'),
+    contentHash: text('content_hash'),
+    authHash: text('auth_hash'),
+    violations: jsonb('violations').$type<Violation[]>().notNull().default([]),
+    protocolVersion: text('protocol_version'),
+    error: text('error'),
+    probeCount: integer('probe_count').notNull().default(1),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+  },
+  (table) => [index('mcp_endpoint_observations_endpoint_idx').on(table.endpointId, table.firstSeenAt)],
+);
+
+/**
+ * A change on a public endpoint worth telling someone about: its contract
+ * (tools), its auth (a client that could sign in may no longer), or its status
+ * (it went dark). The pair index makes a flapping endpoint re-arm one row.
+ */
+export const mcpEndpointChanges = pgTable(
+  'mcp_endpoint_changes',
+  {
+    id: serial('id').primaryKey(),
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    kind: text('kind').$type<'contract' | 'auth' | 'status'>().notNull(),
+    fromKey: text('from_key').notNull(),
+    toKey: text('to_key').notNull(),
+    severity: text('severity').$type<Severity>().notNull(),
+    summary: text('summary').notNull(),
+    diff: jsonb('diff').$type<unknown>(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('mcp_endpoint_changes_pair_idx').on(table.endpointId, table.kind, table.fromKey, table.toKey),
+    index('mcp_endpoint_changes_endpoint_idx').on(table.endpointId, table.createdAt),
+    index('mcp_endpoint_changes_created_idx').on(table.createdAt),
+  ],
+);
+
+export type McpRegistryServerRow = typeof mcpRegistryServers.$inferSelect;
+export type McpRemoteEndpointRow = typeof mcpRemoteEndpoints.$inferSelect;
+export type McpEndpointObservationRow = typeof mcpEndpointObservations.$inferSelect;
+export type McpEndpointChangeRow = typeof mcpEndpointChanges.$inferSelect;
