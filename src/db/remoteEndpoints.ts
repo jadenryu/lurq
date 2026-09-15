@@ -236,8 +236,17 @@ export async function getDeclaredHeaders(db: Database, endpointIds: number[]): P
  */
 export async function claimDueEndpoints(
   db: Database,
-  opts: { limit: number; leaseMs?: number; now?: Date },
+  opts: {
+    limit: number;
+    leaseMs?: number;
+    now?: Date;
+    /** Only these endpoints: an operator re-probing one server, or a test keeping to its own rows. */
+    onlyIds?: number[];
+    /** Ignore the schedule. Never ignores a live lease, an opt-out or a removal. */
+    force?: boolean;
+  },
 ): Promise<ClaimedEndpoint[]> {
+  if (opts.onlyIds && opts.onlyIds.length === 0) return [];
   const now = opts.now ?? new Date();
   const leaseUntil = new Date(now.getTime() + (opts.leaseMs ?? 10 * 60_000));
   return db.transaction(async (tx) => {
@@ -249,8 +258,9 @@ export async function claimDueEndpoints(
           eq(mcpRemoteEndpoints.optedOut, false),
           eq(mcpRemoteEndpoints.templated, false),
           isNull(mcpRemoteEndpoints.removedAt),
-          lte(mcpRemoteEndpoints.nextProbeAt, now),
+          opts.force ? undefined : lte(mcpRemoteEndpoints.nextProbeAt, now),
           or(isNull(mcpRemoteEndpoints.leaseUntil), lt(mcpRemoteEndpoints.leaseUntil, now)),
+          opts.onlyIds ? inArray(mcpRemoteEndpoints.id, opts.onlyIds) : undefined,
         ),
       )
       .orderBy(asc(mcpRemoteEndpoints.nextProbeAt))

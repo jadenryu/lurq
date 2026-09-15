@@ -134,10 +134,10 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
     const ours = new Set(linked.map((l) => l.endpoint.id));
     expect(ours.size).toBe(2);
 
-    // Drain far enough in the future that only due rows matter; other rows in the
-    // test DB may be claimed too, which is fine — the assertions look at ours.
+    // Scoped to this run's endpoints: test files share the database and run in
+    // parallel, and an unscoped drain would probe another file's rows.
     const t1 = new Date(Date.now() + 60_000);
-    const d1 = await drainRemoteProbes(db, { fetch: probeFetch, limit: 500, now: () => t1, budgetMs: 10_000 });
+    const d1 = await drainRemoteProbes(db, { fetch: probeFetch, limit: 500, now: () => t1, budgetMs: 10_000, onlyIds: [...ours] });
     expect(d1.failed).toBe(0);
 
     const open = (await store.getEndpointByUrl(db, `${base}/open-${run}`))!;
@@ -153,7 +153,7 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
     // The server drops a tool; the next probe (forced due) records the change.
     tools = ['search'];
     const t2 = new Date(open.nextProbeAt.getTime() + 60_000);
-    await drainRemoteProbes(db, { fetch: probeFetch, limit: 500, now: () => t2, budgetMs: 10_000 });
+    await drainRemoteProbes(db, { fetch: probeFetch, limit: 500, now: () => t2, budgetMs: 10_000, onlyIds: [...ours] });
     const changed = (await store.getEndpointByUrl(db, `${base}/open-${run}`))!;
     expect(changed.lastContentHash).not.toBe(open.lastContentHash);
     expect(changed.lastChangedAt).toEqual(t2);

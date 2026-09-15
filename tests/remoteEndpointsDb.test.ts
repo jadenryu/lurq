@@ -124,16 +124,16 @@ describe.skipIf(!TEST_DB)('remote endpoint store against Postgres', () => {
     const mine = new Set((await store.getEndpointsForServer(db, c)).map((l) => l.endpoint.id));
     const now = new Date(Date.now() + 60_000);
     const [x, y] = await Promise.all([
-      store.claimDueEndpoints(db, { limit: 500, now }),
-      store.claimDueEndpoints(db, { limit: 500, now }),
+      store.claimDueEndpoints(db, { limit: 500, now, onlyIds: [...mine] }),
+      store.claimDueEndpoints(db, { limit: 500, now, onlyIds: [...mine] }),
     ]);
     const ours = (rows: { id: number }[]) => rows.map((r) => r.id).filter((id) => mine.has(id));
     expect(ours(x).filter((id) => ours(y).includes(id))).toEqual([]);
     expect(new Set([...ours(x), ...ours(y)]).size).toBe(6);
 
-    const again = await store.claimDueEndpoints(db, { limit: 500, now });
+    const again = await store.claimDueEndpoints(db, { limit: 500, now, onlyIds: [...mine] });
     expect(ours(again)).toEqual([]);
-    const later = await store.claimDueEndpoints(db, { limit: 500, now: new Date(now.getTime() + 11 * 60_000) });
+    const later = await store.claimDueEndpoints(db, { limit: 500, now: new Date(now.getTime() + 11 * 60_000), onlyIds: [...mine] });
     expect(ours(later).sort()).toEqual([...mine].sort());
   });
 

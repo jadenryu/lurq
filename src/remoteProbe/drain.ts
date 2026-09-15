@@ -41,6 +41,10 @@ export interface RemoteDrainOptions {
   budgetMs?: number;
   /** Clock seam for tests. */
   now?: () => Date;
+  /** Only these endpoints (see claimDueEndpoints). */
+  onlyIds?: number[];
+  /** Probe them now, whatever the schedule says. */
+  force?: boolean;
 }
 
 export interface RemoteDrainSummary {
@@ -81,7 +85,13 @@ export async function drainRemoteProbes(db: Database, opts: RemoteDrainOptions =
   const summary: RemoteDrainSummary = { claimed: 0, probed: 0, failed: 0, changes: 0, byStatus: {} };
 
   // A lease long enough for the slowest lane to reach its last endpoint.
-  const claimed = await claimDueEndpoints(db, { limit, now: clock(), leaseMs: Math.max(10 * 60_000, (limit / perHost) * budgetMs) });
+  const claimed = await claimDueEndpoints(db, {
+    limit,
+    now: clock(),
+    leaseMs: Math.max(10 * 60_000, (limit / perHost) * budgetMs),
+    onlyIds: opts.onlyIds,
+    force: opts.force,
+  });
   summary.claimed = claimed.length;
   if (claimed.length === 0) return summary;
 

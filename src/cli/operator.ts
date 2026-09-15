@@ -409,15 +409,26 @@ export function registerOperatorCommands(program: Command): void {
     .option('--limit <n>', 'endpoints to probe (default 200)', (v) => parseInt(v, 10))
     .option('--concurrency <n>', 'lanes in flight (default 16)', (v) => parseInt(v, 10))
     .option('--per-host <n>', 'requests in flight per host (default 2)', (v) => parseInt(v, 10))
+    .option('--url <url>', 'probe this one endpoint now, whatever its schedule')
     .option('--json', 'print raw JSON')
-    .action(async (opts: { limit?: number; concurrency?: number; perHost?: number; json?: boolean }) => {
+    .action(async (opts: { limit?: number; concurrency?: number; perHost?: number; url?: string; json?: boolean }) => {
       const { requireConfig } = await import('../core/config');
       requireConfig(['DATABASE_URL']);
       const { createDb } = await import('../db/client');
       const { drainRemoteProbes } = await import('../remoteProbe/drain');
+      const { getEndpointByUrl } = await import('../db/remoteEndpoints');
       const { db, close } = createDb({ max: 6 });
       try {
-        const s = await drainRemoteProbes(db, { limit: opts.limit, concurrency: opts.concurrency, perHost: opts.perHost });
+        let onlyIds: number[] | undefined;
+        if (opts.url) {
+          const row = await getEndpointByUrl(db, opts.url);
+          if (!row) {
+            console.log(`no endpoint with that URL; run registry-sync first, or check the URL`);
+            return;
+          }
+          onlyIds = [row.id];
+        }
+        const s = await drainRemoteProbes(db, { limit: opts.limit, concurrency: opts.concurrency, perHost: opts.perHost, onlyIds, force: Boolean(opts.url) });
         if (opts.json) {
           console.log(JSON.stringify(s, null, 2));
           return;
