@@ -431,6 +431,7 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
         'https://chatgpt.com/connector/oauth/{callback_id}',
       ],
       note: 'The authorization server must advertise S256 in code_challenge_methods_supported or ChatGPT will not connect.',
+      strict: { pkceS256Required: true },
     },
     toolNaming: {
       format: null,
@@ -588,6 +589,7 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
       staticHeaders: 'yes',
       redirectUris: ['http://127.0.0.1:{port}/callback'],
       note: 'Authorization servers that advertise issuer identification must return a matching iss (RFC 9207) or Codex rejects the response.',
+      strict: { issValidated: true },
     },
     toolNaming: {
       format: 'mcp__{server}__{tool}',
@@ -699,6 +701,7 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
       staticHeaders: 'yes',
       redirectUris: ['http://localhost:{port}/oauth/callback'],
       note: 'Authorization servers must return an iss matching the issuer (RFC 9207) or Gemini CLI rejects the response.',
+      strict: { issValidated: true },
     },
     toolNaming: {
       format: 'mcp_{server}_{tool}',

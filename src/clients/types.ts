@@ -80,6 +80,17 @@ export interface AuthSupport {
   redirectUris: string[];
   /** One sentence on a caveat that changes an outcome (plan gating, admin-only headers). */
   note: string | null;
+  /**
+   * Spec checks a primary source says this client enforces. Absent means not
+   * confirmed either way, and the evaluator reports the deviation as a warning
+   * rather than a block.
+   */
+  strict?: {
+    /** Refuses an authorization server that does not advertise PKCE S256. */
+    pkceS256Required?: boolean;
+    /** Rejects an authorization response whose `iss` does not match (RFC 9207). */
+    issValidated?: boolean;
+  };
 }
 
 export interface ProtocolSupport {
