@@ -713,6 +713,12 @@ export const surfaceQueue = pgTable(
     specKey: text('spec_key').notNull().unique(),
     /** Failed drains bump this; the worker drops a spec that keeps failing. */
     attempts: integer('attempts').notNull().default(0),
+    /**
+     * Not eligible before this. Set on every retry with an exponential delay, so
+     * a spec that just failed waits instead of being retried the next cycle and
+     * — oldest-first — blocking every newer spec behind it. Null = ready now.
+     */
+    nextAttemptAt: ts('next_attempt_at'),
     requestedAt: ts('requested_at').notNull().defaultNow(),
   },
   (table) => [index('surface_queue_requested_idx').on(table.kind, table.requestedAt)],
