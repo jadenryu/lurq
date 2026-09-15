@@ -19,7 +19,6 @@
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { enqueueDemand, recordIngestFailure, setDiscoveryStatus } from '../db/discovery';
-import { ensureSeedEntry } from '../db/packages';
 import type { PackageRow } from '../db/schema';
 import { DISCOVERY } from '../scoring/weights';
 import { syncOnePackage } from './single';
@@ -119,10 +118,10 @@ function pump(db: Database): void {
 }
 
 /**
- * Fetch→score→embed→upsert one package and, if it clears the roster-promotion
- * bar, seed it for future syncs. Returns the stored row, or null on failure.
- * Shared by the background queue and the block-on-first-touch path (§4A) so both
- * apply the same promotion rule.
+ * Fetch→score→embed→upsert one package, recording the request and its outcome
+ * in `discovery_queue`. Returns the stored row, or null on failure. Shared by the
+ * background queue and the block-on-first-touch path (§4A) so both record the
+ * same way.
  */
 export async function runIngest(
   db: Database,
@@ -137,11 +136,11 @@ export async function runIngest(
   const persisted = persistDemand(db, name, requestedByOwnerId);
   try {
     const row = await syncOnePackage(db, name, { requestedByOwnerId });
-    // Same roster-promotion bar as the old inline path: only genuinely-trackable
-    // discoveries join the sync roster, so the on-demand tail can't inflate cost.
-    if (row.confidence && row.confidence !== 'unproven') {
-      await ensureSeedEntry(db, name, row.category).catch(() => {});
-    }
+    // Deliberately NOT added to `seed_packages`. It used to be, and nothing ever
+    // removed an entry, so the list the daily sync re-fetches in full every run
+    // only grew. An ingested package is kept fresh without it: the publish feed
+    // re-syncs it the moment it releases, and the daily rotation refreshes the
+    // stalest non-seed packages.
     await persisted;
     await setDiscoveryStatus(db, name, { status: 'ingested' }).catch(() => {});
     return row;

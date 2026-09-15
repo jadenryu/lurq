@@ -251,7 +251,7 @@ export async function getOrFetchPackage(
 
   // Real but untracked: ingest off the request path. Bounded + deduped so a
   // flood of distinct names can't spawn unbounded work (the whole point of not
-  // doing it inline). Roster promotion happens in the worker, same quality bar.
+  // doing it inline).
   enqueueIngest(db, name, opts.requestedByOwnerId ?? null);
   return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
 }
