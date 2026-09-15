@@ -21,6 +21,10 @@ export interface CollectDeps {
    * API's harsh rate limits during a full sync.
    */
   prefetchedWeekly?: number | null;
+  /** Read the registry packument fresh instead of from cache. Only the registry:
+   *  it is the one source that says which version is latest, and the others'
+   *  caches (downloads, GitHub, deps.dev) exist to stay inside rate limits. */
+  freshRegistry?: boolean;
 }
 
 async function attempt<T>(
@@ -47,7 +51,9 @@ export async function collectSignals(
   const errors: { source: string; message: string }[] = [];
 
   // 1. Registry first — it provides the repo + version the other sources need.
-  const registry = await attempt('npm-registry', errors, () => fetchNpmRegistry(name, fetchImpl));
+  const registry = await attempt('npm-registry', errors, () =>
+    fetchNpmRegistry(name, fetchImpl, { fresh: deps.freshRegistry }),
+  );
 
   const repo = registry?.repo ?? null;
   const version = registry?.latestVersion ?? null;
