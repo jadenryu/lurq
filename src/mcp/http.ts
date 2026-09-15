@@ -93,6 +93,7 @@ import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
 import { registerPublicMcpRoutes } from './publicMcpRoutes';
+import { registerPublicMcpServerRoutes } from './publicMcpServers';
 import { registerNotificationRoutes } from './notificationRoutes';
 import { registerChannelRoutes } from './channelRoutes';
 import { registerBuilderScanRoutes } from './builderScanRoutes';
@@ -411,6 +412,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // limiter only; publicPackages.ts keeps them to a summary of the top packages.
   registerPublicPackageRoutes(app, db, ipLimiter);
   registerPublicUpgradeRoutes(app, db, ipLimiter);
+  // Public MCP server summaries for lurq.run/mcp pages; publicMcpServers.ts keeps them to a summary.
+  registerPublicMcpServerRoutes(app, db, ipLimiter);
 
   app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
