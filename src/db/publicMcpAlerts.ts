@@ -119,6 +119,55 @@ export async function publicChangesForOwners(
   return [...out.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
+/**
+ * Rebuild routed changes from (change, account) pairs, for delivery retries.
+ * A pair whose change is gone, or whose account no longer depends on the
+ * endpoint, is dropped: nobody is retried an alert they stopped subscribing to.
+ */
+export async function loadPublicChanges(db: Database, pairs: { changeId: number; ownerId: string }[]): Promise<OwnerPublicChange[]> {
+  if (pairs.length === 0) return [];
+  const rows = await db
+    .select({
+      changeId: mcpEndpointChanges.id,
+      endpointId: mcpEndpointChanges.endpointId,
+      url: mcpRemoteEndpoints.url,
+      host: mcpRemoteEndpoints.host,
+      scanKey: mcpRemoteEndpoints.scanKey,
+      kind: mcpEndpointChanges.kind,
+      severity: mcpEndpointChanges.severity,
+      summary: mcpEndpointChanges.summary,
+      diff: mcpEndpointChanges.diff,
+      createdAt: mcpEndpointChanges.createdAt,
+    })
+    .from(mcpEndpointChanges)
+    .innerJoin(mcpRemoteEndpoints, eq(mcpRemoteEndpoints.id, mcpEndpointChanges.endpointId))
+    .where(inArray(mcpEndpointChanges.id, [...new Set(pairs.map((p) => p.changeId))]));
+  const byId = new Map(rows.map((r) => [r.changeId, r]));
+  const owners = [...new Set(pairs.map((p) => p.ownerId))];
+  const [pins, deployments] = await Promise.all([
+    db
+      .select({ ownerId: mcpPins.ownerId, endpointId: mcpPins.endpointId })
+      .from(mcpPins)
+      .where(and(inArray(mcpPins.ownerId, owners), isNull(mcpPins.removedAt))),
+    db
+      .select({ ownerId: mcpDeployments.ownerId, serverKey: mcpDeployments.serverKey, alias: mcpDeployments.alias })
+      .from(mcpDeployments)
+      .where(inArray(mcpDeployments.ownerId, owners)),
+  ]);
+
+  const out: OwnerPublicChange[] = [];
+  for (const { changeId, ownerId } of pairs) {
+    const r = byId.get(changeId);
+    if (!r) continue;
+    const pinned = pins.some((p) => p.ownerId === ownerId && p.endpointId === r.endpointId);
+    const deployment = deployments.find((d) => d.ownerId === ownerId && r.scanKey !== null && d.serverKey === r.scanKey);
+    if (!pinned && !deployment) continue;
+    const { host, scanKey: _scanKey, ...change } = r;
+    out.push({ ...change, ownerId, via: pinned ? 'pin' : 'deployment', label: deployment?.alias ?? host });
+  }
+  return out;
+}
+
 /** Mark a public change seen by one account. Idempotent. */
 export async function acknowledgePublicChange(db: Database, ownerId: string, changeId: number): Promise<void> {
   await db.insert(mcpEndpointChangeAcks).values({ ownerId, changeId }).onConflictDoNothing();
