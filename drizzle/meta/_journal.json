@@ -311,17 +311,17 @@
       "breakpoints": true
     },
     {
-      "idx": 44,
+      "idx": 48,
       "version": "7",
       "when": 1789509214185,
-      "tag": "0044_remote_mcp_contracts",
+      "tag": "0048_remote_mcp_contracts",
       "breakpoints": true
     },
     {
-      "idx": 45,
+      "idx": 49,
       "version": "7",
       "when": 1789511184685,
-      "tag": "0045_mcp_pins_and_public_alerts",
+      "tag": "0049_mcp_pins_and_public_alerts",
       "breakpoints": true
     }
   ]
