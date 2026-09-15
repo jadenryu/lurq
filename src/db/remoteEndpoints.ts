@@ -127,10 +127,18 @@ export async function storeRegistryEntries(db: Database, entries: RegistryEntry[
       for (const r of rows) idByUrl.set(r.url, r.id);
     }
 
+    // One server can list the same endpoint twice under spellings that canonicalize
+    // together; its declared headers are the union, first declaration of a name wins.
     const links = new Map<string, { endpointId: number; serverName: string; headers: NonNullable<RegistryEntry['remotes'][number]['headers']> }>();
     for (const w of wanted) {
       const endpointId = idByUrl.get(w.url);
-      if (endpointId !== undefined) links.set(`${endpointId}:${w.serverName}`, { endpointId, serverName: w.serverName, headers: w.headers ?? [] });
+      if (endpointId === undefined) continue;
+      const key = `${endpointId}:${w.serverName}`;
+      const link = links.get(key) ?? { endpointId, serverName: w.serverName, headers: [] };
+      for (const h of w.headers ?? []) {
+        if (!link.headers.some((x) => x.name.toLowerCase() === h.name.toLowerCase())) link.headers.push(h);
+      }
+      links.set(key, link);
     }
     if (links.size) {
       await tx

@@ -157,12 +157,13 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): SafeFetch {
         continue;
       }
 
-      if (!res.body) return res;
-      return new Response(capped(res.body, maxBytes), {
-        status: res.status,
-        statusText: res.statusText,
-        headers: res.headers,
-      });
+      // `Response.url` is how callers learn where a redirect chain ended; a
+      // constructed Response has none, so it is set explicitly.
+      const final = res.body
+        ? new Response(capped(res.body, maxBytes), { status: res.status, statusText: res.statusText, headers: res.headers })
+        : res;
+      if (final !== res || !res.url) Object.defineProperty(final, 'url', { value: url.toString() });
+      return final;
     }
   };
 }
