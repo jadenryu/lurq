@@ -94,6 +94,16 @@ export type McpServerStatus =
   | "remote-only"
   | "not-probed";
 
+export interface McpToolDetail {
+  name: string;
+  required: string[];
+  params: string[];
+  readOnly: boolean;
+  destructive: boolean;
+  output: boolean;
+  deprecated: boolean;
+}
+
 export interface ProfileMcpServer {
   alias: string;
   kind: "npm-stdio" | "remote" | "local" | "other-registry";
@@ -104,6 +114,8 @@ export interface ProfileMcpServer {
   writes: number;
   destroys: number;
   requiredConfig: string[];
+  /** Absent on scans from before tool schemas were carried. */
+  toolDetail?: McpToolDetail[];
 }
 
 export interface ProfileMcp {

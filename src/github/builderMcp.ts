@@ -31,6 +31,28 @@ export const SDK_PACKAGE = '@modelcontextprotocol/sdk';
 /** Surface lookups per profile. Each can reach the MCP registry; past this a server is listed as not checked. */
 export const MAX_SURFACE_LOOKUPS = 20;
 
+/**
+ * Tools carried per server. The counts above the list stay exact; this bounds
+ * the payload for a server with a hundred tools, which no reader opens anyway.
+ * Tools arrive sorted by name, so the cap keeps a stable slice.
+ */
+export const TOOLS_SHOWN = 40;
+
+/** One tool's schema, as the server declared it at the handshake. */
+export interface McpToolDetail {
+  name: string;
+  /** Parameters a caller must pass. */
+  required: string[];
+  /** Every top-level parameter the tool accepts. */
+  params: string[];
+  readOnly: boolean;
+  /** By the tool's own annotation. The spec default is destructive, so silence counts as yes. */
+  destructive: boolean;
+  /** The tool declares a structured result, so an agent can parse it rather than read prose. */
+  output: boolean;
+  deprecated: boolean;
+}
+
 export type McpServerStatus =
   | 'probed'
   | 'queued'
@@ -54,6 +76,8 @@ export interface ProfileMcpServer {
   destroys: number;
   /** Settings the MCP registry says the server requires. Names only, never values. */
   requiredConfig: string[];
+  /** What each probed tool takes and returns. Empty unless `probed`; capped at TOOLS_SHOWN. */
+  toolDetail: McpToolDetail[];
 }
 
 export interface ProfileMcpConfig {
@@ -126,6 +150,7 @@ const unprobed = (base: Pick<ProfileMcpServer, 'alias' | 'kind' | 'packageName' 
   writes: 0,
   destroys: 0,
   requiredConfig: [],
+  toolDetail: [],
 });
 
 function fromSurface(
@@ -142,6 +167,15 @@ function fromSurface(
     writes: tools.filter((t) => !t.annotations.readOnlyHint).length,
     destroys: tools.filter((t) => t.annotations.destructiveHint).length,
     requiredConfig: s.requires.filter((r) => r.required).map((r) => r.name),
+    toolDetail: tools.slice(0, TOOLS_SHOWN).map((t) => ({
+      name: t.name,
+      required: t.required,
+      params: t.params,
+      readOnly: t.annotations.readOnlyHint,
+      destructive: t.annotations.destructiveHint,
+      output: t.hasOutputSchema,
+      deprecated: t.deprecated,
+    })),
   };
 }
 

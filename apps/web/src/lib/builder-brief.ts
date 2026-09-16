@@ -8,6 +8,7 @@ import {
   type RepoStack,
   type ScanConflict,
   type ScanDep,
+  type McpToolDetail,
   type ProfileMcpServer,
 } from "./builder-profile";
 import { siteUrl } from "./site";
@@ -199,6 +200,28 @@ export function depLabel(d: ScanDep): string {
 /** An issue worth flagging: an advisory, a deprecation, or a breaking release behind. */
 function depIssue(d: ScanDep): string | null {
   return d.advisories > 0 || d.deprecated || depStatus(d) === "major" ? depLabel(d) : null;
+}
+
+/** What a tool takes and returns, in words. Parameters are named by the server; values are never read. */
+export function mcpToolSummary(t: McpToolDetail): string {
+  const parts = [
+    t.params.length === 0
+      ? "no parameters"
+      : `${plural(t.params.length, "param")}${t.required.length > 0 ? `, ${t.required.length} required` : ""}`,
+  ];
+  if (t.output) parts.push("structured output");
+  if (t.deprecated) parts.push("deprecated");
+  return parts.join(" · ");
+}
+
+/**
+ * How a tool is allowed to act, worst first. The MCP spec's default is
+ * destructive, so a tool that annotates nothing is shown as one, not as safe.
+ */
+export function mcpToolPower(t: McpToolDetail): { text: string; tone: string } {
+  if (t.destructive) return { text: "destructive", tone: "text-bad" };
+  if (!t.readOnly) return { text: "writes", tone: "text-warn" };
+  return { text: "read-only", tone: "text-ink-3" };
 }
 
 /**

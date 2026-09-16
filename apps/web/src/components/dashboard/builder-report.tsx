@@ -22,6 +22,8 @@ import {
   summarize,
   archetypeLine,
   mcpServerLabel,
+  mcpToolPower,
+  mcpToolSummary,
   depLabel,
   depStatus,
   savedDaysAgo,
@@ -45,6 +47,7 @@ import {
   type RepoStack,
   type ScanConflict,
   type BuilderStanding,
+  type ProfileMcpServer,
   type SavedBuilderScan,
   type StandingMetricId,
   type ScanDep,
@@ -1358,6 +1361,67 @@ function Conflicts({
   );
 }
 
+/**
+ * One server in a config. A probed server opens into the tools it hands the
+ * agent: what each one takes, whether it returns something parseable, and what
+ * it is allowed to do. There is nothing to open for a server lurq could not
+ * probe, so those stay a plain row.
+ */
+function McpServerRow({ server }: { server: ProfileMcpServer }) {
+  const tools = server.toolDetail ?? [];
+  const line = (
+    <>
+      <span className="font-mono text-ink">{server.alias}</span>
+      <span className="break-all font-mono text-ink-3">{server.packageName ?? server.endpoint ?? ""}</span>
+      <span className={cn("ml-auto text-[12px]", MCP_TONE[server.status] ?? "text-ink-3")}>
+        {mcpServerLabel(server)}
+      </span>
+    </>
+  );
+
+  if (tools.length === 0) {
+    return (
+      <li className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
+        <span aria-hidden className="w-3.5 shrink-0" />
+        {line}
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <details className="group">
+        <summary className="flex cursor-pointer list-none flex-wrap items-baseline gap-x-3 text-[12.5px] [&::-webkit-details-marker]:hidden">
+          <ChevronRight aria-hidden className={CHEVRON} />
+          {line}
+        </summary>
+        <ul className="mt-2 space-y-1.5 border-l border-edge pl-3">
+          {tools.map((t) => {
+            const power = mcpToolPower(t);
+            return (
+              <li key={t.name} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[12px]">
+                <span className="font-mono text-ink">{t.name}</span>
+                <span className="text-ink-3">{mcpToolSummary(t)}</span>
+                <span className={cn("ml-auto font-mono text-[11px]", power.tone)}>{power.text}</span>
+                {t.required.length > 0 && (
+                  <span className="w-full break-all font-mono text-[11px] text-ink-3">
+                    requires {t.required.join(", ")}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {server.tools > tools.length && (
+          <p className="mt-2 pl-3 text-[11.5px] text-ink-3">
+            {plural(server.tools - tools.length, "more tool")} not listed. The counts above are exact.
+          </p>
+        )}
+      </details>
+    </li>
+  );
+}
+
 const MCP_TONE: Record<string, string> = {
   probed: "text-ink-2",
   "handshake-failed": "text-bad",
@@ -1405,11 +1469,7 @@ function McpSection({ report }: { report: BuilderReport }) {
           </p>
           <ul className="mt-1.5 space-y-1">
             {c.servers.map((s) => (
-              <li key={`${s.alias}-${s.packageName ?? s.endpoint ?? ""}`} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
-                <span className="font-mono text-ink">{s.alias}</span>
-                <span className="break-all font-mono text-ink-3">{s.packageName ?? s.endpoint ?? ""}</span>
-                <span className={cn("ml-auto text-[12px]", MCP_TONE[s.status] ?? "text-ink-3")}>{mcpServerLabel(s)}</span>
-              </li>
+              <McpServerRow key={`${s.alias}-${s.packageName ?? s.endpoint ?? ""}`} server={s} />
             ))}
           </ul>
           {c.collisions.map((x) => (

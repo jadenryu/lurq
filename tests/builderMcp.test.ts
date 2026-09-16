@@ -5,7 +5,7 @@
  * called an MCP server only on real evidence.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { profileMcp, serverPackage, statusFrom, type McpReadDeps } from '../src/github/builderMcp';
+import { profileMcp, serverPackage, statusFrom, TOOLS_SHOWN, type McpReadDeps } from '../src/github/builderMcp';
 import type { McpSurfaceResponse } from '../src/mcp/mcpHandlers';
 
 const ann = (readOnly: boolean, destructive = false) => ({
@@ -112,6 +112,13 @@ describe('profileMcp', () => {
 
     const byAlias = Object.fromEntries(config.servers.map((s) => [s.alias, s]));
     expect(byAlias.github).toMatchObject({ status: 'probed', tools: 3, writes: 2, destroys: 1 });
+    // The schema of each tool, for the drawer: what it takes and what it may do.
+    expect(byAlias.github!.toolDetail).toEqual([
+      { name: 'search', required: [], params: [], readOnly: true, destructive: false, output: false, deprecated: false },
+      { name: 'create_issue', required: [], params: [], readOnly: false, destructive: false, output: false, deprecated: false },
+      { name: 'delete_repo', required: [], params: [], readOnly: false, destructive: true, output: false, deprecated: false },
+    ]);
+    expect(byAlias.linear!.toolDetail).toEqual([]);
     expect(byAlias.linear).toMatchObject({ kind: 'remote', status: 'not-probed', endpoint: 'mcp.linear.app' });
     expect(byAlias.py).toMatchObject({ kind: 'other-registry', status: 'not-probed' });
 
@@ -133,5 +140,18 @@ describe('profileMcp', () => {
       expect.objectContaining({ repo: 'ada/weather', packageName: '@ada/weather-mcp', status: 'queued' }),
     ]);
     expect(mcp.configs).toEqual([]);
+  });
+});
+
+describe('tool detail', () => {
+  it('carries at most TOOLS_SHOWN tools, leaving the counts exact', async () => {
+    const many = Array.from({ length: TOOLS_SHOWN + 5 }, (_, i) => tool(`t${String(i).padStart(2, '0')}`, true));
+    const mcp = await profileMcp('ada', [{ name: 'app', manifest: null }], {
+      read: async (_repo: string, path: string) => (path === '.mcp.json' ? ok({ mcpServers: { big: { command: 'npx', args: ['-y', 'big-mcp'] } } }) : missing),
+      surface: async () => surface({ tools: many }),
+    });
+    const server = mcp.configs[0]!.servers[0]!;
+    expect(server.tools).toBe(many.length);
+    expect(server.toolDetail).toHaveLength(TOOLS_SHOWN);
   });
 });

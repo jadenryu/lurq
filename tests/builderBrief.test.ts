@@ -4,6 +4,8 @@ import {
   cardProfile,
   depLabel,
   mcpServerLabel,
+  mcpToolPower,
+  mcpToolSummary,
   depStatus,
   savedDaysAgo,
   cardStats,
@@ -359,5 +361,22 @@ describe('mcpServerLabel', () => {
     expect(mcpServerLabel(server({ status: 'needs-config', requiredConfig: ['GITHUB_TOKEN'] }))).toBe('needs GITHUB_TOKEN to probe');
     expect(mcpServerLabel(server({ status: 'not-probed', kind: 'remote' }))).toBe('remote endpoint, not probed by lurq');
     expect(mcpServerLabel(server({ status: 'not-probed', kind: 'other-registry' }))).toBe('PyPI or Docker, not probed by lurq');
+  });
+});
+
+describe('mcp tool schema', () => {
+  const t = (over: Record<string, unknown> = {}) =>
+    ({ name: 'search', required: ['query'], params: ['query', 'limit'], readOnly: true, destructive: false, output: true, deprecated: false, ...over }) as Parameters<typeof mcpToolSummary>[0];
+
+  it('says what a tool takes and returns', () => {
+    expect(mcpToolSummary(t())).toBe('2 params, 1 required · structured output');
+    expect(mcpToolSummary(t({ params: [], required: [], output: false }))).toBe('no parameters');
+    expect(mcpToolSummary(t({ deprecated: true }))).toContain('deprecated');
+  });
+
+  it('treats an unannotated tool as destructive, the way the spec does', () => {
+    expect(mcpToolPower(t()).text).toBe('read-only');
+    expect(mcpToolPower(t({ readOnly: false })).text).toBe('writes');
+    expect(mcpToolPower(t({ readOnly: false, destructive: true })).text).toBe('destructive');
   });
 });
