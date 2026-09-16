@@ -54,6 +54,16 @@ reads like a guess.
   versions. Returns what was removed, added, and what changed arity between them, with
   type-only removals listed separately because those break the build rather than the
   program. Static comparison of both published versions — no install, no test run.
+- **Start work in a project you have just opened, or see what an upgrade broke** →
+  `upkeep` with its directory. It reads the project itself and returns what needs
+  fixing: environment variables the code reads that no `.env` file declares, and —
+  when you pass the versions you are moving between — the call sites an upgrade
+  breaks, the replacement the package itself proves, and the manifest ranges left
+  stale. Findings carry either exact edits you can apply or the facts you cannot
+  look up, such as the exports the target version actually ships with their
+  arities. A domain it could not run says so: an empty result is not a clean
+  project. Offered only when lurq runs beside your files (`lurq serve`) — the
+  hosted server cannot see them, so the tool is absent there rather than empty.
 - **Take stock of a whole project** → `audit` with the inventory you read from its
   `package.json` + lockfile and its MCP configs (names and versions only — never source).
   One call returns every outdated, deprecated and vulnerable dependency plus every MCP

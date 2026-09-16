@@ -91,6 +91,16 @@ export interface ServerContext {
   notice?: string | null;
   /** The coding agent this connection belongs to, when its config names one (clientInfo.ts). */
   client?: string | null;
+  /**
+   * This server runs beside the user's files (the stdio path), so tools that
+   * read the project may be registered.
+   *
+   * Set at the stdio call site only. The hosted server shares this builder
+   * verbatim, and there the files are not there — a filesystem tool would
+   * answer about an empty directory, which reads to a model as "your project
+   * is clean". Absent means not local, like every other permission here.
+   */
+  local?: boolean;
 }
 
 /**
@@ -440,6 +450,53 @@ export function buildMcpServer(
       ),
   );
 
+  // Registered only beside the user's files. Every other tool here is
+  // argument-fed or index-backed and works identically hosted; this one reads
+  // the project, so on the hosted path it is absent rather than empty.
+  if (ctx.local) {
+    server.registerTool(
+      'upkeep',
+      {
+        title: 'What needs fixing in this project',
+        description:
+          "The upkeep plan for the project you are editing, read from its own files. Returns findings across domains: environment variables the code reads that no .env file declares, and — when you pass `upgrade` — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Each finding carries either exact edits (a rename the package proves, byte ranges you can apply) or a brief with the facts you cannot look up: the exports the target version actually ships, with their kinds and arities. A domain that could not run says so; a skipped domain is never the same as a clean one. Needs no API key. Use it before editing a project you have just opened, or after an upgrade to see what it broke.",
+        annotations: READ_LIVE,
+        inputSchema: {
+          dir: z
+            .string()
+            .max(4096)
+            .optional()
+            .describe('Project root. Defaults to the working directory this server was started in.'),
+          upgrade: z
+            .array(
+              z.object({
+                package: npmName,
+                fromVersion: z.string().min(1).max(100),
+                toVersion: z.string().min(1).max(100),
+              }),
+            )
+            .max(50)
+            .optional()
+            .describe(
+              'Upgrades to assess. Without this the package domain is skipped, because working out what moved needs the index and this tool runs without a key.',
+            ),
+          domains: z
+            .array(z.enum(['package', 'mcp-config', 'env', 'api']))
+            .max(4)
+            .optional()
+            .describe('Limit to these domains. Default: every domain with a detector.'),
+        },
+      },
+      async (args) =>
+        reply(
+          await run('upkeep', async () => {
+            const { handleUpkeep } = await import('./upkeepHandler');
+            return handleUpkeep(args);
+          }),
+        ),
+    );
+  }
+
   server.registerTool(
     'audit',
     {
@@ -580,7 +637,8 @@ export const SERVE_NEEDS_DATABASE =
 export async function startMcpServer(): Promise<void> {
   if (!getConfig().DATABASE_URL) throw new Error(SERVE_NEEDS_DATABASE);
   const { db, close } = createDb();
-  const server = buildMcpServer(db);
+  // The one place `local` is set: this process runs beside the user's project.
+  const server = buildMcpServer(db, { local: true });
 
   const shutdown = async () => {
     try {

@@ -86,6 +86,14 @@ export const TOOLS: GuideTool[] = [
     input: "package",
   },
   {
+    name: "upkeep",
+    group: "check",
+    purpose:
+      "The whole upkeep plan for a project, read from its own files: environment variables nothing declares, and — given the versions you are moving between — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Available when lurq runs beside your code (`lurq serve`); the hosted server cannot see your files, so it does not offer it.",
+    prompt: "what needs fixing in this project before I start?",
+    input: "optional dir · optional upgrades · optional domains",
+  },
+  {
     name: "policy",
     group: "check",
     purpose:
