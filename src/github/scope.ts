@@ -40,19 +40,32 @@ export interface ScopedUpgrade extends UpgradeBrief {
  * Does this repo's policy grant a check?
  *
  * One accessor, because a permission spelled four different ways across a
- * codebase is a permission that is accidentally truthy somewhere. `=== true` is
- * deliberate: a policy round-tripped through JSON could carry a string, and
- * `"false"` is truthy.
+ * codebase is a permission that is accidentally truthy somewhere.
  *
- * A null policy — a repo with no record, or a plan from a server that predates
- * policies — grants nothing. That is the opposite reading from `inScope`, where
- * absent means UNGOVERNED so an older deployment keeps working. The difference
- * is the direction of harm: an unannotated upgrade plan read as "excluded"
- * would empty a brief, while an unannotated permission read as "granted" would
- * run something nobody asked for.
+ * THE RULE, and it is a split rather than one default: consent is required for
+ * WRITES, not for READS. A check here reads the project's own files, needs no
+ * key, reaches no network, writes nothing and fails no build — so it is on
+ * unless someone turns it off (`!== false`). A permission that lets lurq or an
+ * agent CHANGE something stays off unless explicitly granted, and the next
+ * field added to this policy should follow whichever half it belongs to.
+ *
+ * This inverts what shipped in 47b39a9, deliberately. Absent-means-denied left
+ * every already-connected repo unable to get a read-only check without finding
+ * a toggle, which is a decision asked of the user for no risk taken — the
+ * definition of friction. `=== false` is still explicit: a user who turned it
+ * off stays off, and only that.
+ *
+ * `!== false` rather than a truthy test for the same reason the old code used
+ * `=== true`: a policy round-trips through JSON, and neither `"false"` nor a
+ * missing key should be read as a decision the user made.
+ *
+ * A null policy — an unconnected checkout, or a plan from a server predating
+ * policies — therefore reads as ON, and that is the right answer for a
+ * read-only check: `upgrade-plan` works in any clone, and nothing here writes.
+ * A future write permission must NOT reuse this accessor for that reason.
  */
 export function permits(policy: RepoPolicy | null, check: RepoCheck): boolean {
-  return policy?.checks?.[check] === true;
+  return policy?.checks?.[check] !== false;
 }
 
 /**
