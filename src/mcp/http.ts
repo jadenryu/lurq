@@ -72,7 +72,7 @@ import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
-import { applyScope } from '../github/scope';
+import { applyScope, permits } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
 import {
   findRepoIdByFullName,
@@ -1436,6 +1436,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           installCommand: row.installCommand ?? undefined,
           armed: row.policy.enabled,
           autoMerge: row.policy.autoMerge,
+          // Through the one accessor, so the permission cannot be read here as
+          // `row.policy.checks?.env` and somewhere else as something truthier.
+          checkEnv: permits(row.policy, 'env'),
         });
         res.status(200).json({
           repo: {

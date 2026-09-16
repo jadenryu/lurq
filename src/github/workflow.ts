@@ -34,6 +34,14 @@ export interface WorkflowOptions {
   /** Max upgrades attempted per run — the blast-radius cap. */
   maxUpgrades?: number;
   /**
+   * Include the environment check, per `RepoPolicy.checks.env`.
+   *
+   * Off unless granted, like every other permission: absent means not granted.
+   * A repo whose policy predates checks has no such key and gets no step, which
+   * is the same workflow it has today.
+   */
+  checkEnv?: boolean;
+  /**
    * Emit the auto-merge step, per `RepoPolicy.autoMerge`. Off unless the repo
    * has explicitly opted in — this is the only setting that lets lurq's loop
    * change a default branch, so it is never a default.
@@ -80,6 +88,22 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const mode = opts.armed ? 'pr' : 'comment';
   const autoMerge = opts.autoMerge ?? false;
   const cli = cliSpec();
+  /**
+   * Deliberately NOT gated on LURQ_MODE. It writes nothing, needs no API key
+   * and no network to us, so it runs in analyse-only mode too — analysis is not
+   * the part that needs arming. No `--exit-code` either: a repo should not
+   * start failing its build the day someone connects it, and the finding is in
+   * the run summary where the rest of the report already is.
+   */
+  const envCheck =
+    opts.checkEnv === true
+      ? `      - name: Check environment
+        run: |
+          npx -y ${cli} check-env . > lurq-env.txt
+          { echo '\`\`\`'; cat lurq-env.txt; echo '\`\`\`'; } >> "$\{GITHUB_STEP_SUMMARY}"
+
+`
+      : '';
 
   return `# Managed by lurq, https://lurq.run
 #
@@ -151,7 +175,7 @@ jobs:
           { echo '\`\`\`'; cat lurq-report.txt; echo '\`\`\`'; } > lurq-report.md
           cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
-      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
+${envCheck}      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
       #    changed nothing, the brief is in the run summary above, and no
       #    Anthropic credential is needed to get this far.
       - name: Check agent credentials
