@@ -180,6 +180,40 @@ function isStalled(repo: DashboardRepo): boolean {
   return repo.policy.enabled && (repo.drift?.majorDrift ?? 0) > 0 && repo.upkeep === null;
 }
 
+/**
+ * Armed, reporting runs, and every one of them only analysed.
+ *
+ * A different failure from `isStalled`: the workflow is committed and running,
+ * it just never gets past a comment. This reads the count the API returns
+ * rather than inferring from `delivered === 0`, because a healthy repo with
+ * nothing worth a pull request also delivers nothing — `checked` is defined as
+ * "analysed only (comment mode, or the agent step was not armed)", so an
+ * all-`checked` history is evidence and `delivered === 0` is a guess.
+ *
+ * Kept apart from `isStalled` because the fix differs: that one needs the
+ * workflow committed, this one needs the mode changed in a file already in
+ * their repo — which the autopilot setting on this page does not rewrite.
+ */
+function isAnalysingOnly(repo: DashboardRepo): boolean {
+  const upkeep = repo.upkeep;
+  if (!upkeep || !repo.policy.enabled) return false;
+  return upkeep.runs > 0 && upkeep.analysedOnly === upkeep.runs;
+}
+
+/** The hover text for the last-run cell, which has four distinct cases. */
+function lastRunTitle(repo: DashboardRepo): string {
+  const upkeep = repo.upkeep;
+  if (!upkeep) {
+    return isStalled(repo)
+      ? "Armed and still behind, but the workflow has never reported a run — it may not be committed"
+      : "No runs reported yet";
+  }
+  const counts = `${upkeep.runs} run(s), ${upkeep.delivered} reached a pull request${upkeep.failed ? `, ${upkeep.failed} failed` : ""}`;
+  return isAnalysingOnly(repo)
+    ? `${counts}. Every run only analysed — the committed workflow is still in comment mode, which the autopilot setting here does not change.`
+    : counts;
+}
+
 export function ReposPanel({
   repos,
   demo,
@@ -191,6 +225,7 @@ export function ReposPanel({
 }) {
   const armed = repos.filter((r) => r.policy.enabled).length;
   const stalled = repos.filter(isStalled).length;
+  const analysing = repos.filter(isAnalysingOnly).length;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
@@ -204,7 +239,10 @@ export function ReposPanel({
     if (query && !repo.fullName.toLowerCase().includes(query.toLowerCase())) return false;
     if (filter === "behind") return (repo.drift?.majorDrift ?? 0) > 0;
     if (filter === "armed") return repo.policy.enabled;
-    if (filter === "stalled") return isStalled(repo);
+    // One chip for both: the question being asked is "which armed repo is not
+    // actually landing anything", and a chip nobody clicks costs the same room
+    // as one everybody does. The row badges still say which of the two it is.
+    if (filter === "stalled") return isStalled(repo) || isAnalysingOnly(repo);
     return true;
   });
 
@@ -259,6 +297,11 @@ export function ReposPanel({
             <span className="font-mono text-xs text-ink-2">
               {armed} of {repos.length} armed
               {stalled > 0 && <span className="text-bad"> · {stalled} never ran</span>}
+              {/* Never summed with `stalled`: you fix them differently, the
+                  same rule the risk column follows. */}
+              {analysing > 0 && (
+                <span className="text-warn"> · {analysing} analysing only</span>
+              )}
             </span>
           }
         />
@@ -345,14 +388,15 @@ export function ReposPanel({
                         running on theirs. A repo can be armed with the workflow
                         never committed, and only this column shows it. */}
                     <span
-                      className={cn("font-mono text-xs", isStalled(repo) ? "text-bad" : "text-ink-2")}
-                      title={
-                        repo.upkeep
-                          ? `${repo.upkeep.runs} run(s), ${repo.upkeep.delivered} reached a pull request${repo.upkeep.failed ? `, ${repo.upkeep.failed} failed` : ""}`
-                          : isStalled(repo)
-                            ? "Armed and still behind, but the workflow has never reported a run \u2014 it may not be committed"
-                            : "No runs reported yet"
-                      }
+                      className={cn(
+                        "font-mono text-xs",
+                        isStalled(repo)
+                          ? "text-bad"
+                          : isAnalysingOnly(repo)
+                            ? "text-warn"
+                            : "text-ink-2",
+                      )}
+                      title={lastRunTitle(repo)}
                     >
                       {repo.upkeep ? relativeTime(repo.upkeep.lastRunAt) : "never"}
                     </span>

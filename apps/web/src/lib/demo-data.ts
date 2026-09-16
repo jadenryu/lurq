@@ -436,6 +436,7 @@ export function demoRepos(): DashboardRepo[] {
     ["acme/billing-api", 96, 88, 21, 4, 1, 0, 5, 742],
     ["acme/design-system", 72, 66, 17, 6, 2, 1, 7, 0],
     ["acme/internal-tools", 210, 174, 83, 23, 11, 4, 26, 2130],
+    ["acme/notifications", 64, 58, 12, 3, 0, 1, 4, 615],
   ];
   return rows.map(
     ([fullName, depsDeclared, depsTracked, anyDrift, majorDrift, deprecated, advisories, h, resolved], i) => ({
@@ -444,7 +445,9 @@ export function demoRepos(): DashboardRepo[] {
       defaultBranch: "main",
       isPrivate: i !== 2,
       policy: {
-        enabled: i < 2,
+        // Explicit rather than `i < 2`: armed is no longer a prefix of the list
+        // now that the last repo is armed too.
+        enabled: [true, true, false, false, true][i] ?? false,
         scope: i === 0 ? ("all" as const) : ("blocking" as const),
         autoMerge: false,
       },
@@ -455,14 +458,14 @@ export function demoRepos(): DashboardRepo[] {
         majorDrift,
         deprecated,
         advisories,
-        conflicts: [2, 0, 1, 3][i] ?? 0,
+        conflicts: [2, 0, 1, 3, 0][i] ?? 0,
         transitive:
           resolved > 0
             ? {
                 resolved,
                 tracked: Math.round(resolved * 0.72),
-                advisoryPackages: [7, 3, 0, 14][i] ?? 0,
-                deprecated: [4, 2, 0, 9][i] ?? 0,
+                advisoryPackages: [7, 3, 0, 14, 2][i] ?? 0,
+                deprecated: [4, 2, 0, 9, 1][i] ?? 0,
                 truncated: false,
                 // internal-tools has no usable edge data, so its risks show as
                 // unattributed: the state a real SBOM without relationships hits.
@@ -472,7 +475,7 @@ export function demoRepos(): DashboardRepo[] {
       },
       lastScanAt: hoursAgo(h),
       lastScanError: null,
-      // Four different upkeep states on purpose, for the reason this fixture
+      // Five different upkeep states on purpose, for the reason this fixture
       // states above: a fixture where every repo looks the same lets a
       // rendering bug read as correct.
       //   0 armed + behind + delivering  — the working case
@@ -483,14 +486,18 @@ export function demoRepos(): DashboardRepo[] {
       //   3 not armed + has run, failing — a workflow reporting without the
       //                                    GitHub App installed, which is why
       //                                    the query keys on the repo name
-      // `analysedOnly` completes each row: runs that only analysed. It is what
-      // separates "armed but the committed workflow is still in comment mode"
-      // from "armed and there was simply nothing worth a pull request".
+      //   4 armed + running + all checked — analysed-only: committed, running
+      //                                    daily, never past a comment. Shares
+      //                                    "nothing landed" with 1 and needs a
+      //                                    different fix, so it renders apart.
+      // `analysedOnly` is what separates 4 from 0: repo 0 also has runs that
+      // only analysed, but not every one of them, so it is not flagged.
       upkeep: [
         { lastRunAt: hoursAgo(20), runs: 14, delivered: 5, failed: 0, analysedOnly: 9 },
         null,
         null,
         { lastRunAt: hoursAgo(190), runs: 6, delivered: 1, failed: 2, analysedOnly: 3 },
+        { lastRunAt: hoursAgo(6), runs: 9, delivered: 0, failed: 0, analysedOnly: 9 },
       ][i] ?? null,
     }),
   );
