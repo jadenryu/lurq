@@ -398,6 +398,23 @@ export function buildProgram(): Command {
       if (opts.exitCode && check.verdict !== 'ok') process.exitCode = 1;
     });
 
+  // The "works on my machine" gap. Reads the project's own source and its
+  // `.env*` files; no API key, no network, and never a value.
+  program
+    .command('check-env')
+    .argument('[dir]', 'project directory to scan (default: current)', '.')
+    .description('which environment variables does this project read that nothing declares?')
+    .option('--json', 'output the result as JSON')
+    .option('--exit-code', 'exit 1 when anything is undeclared (for CI)')
+    .option('--sarif <file>', 'write SARIF for GitHub code scanning')
+    .option('--limit <n>', 'source files to read before stopping (default 5000)')
+    .action(
+      async (dir: string, opts: { json?: boolean; exitCode?: boolean; sarif?: string; limit?: string }) => {
+        const { runEnvCheck } = await import('./envCheck');
+        await runEnvCheck(dir, opts);
+      },
+    );
+
   // The same question as check-upgrade, asked by the other party: not "will this
   // dependency break me" but "will this change break the people calling me".
   // Reads two git revisions of an OpenAPI document — nothing leaves the machine.

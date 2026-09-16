@@ -237,6 +237,40 @@ understates the change — a removal shipped as a minor, say. Use it in
 `--exit-code`. With no argument it uses the first OpenAPI document it finds;
 `-C <dir>` points at another repository. Nothing leaves the machine.
 
+## Environment
+
+```bash
+lurq check-env .
+```
+
+Which variables does this project read that nothing declares — the "works on my
+machine" gap. It reads your own source and your `.env*` files, needs no API key
+and no network, and never looks at a value: a declared name is the text left of
+the first `=`, and the rest is not parsed.
+
+A commented declaration counts. `.env.example` files conventionally document
+optional variables as `# REDIS_URL=…`, and that still tells a fresh clone the
+variable exists.
+
+Three things are deliberately never reported, because a noisy check gets
+switched off and a check nobody runs is worth less than no check:
+
+| Not reported | Why |
+| --- | --- |
+| Platform variables — `NODE_ENV`, `CI`, `PORT`, the `GITHUB_*`, `npm_*`, `VERCEL_*` families, XDG and Windows paths | Supplied by the runtime or the runner; they belong in no `.env.example` |
+| Reads inside tests, specs and fixtures | The harness that runs that code sets them itself |
+| A read with its fallback beside it — `process.env.CACHE_TTL ?? '60'` | The code already states what happens without it |
+
+A variable defaulted at every site is optional; one unguarded read anywhere
+makes it required, and only those sites are cited. Reads are found through the
+TypeScript AST, so a `process.env.X` inside a comment or a string is not a read,
+and `process.env[key]` is skipped rather than guessed at.
+
+`--exit-code` exits 1 when anything is undeclared **or** when the scan stopped
+at its file limit — a file nobody opened is not a clean result. `--sarif` files
+each variable as a GitHub code scanning alert; `--json` prints every finding
+with all of its read sites.
+
 ## MCP servers
 
 ```bash

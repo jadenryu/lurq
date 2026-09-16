@@ -166,7 +166,7 @@ export function packageOfSpecifier(spec: string): string | null {
  * The walk stays as the fallback, because a directory that is not a git
  * checkout still has to be scannable.
  */
-function listSourceFiles(dir: string, limit = 5000): SourceListing {
+export function listSourceFiles(dir: string, limit = 5000): SourceListing {
   const tracked = gitSourceFiles(dir, limit);
   if (tracked) return tracked;
 
@@ -206,7 +206,7 @@ function listSourceFiles(dir: string, limit = 5000): SourceListing {
  * it reports on files it never opened, so a check that must not claim "safe"
  * without looking has to surface it.
  */
-interface SourceListing {
+export interface SourceListing {
   files: string[];
   truncated: boolean;
 }
