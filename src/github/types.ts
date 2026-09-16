@@ -198,12 +198,36 @@ export interface RepoPolicy {
    * only setting that lets lurq change a default branch. Default false, always.
    */
   autoMerge: boolean;
+  /**
+   * Read-only checks this repo's generated workflow should run, beyond the
+   * upgrade gate it always runs.
+   *
+   * Optional, and ABSENT MEANS OFF — never a permissive default. Policies
+   * stored before this shipped have no such key, and a missing permission must
+   * read as "not granted" rather than inherit whatever the current default
+   * happens to be. `scope` already has a test guarding the mirror image of this
+   * mistake (not inheriting `blocking` and silently narrowing); this is the
+   * same rule pointed the other way.
+   */
+  checks?: {
+    /** `lurq check-env`: variables the code reads that nothing declares. */
+    env?: boolean;
+  };
 }
+
+/** A check a policy can grant. One name, so no site spells it its own way. */
+export type RepoCheck = 'env';
 
 export const DEFAULT_REPO_POLICY: RepoPolicy = {
   enabled: false,
   scope: 'blocking',
   autoMerge: false,
+  // On for a newly connected repo: it reads the project's own source and its
+  // .env files, needs no key and no network, and never fails a build unless
+  // someone asks it to. Repos connected before this shipped have no `checks`
+  // key, so they read as off until the dashboard turns it on — visible in the
+  // policy panel rather than differing invisibly from a new repo.
+  checks: { env: true },
 };
 
 /**

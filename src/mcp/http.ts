@@ -1205,7 +1205,28 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     if (typeof raw.enabled !== 'boolean') return null;
     if (typeof raw.autoMerge !== 'boolean') return null;
     if (raw.scope !== 'security' && raw.scope !== 'blocking' && raw.scope !== 'all') return null;
-    return { enabled: raw.enabled, scope: raw.scope, autoMerge: raw.autoMerge };
+    // Checks are carried through, and that is not a formality: setRepoPolicy
+    // REPLACES the stored policy wholesale and the dashboard PATCHes the whole
+    // object, so rebuilding a three-key policy here would erase a granted check
+    // the next time anyone toggled autopilot — a setting lost with no error and
+    // nothing in the response to show it happened.
+    const checks = parseChecks(raw.checks);
+    return {
+      enabled: raw.enabled,
+      scope: raw.scope,
+      autoMerge: raw.autoMerge,
+      ...(checks ? { checks } : {}),
+    };
+  }
+
+  /**
+   * Absent or malformed reads as not granted, never as a permissive default.
+   * An explicit `false` and a missing key mean the same thing, so only a
+   * granted check is stored.
+   */
+  function parseChecks(input: unknown): RepoPolicy['checks'] | null {
+    if (!input || typeof input !== 'object') return null;
+    return { env: (input as Record<string, unknown>).env === true };
   }
 
   /**
