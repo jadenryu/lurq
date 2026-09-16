@@ -56,14 +56,16 @@ function Row({
  * to infer is not consent.
  */
 /**
- * `=== true`, the same reading as the server's `permits()`.
+ * `!== false`, the same reading as the server's `permits()` — and it must stay
+ * the same reading.
  *
- * Absent and `false` are the same state, so a policy stored before checks
- * existed must not read as different from one with the box unticked — with a
- * plain `!==`, opening this panel on an older repo would arm the save button
- * with nothing to save.
+ * A read-only check is on unless someone turns it off, so absent and `true` are
+ * the same state and only an explicit `false` is off. Spelling this `=== true`
+ * here while the server says `!== false` would render the toggle OFF for every
+ * repo connected before checks existed, while the workflow generator treated it
+ * as ON — a switch that disagrees with what it controls.
  */
-const envOn = (p: RepoPolicy) => p.checks?.env === true;
+const envOn = (p: RepoPolicy) => p.checks?.env !== false;
 
 export function RepoPolicyPanel({
   repoId,
@@ -119,7 +121,7 @@ export function RepoPolicyPanel({
       <div className="mt-5 space-y-4">
         <Row
           label="Let lurq open upgrade pull requests"
-          description="Runs in your own GitHub Actions on a schedule. lurq supplies the symbol-level migration brief; the agent edits, runs your test suite, and opens a pull request. Your source never leaves your CI."
+          description="Runs in your own GitHub Actions on a schedule. lurq supplies the symbol-level migration brief; the agent edits, runs your test suite, and opens a pull request. Your source never leaves your CI. Each run reads this setting when it starts, so a change here governs the next one — except for a workflow file committed before that was true, which pins its own mode until you re-copy it."
         >
           <Button
             variant={policy.enabled ? "default" : "outline"}

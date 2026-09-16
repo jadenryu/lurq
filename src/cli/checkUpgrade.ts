@@ -35,6 +35,11 @@ export function parseUpgradeSpec(spec: string): UpgradeTarget {
 /** Shape of the `upgrade-plan --json` file, as far as this command cares. */
 interface PlanFile {
   upgrades?: PlanUpgrade[];
+  /**
+   * What the repository's dashboard setting says this job should do. Written by
+   * the server when the plan was governed; absent otherwise.
+   */
+  mode?: 'pr' | 'comment';
 }
 
 /** One plan entry, as far as reading it off disk cares. */
@@ -90,6 +95,36 @@ export function targetsFromPlanFile(path: string): UpgradeTarget[] {
 export function planUpgrades(path: string): PlanUpgrade[] {
   const parsed = readPlanFile(path);
   return parsed.upgrades ?? [];
+}
+
+/** What the dashboard says this repo's job should do, if the server said. */
+export function planMode(path: string): 'pr' | 'comment' | null {
+  const mode = readPlanFile(path).mode;
+  return mode === 'pr' || mode === 'comment' ? mode : null;
+}
+
+/**
+ * The dashboard setting and what this job is actually doing, when they differ.
+ *
+ * A workflow committed before the mode became a runtime value has it baked into
+ * the file, and lurq cannot change that: the GitHub App is Contents:read-only,
+ * so it can neither rewrite the workflow nor set a repository variable. Those
+ * installs will keep ignoring the toggle forever, and the dashboard can see it
+ * but the person reading a CI summary cannot.
+ *
+ * This says it in the one place they are already looking. Deliberately pure and
+ * deliberately not an error: the run is doing what its file says, which is not
+ * a failure, it is just not what the dashboard now claims.
+ */
+export function modeDisagreement(
+  dashboard: 'pr' | 'comment' | null,
+  workflow: string | undefined,
+): string | null {
+  if (!dashboard || (workflow !== 'pr' && workflow !== 'comment')) return null;
+  if (dashboard === workflow) return null;
+  return dashboard === 'pr'
+    ? 'autopilot is ON for this repository in lurq, but this workflow is pinned to comment mode and will not open pull requests. Re-copy .github/workflows/lurq-upgrade.yml from your dashboard to let the setting govern runs.'
+    : 'autopilot is OFF for this repository in lurq, but this workflow is pinned to pr mode and will still open pull requests. Re-copy .github/workflows/lurq-upgrade.yml from your dashboard to let the setting govern runs.';
 }
 
 export interface FixableSplit {
@@ -266,6 +301,16 @@ export async function runCheckUpgrade(dir: string, opts: CheckUpgradeOpts): Prom
       ? JSON.stringify(report, null, 2)
       : formatUpgradeReport(report, `upgrade check on ${dir}`),
   );
+  // Only on the text path: --json is read by the next step, this is a note for
+  // a person, and this command's output is what the workflow pipes into the run
+  // summary and the pull request body. `LURQ_MODE` is what the workflow decided
+  // for this run; the plan file carries what the dashboard says it should be.
+  // An install whose workflow predates the runtime lookup can only learn about
+  // the difference here — nothing lurq owns can reach that file.
+  if (!opts.json && opts.plan) {
+    const note = modeDisagreement(planMode(opts.plan), process.env.LURQ_MODE);
+    if (note) console.log(`\nnote: ${note}`);
+  }
   // Before the exit code, so the report lands even on a run this gate fails —
   // a blocked upgrade is the single most useful row the dashboard can show.
   if (opts.report) await reportOutcome(report, targets, opts);

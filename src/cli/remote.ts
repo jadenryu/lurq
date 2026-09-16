@@ -253,6 +253,12 @@ export interface RemotePlan {
   scope?: 'security' | 'blocking' | 'all';
   scopeSource?: 'repo-policy' | 'unconnected';
   outOfScope?: number;
+  /**
+   * What the repository's dashboard setting says the job should do. Absent from
+   * an older server, and absent for an unconnected checkout — in both cases the
+   * workflow keeps the mode baked into it.
+   */
+  mode?: 'pr' | 'comment';
 }
 
 export function fetchUpgradePlan(

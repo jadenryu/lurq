@@ -97,8 +97,13 @@ describe('detectInstallCommand', () => {
 describe('renderWorkflow', () => {
   it('defaults to analyse-only so connecting a repo never edits it', () => {
     const yaml = renderWorkflow();
-    expect(yaml).toContain("default: comment");
-    expect(yaml).toContain("|| 'comment'");
+    expect(yaml).toContain('default: comment');
+    // The baked default moved rather than disappeared. The job-level env now
+    // starts EMPTY so the dashboard setting can fill it at runtime, which makes
+    // the fallback inside "Resolve mode" the thing that has to say `comment` —
+    // it is where a plan response carrying no mode ends up.
+    expect(yaml).toContain("vars.LURQ_MODE || '' }}");
+    expect(yaml).toContain("*) MODE='comment' ;;");
   });
 
   it('grants no permission beyond branch + PR writes', () => {

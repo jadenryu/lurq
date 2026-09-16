@@ -202,12 +202,15 @@ export interface RepoPolicy {
    * Read-only checks this repo's generated workflow should run, beyond the
    * upgrade gate it always runs.
    *
-   * Optional, and ABSENT MEANS OFF — never a permissive default. Policies
-   * stored before this shipped have no such key, and a missing permission must
-   * read as "not granted" rather than inherit whatever the current default
-   * happens to be. `scope` already has a test guarding the mirror image of this
-   * mistake (not inheriting `blocking` and silently narrowing); this is the
-   * same rule pointed the other way.
+   * Optional, and ABSENT MEANS ON for everything in here — see `permits()` for
+   * the rule and why it is a split. Every member of `checks` must be read-only:
+   * no key, no network, no writes, and unable to fail a build on its own. That
+   * is what makes a permissive default honest, and it is the condition for
+   * adding a field here rather than to a future `writes` block, which defaults
+   * off.
+   *
+   * Only an explicit `false` turns one off, so a user's decision survives and a
+   * missing key is not mistaken for one.
    */
   checks?: {
     /** `lurq check-env`: variables the code reads that nothing declares. */
@@ -222,11 +225,10 @@ export const DEFAULT_REPO_POLICY: RepoPolicy = {
   enabled: false,
   scope: 'blocking',
   autoMerge: false,
-  // On for a newly connected repo: it reads the project's own source and its
-  // .env files, needs no key and no network, and never fails a build unless
-  // someone asks it to. Repos connected before this shipped have no `checks`
-  // key, so they read as off until the dashboard turns it on — visible in the
-  // policy panel rather than differing invisibly from a new repo.
+  // Stated rather than relied upon. `permits()` already reads an absent
+  // `checks` as on, so a repo connected before this shipped behaves the same as
+  // a new one — which is the point of the inversion. Writing it here keeps the
+  // default visible in the policy the dashboard round-trips.
   checks: { env: true },
 };
 

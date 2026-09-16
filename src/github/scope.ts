@@ -40,19 +40,32 @@ export interface ScopedUpgrade extends UpgradeBrief {
  * Does this repo's policy grant a check?
  *
  * One accessor, because a permission spelled four different ways across a
- * codebase is a permission that is accidentally truthy somewhere. `=== true` is
- * deliberate: a policy round-tripped through JSON could carry a string, and
- * `"false"` is truthy.
+ * codebase is a permission that is accidentally truthy somewhere.
  *
- * A null policy — a repo with no record, or a plan from a server that predates
- * policies — grants nothing. That is the opposite reading from `inScope`, where
- * absent means UNGOVERNED so an older deployment keeps working. The difference
- * is the direction of harm: an unannotated upgrade plan read as "excluded"
- * would empty a brief, while an unannotated permission read as "granted" would
- * run something nobody asked for.
+ * THE RULE, and it is a split rather than one default: consent is required for
+ * WRITES, not for READS. A check here reads the project's own files, needs no
+ * key, reaches no network, writes nothing and fails no build — so it is on
+ * unless someone turns it off (`!== false`). A permission that lets lurq or an
+ * agent CHANGE something stays off unless explicitly granted, and the next
+ * field added to this policy should follow whichever half it belongs to.
+ *
+ * This inverts what shipped in 47b39a9, deliberately. Absent-means-denied left
+ * every already-connected repo unable to get a read-only check without finding
+ * a toggle, which is a decision asked of the user for no risk taken — the
+ * definition of friction. `=== false` is still explicit: a user who turned it
+ * off stays off, and only that.
+ *
+ * `!== false` rather than a truthy test for the same reason the old code used
+ * `=== true`: a policy round-trips through JSON, and neither `"false"` nor a
+ * missing key should be read as a decision the user made.
+ *
+ * A null policy — an unconnected checkout, or a plan from a server predating
+ * policies — therefore reads as ON, and that is the right answer for a
+ * read-only check: `upgrade-plan` works in any clone, and nothing here writes.
+ * A future write permission must NOT reuse this accessor for that reason.
  */
 export function permits(policy: RepoPolicy | null, check: RepoCheck): boolean {
-  return policy?.checks?.[check] === true;
+  return policy?.checks?.[check] !== false;
 }
 
 /**
@@ -104,6 +117,21 @@ export interface ScopedPlan {
   scopeSource: 'repo-policy' | 'unconnected';
   /** How many upgrades the policy holds back. Printed, never silent. */
   outOfScope: number;
+  /**
+   * What this repository's dashboard setting says the job should do: `pr` to
+   * open pull requests, `comment` to analyse only.
+   *
+   * Here because the toggle on the dashboard was otherwise a no-op for any
+   * workflow already committed. lurq's GitHub App is Contents:read-only — it
+   * cannot rewrite that file or set a repository variable — so the mode has to
+   * be something the workflow READS, and this response is one it already
+   * fetches on every run.
+   *
+   * Absent when no policy governs the checkout, and that absence is load
+   * bearing: the workflow falls back to the mode baked in when it was
+   * generated, so a server with no opinion never disarms a repo.
+   */
+  mode?: 'pr' | 'comment';
 }
 
 /**
@@ -133,5 +161,9 @@ export function applyScope(upgrades: UpgradeBrief[], policy: RepoPolicy | null):
     scope: policy.scope,
     scopeSource: 'repo-policy',
     outOfScope: scoped.filter((u) => !u.inScope).length,
+    // Only on this branch. The unconnected branch above deliberately omits it:
+    // "no policy" is not "policy says comment", and conflating them would turn
+    // an unconnected checkout into a silent disarm.
+    mode: policy.enabled ? 'pr' : 'comment',
   };
 }

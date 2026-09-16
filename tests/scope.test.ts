@@ -104,3 +104,31 @@ describe('applyScope', () => {
     expect(applyScope([], policy('security')).scopeSource).toBe('repo-policy');
   });
 });
+
+/**
+ * The mode the plan response carries.
+ *
+ * This is what makes the dashboard's autopilot toggle govern runs rather than
+ * only new installs: lurq is Contents:read-only and cannot rewrite a committed
+ * workflow or set a repository variable, so the workflow reads the mode from
+ * this response instead.
+ */
+describe('applyScope: the mode it reports', () => {
+  it('says pr when the repository is armed', () => {
+    expect(applyScope([], policy('all')).mode).toBe('pr');
+  });
+
+  it('says comment when the repository is not armed', () => {
+    expect(applyScope([], { ...policy('all'), enabled: false }).mode).toBe('comment');
+  });
+
+  it('omits the mode entirely for an unconnected checkout', () => {
+    // Load bearing, and the reason this is not just `policy?.enabled`: "no
+    // policy" is not "policy says comment". The workflow falls back to the mode
+    // baked in when it was generated, so a server with no opinion about a repo
+    // can never disarm one that armed itself.
+    const plan = applyScope([upgrade()], null);
+    expect(plan.mode).toBeUndefined();
+    expect('mode' in plan).toBe(false);
+  });
+});

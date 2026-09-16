@@ -242,6 +242,13 @@ export interface DashboardRepo {
     /** Runs that reached a pull request. */
     delivered: number;
     failed: number;
+    /**
+     * Runs that only analysed (`checked`). When this equals `runs`, the
+     * committed workflow never got past comment mode — which is different from
+     * a repo that had nothing worth a pull request, and is the only sound way
+     * to tell those apart.
+     */
+    analysedOnly: number;
   } | null;
 }
 
