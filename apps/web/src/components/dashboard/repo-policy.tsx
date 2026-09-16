@@ -55,6 +55,16 @@ function Row({
  * touch a default branch, and it says so, a toggle whose consequence you have
  * to infer is not consent.
  */
+/**
+ * `=== true`, the same reading as the server's `permits()`.
+ *
+ * Absent and `false` are the same state, so a policy stored before checks
+ * existed must not read as different from one with the box unticked — with a
+ * plain `!==`, opening this panel on an older repo would arm the save button
+ * with nothing to save.
+ */
+const envOn = (p: RepoPolicy) => p.checks?.env === true;
+
 export function RepoPolicyPanel({
   repoId,
   policy: initial,
@@ -73,7 +83,8 @@ export function RepoPolicyPanel({
   const dirty =
     policy.enabled !== initial.enabled ||
     policy.scope !== initial.scope ||
-    policy.autoMerge !== initial.autoMerge;
+    policy.autoMerge !== initial.autoMerge ||
+    envOn(policy) !== envOn(initial);
 
   async function save() {
     setSaving(true);
@@ -160,6 +171,26 @@ export function RepoPolicyPanel({
             onClick={() => setPolicy((p) => ({ ...p, autoMerge: !p.autoMerge }))}
           >
             {policy.autoMerge ? "on" : "off"}
+          </Button>
+        </Row>
+
+        <Row
+          label="Check for undeclared environment variables"
+          description="Adds a read-only step to the generated workflow: variables your code reads that none of your .env files declare. It needs no API key, never writes anything, and does not fail your build."
+        >
+          {/* Not disabled on `!policy.enabled`, unlike auto-merge: this check
+              writes nothing, so it is useful precisely on a repo that has not
+              armed the agent — and gating it there would leave those repos
+              unable to turn it on at all. */}
+          <Button
+            variant={envOn(policy) ? "default" : "outline"}
+            size="sm"
+            disabled={demo}
+            onClick={() =>
+              setPolicy((p) => ({ ...p, checks: { ...p.checks, env: !envOn(p) } }))
+            }
+          >
+            {envOn(policy) ? "on" : "off"}
           </Button>
         </Row>
       </div>

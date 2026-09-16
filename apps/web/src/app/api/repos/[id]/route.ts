@@ -18,7 +18,25 @@ function parsePolicy(input: unknown): RepoPolicy | null {
   const raw = input as Record<string, unknown>;
   if (typeof raw.enabled !== "boolean" || typeof raw.autoMerge !== "boolean") return null;
   if (raw.scope !== "security" && raw.scope !== "blocking" && raw.scope !== "all") return null;
-  return { enabled: raw.enabled, scope: raw.scope, autoMerge: raw.autoMerge };
+  // Checks are carried through, and this route is the reason that matters: it
+  // sits between the dashboard and the backend, so rebuilding a three-key
+  // policy here strips a granted check in transit — the save succeeds, the
+  // toggle looks like it worked, and nothing runs. Fixing the backend's parser
+  // alone does not close that, because this one gets the request first.
+  const checks = parseChecks(raw.checks);
+  return {
+    enabled: raw.enabled,
+    scope: raw.scope,
+    autoMerge: raw.autoMerge,
+    ...(checks ? { checks } : {}),
+  };
+}
+
+/** Absent or malformed reads as not granted. An explicit false and a missing
+ *  key mean the same thing, so only a granted check is forwarded. */
+function parseChecks(input: unknown): RepoPolicy["checks"] | null {
+  if (!input || typeof input !== "object") return null;
+  return { env: (input as Record<string, unknown>).env === true };
 }
 
 async function guard(id: string): Promise<

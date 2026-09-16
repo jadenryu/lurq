@@ -202,6 +202,18 @@ export interface RepoPolicy {
   enabled: boolean;
   scope: "security" | "blocking" | "all";
   autoMerge: boolean;
+  /**
+   * Read-only checks the generated workflow should run. Mirrors the server's
+   * `RepoPolicy` in src/github/types.ts — this type is declared separately, so
+   * the two drift unless changed together.
+   *
+   * Absent means NOT GRANTED, never a permissive default: a policy stored
+   * before checks existed has no such key.
+   */
+  checks?: {
+    /** `lurq check-env`: variables the code reads that nothing declares. */
+    env?: boolean;
+  };
 }
 
 export interface DashboardRepo {
