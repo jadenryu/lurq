@@ -72,17 +72,19 @@ export const EYEBROW_NPM = "live on npm";
 export const EYEBROW_LICENSE = "MIT";
 export const NPM_PACKAGE_URL = "https://www.npmjs.com/package/lurqrun";
 
-export const HEADLINE_LINE_1 = "The verification layer";
-export const HEADLINE_LINE_2 = "for everything your agent installs.";
-
 /**
- * Two lines, 23 words. The four-clause version this replaces enumerated every
- * check and then conceded one of them, which took four lines to say less. The
- * concession now lives in NOTE_* below, where it is its own line rather than a
- * subordinate clause.
+ * The pain first, the product second. "The verification layer for everything
+ * your agent installs" led with version agreement, and that is a problem people
+ * meet at deploy, occasionally. Code written against an API that has since moved
+ * is one they meet every day. The closing section makes the same argument, which
+ * is on purpose: the page opens and ends on it.
  */
+export const HEADLINE_LINE_1 = "Your agent writes code";
+export const HEADLINE_LINE_2 = "for the version it remembers.";
+
+/** Two sentences, one short. The cause, then the call that fixes it. */
 export const LEAD =
-  "lurq serves your agent before it ever installs a single package, so the versions agree and the stack runs when you deploy.";
+  "APIs keep moving after a model stops reading. lurq reads the exports your installed version actually ships and hands them to your agent before it writes a line.";
 
 /* THE HERO NOTE IS GONE. It went through three versions and none of them earned
    the line. "Three of the four checks work today" put a four on the page while
@@ -129,7 +131,7 @@ export const DRIFT_HEAD_1 = "The most-installed packages";
 /** "model", not "agent": it is the training cutoff that causes this, not the tool. */
 export const DRIFT_HEAD_2 = "your model still gets wrong.";
 export const DRIFT_BODY =
-  "New versions mean the old API broke. We record the date their knowledge stops and record how the registry transforms over time. Asking models which version to install returns confident answers but breaking code";
+  "A new major is where the old API breaks. We record the day each model stopped reading and count what the registry shipped after it. The code comes back confident, and written for a version that has moved on.";
 
 
 /** The picker, and the sentence it produces. */
