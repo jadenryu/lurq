@@ -10,7 +10,7 @@ import { and, eq, gte, inArray, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { mcpChangeEvents, mcpDeployments, repoAlerts, type RepoAlertRow } from '../db/schema';
 import type { ChannelItem } from './channels';
-import { eventItem, URGENT_WINDOW_MS } from './sources';
+import { alertUrl, eventItem, URGENT_WINDOW_MS } from './sources';
 
 function fromAlert(a: RepoAlertRow, webUrl: string): ChannelItem {
   return {
@@ -18,10 +18,13 @@ function fromAlert(a: RepoAlertRow, webUrl: string): ChannelItem {
     severity: a.inRange ? 'high' : 'moderate',
     source: 'release',
     title: `${a.packageName} ${a.toVersion} in ${a.repoFullName}`,
-    detail: a.inRange
-      ? `The range ${a.range} already admits ${a.toVersion}, a new major; the next clean install takes it.`
-      : `${a.repoFullName} is now a major behind (declares ${a.range}).`,
-    url: `${webUrl}/dashboard/repos/${a.repoId}?q=${encodeURIComponent(a.packageName)}#deps`,
+    detail:
+      a.repoId === null
+        ? `${a.toVersion} is a new major; ${a.repoFullName} was last upgraded to ${a.range} with lurq check-upgrade.`
+        : a.inRange
+          ? `The range ${a.range} already admits ${a.toVersion}, a new major; the next clean install takes it.`
+          : `${a.repoFullName} is now a major behind (declares ${a.range}).`,
+    url: alertUrl(a, webUrl),
   };
 }
 

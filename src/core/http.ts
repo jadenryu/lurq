@@ -38,6 +38,13 @@ export interface HttpOptions {
   retries?: number;
   /** Override the cache key (e.g. to keep auth tokens out of the key). */
   cacheKey?: string;
+  /**
+   * Skip the cache READ for this one request, but still write the response
+   * back. For callers that know the cached copy is stale — the publish feed
+   * re-syncing a package that just released — without widening it to every
+   * other request the way `setCacheBypassRead` does.
+   */
+  fresh?: boolean;
   /** Injected for tests. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
 }
@@ -205,7 +212,7 @@ export async function httpRequest<T = unknown>(
   } = opts;
   const key = opts.cacheKey ?? `${method} ${url} ${body ?? ''}`;
 
-  if (ttlMs > 0 && !bypassCacheRead) {
+  if (ttlMs > 0 && !bypassCacheRead && !opts.fresh) {
     const cached = await readCache(key, ttlMs);
     if (cached) {
       return { status: cached.status, data: decode<T>(cached.body, accept), fromCache: true };

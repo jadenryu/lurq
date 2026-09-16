@@ -1,0 +1,1 @@
+ALTER TABLE "surface_queue" ADD COLUMN "next_attempt_at" timestamp with time zone;

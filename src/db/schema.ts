@@ -175,6 +175,16 @@ export const packages = pgTable(
      *  dashboard accounts existed. Stamped once via a standalone WHERE ... IS NULL
      *  update kept out of upsertPackage, so re-syncs can never clobber it. */
     firstRequestedByOwnerId: text('first_requested_by_owner_id'),
+    /**
+     * Failed API-surface extractions for `surface_attempted_version`. The worker
+     * stops asking once a version has failed SURFACE_MAX_ATTEMPTS times; a new
+     * latest version starts the count again, since it may ship types the last
+     * one did not. Without this, a package with no extractable surface was
+     * re-attempted at random every hour, forever. Not in upsertPackage's row,
+     * so re-syncs never reset it.
+     */
+    surfaceAttempts: integer('surface_attempts').notNull().default(0),
+    surfaceAttemptedVersion: text('surface_attempted_version'),
   },
   (table) => [
     uniqueIndex('packages_ecosystem_name_idx').on(table.ecosystem, table.name),
@@ -235,6 +245,13 @@ export const discoveryQueue = pgTable(
      *  and never reaching the write that would take it off the queue. Same
      *  treatment `compat_verify_queue.attempts` already gives a failing set. */
     attempts: integer('attempts').notNull().default(0),
+    /**
+     * The account whose query asked for this package (`reactive` rows only),
+     * credited as first requester when it is ingested. Stored here because the
+     * on-demand ingest used to live only in the API process's memory, and a
+     * deploy mid-backlog dropped both the work and the attribution.
+     */
+    requestedByOwnerId: text('requested_by_owner_id'),
     discoveredAt: ts('discovered_at').notNull().defaultNow(),
   },
   (table) => [index('discovery_queue_status_idx').on(table.status)],
@@ -616,7 +633,10 @@ export const repoAlerts = pgTable(
     id: serial('id').primaryKey(),
     /** Clerk user id, copied from the repo — alerts are read owner-scoped. */
     ownerId: text('owner_id').notNull(),
-    repoId: integer('repo_id').notNull(),
+    /** Null for an account that runs `check-upgrade` on a repo lurq has no
+     *  GitHub App installation for: the alert is keyed by `repo_full_name` from
+     *  its upgrade runs instead, and there is no repo page to link to. */
+    repoId: integer('repo_id'),
     /** Denormalized so the feed renders without a join, as in `upgrade_runs`. */
     repoFullName: text('repo_full_name').notNull(),
     packageName: text('package_name').notNull(),
@@ -644,6 +664,12 @@ export const repoAlerts = pgTable(
     // watcher re-syncs on every publish, including non-latest backports — must
     // not re-notify.
     uniqueIndex('repo_alerts_dedup_idx').on(table.repoId, table.packageName, table.toVersion),
+    // The same rule for alerts with no connected repo. Postgres treats NULLs as
+    // distinct, so the index above can never dedupe those rows; this one covers
+    // exactly them. Partial, so adding it cannot fail on existing rows.
+    uniqueIndex('repo_alerts_cli_dedup_idx')
+      .on(table.ownerId, table.repoFullName, table.packageName, table.toVersion)
+      .where(sql`repo_id is null`),
   ],
 );
 
@@ -706,6 +732,12 @@ export const surfaceQueue = pgTable(
     specKey: text('spec_key').notNull().unique(),
     /** Failed drains bump this; the worker drops a spec that keeps failing. */
     attempts: integer('attempts').notNull().default(0),
+    /**
+     * Not eligible before this. Set on every retry with an exponential delay, so
+     * a spec that just failed waits instead of being retried the next cycle and
+     * — oldest-first — blocking every newer spec behind it. Null = ready now.
+     */
+    nextAttemptAt: ts('next_attempt_at'),
     requestedAt: ts('requested_at').notNull().defaultNow(),
   },
   (table) => [index('surface_queue_requested_idx').on(table.kind, table.requestedAt)],
