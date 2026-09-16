@@ -206,6 +206,20 @@ keep their own surface, and every edit records the bytes it was computed from �
 so if a file changes between the scan and the write, nothing is written at all
 rather than a rename landing in the wrong place.
 
+Three kinds of upgrade it will not attempt at all — and it names each one rather
+than passing over it in silence:
+
+| Not attempted | Why |
+| --- | --- |
+| A multi-major upgrade (`hops` in the plan) | It has to be walked one major at a time. Jumping straight to the target skips whatever each intermediate release removed. |
+| One the plan could not sequence (`sequenceNote`) | That is a migration, not an upgrade, and nothing mechanical should attempt it. |
+| Anything past `--max <n>` | The blast radius. A deterministic edit is safer than a model's, but a diff touching forty packages is still a review nobody finishes, and the number is your call. |
+
+`check-upgrade` still reports on all three: checking an upgrade is free and tells
+you something, so only *performing* one is capped. If every upgrade in a plan
+falls into these, `fix` says so and names them — it never reports "nothing to
+fix" for work it declined to do.
+
 `--sarif` writes SARIF 2.1.0 for `github/codeql-action/upload-sarif`, which
 gives each finding dedup, assignment and closing itself when it stops
 reproducing. Proven renames carry the replacement as a SARIF fix, so the

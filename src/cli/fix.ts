@@ -27,7 +27,7 @@ import { manifestFindings } from '../fix/manifest';
 import { deterministic, editsByFile, applyEdits, type Finding } from '../fix/types';
 import { unifiedDiff } from '../fix/diff';
 import type { UpgradeTarget } from '../surface/upgrade';
-import { SCAN_LIMIT, parseUpgradeSpec, targetsFromPlanFile, targetsFromUpgrades } from './checkUpgrade';
+import { SCAN_LIMIT, fixableTargets, parseUpgradeSpec, planUpgrades, type FixableSplit } from './checkUpgrade';
 
 export interface FixOpts {
   /** Targets from `upgrade-plan --json`. */
@@ -44,6 +44,12 @@ export interface FixOpts {
   json?: boolean;
   /** Exit 1 when something is left for a human or an agent to do. */
   exitCode?: boolean;
+  /**
+   * Most packages to fix in one run. The blast radius: a deterministic edit is
+   * safer than a model's, but a diff touching forty packages is still a review
+   * nobody finishes.
+   */
+  max?: number;
   /**
    * Write SARIF here, for GitHub code scanning. That is where a finding gets a
    * lifecycle lurq would otherwise have to build: dedup, assignment, and
@@ -69,6 +75,12 @@ interface FixResult {
   }[];
   /** Why a proven rename was not written here, and in which file. */
   refused: { symbol: string; file?: string; reason: string }[];
+  /**
+   * Upgrades never attempted, and why. Kept apart from `refused`: "tried and
+   * would not" and "did not try" are different answers, and merging them put
+   * a skipped multi-major upgrade under a heading about proven renames.
+   */
+  skipped: { package: string; reason: string }[];
 }
 
 /**
@@ -81,12 +93,12 @@ interface FixResult {
  * needs no key, and the refusal here says so rather than surfacing a bare 401
  * from a command whose whole point is working without us.
  */
-async function derivePlanTargets(dir: string, opts: FixOpts): Promise<UpgradeTarget[]> {
+async function derivePlanTargets(dir: string, opts: FixOpts): Promise<FixableSplit> {
   const { buildUpgradePlan } = await import('./upgradePlan');
   try {
     const plan = await buildUpgradePlan(dir, { url: opts.url, apiKey: opts.apiKey, repo: opts.repo });
-    // The same scope filter the --plan path uses, not a second reading of it.
-    return targetsFromUpgrades(plan.upgrades);
+    // The same rules the --plan path uses, not a second reading of them.
+    return fixableTargets(plan.upgrades, opts.max);
   } catch (err) {
     // Matched by name rather than instanceof: remote.ts stays a lazy import, so
     // there is no guarantee both sides hold the same class object.
@@ -129,19 +141,28 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   // Naming versions was the last decision this command still demanded, and it
   // was the one the user could not answer without looking something up first.
   const asked = Boolean(opts.plan) || (opts.upgrade?.length ?? 0) > 0;
-  const targets = asked
-    ? [...(opts.plan ? targetsFromPlanFile(opts.plan) : []), ...(opts.upgrade ?? []).map(parseUpgradeSpec)]
-    : await derivePlanTargets(dir, opts);
+  // `--upgrade` is the user naming a version pair themselves, so it is taken at
+  // face value; a plan is filtered, because a plan carries what the upgrade
+  // would actually involve.
+  const split = asked
+    ? {
+        ...fixableTargets(opts.plan ? planUpgrades(opts.plan) : [], opts.max),
+        named: (opts.upgrade ?? []).map(parseUpgradeSpec),
+      }
+    : { ...(await derivePlanTargets(dir, opts)), named: [] as UpgradeTarget[] };
+  const targets = [...split.targets, ...split.named];
+  const skipped = split.skipped;
 
   if (targets.length === 0) {
-    const empty: FixResult = { root: dir, files: [], applied: [], remaining: [], refused: [] };
-    console.log(
-      opts.json
-        ? JSON.stringify(empty, null, 2)
-        : asked
-          ? 'Nothing to check.'
-          : 'Nothing to fix: every dependency is current, or the repo policy holds the rest.',
-    );
+    const empty: FixResult = { root: dir, files: [], applied: [], remaining: [], refused: [], skipped };
+    // Silence here would be a lie when every upgrade was skipped: "nothing to
+    // fix" and "nothing I am willing to fix" are different sentences.
+    const nothing = skipped.length
+      ? [`Nothing attempted in ${dir}. ${skipped.length} upgrade(s) deliberately not tried:`, ...skippedLines(skipped)].join('\n')
+      : asked
+        ? 'Nothing to check.'
+        : 'Nothing to fix: every dependency is current, or the repo policy holds the rest.';
+    console.log(opts.json ? JSON.stringify(empty, null, 2) : nothing);
     return;
   }
 
@@ -172,6 +193,7 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
     applied: [],
     remaining: [],
     refused: refused.map((r) => ({ symbol: r.symbol, file: r.file, reason: r.reason })),
+    skipped,
   };
 
   // Stage every file before writing any of it. A stale offset in the fourth
@@ -229,6 +251,11 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   if (opts.exitCode && result.remaining.length > 0) process.exitCode = 1;
 }
 
+/** One line per skip, shared by the empty case and the full report. */
+function skippedLines(skipped: { package: string; reason: string }[]): string[] {
+  return skipped.map((s) => `  ${s.package}: ${s.reason}`);
+}
+
 export function formatFix(result: FixResult, diff: string, applied: boolean): string {
   const out: string[] = [];
   if (result.applied.length === 0 && result.remaining.length === 0) {
@@ -258,6 +285,11 @@ export function formatFix(result: FixResult, diff: string, applied: boolean): st
       // exists to prevent.
       for (const e of r.evidence ?? []) out.push(`    use: ${e}`);
     }
+  }
+
+  if (result.skipped.length > 0) {
+    out.push('', `${result.skipped.length} upgrade(s) deliberately not attempted:`);
+    out.push(...skippedLines(result.skipped));
   }
 
   if (result.refused.length > 0) {
