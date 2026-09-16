@@ -25,13 +25,19 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deterministic, editsByFile, applyEdits, type Finding } from '../fix/types';
 import { unifiedDiff } from '../fix/diff';
-import { SCAN_LIMIT, parseUpgradeSpec, targetsFromPlanFile } from './checkUpgrade';
+import type { UpgradeTarget } from '../surface/upgrade';
+import { SCAN_LIMIT, parseUpgradeSpec, targetsFromPlanFile, targetsFromUpgrades } from './checkUpgrade';
 
 export interface FixOpts {
   /** Targets from `upgrade-plan --json`. */
   plan?: string;
   /** `pkg@from..to`, repeatable. */
   upgrade?: string[];
+  /** For the derived plan only; the fix itself never talks to us. */
+  url?: string;
+  apiKey?: string;
+  /** Which repo's policy governs the derived plan. Defaults to $GITHUB_REPOSITORY. */
+  repo?: string;
   /** Write the files. Off by default: the default is a diff. */
   apply?: boolean;
   json?: boolean;
@@ -56,6 +62,34 @@ interface FixResult {
   }[];
   /** Why a proven rename was not written here, and in which file. */
   refused: { symbol: string; file?: string; reason: string }[];
+}
+
+/**
+ * No `--plan` and no `--upgrade`: work out what moved, instead of making the
+ * user name versions they would have had to look up first.
+ *
+ * This is the only part of `fix` that needs the hosted API, because the index is
+ * what knows a newer version exists. Everything after it reads the two npm
+ * tarballs locally, so the offline contract still holds: `--upgrade pkg@from..to`
+ * needs no key, and the refusal here says so rather than surfacing a bare 401
+ * from a command whose whole point is working without us.
+ */
+async function derivePlanTargets(dir: string, opts: FixOpts): Promise<UpgradeTarget[]> {
+  const { buildUpgradePlan } = await import('./upgradePlan');
+  try {
+    const plan = await buildUpgradePlan(dir, { url: opts.url, apiKey: opts.apiKey, repo: opts.repo });
+    // The same scope filter the --plan path uses, not a second reading of it.
+    return targetsFromUpgrades(plan.upgrades);
+  } catch (err) {
+    // Matched by name rather than instanceof: remote.ts stays a lazy import, so
+    // there is no guarantee both sides hold the same class object.
+    if (err instanceof Error && err.name === 'MissingKeyError') {
+      throw new Error(
+        `${err.message}\n\nOr skip the lookup: \`lurq fix --upgrade pkg@from..to\` reads both versions straight from npm and needs no key.`,
+      );
+    }
+    throw err;
+  }
 }
 
 /**
@@ -85,17 +119,23 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   const { checkUpgrade } = await import('../surface/upgrade');
   const { renamePlan } = await import('../fix/rename');
 
-  const targets = [
-    ...(opts.plan ? targetsFromPlanFile(opts.plan) : []),
-    ...(opts.upgrade ?? []).map(parseUpgradeSpec),
-  ];
+  // Naming versions was the last decision this command still demanded, and it
+  // was the one the user could not answer without looking something up first.
+  const asked = Boolean(opts.plan) || (opts.upgrade?.length ?? 0) > 0;
+  const targets = asked
+    ? [...(opts.plan ? targetsFromPlanFile(opts.plan) : []), ...(opts.upgrade ?? []).map(parseUpgradeSpec)]
+    : await derivePlanTargets(dir, opts);
+
   if (targets.length === 0) {
-    if (opts.plan) {
-      const empty: FixResult = { root: dir, files: [], applied: [], remaining: [], refused: [] };
-      console.log(opts.json ? JSON.stringify(empty, null, 2) : 'Nothing to fix.');
-      return;
-    }
-    throw new Error('give --plan <file> or at least one --upgrade pkg@from..to');
+    const empty: FixResult = { root: dir, files: [], applied: [], remaining: [], refused: [] };
+    console.log(
+      opts.json
+        ? JSON.stringify(empty, null, 2)
+        : asked
+          ? 'Nothing to check.'
+          : 'Nothing to fix: every dependency is current, or the repo policy holds the rest.',
+    );
+    return;
   }
 
   // No type check: a rename is a fact about the runtime surface, and the type

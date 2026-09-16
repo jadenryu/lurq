@@ -349,15 +349,30 @@ export function buildProgram(): Command {
     .command('fix')
     .argument('[dir]', 'project directory to scan (default: current)', '.')
     .description('write the upgrade changes that need no judgement, and brief the agent on the rest')
+    // With neither --plan nor --upgrade it works out what moved by itself, which
+    // is the only part that asks our API anything. Naming the versions keeps the
+    // whole run offline.
     .option('--plan <file>', 'targets from `upgrade-plan --json`')
-    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. cookie@0.6.0..1.0.0')
+    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. cookie@1.1.1..2.0.1 — needs no API key')
     .option('--apply', 'write the files (default: print the diff and change nothing)')
     .option('--json', 'output the result as JSON')
     .option('--exit-code', 'exit 1 when something is left for a human or an agent to do')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .option('--repo <owner/name>', "apply this repo's policy (defaults to $GITHUB_REPOSITORY)")
     .action(
       async (
         dir: string,
-        opts: { plan?: string; upgrade?: string[]; apply?: boolean; json?: boolean; exitCode?: boolean },
+        opts: {
+          plan?: string;
+          upgrade?: string[];
+          apply?: boolean;
+          json?: boolean;
+          exitCode?: boolean;
+          url?: string;
+          apiKey?: string;
+          repo?: string;
+        },
       ) => {
         const { runFix } = await import('./fix');
         await runFix(dir, opts);

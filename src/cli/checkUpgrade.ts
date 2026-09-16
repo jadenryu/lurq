@@ -68,12 +68,27 @@ export function targetsFromPlanFile(path: string): UpgradeTarget[] {
   if (!Array.isArray(parsed.upgrades)) {
     throw new Error(`${path} is not an upgrade plan (no "upgrades" array)`);
   }
-  return parsed.upgrades
+  return targetsFromUpgrades(parsed.upgrades);
+}
+
+/**
+ * Plan entries to targets, with the repo's policy scope applied.
+ *
+ * Shared by the `--plan` file and by a bare `lurq fix`, which derives the same
+ * plan from the API instead of reading it off disk. One interpretation of scope
+ * in one place: two copies of this filter would eventually disagree about
+ * whether an unannotated plan is ungoverned or excluded, and that is the
+ * difference between a full brief and an empty one.
+ *
+ * `!== false` rather than a truthy test: a plan from a server that predates
+ * scope enforcement has no `inScope` key at all, and an absent policy must mean
+ * "ungoverned", never "excluded".
+ */
+export function targetsFromUpgrades(
+  upgrades: { package: string; fromVersion: string; toVersion: string; inScope?: boolean }[],
+): UpgradeTarget[] {
+  return upgrades
     .filter((u) => u.package && u.fromVersion && u.toVersion)
-    // `!== false` rather than a truthy test: a plan from a server that predates
-    // scope enforcement has no `inScope` key at all, and an absent policy must
-    // mean "ungoverned", never "excluded". Getting this backwards would empty
-    // the brief on every older deployment.
     .filter((u) => u.inScope !== false)
     .map((u) => ({ package: u.package, fromVersion: u.fromVersion, toVersion: u.toVersion }));
 }
