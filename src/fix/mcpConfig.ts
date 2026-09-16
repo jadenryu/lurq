@@ -73,10 +73,64 @@ export interface McpConfigOptions {
  * never imports the CLI it serves.
  */
 export interface ScanLike {
-  servers: { alias: string; analysis: { findings: McpFinding[] } | null }[];
+  servers: {
+    alias: string;
+    analysis: { findings: McpFinding[] } | null;
+    /** `needs_config` is the one status only the user can clear. */
+    status?: string;
+    error?: string | null;
+    hint?: string | null;
+  }[];
   /** Cross-server findings, which belong to no single alias. */
   findings: McpFinding[];
   configSources?: Record<string, ItemSource>;
+}
+
+/**
+ * Servers that cannot start until someone supplies a value.
+ *
+ * This is the first finding lurq produces that no agent should act on alone.
+ * Everything else here is either mechanical or a brief an agent can research;
+ * a missing credential is held by exactly one party, and an agent that "fixes"
+ * it has invented a secret — so the instruction says where the value comes
+ * from as forcefully as it says what to do.
+ *
+ * `needs_config` covers both an unfilled `${VAR}` in the config and a server
+ * that reported a missing setting when it started. Both have the same
+ * remedy. `auth_required` is deliberately NOT folded in: it also needs the
+ * user, but it needs a sign-in, and one instruction cannot be right for both.
+ *
+ * Nothing here reads a value. The names come from the scan's own error text,
+ * which describes settings that by definition have none.
+ */
+function needsConfigFindings(report: ScanLike): Finding[] {
+  return report.servers
+    .filter((s) => s.status === 'needs_config')
+    .map((s) => {
+      const source = report.configSources?.[s.alias];
+      const what = s.error ?? 'it needs configuration that is not set';
+      return {
+        domain: 'mcp-config' as const,
+        code: `mcp-needs-config:${s.alias}`,
+        // It does not run at all, which is worse than anything its tools say.
+        severity: 'blocking' as const,
+        detail: `${s.alias} cannot start: ${what}`,
+        ...(source ? { file: source.file, section: `${source.section}.${s.alias}` } : {}),
+        ...(s.hint ? { evidence: s.hint } : {}),
+        fix: {
+          summary: `supply the configuration ${s.alias} needs`,
+          task: {
+            instruction:
+              `Ask the user to supply the missing configuration for ${s.alias} (${what}). ` +
+              'Take each value from the user — never from a log, an example file, a previous scan, or a guess — ' +
+              'then re-run `lurq mcp-scan`.',
+            files: source ? [source.file] : [],
+            evidence: s.hint ? [s.hint] : [],
+          },
+          verify: ['probe' as const],
+        },
+      };
+    });
 }
 
 /**
@@ -92,7 +146,12 @@ export function scanFindings(report: ScanLike): Finding[] {
     ...report.servers.flatMap((s) => (s.analysis?.findings ?? []).map((f) => ({ ...f, server: s.alias }))),
     ...report.findings,
   ]);
-  return mcpConfigFindings(merged, { sourceFor: (alias) => report.configSources?.[alias] });
+  // A server that never started produced no findings of its own, and the reason
+  // it did not start outranks anything the ones that did start are saying.
+  return [
+    ...needsConfigFindings(report),
+    ...mcpConfigFindings(merged, { sourceFor: (alias) => report.configSources?.[alias] }),
+  ];
 }
 
 export function mcpConfigFindings(findings: ScanFinding[], opts: McpConfigOptions = {}): Finding[] {
