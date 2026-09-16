@@ -65,6 +65,10 @@ export type ReferenceVia =
 
 export interface CallSite {
   line: number;
+  /** Character offsets of the identifier itself, for a patcher that rewrites it.
+   *  Absent on references the scanner recorded without a node to point at. */
+  start?: number;
+  end?: number;
   /** Arguments passed, or null when they cannot be counted: a spread argument,
    *  or a use that is not a call at all (passed as a callback, stored, exported). */
   args: number | null;
@@ -94,6 +98,25 @@ export interface SymbolReference {
   /** Set when the module was loaded with `require()`, TypeScript's
    *  `import x = require()` included. That is what an ESM-only release breaks. */
   loader?: 'require';
+  /**
+   * The LOCAL name the code uses, which is what appears at every call site.
+   * Equal to `symbol` unless the import renames it (`{ parse as parseCookie }`).
+   */
+  local?: string;
+  /** The import renames the export, so the local name survives a rename of the export. */
+  aliased?: boolean;
+  /**
+   * Offsets of the identifier holding the EXPORTED name in the import: the
+   * `propertyName` when aliased, the bound name otherwise. A rename rewrites
+   * exactly this range, and the uses only when `aliased` is false.
+   */
+  nameStart?: number;
+  nameEnd?: number;
+  /**
+   * The local name is declared more than once in the file, so uses of it cannot
+   * be attributed to this import. A patcher must refuse the file.
+   */
+  shadowed?: boolean;
 }
 
 /** Kinds that assert something about the module's own export surface. */
@@ -239,12 +262,13 @@ function loadedModule(expr: ts.Expression): { spec: string; loader: 'require' | 
 /** What the use at `node` is: a call and its argument count, or anything else. */
 function callSiteOf(sf: ts.SourceFile, node: ts.Node): CallSite {
   const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+  const span = { start: node.getStart(sf), end: node.getEnd() };
   const p = node.parent;
   if (p && (ts.isCallExpression(p) || ts.isNewExpression(p)) && p.expression === node) {
     const args = p.arguments ?? [];
-    return { line, args: args.some(ts.isSpreadElement) ? null : args.length };
+    return { line, ...span, args: args.some(ts.isSpreadElement) ? null : args.length };
   }
-  return { line, args: null };
+  return { line, ...span, args: null };
 }
 
 /** Is this identifier a read of a binding, rather than a name being declared? */
@@ -328,7 +352,11 @@ function bindsName(id: ts.Identifier): boolean {
  * returned, which is a BLOCKING claim. A scope-aware pass means a binder; the
  * type check already judges TypeScript files exactly.
  */
-function valueUses(sf: ts.SourceFile, locals: Set<string>): Map<string, CallSite[]> {
+function valueUses(
+  sf: ts.SourceFile,
+  locals: Set<string>,
+  shadowed?: Set<string>,
+): Map<string, CallSite[]> {
   const out = new Map<string, CallSite[]>();
   const bindings = new Map<string, number>();
   const visit = (node: ts.Node, inType: boolean): void => {
@@ -345,7 +373,10 @@ function valueUses(sf: ts.SourceFile, locals: Set<string>): Map<string, CallSite
   };
   visit(sf, false);
   for (const [name, count] of bindings) {
+    if (count > 1) shadowed?.add(name);
     const uses = out.get(name);
+    // A name declared twice in one file cannot have its uses attributed to the
+    // import: the counts are unusable, and a patcher must not rewrite them.
     if (count > 1 && uses) out.set(name, uses.map((u) => ({ line: u.line, args: null })));
   }
   return out;
@@ -412,6 +443,7 @@ export function scanReferences(
     line: number,
     parent?: string,
     call?: CallSite,
+    binding?: { local: string; aliased: boolean; nameStart: number; nameEnd: number },
   ): SymbolReference => {
     let syms = byPackage.get(pkg);
     if (!syms) byPackage.set(pkg, (syms = new Map()));
@@ -424,6 +456,7 @@ export function scanReferences(
       line,
       ...(parent ? { parent } : {}),
       ...(call ? { calls: [call] } : {}),
+      ...(binding ?? {}),
     };
     if (!list) {
       syms.set(symbol, [ref]);
@@ -502,6 +535,7 @@ export function scanReferences(
                 const local = el.name.text;
                 const exported = el.propertyName?.text ?? local;
                 const typeOnly = clause.isTypeOnly || el.isTypeOnly || !valueUsed.has(local);
+                const nameNode = el.propertyName ?? el.name;
                 const ref = record(
                   pkg,
                   exported,
@@ -509,6 +543,14 @@ export function scanReferences(
                   node.moduleSpecifier.text,
                   rel,
                   lineOf(el),
+                  undefined,
+                  undefined,
+                  {
+                    local,
+                    aliased: el.propertyName !== undefined,
+                    nameStart: nameNode.getStart(sf),
+                    nameEnd: nameNode.getEnd(),
+                  },
                 );
                 if (!typeOnly) {
                   follow(local, ref);
@@ -576,7 +618,12 @@ export function scanReferences(
           for (const el of node.name.elements) {
             const name = el.propertyName ?? el.name;
             if (!ts.isIdentifier(name)) continue;
-            const ref = record(ns.pkg, name.text, 'namespace', ns.spec, rel, lineOf(el));
+            const ref = record(ns.pkg, name.text, 'namespace', ns.spec, rel, lineOf(el), undefined, undefined, {
+              local: ts.isIdentifier(el.name) ? el.name.text : name.text,
+              aliased: el.propertyName !== undefined,
+              nameStart: name.getStart(sf),
+              nameEnd: name.getEnd(),
+            });
             if (ns.loader) ref.loader = ns.loader;
             if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
           }
@@ -605,7 +652,12 @@ export function scanReferences(
             for (const el of node.name.elements) {
               const name = el.propertyName ?? el.name;
               if (!ts.isIdentifier(name)) continue;
-              const ref = record(pkg, name.text, 'destructured', spec, rel, lineOf(el));
+              const ref = record(pkg, name.text, 'destructured', spec, rel, lineOf(el), undefined, undefined, {
+                local: ts.isIdentifier(el.name) ? el.name.text : name.text,
+                aliased: el.propertyName !== undefined,
+                nameStart: name.getStart(sf),
+                nameEnd: name.getEnd(),
+              });
               if (viaRequire) ref.loader = 'require';
               if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
             }
@@ -664,9 +716,13 @@ export function scanReferences(
     visit(sf);
 
     if (followed.size) {
-      const uses = valueUses(sf, new Set(followed.keys()));
+      const shadowedLocals = new Set<string>();
+      const uses = valueUses(sf, new Set(followed.keys()), shadowedLocals);
       for (const [local, refs] of followed) {
-        for (const ref of refs) ref.calls = [...(ref.calls ?? []), ...(uses.get(local) ?? [])];
+        for (const ref of refs) {
+          ref.calls = [...(ref.calls ?? []), ...(uses.get(local) ?? [])];
+          if (shadowedLocals.has(local)) ref.shadowed = true;
+        }
       }
     }
   }

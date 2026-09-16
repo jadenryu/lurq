@@ -114,17 +114,17 @@ describe('reference scanner', () => {
       const calls = (pkg: string, sym: string) =>
         refs.find((r) => r.package === pkg)!.symbols.get(sym)!.flatMap((r) => r.calls ?? []);
       expect(calls('cookie', 'parse').slice(0, 4)).toEqual([
-        { line: 4, args: 1 },
-        { line: 5, args: 2 },
-        { line: 6, args: null },
-        { line: 7, args: null },
+        expect.objectContaining({ line: 4, args: 1 }),
+        expect.objectContaining({ line: 5, args: 2 }),
+        expect.objectContaining({ line: 6, args: null }),
+        expect.objectContaining({ line: 7, args: null }),
       ]);
       // Two calls on one line stay two call sites.
       expect(calls('qs', 'stringify')).toEqual([
-        { line: 8, args: 2 },
-        { line: 8, args: 1 },
+        expect.objectContaining({ line: 8, args: 2 }),
+        expect.objectContaining({ line: 8, args: 1 }),
       ]);
-      expect(calls('lodash', 'debounce')).toEqual([{ line: 9, args: 2 }]);
+      expect(calls('lodash', 'debounce')).toEqual([expect.objectContaining({ line: 9, args: 2 })]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
