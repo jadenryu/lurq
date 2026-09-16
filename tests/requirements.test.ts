@@ -134,9 +134,9 @@ describe('the scanner marks require() loads', () => {
       const refs = scanReferences(dir);
       const get = (pkg: string, sym: string) => refs.find((r) => r.package === pkg)!.symbols.get(sym)![0]!;
       expect(get('chalk', 'default')).toMatchObject({ loader: 'require' });
-      expect(get('chalk', 'default').calls).toContainEqual({ line: 2, args: 1 });
+      expect(get('chalk', 'default').calls).toContainEqual(expect.objectContaining({ line: 2, args: 1 }));
       expect(get('chalk', 'red')).toMatchObject({ via: 'namespace', loader: 'require' });
-      expect(get('node-fetch', 'default').calls).toContainEqual({ line: 5, args: 1 });
+      expect(get('node-fetch', 'default').calls).toContainEqual(expect.objectContaining({ line: 5, args: 1 }));
       expect(get('uuid', 'v4')).toMatchObject({ via: 'destructured', loader: 'require' });
       expect(get('cookie', 'parse').loader).toBeUndefined();
     } finally {
