@@ -188,15 +188,22 @@ function detectProvenance(manifest: any): boolean {
   return Boolean(manifest?.dist?.attestations);
 }
 
+/**
+ * `fresh` skips the cached packument. The publish feed needs it: the document
+ * is cached for hours, so without it a re-sync triggered BY a publish could read
+ * the copy from before that publish and record no new version at all.
+ */
 export async function fetchNpmRegistry(
   name: string,
   fetchImpl?: typeof fetch,
+  opts: { fresh?: boolean } = {},
 ): Promise<NpmRegistryData> {
   const url = `https://${HOST}/${encodeNpmName(name)}`;
   const { data } = await httpGetJson<any>(url, {
     host: HOST,
     ttlMs: CACHE_TTL.npmRegistry,
     fetchImpl,
+    fresh: opts.fresh,
   });
   return parseNpmRegistry(data);
 }

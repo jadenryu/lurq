@@ -21,6 +21,9 @@ import {
   sharedPackages,
   summarize,
   archetypeLine,
+  mcpServerLabel,
+  mcpToolPower,
+  mcpToolSummary,
   depLabel,
   depStatus,
   savedDaysAgo,
@@ -44,6 +47,7 @@ import {
   type RepoStack,
   type ScanConflict,
   type BuilderStanding,
+  type ProfileMcpServer,
   type SavedBuilderScan,
   type StandingMetricId,
   type ScanDep,
@@ -453,6 +457,8 @@ function Report({
           </ul>
         </Panel>
       )}
+
+      <McpSection report={report} />
 
       <SharedPackages report={report} />
 
@@ -1352,6 +1358,144 @@ function Conflicts({
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * One server in a config. A probed server opens into the tools it hands the
+ * agent: what each one takes, whether it returns something parseable, and what
+ * it is allowed to do. There is nothing to open for a server lurq could not
+ * probe, so those stay a plain row.
+ */
+function McpServerRow({ server }: { server: ProfileMcpServer }) {
+  const tools = server.toolDetail ?? [];
+  const line = (
+    <>
+      <span className="font-mono text-ink">{server.alias}</span>
+      <span className="break-all font-mono text-ink-3">{server.packageName ?? server.endpoint ?? ""}</span>
+      <span className={cn("ml-auto text-[12px]", MCP_TONE[server.status] ?? "text-ink-3")}>
+        {mcpServerLabel(server)}
+      </span>
+    </>
+  );
+
+  if (tools.length === 0) {
+    return (
+      <li className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
+        <span aria-hidden className="w-3.5 shrink-0" />
+        {line}
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <details className="group">
+        <summary className="flex cursor-pointer list-none flex-wrap items-baseline gap-x-3 text-[12.5px] [&::-webkit-details-marker]:hidden">
+          <ChevronRight aria-hidden className={CHEVRON} />
+          {line}
+        </summary>
+        <ul className="mt-2 space-y-1.5 border-l border-edge pl-3">
+          {tools.map((t) => {
+            const power = mcpToolPower(t);
+            return (
+              <li key={t.name} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[12px]">
+                <span className="font-mono text-ink">{t.name}</span>
+                <span className="text-ink-3">{mcpToolSummary(t)}</span>
+                <span className={cn("ml-auto font-mono text-[11px]", power.tone)}>{power.text}</span>
+                {t.required.length > 0 && (
+                  <span className="w-full break-all font-mono text-[11px] text-ink-3">
+                    requires {t.required.join(", ")}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {server.tools > tools.length && (
+          <p className="mt-2 pl-3 text-[11.5px] text-ink-3">
+            {plural(server.tools - tools.length, "more tool")} not listed. The counts above are exact.
+          </p>
+        )}
+      </details>
+    </li>
+  );
+}
+
+const MCP_TONE: Record<string, string> = {
+  probed: "text-ink-2",
+  "handshake-failed": "text-bad",
+  queued: "text-warn",
+  "needs-config": "text-warn",
+};
+
+/**
+ * MCP servers in the repos read: what they commit to their agents' configs, and
+ * the repos that are MCP servers. Evidence from those files and lurq's index of
+ * probed servers only; anything lurq cannot probe says so. Absent when the repos
+ * read have neither, so a profile with no MCP gets no empty panel.
+ */
+function McpSection({ report }: { report: BuilderReport }) {
+  const mcp = report.mcp;
+  const hidden = report.locked?.mcp ?? 0;
+  if (!mcp || (mcp.configs.length === 0 && mcp.builds.length === 0 && mcp.unreadFiles === 0)) return null;
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="mcp servers"
+        trailing={<span className="text-[11.5px] text-ink-3">from committed configs and lurq&apos;s probes</span>}
+      />
+      {mcp.builds.length > 0 && (
+        <div>
+          <p className={microLabel}>built here</p>
+          <ul className="mt-1.5 space-y-1">
+            {mcp.builds.map((b) => (
+              <li key={b.repo} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
+                <span className="font-mono text-ink">{b.repo}</span>
+                <span className="font-mono text-ink-3">{b.packageName}</span>
+                <span className={cn("ml-auto text-[12px]", MCP_TONE[b.status] ?? "text-ink-3")}>
+                  {mcpServerLabel(b)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {mcp.configs.map((c) => (
+        <div key={c.repo} className={cn(mcp.builds.length > 0 || c !== mcp.configs[0] ? "mt-5" : "")}>
+          <p className={microLabel}>
+            {c.repo} · {c.files.join(", ")}
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {c.servers.map((s) => (
+              <McpServerRow key={`${s.alias}-${s.packageName ?? s.endpoint ?? ""}`} server={s} />
+            ))}
+          </ul>
+          {c.collisions.map((x) => (
+            <p key={x.tool} className="mt-2 text-[12.5px] leading-snug text-bad">
+              <span className="font-mono">{x.tool}</span> is exposed by {x.servers.join(" and ")}: the agent cannot say
+              which one it means{x.writes ? ", and one of them can write" : ""}.
+            </p>
+          ))}
+          <p className="mt-2 text-[11.5px] text-ink-3">
+            {c.totalTools !== null
+              ? `${plural(c.totalTools, "tool")} in total, about ${c.estimatedContextTokens?.toLocaleString()} tokens of schema in every request.`
+              : "Total tools unknown: not every server here is probed."}
+          </p>
+        </div>
+      ))}
+      {mcp.unreadFiles > 0 && (
+        <p className="mt-3 text-[12px] text-warn">
+          GitHub didn&rsquo;t answer for {plural(mcp.unreadFiles, "MCP file")}, so servers in them are missing.
+        </p>
+      )}
+      {hidden > 0 && (
+        <div className="mt-3">
+          <LockedRow>{plural(hidden, "more MCP config or server", "more MCP configs or servers")} with a free account.</LockedRow>
+        </div>
+      )}
+    </Panel>
   );
 }
 

@@ -49,7 +49,7 @@ const EVIDENCE_MAX = 800;
  * measurement failure — a partially-drained list is indistinguishable from a
  * server that deleted the tools on the pages we never asked for.
  */
-const MAX_PAGES = 50;
+export const MAX_PAGES = 50;
 
 export interface ProbeOutput {
   ok: boolean;
@@ -76,6 +76,7 @@ export function probeScript(
   pkg: string,
   launchArgs: string[] = [],
   env: Record<string, string> = {},
+  maxPages: number = MAX_PAGES,
 ): string {
   return `
 const { spawn } = require('node:child_process');
@@ -191,7 +192,7 @@ child.stdout.on('data', (d) => {
           annotations: t.annotations,
         });
       }
-      if (result.nextCursor && pages < ${MAX_PAGES}) { nextId++; listTools(result.nextCursor); return; }
+      if (result.nextCursor && pages < ${Math.max(1, Math.floor(maxPages))}) { nextId++; listTools(result.nextCursor); return; }
       clearTimeout(timer);
       return out({
         ok: true, stage: 'done', serverInfo, protocolVersion, tools, pages,
@@ -263,6 +264,9 @@ export interface ProbeOptions {
    * that boots on a fake key has not been shown to work.
    */
   env?: Record<string, string>;
+  /** Pagination ceiling for `tools/list`; defaults to MAX_PAGES. Raised when a
+   *  previous probe of the same server came back truncated. */
+  maxPages?: number;
 }
 
 async function attempt(
@@ -271,8 +275,9 @@ async function attempt(
   version: string | null,
   args: string[],
   env: Record<string, string>,
+  maxPages: number,
 ): Promise<{ probe: ProbeOutput | null; stderr: string }> {
-  const res = await sandbox.exec(`node -e ${shellQuote(probeScript(pkg, args, env))}`, {
+  const res = await sandbox.exec(`node -e ${shellQuote(probeScript(pkg, args, env, maxPages))}`, {
     install: [{ name: pkg, version }],
     timeoutMs: HANDSHAKE_TIMEOUT_MS,
   });
@@ -294,7 +299,7 @@ export async function probeMcpServer(
   let last: { probe: ProbeOutput | null; stderr: string } = { probe: null, stderr: '' };
   for (const args of ladder) {
     try {
-      const res = await attempt(sandbox, pkg, version, args, opts.env ?? {});
+      const res = await attempt(sandbox, pkg, version, args, opts.env ?? {}, opts.maxPages ?? MAX_PAGES);
       if (res.probe?.ok) return { ...res, launchedWith: args };
       last = res;
     } catch (err) {

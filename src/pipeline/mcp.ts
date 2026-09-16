@@ -32,7 +32,7 @@ import {
   storeSurface,
 } from '../db/surface';
 import { recordObservation, upsertClaim, upsertEntity } from '../db/graph';
-import { probeMcpServer, mcpServerOracle } from '../graph/oracles/mcpServer';
+import { MAX_PAGES, probeMcpServer, mcpServerOracle } from '../graph/oracles/mcpServer';
 import { sniffMissingEnv } from '../mcpScan/errors';
 import { getSandbox, isolationAvailable } from '../sandbox/index';
 import type { Sandbox } from '../sandbox/types';
@@ -73,6 +73,27 @@ const MAX_ATTEMPTS = 3;
  * whole worker loop.
  */
 export const MCP_PER_CYCLE = 3;
+
+/**
+ * What the queue does with a spec after a probe.
+ *
+ * `retry` only for outcomes that say something about OUR measurement or about a
+ * moment in time: a truncated list (our page ceiling) and a server that would
+ * not start (a slow install or a flaky registry look exactly like a broken
+ * server on one attempt). Everything else is a settled answer about that
+ * version and leaves the queue. Retries are bounded by MAX_ATTEMPTS and spaced
+ * by the queue's backoff.
+ */
+export function mcpQueueAction(outcome: McpOutcome, attempts: number): 'drop' | 'retry' {
+  const retryable = outcome === 'truncated' || outcome === 'unreachable';
+  return retryable && attempts + 1 < MAX_ATTEMPTS ? 'retry' : 'drop';
+}
+
+/** Page ceiling for a probe: MAX_PAGES first, then 4x per prior attempt, so a
+ *  server that came back truncated gets room to finish its list. */
+export function probePageCeiling(attempts: number): number {
+  return MAX_PAGES * 4 ** Math.max(0, attempts);
+}
 
 export type McpOutcome =
   | 'stored'
@@ -117,7 +138,7 @@ export async function extractAndStoreMcp(
   db: Database,
   server: string,
   version: string | null,
-  opts: { sandbox?: Sandbox; env?: NodeJS.ProcessEnv } = {},
+  opts: { sandbox?: Sandbox; env?: NodeJS.ProcessEnv; maxPages?: number } = {},
 ): Promise<McpExtractResult> {
   const ref = mcpSurfaceRef(server, version);
 
@@ -156,6 +177,7 @@ export async function extractAndStoreMcp(
   const { probe, stderr } = await probeMcpServer(sandbox, server, version, {
     args: manifest?.args ?? [],
     env: placeholders,
+    maxPages: opts.maxPages,
   });
 
   // Still no handshake after every lever: report what the server needs rather
@@ -337,6 +359,7 @@ export async function drainMcpQueue(
     try {
       const { outcome, reason } = await extractAndStoreMcp(db, item.packageName, item.version, {
         sandbox: opts.sandbox,
+        maxPages: probePageCeiling(item.attempts),
       });
       s[outcome]++;
 
@@ -369,10 +392,11 @@ export async function drainMcpQueue(
         );
       }
 
-      // A server that cannot start is a settled answer about that version, not
-      // a transient one — drop it rather than retrying the same failure every
-      // cycle. A truncated list, by contrast, means our own ceiling was too low.
-      await dropSurfaceQueue(db, item.id);
+      // Settled answers leave the queue. A truncated list (our ceiling) and a
+      // server that would not start (possibly a flaky install) come back later
+      // with backoff and, for truncation, a higher page ceiling.
+      if (mcpQueueAction(outcome, item.attempts) === 'retry') await bumpSurfaceAttempt(db, item.id);
+      else await dropSurfaceQueue(db, item.id);
     } catch (err) {
       s.failed++;
       // The sandbox itself failed. Never a verdict about the server (§4.2).

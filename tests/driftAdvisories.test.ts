@@ -8,7 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/pipeline/single', () => ({
   syncOnePackage: vi.fn().mockResolvedValue({ confidence: 'unproven', category: null }),
 }));
-vi.mock('../src/db/packages', () => ({ ensureSeedEntry: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../src/db/discovery', () => ({
+  enqueueDemand: vi.fn().mockResolvedValue(undefined),
+  setDiscoveryStatus: vi.fn().mockResolvedValue(undefined),
+  recordIngestFailure: vi.fn().mockResolvedValue(1),
+}));
 vi.mock('../src/ingestion/sources/osv', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/ingestion/sources/osv')>()),
   queryVulnerableInstalls: vi.fn(),

@@ -193,7 +193,11 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
         if (signal?.aborted) break;
         const route = routeChange(change, tracked, queued);
         if (route === 'resync') {
-          await syncOnePackage(db, change.id).catch((err) =>
+          // `fresh`: this change IS a publish, so a packument cached before it
+          // (hours, see CACHE_TTL.npmRegistry) is exactly the stale copy that
+          // would record no new version — and a package publishing twice in
+          // that window would always hit it on the second release.
+          await syncOnePackage(db, change.id, { fresh: true }).catch((err) =>
             logger.warn(`watch: re-sync failed for ${change.id}: ${String(err)}`),
           );
           resynced++;
@@ -268,6 +272,9 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  // An 'abort' listener added after the signal already fired never runs, so a
+  // stop requested mid-page would otherwise sit out the full idle poll.
+  if (signal?.aborted) return Promise.resolve();
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
     signal?.addEventListener(

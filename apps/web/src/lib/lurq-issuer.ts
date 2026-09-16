@@ -295,7 +295,9 @@ export async function fetchRepos(ownerId: string): Promise<DashboardRepo[]> {
  */
 export interface RepoAlert {
   id: number;
-  repoId: number;
+  /** Null when the repo is not connected: lurq heard about it from a
+   *  `check-upgrade` run, so there is no repo page to link to. */
+  repoId: number | null;
   repoFullName: string;
   packageName: string;
   /** The range the repo declared when the release landed. */

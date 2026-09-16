@@ -26,11 +26,9 @@ export async function getStoredSurface(
  * same head rows every cycle and never reached the tail: 96 cycles a day × 50
  * rows produced 357 surfaces against 3,316 packages.
  *
- * ponytail: `random()` guarantees the pass advances without a schema change, at
- * the cost of re-attempting permanent failures. If that retry waste starts
- * mattering, the upgrade is an `attempts`/`last_attempt_at` column on `packages`
- * (or a negative-cache row) plus exponential backoff — same shape as
- * `surface_queue.attempts` already uses on the demand-driven path.
+ * `random()` keeps the pass advancing through the backlog; the attempt count on
+ * `packages` keeps permanent failures out of it. A version that has failed
+ * SURFACE_MAX_ATTEMPTS times is skipped until the package publishes a new one.
  */
 export async function getPackagesMissingSurface(
   db: Database,
@@ -46,10 +44,34 @@ export async function getPackagesMissingSurface(
         eq(apiSurfaces.version, packages.latestVersion),
       ),
     )
-    .where(and(isNotNull(packages.latestVersion), isNull(apiSurfaces.id)))
+    .where(
+      and(
+        isNotNull(packages.latestVersion),
+        isNull(apiSurfaces.id),
+        sql`not (${packages.surfaceAttemptedVersion} is not distinct from ${packages.latestVersion} and ${packages.surfaceAttempts} >= ${SURFACE_MAX_ATTEMPTS})`,
+      ),
+    )
     .orderBy(sql`random()`)
     .limit(limit);
   return rows.filter((r): r is { name: string; version: string } => r.version !== null);
+}
+
+/** Extraction failures a version gets before the worker stops retrying it. */
+export const SURFACE_MAX_ATTEMPTS = 3;
+
+/**
+ * Count one failed extraction of `version`. Counting restarts at 1 when the
+ * version differs from the last one attempted, so a new release is always
+ * given a fresh budget. One statement, so concurrent passes cannot lose a count.
+ */
+export async function recordSurfaceMiss(db: Database, name: string, version: string): Promise<void> {
+  await db
+    .update(packages)
+    .set({
+      surfaceAttempts: sql`case when ${packages.surfaceAttemptedVersion} = ${version} then ${packages.surfaceAttempts} + 1 else 1 end`,
+      surfaceAttemptedVersion: version,
+    })
+    .where(eq(packages.name, name));
 }
 
 /** Cache a version's surface. Versions are immutable, so a stored surface is

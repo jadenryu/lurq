@@ -240,23 +240,6 @@ export async function getTopPackageNames(db: Database, limit = 1000): Promise<st
 }
 
 /**
- * Promote a package into the curated seed list so future `sync` runs keep it
- * fresh. Used by the on-demand path (§12.5) to make organically-discovered
- * packages durable. No-op if already seeded — preserves the original category
- * and `added_at` rather than overwriting a hand-curated entry.
- */
-export async function ensureSeedEntry(
-  db: Database,
-  name: string,
-  category: Category | null,
-): Promise<void> {
-  await db
-    .insert(seedPackages)
-    .values({ name, category })
-    .onConflictDoNothing({ target: seedPackages.name });
-}
-
-/**
  * Upsert a fully-computed package row, refreshing every field on conflict.
  *
  * The conflict target must name the SAME columns as the unique index or

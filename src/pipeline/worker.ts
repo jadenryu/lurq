@@ -12,7 +12,8 @@
  */
 import { logger } from '../core/logger';
 import { createDb } from '../db/client';
-import { getPackagesMissingSurface } from '../db/apiSurfaces';
+import { getPackagesMissingSurface, recordSurfaceMiss } from '../db/apiSurfaces';
+import { enqueueSurface, hasStoredSurface, surfaceQueueDepth } from '../db/surface';
 import { pMap } from '../core/concurrency';
 import { runDiscovery } from './discovery';
 import { drainCompatVerifyQueue } from './compat';
@@ -40,6 +41,46 @@ export interface WorkerOptions {
   once?: boolean;
 }
 
+export interface ExtractOutcome {
+  name: string;
+  version: string;
+  ok: boolean;
+}
+
+/** The storage operations the extraction pass needs, injected so its rules are testable. */
+export interface ExtractPassIo {
+  recordMiss(name: string, version: string): Promise<void>;
+  hasSymbolSurface(name: string, version: string): Promise<boolean>;
+  enqueueSymbolSurface(name: string, version: string): Promise<void>;
+  queueDepth(): Promise<number>;
+  headroom: number;
+}
+
+/**
+ * Record what the extraction pass learned.
+ *
+ * A failure counts against that version's attempt budget. A success is also
+ * handed to the symbol store (`entities`/`symbols`, which `resolve_surface`,
+ * `diff_surface` and `check-upgrade` read) — this pass writes only
+ * `api_surfaces`, so without it the two stores covered different packages.
+ * Handed over only while the surface queue has headroom, so demand-driven
+ * misses never wait behind this backfill. Returns how many were queued.
+ */
+export async function recordExtractOutcomes(results: ExtractOutcome[], io: ExtractPassIo): Promise<number> {
+  for (const r of results) if (!r.ok) await io.recordMiss(r.name, r.version);
+
+  let room = io.headroom - (await io.queueDepth());
+  let queued = 0;
+  for (const r of results) {
+    if (room <= 0) break;
+    if (!r.ok || (await io.hasSymbolSurface(r.name, r.version))) continue;
+    await io.enqueueSymbolSurface(r.name, r.version);
+    room--;
+    queued++;
+  }
+  return queued;
+}
+
 /** Extract surfaces for tracked packages that don't have one yet (§4D/§4G). */
 async function extractSurfacesPass(limit: number): Promise<number> {
   const handle = createDb({ max: 4 });
@@ -51,11 +92,27 @@ async function extractSurfacesPass(limit: number): Promise<number> {
     const { getOrExtractSurface } = await import('../usage/service');
     const results = await pMap(
       missing,
-      (p) => getOrExtractSurface(handle.db, p.name, p.version).then((s) => (s ? 1 : 0)),
+      (p) =>
+        getOrExtractSurface(handle.db, p.name, p.version).then(
+          (s) => ({ ...p, ok: Boolean(s) }),
+          () => ({ ...p, ok: false }),
+        ),
       4,
     );
-    const extracted = results.reduce((a: number, b) => a + b, 0);
-    logger.info(`worker: extracted ${extracted}/${missing.length} API surfaces`);
+    const extracted = results.filter((r) => r.ok).length;
+
+    const db = handle.db;
+    const { QUEUE_HEADROOM } = await import('../mcp/publicUpgrades');
+    const followed = await recordExtractOutcomes(results, {
+      recordMiss: (name, version) => recordSurfaceMiss(db, name, version),
+      hasSymbolSurface: (name, version) => hasStoredSurface(db, name, version),
+      enqueueSymbolSurface: (name, version) => enqueueSurface(db, name, version),
+      queueDepth: () => surfaceQueueDepth(db),
+      headroom: QUEUE_HEADROOM,
+    });
+    logger.info(
+      `worker: extracted ${extracted}/${missing.length} API surfaces, ${followed} queued for the symbol store`,
+    );
     return extracted;
   } finally {
     await handle.close();

@@ -69,7 +69,13 @@ async function getCategoryMedianBundle(db: Database, category: Category): Promis
 export async function syncOnePackage(
   db: Database,
   name: string,
-  opts: { category?: Category | null; requestedByOwnerId?: string | null } = {},
+  opts: {
+    category?: Category | null;
+    requestedByOwnerId?: string | null;
+    /** The caller knows a new version was just published: read the registry
+     *  fresh rather than trusting a cached packument from before the publish. */
+    fresh?: boolean;
+  } = {},
 ): Promise<PackageRow> {
   const config = getConfig();
   const now = new Date();
@@ -85,6 +91,7 @@ export async function syncOnePackage(
   const signals = await collectSignals(name, initialCategory, {
     githubToken: config.GITHUB_TOKEN,
     prefetchedWeekly,
+    freshRegistry: opts.fresh,
   });
 
   // The two paid calls in this function — the LLM summary and the embedding —
@@ -244,7 +251,7 @@ export async function getOrFetchPackage(
 
   // Real but untracked: ingest off the request path. Bounded + deduped so a
   // flood of distinct names can't spawn unbounded work (the whole point of not
-  // doing it inline). Roster promotion happens in the worker, same quality bar.
+  // doing it inline).
   enqueueIngest(db, name, opts.requestedByOwnerId ?? null);
   return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
 }

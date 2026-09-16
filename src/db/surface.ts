@@ -277,19 +277,40 @@ export async function getPendingSurfaces(
   return db
     .select()
     .from(surfaceQueue)
-    .where(eq(surfaceQueue.kind, kind))
+    .where(
+      and(
+        eq(surfaceQueue.kind, kind),
+        // Specs backing off after a failure wait their turn instead of sitting
+        // at the head of an oldest-first queue every cycle.
+        sql`(${surfaceQueue.nextAttemptAt} is null or ${surfaceQueue.nextAttemptAt} <= now())`,
+      ),
+    )
     .orderBy(surfaceQueue.requestedAt)
     .limit(limit);
+}
+
+/** Specs waiting in the surface queue, both kinds, including ones backing off. */
+export async function surfaceQueueDepth(db: Database): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(surfaceQueue);
+  return Number(row?.n ?? 0);
 }
 
 export async function dropSurfaceQueue(db: Database, id: number): Promise<void> {
   await db.delete(surfaceQueue).where(eq(surfaceQueue.id, id));
 }
 
+/**
+ * Record a failed attempt and push the spec back: 15 min after the first
+ * failure, 1 h after the second, 4 h after the third. `attempts` in the SET
+ * reads the pre-update value, so the delay grows with each failure.
+ */
 export async function bumpSurfaceAttempt(db: Database, id: number): Promise<void> {
   await db
     .update(surfaceQueue)
-    .set({ attempts: sql`${surfaceQueue.attempts} + 1` })
+    .set({
+      attempts: sql`${surfaceQueue.attempts} + 1`,
+      nextAttemptAt: sql`now() + interval '15 minutes' * power(4, ${surfaceQueue.attempts})`,
+    })
     .where(eq(surfaceQueue.id, id));
 }
 

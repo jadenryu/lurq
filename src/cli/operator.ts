@@ -508,6 +508,39 @@ export function registerOperatorCommands(program: Command): void {
     });
 
   program
+    .command('gc')
+    .description('report prunable bookkeeping rows and table growth (DRY RUN unless --apply)')
+    .option('--keep-days <n>', 'age past which queue and sync-run rows are prunable (default 180)', (v) =>
+      parseInt(v, 10),
+    )
+    .option('--apply', 'actually delete the prunable rows. Without this, nothing is removed.')
+    .action(async (opts: { keepDays?: number; apply?: boolean }) => {
+      const { requireConfig } = await import('../core/config');
+      requireConfig(['DATABASE_URL']);
+      const { createDb } = await import('../db/client');
+      const { gcReport } = await import('../db/gc');
+      const { loadSeedFile } = await import('../db/seed');
+      const { db, close } = createDb();
+      try {
+        const curatedSeeds = loadSeedFile().map((s) => s.name);
+        const r = await gcReport(db, { curatedSeeds, keepDays: opts.keepDays, apply: opts.apply });
+        console.log('prunable:');
+        for (const c of r.categories) console.log(`  ${c.key.padEnd(16)} ${String(c.rows).padStart(8)}  ${c.description}`);
+        console.log('largest tables (reported only, never pruned here):');
+        for (const t of r.tables) {
+          console.log(`  ${t.table.padEnd(18)} ${String(t.rows).padStart(10)} rows  ${(t.bytes / 1024 / 1024).toFixed(1).padStart(8)} MB`);
+        }
+        console.log(
+          r.applied
+            ? 'deleted the prunable rows above.'
+            : 'DRY RUN — nothing deleted. Re-run with --apply to remove the prunable rows.',
+        );
+      } finally {
+        await close();
+      }
+    });
+
+  program
     .command('surface-diff')
     .argument('<dirA>', 'package directory at the FROM version')
     .argument('<dirB>', 'package directory at the TO version')

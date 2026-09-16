@@ -34,9 +34,21 @@ function alertItem(a: RepoAlertRow, webUrl: string): UrgentItem {
     key: `alert:${a.id}`,
     kind: 'breaking_release',
     title: `${a.packageName} ${a.toVersion} will install on its own in ${a.repoFullName}`,
-    detail: `The range ${a.range} already admits ${a.toVersion}, a new major${a.fromVersion ? ` (it resolves ${a.fromVersion} today)` : ''}. The next clean install takes it unless the range is tightened.`,
-    url: `${webUrl}/dashboard/repos/${a.repoId}?q=${encodeURIComponent(a.packageName)}#deps`,
+    detail:
+      a.repoId === null
+        ? `${a.toVersion} is a new major; ${a.repoFullName} was last upgraded to ${a.range} with lurq check-upgrade. Connect the repo to see which exports it removes.`
+        : a.inRange
+          ? `The range ${a.range} already admits ${a.toVersion}, a new major${a.fromVersion ? ` (it resolves ${a.fromVersion} today)` : ''}. The next clean install takes it unless the range is tightened.`
+          : `${a.repoFullName} is now a major behind (declares ${a.range}).`,
+    url: alertUrl(a, webUrl),
   };
+}
+
+/** A connected repo's drift row for the package; the repo list for a CLI-only alert, which has no repo page. */
+export function alertUrl(a: RepoAlertRow, webUrl: string): string {
+  return a.repoId === null
+    ? `${webUrl}/dashboard/repos`
+    : `${webUrl}/dashboard/repos/${a.repoId}?q=${encodeURIComponent(a.packageName)}#deps`;
 }
 
 interface EventRow {
@@ -234,7 +246,19 @@ export async function buildDigest(db: Database, ownerId: string, now: Date, webU
   ]);
 
   const watchedRepos = repoCount?.n ?? 0;
-  if (deployments.length === 0 && watchedRepos === 0 && publicChanges.length === 0) return null;
+  // Every way an account can have news, and each condition was added by a
+  // different branch: dropping either one silently suppresses a whole class of
+  // digest. Without the CLI-only clause an account alerted from its upgrade
+  // runs gets nothing; without the public clause an account whose only news is
+  // a remote MCP server it pinned gets nothing.
+  if (
+    deployments.length === 0 &&
+    watchedRepos === 0 &&
+    (alertTotal[0]?.n ?? 0) === 0 &&
+    publicChanges.length === 0
+  ) {
+    return null;
+  }
 
   // Account-scan changes first (newest first), then public ones (newest first).
   const mcpChanges = [
