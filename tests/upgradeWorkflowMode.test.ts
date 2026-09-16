@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { modeDisagreement } from '../src/cli/checkUpgrade';
 import { renderWorkflow, type WorkflowOptions } from '../src/github/workflow';
 
 interface Step {
@@ -88,5 +89,54 @@ describe('the resolve step', () => {
     // opinion about it — an unconnected repo, or an older API that sends no
     // mode at all. Reading absence as `comment` would disarm it silently.
     expect(resolveStep({ armed: true })!.run).toContain("*) MODE='pr' ;;");
+  });
+});
+
+/**
+ * The other half, for workflows that predate the resolve step above.
+ *
+ * Those files have the mode baked in and nothing lurq owns can change them —
+ * the GitHub App is Contents:read-only. What CAN reach them is the CLI they
+ * invoke with `npx -y`, which resolves the current version on every run. So the
+ * disagreement gets reported into the summary they already read.
+ */
+describe('modeDisagreement', () => {
+  it('says so when the dashboard is armed and the workflow is not', () => {
+    const note = modeDisagreement('pr', 'comment');
+    expect(note).toMatch(/autopilot is ON/);
+    expect(note).toMatch(/will not open pull requests/);
+    // Naming the file is the whole remedy: re-copying it is the only way this
+    // install can start honouring the toggle.
+    expect(note).toContain('.github/workflows/lurq-upgrade.yml');
+  });
+
+  it('says so in the other direction too', () => {
+    // The more surprising one: turning autopilot off on the dashboard does not
+    // stop a workflow pinned to pr mode, and someone who believes it did has a
+    // job still opening pull requests.
+    const note = modeDisagreement('comment', 'pr');
+    expect(note).toMatch(/autopilot is OFF/);
+    expect(note).toMatch(/will still open pull requests/);
+  });
+
+  it('stays quiet when the two agree', () => {
+    expect(modeDisagreement('pr', 'pr')).toBeNull();
+    expect(modeDisagreement('comment', 'comment')).toBeNull();
+  });
+
+  it('stays quiet when the server had no opinion', () => {
+    // An unconnected repo or an older API sends no mode. There is no
+    // disagreement to report, and inventing one would tell every ungoverned
+    // checkout its workflow is misconfigured.
+    expect(modeDisagreement(null, 'pr')).toBeNull();
+    expect(modeDisagreement(null, 'comment')).toBeNull();
+  });
+
+  it('stays quiet when what the run is doing is unreadable', () => {
+    // Outside Actions there is no LURQ_MODE at all, and a junk value says
+    // nothing about what the job did. Neither is evidence of a mismatch.
+    expect(modeDisagreement('pr', undefined)).toBeNull();
+    expect(modeDisagreement('pr', '')).toBeNull();
+    expect(modeDisagreement('pr', 'PR')).toBeNull();
   });
 });
