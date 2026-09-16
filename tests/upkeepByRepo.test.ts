@@ -93,6 +93,39 @@ describe.skipIf(!TEST_DB)('upkeepByRepo against Postgres', () => {
     // `edited` is not delivered: the tree changed and no PR came of it.
     expect(upkeep.delivered).toBe(2);
     expect(upkeep.failed).toBe(1);
+    // Only `checked` is analysed-only. Keeping this apart from
+    // runs - delivered - failed is the whole point: that arithmetic folds in
+    // `edited` and `skipped`, both of which are armed behaviour.
+    expect(upkeep.analysedOnly).toBe(1);
+  });
+
+  it('separates analysed-only from every other reason a run delivered nothing', async () => {
+    // The unsound version of this signal is `delivered === 0`, which is also
+    // true of a healthy repo that had nothing worth a PR. Only an all-`checked`
+    // history says the workflow never got past analysis.
+    const repoFullName = repo('comment-mode');
+    await store.recordUpgradeRuns(db, [
+      row({ repoFullName, packageName: 'c-one', status: 'checked' }),
+      row({ repoFullName, packageName: 'c-two', status: 'checked' }),
+    ]);
+
+    const upkeep = (await store.upkeepByRepo(db, owner)).get(repoFullName)!;
+    expect(upkeep.runs).toBe(2);
+    expect(upkeep.delivered).toBe(0);
+    expect(upkeep.analysedOnly).toBe(upkeep.runs);
+  });
+
+  it('does not call a skipped or edited run analysed-only', async () => {
+    const repoFullName = repo('acted');
+    await store.recordUpgradeRuns(db, [
+      row({ repoFullName, packageName: 'a-skipped', status: 'skipped' }),
+      row({ repoFullName, packageName: 'a-edited', status: 'edited' }),
+    ]);
+
+    const upkeep = (await store.upkeepByRepo(db, owner)).get(repoFullName)!;
+    expect(upkeep.runs).toBe(2);
+    expect(upkeep.analysedOnly).toBe(0);
+    expect(upkeep.delivered).toBe(0);
   });
 
   it('reports the most recent run, not an arbitrary one', async () => {

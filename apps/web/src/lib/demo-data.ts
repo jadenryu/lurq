@@ -483,11 +483,14 @@ export function demoRepos(): DashboardRepo[] {
       //   3 not armed + has run, failing — a workflow reporting without the
       //                                    GitHub App installed, which is why
       //                                    the query keys on the repo name
+      // `analysedOnly` completes each row: runs that only analysed. It is what
+      // separates "armed but the committed workflow is still in comment mode"
+      // from "armed and there was simply nothing worth a pull request".
       upkeep: [
-        { lastRunAt: hoursAgo(20), runs: 14, delivered: 5, failed: 0 },
+        { lastRunAt: hoursAgo(20), runs: 14, delivered: 5, failed: 0, analysedOnly: 9 },
         null,
         null,
-        { lastRunAt: hoursAgo(190), runs: 6, delivered: 1, failed: 2 },
+        { lastRunAt: hoursAgo(190), runs: 6, delivered: 1, failed: 2, analysedOnly: 3 },
       ][i] ?? null,
     }),
   );

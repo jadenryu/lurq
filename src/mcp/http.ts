@@ -1192,6 +1192,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           runs: upkeep.runs,
           delivered: upkeep.delivered,
           failed: upkeep.failed,
+          // Every run only analysed. With `runs`, this is what distinguishes a
+          // repo whose committed workflow never got past comment mode from one
+          // that simply had nothing worth a pull request.
+          analysedOnly: upkeep.analysedOnly,
         }
       : null,
   });

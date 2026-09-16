@@ -111,6 +111,18 @@ export interface RepoUpkeep {
   delivered: number;
   /** Runs the workflow reported as failed, which a green armed badge hides. */
   failed: number;
+  /**
+   * Runs that only analysed. `checked` is documented on UpgradeRunStatus as
+   * "analysed only (comment mode, or the agent step was not armed)", which is
+   * what makes this usable as evidence rather than a guess.
+   *
+   * Counted separately from `runs - delivered - failed` because that arithmetic
+   * folds in `edited` and `skipped`: an agent that changed code without opening
+   * a pull request, and an upgrade the policy excluded, are both armed
+   * behaviour. Only "every run was checked" says the workflow never got past
+   * analysis.
+   */
+  analysedOnly: number;
 }
 
 /**
@@ -130,6 +142,7 @@ export async function upkeepByRepo(
       runs: sql<number>`count(*)::int`,
       delivered: sql<number>`count(*) filter (where ${upgradeRuns.status} in ('pr_open','merged'))::int`,
       failed: sql<number>`count(*) filter (where ${upgradeRuns.status} = 'failed')::int`,
+      analysedOnly: sql<number>`count(*) filter (where ${upgradeRuns.status} = 'checked')::int`,
     })
     .from(upgradeRuns)
     .where(eq(upgradeRuns.ownerId, ownerId))
