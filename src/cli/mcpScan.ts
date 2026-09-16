@@ -12,7 +12,7 @@
  * still sees servers land.
  */
 import { resolve } from 'node:path';
-import { SEVERITY_RANK, type Severity } from '../audit/types';
+import { SEVERITY_RANK, type ItemSource, type Severity } from '../audit/types';
 import { isCrowded } from '../compat/mcpStack';
 import {
   analyzeServer,
@@ -37,6 +37,12 @@ import { RemoteError, uploadMcpScan, type McpScanUploadResult, type UploadedServ
 
 export interface McpScanCliOpts {
   json?: boolean;
+  /**
+   * Write SARIF here, for GitHub code scanning. Config findings then get the
+   * same lifecycle upgrade findings do — dedup, assignment, and closing
+   * themselves when they stop reproducing — without lurq building any of it.
+   */
+  sarif?: string;
   projectOnly?: boolean;
   trustProject?: boolean;
   /** Comma-separated aliases. */
@@ -92,6 +98,12 @@ export interface ScanReport {
   stack: ReturnType<typeof analyzeStackScan>['stack'];
   /** Cross-server findings: collisions and shadowing. */
   findings: McpFinding[];
+  /**
+   * Which config file each alias came from, so a finding can name a real file.
+   * Paths and section names only — a ServerSpec also carries resolved secrets,
+   * and none of that belongs in a report that gets serialised.
+   */
+  configSources: Record<string, ItemSource>;
   worst: Severity | null;
   /** Null when not uploaded: no key, --no-upload, or nothing uploadable. */
   account: AccountSync | null;
@@ -260,6 +272,11 @@ export async function collectScan(dir: string | undefined, opts: McpScanCliOpts)
     servers,
     stack: stackScan.stack,
     findings: stackScan.findings,
+    // First source per alias: an alias declared in two files is still one
+    // server, and the first declaration is the one that won.
+    configSources: Object.fromEntries(
+      specs.flatMap((s) => (s.sources[0] ? [[s.alias, s.sources[0]] as const] : [])),
+    ),
     worst: worst(severities),
     account: null,
     uploadProblem: null,
@@ -501,6 +518,17 @@ export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts):
     ]);
   }
   report.uploadProblem = uploadProblem(report, opts);
+
+  if (opts.sarif) {
+    const { writeFileSync } = await import('node:fs');
+    const { scanFindings } = await import('../fix/mcpConfig');
+    const { toSarif } = await import('../fix/sarif');
+    // `read` returns null deliberately: a config finding carries no edits, so
+    // no region is ever computed and no file needs opening.
+    const doc = toSarif(scanFindings(report), { version: VERSION, read: () => null });
+    writeFileSync(opts.sarif, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+    console.error(`wrote ${opts.sarif}`);
+  }
 
   if (opts.json) console.log(JSON.stringify(toJson(report), null, 2));
   else if (report.servers.length === 0) {

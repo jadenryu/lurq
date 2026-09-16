@@ -473,6 +473,7 @@ export function buildProgram(): Command {
       "do not offer published servers' contracts as corroboration for the public index",
     )
     .option('--json', 'output JSON instead of a report')
+    .option('--sarif <file>', 'write SARIF for GitHub code scanning (upload with codeql-action/upload-sarif)')
     .action(async (dir: string | undefined, opts: import('./mcpScan').McpScanCliOpts) => {
       const { runMcpScan } = await import('./mcpScan');
       await runMcpScan(dir, opts);

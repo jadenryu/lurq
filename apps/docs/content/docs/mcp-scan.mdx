@@ -86,6 +86,7 @@ means the dashboard has that day's scan.
 | `--require-upload` | Exit 1 if the scan could not be recorded to your account. The generated CI workflow sets it. |
 | `--no-contribute` | Do not offer public corroboration. |
 | `--json` | Machine-readable output. |
+| `--sarif <file>` | Write SARIF 2.1.0 for GitHub code scanning. Upload it with `github/codeql-action/upload-sarif` and each finding becomes an alert with its own dedup, assignment and close-when-fixed lifecycle — one rule per kind of finding, one alert per server and tool. |
 
 `lurq mcp-stack` answers just the collision question, live, with the same
 config reading.
