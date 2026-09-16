@@ -72,14 +72,16 @@ import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
-import { applyScope } from '../github/scope';
+import { applyScope, permits } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
 import {
   findRepoIdByFullName,
   getUpgradeImpact,
   listRunsForRepo,
   recordUpgradeRuns,
+  upkeepByRepo,
   MAX_RUNS_PER_POST,
+  type RepoUpkeep,
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
@@ -92,6 +94,8 @@ import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
+import { registerPublicMcpRoutes } from './publicMcpRoutes';
+import { registerPublicMcpServerRoutes } from './publicMcpServers';
 import { registerNotificationRoutes } from './notificationRoutes';
 import { registerChannelRoutes } from './channelRoutes';
 import { registerBuilderScanRoutes } from './builderScanRoutes';
@@ -410,6 +414,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // limiter only; publicPackages.ts keeps them to a summary of the top packages.
   registerPublicPackageRoutes(app, db, ipLimiter);
   registerPublicUpgradeRoutes(app, db, ipLimiter);
+  // Public MCP server summaries for lurq.run/mcp pages; publicMcpServers.ts keeps them to a summary.
+  registerPublicMcpServerRoutes(app, db, ipLimiter);
 
   app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
@@ -1138,7 +1144,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   /** Manifests are never sent to the browser — only the derived drift summary.
    *  The dependency ranges are input to our computation, not dashboard content. */
-  const toDashboardRepo = (row: RepoRow) => ({
+  const toDashboardRepo = (row: RepoRow, upkeep?: RepoUpkeep) => ({
     id: row.id,
     fullName: row.fullName,
     defaultBranch: row.defaultBranch,
@@ -1170,6 +1176,24 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       : null,
     lastScanAt: row.lastScanAt,
     lastScanError: row.lastScanError,
+    /**
+     * What this repo's own workflow has actually done, as opposed to what its
+     * policy permits. `lastScanAt` above is lurq reading the manifests from
+     * here; this is the workflow running over there, and a repo can be armed
+     * with the workflow never committed.
+     *
+     * Null means it has never reported a run — which is NOT proof the workflow
+     * is missing, since a repo with nothing behind reports nothing. Reading it
+     * as "broken" needs drift too, and the consumer has that.
+     */
+    upkeep: upkeep
+      ? {
+          lastRunAt: upkeep.lastRunAt,
+          runs: upkeep.runs,
+          delivered: upkeep.delivered,
+          failed: upkeep.failed,
+        }
+      : null,
   });
 
   /** Reject anything not matching RepoPolicy rather than merging partial input —
@@ -1181,7 +1205,28 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     if (typeof raw.enabled !== 'boolean') return null;
     if (typeof raw.autoMerge !== 'boolean') return null;
     if (raw.scope !== 'security' && raw.scope !== 'blocking' && raw.scope !== 'all') return null;
-    return { enabled: raw.enabled, scope: raw.scope, autoMerge: raw.autoMerge };
+    // Checks are carried through, and that is not a formality: setRepoPolicy
+    // REPLACES the stored policy wholesale and the dashboard PATCHes the whole
+    // object, so rebuilding a three-key policy here would erase a granted check
+    // the next time anyone toggled autopilot — a setting lost with no error and
+    // nothing in the response to show it happened.
+    const checks = parseChecks(raw.checks);
+    return {
+      enabled: raw.enabled,
+      scope: raw.scope,
+      autoMerge: raw.autoMerge,
+      ...(checks ? { checks } : {}),
+    };
+  }
+
+  /**
+   * Absent or malformed reads as not granted, never as a permissive default.
+   * An explicit `false` and a missing key mean the same thing, so only a
+   * granted check is stored.
+   */
+  function parseChecks(input: unknown): RepoPolicy['checks'] | null {
+    if (!input || typeof input !== 'object') return null;
+    return { env: (input as Record<string, unknown>).env === true };
   }
 
   /**
@@ -1333,7 +1378,12 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
     try {
       const rows = await listRepos(db, ownerId);
-      res.status(200).json({ repos: rows.map(toDashboardRepo) });
+      // One aggregate for the whole list: a query per repo would turn opening
+      // this page into N round trips for a column.
+      const upkeep = await upkeepByRepo(db, ownerId);
+      res
+        .status(200)
+        .json({ repos: rows.map((row) => toDashboardRepo(row, upkeep.get(row.fullName))) });
     } catch (err) {
       logger.error('repo list failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not list repos.' });
@@ -1386,6 +1436,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           installCommand: row.installCommand ?? undefined,
           armed: row.policy.enabled,
           autoMerge: row.policy.autoMerge,
+          // Through the one accessor, so the permission cannot be read here as
+          // `row.policy.checks?.env` and somewhere else as something truthier.
+          checkEnv: permits(row.policy, 'env'),
         });
         res.status(200).json({
           repo: {
@@ -1770,6 +1823,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     keyLimiter,
     quota,
     bigJson: express.json({ limit: MCP_SCAN_BODY_LIMIT }),
+    requireIssuerSecret,
+    ownerFrom,
+    keyOwner,
+  });
+
+  // ── Public MCP endpoints: pins and acks (API key), detail pages (issuer) ────
+  registerPublicMcpRoutes(app, {
+    db,
+    ipLimiter,
+    auth: auth as unknown as RequestHandler,
+    keyLimiter,
     requireIssuerSecret,
     ownerFrom,
     keyOwner,

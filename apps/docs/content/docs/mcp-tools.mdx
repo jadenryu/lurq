@@ -1,6 +1,6 @@
 ---
 title: MCP tools
-description: The fifteen tools your agent can call over MCP, and what each returns.
+description: The sixteen tools your agent can call over MCP, and what each returns.
 ---
 
 Once lurq is installed, your agent can call these tools over MCP. Every response
@@ -22,6 +22,7 @@ timestamp so the agent knows how fresh the underlying evidence is.
 | [`mcp_surface`](#mcp_surface) | `server`, `version` | An MCP server's real tool contract |
 | [`mcp_drift`](#mcp_drift) | `server`, `fromVersion`, `toVersion` | What an MCP server changed between two versions |
 | [`mcp_stack`](#mcp_stack) | `servers` | Do these MCP servers collide in one agent? |
+| [`connect_check`](#connect_check) | `server`, `client` | Will this MCP server work in my client, and what does it take? |
 | [`capabilities`](#capabilities) | `query` | Which lurq tool answers this situation |
 | [`report_outcome`](#report_outcome) | `package`, `accepted`, `buildSignal`, `need` | What happened after a pick shipped |
 
@@ -236,6 +237,29 @@ Can a set of MCP servers be wired into one agent together?
 
 A server that hasn't been probed makes the answer `unknown`, never clean. The CLI
 equivalent, reading your own configs live, is `lurq mcp-stack`.
+
+### `connect_check`
+
+Will an MCP server work in a given client, and what does it take to connect?
+
+- **Input:** `server` — an endpoint URL, an official registry name
+  (`io.github.acme/weather`) or an npm package name — and an optional `client`
+  (`claude-code`, `claude-ai`, `chatgpt`, `cursor`, `vscode`, `codex`,
+  `gemini-cli`, …). Omit `client` to check every client lurq has a profile for.
+- **Output:** per client, a verdict — `works`, `needs_setup` (with the steps:
+  a key to send as a header, an OAuth client to pre-register and the redirect
+  URIs to allow, a URL placeholder to fill), `blocked` (with the reason and which
+  side causes it), or `unknown` — plus ready-to-paste config in that client's own
+  format. `evidence` carries what the verdict rests on: whether the endpoint
+  answered, how it authenticates (OAuth registration methods, PKCE), spec
+  deviations strict clients refuse, the tool count, and recent contract or auth
+  changes.
+
+Server facts come from a credential-free probe of every remote endpoint in the
+official MCP registry, re-read on a schedule. Client facts come from each
+client's own documentation and source code, with sources. A URL lurq has never
+seen is probed on the spot and **not stored**. `unknown` means a decisive fact
+is not established — never that the server will not work.
 
 ## Everything else
 

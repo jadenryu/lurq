@@ -337,6 +337,20 @@
       "when": 1789509435501,
       "tag": "0047_cli_repo_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789509214185,
+      "tag": "0048_remote_mcp_contracts",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789511184685,
+      "tag": "0049_mcp_pins_and_public_alerts",
+      "breakpoints": true
     }
   ]
 }

@@ -67,9 +67,24 @@ npx lurqrun mcp-ci
 This writes `.github/workflows/lurq-mcp-scan.yml`, which rescans the servers
 committed to the repository every day and on any pull request that changes their
 config. It prints the repository secrets to add: your `LURQ_API_KEY` and every
-credential the committed servers reference. The workflow has read-only
-permissions, and fails if a scan could not be recorded, so a green run always
-means the dashboard has that day's scan.
+credential the committed servers reference. It fails if a scan could not be
+recorded, so a green run always means the dashboard has that day's scan.
+
+The permissions block is the trust model: contents are read-only, and the only
+writes are the ones you asked for. By default that is `issues: write`, for the
+pinned dashboard issue — `--no-issue` drops it and leaves the workflow entirely
+read-only.
+
+```bash
+npx lurqrun mcp-ci --sarif
+```
+
+That adds `security-events: write` and a step filing every finding as a GitHub
+code scanning alert, which brings dedup, assignment and closing-when-fixed with
+it — none of which lurq has to build. It uploads even when `--fail-on` failed
+the job, because that is exactly the run whose findings matter. It is off by
+default for a reason: the upload needs code scanning enabled, and on a private
+repository without Advanced Security it fails the job outright.
 
 ## Options
 
@@ -86,6 +101,7 @@ means the dashboard has that day's scan.
 | `--require-upload` | Exit 1 if the scan could not be recorded to your account. The generated CI workflow sets it. |
 | `--no-contribute` | Do not offer public corroboration. |
 | `--json` | Machine-readable output. |
+| `--sarif <file>` | Write SARIF 2.1.0 for GitHub code scanning. Upload it with `github/codeql-action/upload-sarif` and each finding becomes an alert with its own dedup, assignment and close-when-fixed lifecycle — one rule per kind of finding, one alert per server and tool. A server stuck on `needs_config` is reported too, as a blocking alert whose instruction is to get the value from you rather than to guess one. |
 
 `lurq mcp-stack` answers just the collision question, live, with the same
 config reading.

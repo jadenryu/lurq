@@ -10,6 +10,8 @@ import { and, eq, gte, inArray, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { mcpChangeEvents, mcpDeployments, repoAlerts, type RepoAlertRow } from '../db/schema';
 import type { ChannelItem } from './channels';
+import { loadPublicChanges, publicChangesForOwners } from '../db/publicMcpAlerts';
+import { parsePublicItemKey, publicChannelItem } from './publicSources';
 import { alertUrl, eventItem, URGENT_WINDOW_MS } from './sources';
 
 function fromAlert(a: RepoAlertRow, webUrl: string): ChannelItem {
@@ -63,7 +65,7 @@ const eventColumns = {
 
 export async function channelCandidates(db: Database, now: Date, webUrl: string): Promise<Map<string, ChannelItem[]>> {
   const since = new Date(now.getTime() - URGENT_WINDOW_MS);
-  const [alerts, events] = await Promise.all([
+  const [alerts, events, publicChanges] = await Promise.all([
     db.select().from(repoAlerts).where(gte(repoAlerts.createdAt, since)).limit(10_000),
     db
       .select(eventColumns)
@@ -71,6 +73,7 @@ export async function channelCandidates(db: Database, now: Date, webUrl: string)
       .innerJoin(mcpDeployments, eq(mcpDeployments.id, mcpChangeEvents.deploymentId))
       .where(and(isNull(mcpChangeEvents.acknowledgedAt), gte(mcpChangeEvents.createdAt, since)))
       .limit(10_000),
+    publicChangesForOwners(db, since, { limit: 10_000 }),
   ]);
   const byOwner = new Map<string, ChannelItem[]>();
   const push = (owner: string, item: ChannelItem) => {
@@ -80,6 +83,7 @@ export async function channelCandidates(db: Database, now: Date, webUrl: string)
   };
   for (const a of alerts) push(a.ownerId, fromAlert(a, webUrl));
   for (const e of events) push(e.ownerId, fromEvent(e, webUrl));
+  for (const c of publicChanges) push(c.ownerId, publicChannelItem(c, webUrl));
   return byOwner;
 }
 
@@ -87,7 +91,8 @@ export async function loadChannelItems(db: Database, keys: string[], webUrl: str
   const ids = (p: string) => keys.filter((k) => k.startsWith(p)).map((k) => Number(k.slice(p.length))).filter(Number.isInteger);
   const alertIds = ids('alert:');
   const eventIds = ids('mcp:');
-  const [alerts, events] = await Promise.all([
+  const publicPairs = keys.map(parsePublicItemKey).filter((p): p is NonNullable<typeof p> => p !== null);
+  const [alerts, events, publicChanges] = await Promise.all([
     alertIds.length ? db.select().from(repoAlerts).where(inArray(repoAlerts.id, alertIds)) : Promise.resolve([]),
     eventIds.length
       ? db
@@ -96,6 +101,11 @@ export async function loadChannelItems(db: Database, keys: string[], webUrl: str
           .innerJoin(mcpDeployments, eq(mcpDeployments.id, mcpChangeEvents.deploymentId))
           .where(inArray(mcpChangeEvents.id, eventIds))
       : Promise.resolve([]),
+    loadPublicChanges(db, publicPairs),
   ]);
-  return [...alerts.map((a) => fromAlert(a, webUrl)), ...events.map((e) => fromEvent(e, webUrl))];
+  return [
+    ...alerts.map((a) => fromAlert(a, webUrl)),
+    ...events.map((e) => fromEvent(e, webUrl)),
+    ...publicChanges.map((c) => publicChannelItem(c, webUrl)),
+  ];
 }

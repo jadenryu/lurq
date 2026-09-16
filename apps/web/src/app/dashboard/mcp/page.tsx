@@ -6,7 +6,7 @@ import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { ChangeFeed, SeverityChip, StatusChip, capabilityList } from "@/components/dashboard/mcp-parts";
 import { CopyButton } from "@/components/dashboard/copy-button";
 import { DigestPrompt } from "@/components/dashboard/notifications-form";
-import { loadMcpServers, loadNotificationPreferences } from "@/lib/dashboard-data";
+import { loadMcpServers, loadNotificationPreferences, loadPinnedEndpoints } from "@/lib/dashboard-data";
 import { relativeTime } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -23,7 +23,11 @@ const CI = "npx lurqrun mcp-ci";
  * so this is the contract their agents actually receive.
  */
 export default async function McpServersPage() {
-  const [{ data, demo, failed }, { data: email }] = await Promise.all([loadMcpServers(), loadNotificationPreferences()]);
+  const [{ data, demo, failed }, { data: email }, { data: pins }] = await Promise.all([
+    loadMcpServers(),
+    loadNotificationPreferences(),
+    loadPinnedEndpoints(),
+  ]);
   const { servers, events } = data;
 
   const tools = servers.reduce((n, s) => n + (s.toolCount ?? 0), 0);
@@ -42,6 +46,35 @@ export default async function McpServersPage() {
 
       <PageBody>
         {failed && <InlineError>The scan history could not be loaded right now. Your scans are still being recorded.</InlineError>}
+
+        {pins.length > 0 && (
+          <Panel padding="none">
+            <div className="p-[var(--panel-px)] pb-0" style={{ "--panel-px": "1.125rem" } as React.CSSProperties}>
+              <PanelHeader
+                title="pinned remote servers"
+                trailing={<span className="font-mono text-xs text-ink-2">{pins.filter((p) => p.contractChanged || p.authChanged).length} changed</span>}
+              />
+            </div>
+            <Rows>
+              {pins.map((p) => (
+                <Row key={p.endpointId} className="flex-wrap gap-y-1.5 py-2.5">
+                  <Link href={`/dashboard/mcp/public/${p.endpointId}`} className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink hover:text-signal">
+                    {p.url}
+                  </Link>
+                  {p.contractChanged || p.authChanged ? (
+                    <span className="font-mono text-xs text-bad">
+                      {[p.contractChanged && "tools changed", p.authChanged && "sign-in changed"].filter(Boolean).join(" · ")}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs text-ink-3">unchanged since pinned</span>
+                  )}
+                  {p.worstOpen && <SeverityChip severity={p.worstOpen} />}
+                  <span className="w-20 text-right font-mono text-xs text-ink-3">{p.lastProbedAt ? relativeTime(p.lastProbedAt) : "—"}</span>
+                </Row>
+              ))}
+            </Rows>
+          </Panel>
+        )}
 
         {servers.length === 0 ? (
           <EmptyState title="No scans yet">

@@ -21,7 +21,7 @@
  * that makes someone widen their scope later.
  */
 import type { UpgradeBrief } from './brief';
-import type { RepoPolicy } from './types';
+import type { RepoCheck, RepoPolicy } from './types';
 
 /** Why an upgrade is not eligible for the agent, in words a user can act on. */
 export type ScopeReason =
@@ -34,6 +34,25 @@ export interface ScopedUpgrade extends UpgradeBrief {
   inScope: boolean;
   /** Set only when `inScope` is false. */
   scopeReason?: ScopeReason;
+}
+
+/**
+ * Does this repo's policy grant a check?
+ *
+ * One accessor, because a permission spelled four different ways across a
+ * codebase is a permission that is accidentally truthy somewhere. `=== true` is
+ * deliberate: a policy round-tripped through JSON could carry a string, and
+ * `"false"` is truthy.
+ *
+ * A null policy — a repo with no record, or a plan from a server that predates
+ * policies — grants nothing. That is the opposite reading from `inScope`, where
+ * absent means UNGOVERNED so an older deployment keeps working. The difference
+ * is the direction of harm: an unannotated upgrade plan read as "excluded"
+ * would empty a brief, while an unannotated permission read as "granted" would
+ * run something nobody asked for.
+ */
+export function permits(policy: RepoPolicy | null, check: RepoCheck): boolean {
+  return policy?.checks?.[check] === true;
 }
 
 /**

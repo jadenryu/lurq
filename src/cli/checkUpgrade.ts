@@ -19,7 +19,7 @@ import type { UpgradeTarget } from '../surface/upgrade';
  * this is the gate, and a monorepo past the default is exactly the codebase
  * where an unread file hides a call site. Past it, the report says so.
  */
-const SCAN_LIMIT = 20_000;
+export const SCAN_LIMIT = 20_000;
 
 /** `pkg@from..to`, the repeatable `--upgrade` form. */
 export function parseUpgradeSpec(spec: string): UpgradeTarget {
@@ -34,21 +34,31 @@ export function parseUpgradeSpec(spec: string): UpgradeTarget {
 
 /** Shape of the `upgrade-plan --json` file, as far as this command cares. */
 interface PlanFile {
-  upgrades?: {
-    package: string;
-    fromVersion: string;
-    toVersion: string;
-    /** Repo-policy eligibility, when the plan was governed. */
-    inScope?: boolean;
-  }[];
+  upgrades?: PlanUpgrade[];
 }
 
-/** Read targets from a plan produced by `lurq upgrade-plan --json`. */
-export function targetsFromPlanFile(path: string): UpgradeTarget[] {
-  // A plan file is written by one command and read by another, usually across
-  // two CI steps. When step one fails the file is missing or empty, and the bare
-  // `Unexpected end of JSON input` that fell out of JSON.parse named neither the
-  // file nor the step that should have written it.
+/** One plan entry, as far as reading it off disk cares. */
+export interface PlanUpgrade {
+  package: string;
+  fromVersion: string;
+  toVersion: string;
+  /** Repo-policy eligibility, when the plan was governed. */
+  inScope?: boolean;
+  /** Migration sequence for a multi-major upgrade; empty when one hop suffices. */
+  hops?: unknown[];
+  /** Present when the sequence could NOT be planned. */
+  sequenceNote?: string;
+}
+
+/**
+ * Read and validate a plan file.
+ *
+ * A plan file is written by one command and read by another, usually across two
+ * CI steps. When step one fails the file is missing or empty, and the bare
+ * `Unexpected end of JSON input` that fell out of JSON.parse named neither the
+ * file nor the step that should have written it.
+ */
+function readPlanFile(path: string): PlanFile {
   let text: string;
   try {
     text = readFileSync(path, 'utf8');
@@ -68,12 +78,86 @@ export function targetsFromPlanFile(path: string): UpgradeTarget[] {
   if (!Array.isArray(parsed.upgrades)) {
     throw new Error(`${path} is not an upgrade plan (no "upgrades" array)`);
   }
-  return parsed.upgrades
+  return parsed;
+}
+
+/** Read targets from a plan produced by `lurq upgrade-plan --json`. */
+export function targetsFromPlanFile(path: string): UpgradeTarget[] {
+  return targetsFromUpgrades(readPlanFile(path).upgrades ?? []);
+}
+
+/** The raw entries, for callers that need more than package and versions. */
+export function planUpgrades(path: string): PlanUpgrade[] {
+  const parsed = readPlanFile(path);
+  return parsed.upgrades ?? [];
+}
+
+export interface FixableSplit {
+  targets: UpgradeTarget[];
+  /** Upgrades deliberately not attempted, and why — reported, never silent. */
+  skipped: { package: string; reason: string }[];
+}
+
+/**
+ * The upgrades `lurq fix` may actually perform.
+ *
+ * Narrower than what `check-upgrade` reports on, and deliberately so. Checking
+ * an upgrade is free and tells the user something; performing one edits their
+ * tree, so two rules the upgrade workflow already states for its agent apply
+ * here too — this is the same job, done by a rule instead of a model:
+ *
+ *   - A multi-major upgrade has to be walked one major at a time. `hops` is the
+ *     planned sequence, and jumping straight to the target skips whatever each
+ *     intermediate release removed.
+ *   - `sequenceNote` means the sequence could NOT be planned. That is a
+ *     migration, not an upgrade, and nothing mechanical should attempt it.
+ *
+ * `max` is the blast radius. A deterministic edit is safer than a model's, but
+ * a pull request touching forty packages is still a review nobody finishes, and
+ * the number is the repository's call rather than ours.
+ */
+export function fixableTargets(upgrades: PlanUpgrade[], max?: number): FixableSplit {
+  const targets: UpgradeTarget[] = [];
+  const skipped: FixableSplit['skipped'] = [];
+
+  for (const u of upgrades) {
+    if (!u.package || !u.fromVersion || !u.toVersion) continue;
+    if (u.inScope === false) {
+      skipped.push({ package: u.package, reason: 'held by this repository\'s policy' });
+    } else if (u.sequenceNote) {
+      skipped.push({ package: u.package, reason: `a migration, not an upgrade: ${u.sequenceNote}` });
+    } else if (u.hops && u.hops.length > 0) {
+      skipped.push({
+        package: u.package,
+        reason: `crosses ${u.hops.length} majors and has to be done a step at a time`,
+      });
+    } else if (max !== undefined && targets.length >= max) {
+      skipped.push({ package: u.package, reason: `beyond the --max ${max} cap for one run` });
+    } else {
+      targets.push({ package: u.package, fromVersion: u.fromVersion, toVersion: u.toVersion });
+    }
+  }
+  return { targets, skipped };
+}
+
+/**
+ * Plan entries to targets, with the repo's policy scope applied.
+ *
+ * Shared by the `--plan` file and by a bare `lurq fix`, which derives the same
+ * plan from the API instead of reading it off disk. One interpretation of scope
+ * in one place: two copies of this filter would eventually disagree about
+ * whether an unannotated plan is ungoverned or excluded, and that is the
+ * difference between a full brief and an empty one.
+ *
+ * `!== false` rather than a truthy test: a plan from a server that predates
+ * scope enforcement has no `inScope` key at all, and an absent policy must mean
+ * "ungoverned", never "excluded".
+ */
+export function targetsFromUpgrades(
+  upgrades: { package: string; fromVersion: string; toVersion: string; inScope?: boolean }[],
+): UpgradeTarget[] {
+  return upgrades
     .filter((u) => u.package && u.fromVersion && u.toVersion)
-    // `!== false` rather than a truthy test: a plan from a server that predates
-    // scope enforcement has no `inScope` key at all, and an absent policy must
-    // mean "ungoverned", never "excluded". Getting this backwards would empty
-    // the brief on every older deployment.
     .filter((u) => u.inScope !== false)
     .map((u) => ({ package: u.package, fromVersion: u.fromVersion, toVersion: u.toVersion }));
 }

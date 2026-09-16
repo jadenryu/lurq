@@ -59,6 +59,16 @@ reads like a guess.
   versions. Returns what was removed, added, and what changed arity between them, with
   type-only removals listed separately because those break the build rather than the
   program. Static comparison of both published versions — no install, no test run.
+- **Start work in a project you have just opened, or see what an upgrade broke** →
+  `upkeep` with its directory. It reads the project itself and returns what needs
+  fixing: environment variables the code reads that no `.env` file declares, and —
+  when you pass the versions you are moving between — the call sites an upgrade
+  breaks, the replacement the package itself proves, and the manifest ranges left
+  stale. Findings carry either exact edits you can apply or the facts you cannot
+  look up, such as the exports the target version actually ships with their
+  arities. A domain it could not run says so: an empty result is not a clean
+  project. Offered only when lurq runs beside your files (`lurq serve`) — the
+  hosted server cannot see them, so the tool is absent there rather than empty.
 - **Take stock of a whole project** → `audit` with the inventory you read from its
   `package.json` + lockfile and its MCP configs (names and versions only — never source).
   One call returns every outdated, deprecated and vulnerable dependency plus every MCP
@@ -89,6 +99,15 @@ reads like a guess.
   can catch it, and the symptom is a malformed call that looks like a model mistake.
   **Privilege widening** is a tool that stopped being read-only or started being
   destructive; nothing breaks, which is what makes it worse than a break.
+- **Add an MCP server to a client, or a remote server will not connect** → `connect_check`
+  with the endpoint URL, registry name or npm package, and the `client` you are wiring it
+  into (`claude-code`, `cursor`, `vscode`, `chatgpt`, `claude-ai`, `codex`, `gemini-cli`, …).
+  Returns `works`, `needs_setup` with the exact steps (a key header, an OAuth client to
+  pre-register and its redirect URIs), `blocked` with the reason, or `unknown`, plus config
+  in that client's own format. Built from a credential-free probe of the server and the
+  client's documented constraints. Use the returned config instead of writing one from
+  memory, put any setup step in front of the user, and never invent a key: header values
+  are placeholders. `unknown` is not "will not work".
 - **Visualize a stack you have already chosen** → `diagram` with the package names. A
   labeled starting point by layer — not a validated architecture.
 - **Unsure whether lurq covers the situation** → `capabilities` with what you are trying

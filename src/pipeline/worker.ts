@@ -33,6 +33,10 @@ export interface WorkerOptions {
   surfacePerCycle?: number;
   /** MCP servers probed per cycle. Small: each one spawns a sandbox. */
   mcpPerCycle?: number;
+  /** Remote MCP endpoints probed per cycle (HTTP only, no sandbox). */
+  remoteProbesPerCycle?: number;
+  /** Sync the official MCP registry each cycle (incremental). Default true. */
+  registrySync?: boolean;
   /** Run exactly one cycle and return (for tests / cron). */
   once?: boolean;
 }
@@ -206,6 +210,41 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: mcp drain failed: ${String(err)}`));
+    // The official MCP registry. Incremental against a watermark, so an hourly
+    // pass reads a page or two; it runs before the remote drain so a server
+    // published this hour is probed this hour.
+    if (opts.registrySync !== false) {
+      await (async () => {
+        const { syncRegistry } = await import('../registry/sync');
+        const handle = createDb({ max: 2 });
+        try {
+          const s = await syncRegistry(handle.db);
+          if (s.versions) {
+            logger.info(
+              `worker: registry sync, ${s.versions} version(s), ${s.endpointsLinked} endpoint link(s), ${s.linksRemoved} link(s) removed, ${s.endpointsRemoved} endpoint(s) removed`,
+            );
+          }
+        } finally {
+          await handle.close();
+        }
+      })().catch((err) => logger.warn(`worker: registry sync failed: ${String(err)}`));
+    }
+    // Remote MCP endpoints: a credential-free read of each one's contract and
+    // sign-in path. Plain HTTP, so the budget is two orders of magnitude above
+    // the sandboxed stdio drain, and it is still bounded per host.
+    await (async () => {
+      const { drainRemoteProbes, REMOTE_PROBES_PER_CYCLE } = await import('../remoteProbe/drain');
+      const handle = createDb({ max: 4 });
+      try {
+        const s = await drainRemoteProbes(handle.db, { limit: opts.remoteProbesPerCycle ?? REMOTE_PROBES_PER_CYCLE });
+        if (s.claimed) {
+          const statuses = Object.entries(s.byStatus).map(([k, v]) => `${v} ${k}`).join(', ');
+          logger.info(`worker: remote probes, ${s.probed} probed (${statuses || 'none'}), ${s.changes} change(s), ${s.failed} failed`);
+        }
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: remote probe drain failed: ${String(err)}`));
     // Account email. Last in the cycle so it sees this cycle's alerts; hourly is
     // the ceiling on how late an urgent email can be. A no-op without Resend and
     // Clerk configured.

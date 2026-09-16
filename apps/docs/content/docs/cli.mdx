@@ -67,7 +67,7 @@ counted as such, never reported clean.
 
 ## Upgrades
 
-These two run where your code is — a laptop or a CI runner:
+These run where your code is — a laptop or a CI runner:
 
 ```bash
 # what's behind, and what each upgrade removes from its API  (needs your lurq key)
@@ -78,6 +78,9 @@ lurq check-upgrade . --plan lurq-plan.json --exit-code
 
 # or name the upgrades directly, no plan needed
 lurq check-upgrade . --upgrade commander@11.1.0..12.1.0 --upgrade zod@3.23.8..4.0.0
+
+# and write the changes that need no judgement
+lurq fix .
 ```
 
 `check-upgrade` compares both versions' npm tarballs against the symbols your
@@ -127,6 +130,103 @@ counted as safe.
 from `--api-key` or `LURQ_API_KEY`). It's opt-in and never changes the outcome of
 the check.
 
+### Writing the fix
+
+`check-upgrade` tells you what breaks. `lurq fix` writes the part of it that
+needs no judgement, and hands the rest to your agent with the facts it needs.
+
+```bash
+# work out what moved, and show the diff       (one lookup needs your lurq key)
+lurq fix .
+
+# name the versions yourself, and it needs nothing
+lurq fix . --upgrade cookie@1.1.1..2.0.1
+
+# write the files
+lurq fix . --apply
+
+# file every finding as a GitHub code scanning alert
+lurq fix . --sarif lurq.sarif
+```
+
+With neither `--plan` nor `--upgrade` it works out what moved by itself, so you
+never have to look up a version to pass one in. That single lookup is the only
+part that talks to lurq, and it applies your repo's selection policy — an
+upgrade the policy holds is not attempted. Naming the versions yourself keeps
+the entire run offline, exactly like `check-upgrade`.
+
+Nothing is written until `--apply`; the default prints a unified diff, and
+`git apply` accepts it:
+
+```text
+Would write 2 file(s) (pass --apply):
+  rename parse to parseCookie — src/alias.ts, src/app.ts
+
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -1,4 +1,4 @@
+-import { parse } from 'cookie';
++import { parseCookie } from 'cookie';
+```
+
+It bumps the declared range in the same run. Rewriting the imports and leaving
+`"cookie": "^1.1.1"` in `package.json` is a tree that does not build: the code
+now calls an export the installed version lacks, and the next `npm install`
+faithfully reinstalls the old one. Every manifest declaring the package is
+bumped, across workspaces, keeping the operator you wrote (`^`, `~`, or an exact
+pin). A range that already admits the new version is left alone rather than
+narrowed, and one whose intent is a judgement — `>=1.0.0 <2`, `1 || 2`, `1.x` —
+is reported instead of guessed at.
+
+Only a rename the package itself proves is ever written — the old version
+exported both names from one declaration and the new one still exports the
+survivor. That makes the rewrite mechanical rather than a guess. Whether a given
+upgrade qualifies depends on the exact versions: cookie 1.1.1 → 2.0.1 does,
+because 1.1.x shipped `parseCookie` alongside `parse`; 1.0.2 → 2.0.0 does not.
+
+Everything else becomes a brief instead of an edit, carrying the exports the new
+version actually ships with their kinds and arities — the facts an agent doing
+the rewrite cannot look up, since it has no network and its training data is the
+stale source this is correcting. Two candidates is a choice, not a fix, so it is
+briefed too.
+
+Refusals are per file. A file where the imported name is declared twice can't
+have its call sites attributed to the import, so that file is briefed while the
+rest are still rewritten:
+
+```text
+1 change(s) lurq will not make for you:
+  parse was renamed to parseCookie, but 1 file(s) need a person:
+  src/shadowed.ts (parse is declared more than once)
+```
+
+An aliased import is rewritten once, at the import, because every call site
+still reads the local name. Type-only references are skipped, subpath imports
+keep their own surface, and every edit records the bytes it was computed from —
+so if a file changes between the scan and the write, nothing is written at all
+rather than a rename landing in the wrong place.
+
+Three kinds of upgrade it will not attempt at all — and it names each one rather
+than passing over it in silence:
+
+| Not attempted | Why |
+| --- | --- |
+| A multi-major upgrade (`hops` in the plan) | It has to be walked one major at a time. Jumping straight to the target skips whatever each intermediate release removed. |
+| One the plan could not sequence (`sequenceNote`) | That is a migration, not an upgrade, and nothing mechanical should attempt it. |
+| Anything past `--max <n>` | The blast radius. A deterministic edit is safer than a model's, but a diff touching forty packages is still a review nobody finishes, and the number is your call. |
+
+`check-upgrade` still reports on all three: checking an upgrade is free and tells
+you something, so only *performing* one is capped. If every upgrade in a plan
+falls into these, `fix` says so and names them — it never reports "nothing to
+fix" for work it declined to do.
+
+`--sarif` writes SARIF 2.1.0 for `github/codeql-action/upload-sarif`, which
+gives each finding dedup, assignment and closing itself when it stops
+reproducing. Proven renames carry the replacement as a SARIF fix, so the
+suggested change is visible in the alert; briefs carry the agent instruction
+instead. `--exit-code` exits 1 when anything is left for a person or an agent to
+do, and `--json` prints the whole result.
+
 ## Before you publish
 
 The same diff, pointed the other way: will your change break the people who
@@ -151,6 +251,40 @@ understates the change — a removal shipped as a minor, say. Use it in
 `--exit-code`. With no argument it uses the first OpenAPI document it finds;
 `-C <dir>` points at another repository. Nothing leaves the machine.
 
+## Environment
+
+```bash
+lurq check-env .
+```
+
+Which variables does this project read that nothing declares — the "works on my
+machine" gap. It reads your own source and your `.env*` files, needs no API key
+and no network, and never looks at a value: a declared name is the text left of
+the first `=`, and the rest is not parsed.
+
+A commented declaration counts. `.env.example` files conventionally document
+optional variables as `# REDIS_URL=…`, and that still tells a fresh clone the
+variable exists.
+
+Three things are deliberately never reported, because a noisy check gets
+switched off and a check nobody runs is worth less than no check:
+
+| Not reported | Why |
+| --- | --- |
+| Platform variables — `NODE_ENV`, `CI`, `PORT`, the `GITHUB_*`, `npm_*`, `VERCEL_*` families, XDG and Windows paths | Supplied by the runtime or the runner; they belong in no `.env.example` |
+| Reads inside tests, specs and fixtures | The harness that runs that code sets them itself |
+| A read with its fallback beside it — `process.env.CACHE_TTL ?? '60'` | The code already states what happens without it |
+
+A variable defaulted at every site is optional; one unguarded read anywhere
+makes it required, and only those sites are cited. Reads are found through the
+TypeScript AST, so a `process.env.X` inside a comment or a string is not a read,
+and `process.env[key]` is skipped rather than guessed at.
+
+`--exit-code` exits 1 when anything is undeclared **or** when the scan stopped
+at its file limit — a file nobody opened is not a clean result. `--sarif` files
+each variable as a GitHub code scanning alert; `--json` prints every finding
+with all of its read sites.
+
 ## MCP servers
 
 ```bash
@@ -159,6 +293,10 @@ lurq mcp-ci                                    # a GitHub Actions workflow that 
 lurq mcp-stack                                 # do your configured servers collide?
 lurq mcp-surface @modelcontextprotocol/server-filesystem
 lurq mcp-drift @modelcontextprotocol/server-filesystem --from <version> --to <version>
+lurq connect-check https://mcp.example.com/mcp --client chatgpt
+lurq mcp-pin io.github.acme/weather            # tell me when this server changes
+lurq mcp-pins                                  # what changed since you pinned it
+lurq mcp-unpin io.github.acme/weather
 ```
 
 `mcp-scan` and `mcp-ci` have their own page: see
@@ -166,6 +304,20 @@ lurq mcp-drift @modelcontextprotocol/server-filesystem --from <version> --to <ve
 server's tool contract as lurq probed it (`--version` for an exact version);
 `mcp-drift` needs both `--from` and `--to`, and reports what moved between them,
 including silent schema changes and tools that stopped being read-only.
+
+`connect-check` takes an endpoint URL, an official registry name or an npm
+package name, and answers for every MCP client lurq has a profile for — or one
+client with `--client` — whether the server works there, what setup it needs (a
+key to send as a header, an OAuth client to pre-register and the redirect URIs
+to allow), or why it is blocked. With `--client` it also prints the config to
+paste in that client's own format. A URL lurq has not probed is read live and
+not stored.
+
+`mcp-pin` records a remote server as it is now, so lurq tells this account when
+its tools, its sign-in path or its availability change; `mcp-pins` lists what
+changed since, and re-running `mcp-pin` approves a change you reviewed. Servers
+in your uploaded `mcp-scan` results are watched the same way without pinning.
+These three need an API key, because a pin belongs to an account.
 
 ## Scoring controls
 

@@ -18,6 +18,7 @@ import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
 import { handleMcpDrift, handleMcpSurface } from './mcpHandlers';
+import { CLIENT_IDS } from '../clients/types';
 import { handleAudit } from './auditHandler';
 import {
   handleCompare,
@@ -90,6 +91,16 @@ export interface ServerContext {
   notice?: string | null;
   /** The coding agent this connection belongs to, when its config names one (clientInfo.ts). */
   client?: string | null;
+  /**
+   * This server runs beside the user's files (the stdio path), so tools that
+   * read the project may be registered.
+   *
+   * Set at the stdio call site only. The hosted server shares this builder
+   * verbatim, and there the files are not there — a filesystem tool would
+   * answer about an empty directory, which reads to a model as "your project
+   * is clean". Absent means not local, like every other permission here.
+   */
+  local?: boolean;
 }
 
 /**
@@ -414,6 +425,79 @@ export function buildMcpServer(
   );
 
   server.registerTool(
+    'connect_check',
+    {
+      title: 'Will this MCP server work in my client?',
+      description:
+        "Before wiring an MCP server into a client, find out whether it will work there and exactly what it takes. Accepts an endpoint URL, an official-registry server name, or an npm package name. Answers per client (Claude Code, Claude.ai, ChatGPT, Cursor, VS Code, Codex, Gemini CLI and more): WORKS; NEEDS_SETUP with the steps (a key to send as a header, an OAuth client to pre-register and the redirect URIs to allow, a URL placeholder to fill); BLOCKED with the reason and which side causes it; or UNKNOWN when a decisive fact is not established. Built from a credential-free probe of the endpoint (whether it answers, how it authenticates, which OAuth registration methods it offers, spec deviations strict clients refuse, tool names and schemas) and from primary-sourced client constraints. Returns ready-to-paste config in each client's own format, with placeholder values. Tell the user what it found, including which client it was checked for. UNKNOWN never means it will not work.",
+      annotations: READ_LIVE,
+      inputSchema: {
+        server: z
+          .string()
+          .trim()
+          .min(1)
+          .max(2048)
+          .describe('Endpoint URL (https://…), official registry name (io.github.acme/weather), or npm package name'),
+        client: z.enum(CLIENT_IDS).optional().describe('One client to check, e.g. claude-code, cursor, chatgpt; omit for every client'),
+      },
+    },
+    async (args) =>
+      reply(
+        await run('connect_check', async () => {
+          const [{ handleConnectCheck }, { sharedSafeFetch }] = await Promise.all([import('../connect/check'), import('../core/safeFetch')]);
+          return handleConnectCheck(db, { server: args.server, client: args.client ?? null }, { liveProbe: { fetch: sharedSafeFetch() } });
+        }),
+      ),
+  );
+
+  // Registered only beside the user's files. Every other tool here is
+  // argument-fed or index-backed and works identically hosted; this one reads
+  // the project, so on the hosted path it is absent rather than empty.
+  if (ctx.local) {
+    server.registerTool(
+      'upkeep',
+      {
+        title: 'What needs fixing in this project',
+        description:
+          "The upkeep plan for the project you are editing, read from its own files. Returns findings across domains: environment variables the code reads that no .env file declares, and — when you pass `upgrade` — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Each finding carries either exact edits (a rename the package proves, byte ranges you can apply) or a brief with the facts you cannot look up: the exports the target version actually ships, with their kinds and arities. A domain that could not run says so; a skipped domain is never the same as a clean one. Needs no API key. Use it before editing a project you have just opened, or after an upgrade to see what it broke.",
+        annotations: READ_LIVE,
+        inputSchema: {
+          dir: z
+            .string()
+            .max(4096)
+            .optional()
+            .describe('Project root. Defaults to the working directory this server was started in.'),
+          upgrade: z
+            .array(
+              z.object({
+                package: npmName,
+                fromVersion: z.string().min(1).max(100),
+                toVersion: z.string().min(1).max(100),
+              }),
+            )
+            .max(50)
+            .optional()
+            .describe(
+              'Upgrades to assess. Without this the package domain is skipped, because working out what moved needs the index and this tool runs without a key.',
+            ),
+          domains: z
+            .array(z.enum(['package', 'mcp-config', 'env', 'api']))
+            .max(4)
+            .optional()
+            .describe('Limit to these domains. Default: every domain with a detector.'),
+        },
+      },
+      async (args) =>
+        reply(
+          await run('upkeep', async () => {
+            const { handleUpkeep } = await import('./upkeepHandler');
+            return handleUpkeep(args);
+          }),
+        ),
+    );
+  }
+
+  server.registerTool(
     'audit',
     {
       title: 'Audit a whole project',
@@ -553,7 +637,8 @@ export const SERVE_NEEDS_DATABASE =
 export async function startMcpServer(): Promise<void> {
   if (!getConfig().DATABASE_URL) throw new Error(SERVE_NEEDS_DATABASE);
   const { db, close } = createDb();
-  const server = buildMcpServer(db);
+  // The one place `local` is set: this process runs beside the user's project.
+  const server = buildMcpServer(db, { local: true });
 
   const shutdown = async () => {
     try {

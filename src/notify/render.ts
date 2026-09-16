@@ -8,7 +8,7 @@
  */
 import type { Severity } from '../audit/types';
 
-export type UrgentKind = 'mcp_rug_pull' | 'mcp_privilege' | 'breaking_release';
+export type UrgentKind = 'mcp_rug_pull' | 'mcp_privilege' | 'breaking_release' | 'mcp_public_change';
 
 export interface UrgentItem {
   key: string;
@@ -50,6 +50,7 @@ const KIND_LABEL: Record<UrgentKind, string> = {
   mcp_rug_pull: 'Tool rewritten to instruct your agent',
   mcp_privilege: 'Tool can now do more than you approved',
   breaking_release: 'Breaking release will install on its own',
+  mcp_public_change: 'Server changed',
 };
 
 function shell(title: string, body: string, footer: string): string {

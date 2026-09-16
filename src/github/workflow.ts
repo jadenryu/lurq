@@ -34,6 +34,14 @@ export interface WorkflowOptions {
   /** Max upgrades attempted per run — the blast-radius cap. */
   maxUpgrades?: number;
   /**
+   * Include the environment check, per `RepoPolicy.checks.env`.
+   *
+   * Off unless granted, like every other permission: absent means not granted.
+   * A repo whose policy predates checks has no such key and gets no step, which
+   * is the same workflow it has today.
+   */
+  checkEnv?: boolean;
+  /**
    * Emit the auto-merge step, per `RepoPolicy.autoMerge`. Off unless the repo
    * has explicitly opted in — this is the only setting that lets lurq's loop
    * change a default branch, so it is never a default.
@@ -80,6 +88,22 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const mode = opts.armed ? 'pr' : 'comment';
   const autoMerge = opts.autoMerge ?? false;
   const cli = cliSpec();
+  /**
+   * Deliberately NOT gated on LURQ_MODE. It writes nothing, needs no API key
+   * and no network to us, so it runs in analyse-only mode too — analysis is not
+   * the part that needs arming. No `--exit-code` either: a repo should not
+   * start failing its build the day someone connects it, and the finding is in
+   * the run summary where the rest of the report already is.
+   */
+  const envCheck =
+    opts.checkEnv === true
+      ? `      - name: Check environment
+        run: |
+          npx -y ${cli} check-env . > lurq-env.txt
+          { echo '\`\`\`'; cat lurq-env.txt; echo '\`\`\`'; } >> "$\{GITHUB_STEP_SUMMARY}"
+
+`
+      : '';
 
   return `# Managed by lurq, https://lurq.run
 #
@@ -151,7 +175,7 @@ jobs:
           { echo '\`\`\`'; cat lurq-report.txt; echo '\`\`\`'; } > lurq-report.md
           cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
-      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
+${envCheck}      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
       #    changed nothing, the brief is in the run summary above, and no
       #    Anthropic credential is needed to get this far.
       - name: Check agent credentials
@@ -168,6 +192,19 @@ jobs:
       - name: Install dependencies
         if: env.LURQ_MODE == 'pr'
         run: ${install}
+
+      # Everything the package itself proves, made WITHOUT a model: renamed call
+      # sites, and the range bump in every manifest declaring the dependency.
+      #
+      # After the install, not before: bumping package.json first fails \`npm ci\`
+      # outright with a lock-out-of-sync error, and the agent's own install below
+      # reconciles the lockfile afterwards. It takes the same cap the agent is
+      # given, so the two cannot disagree about blast radius, and it refuses
+      # multi-major upgrades and unplannable sequences — the same rules the
+      # prompt states below, applied by a rule instead of a model.
+      - name: Apply what needs no judgement
+        if: env.LURQ_MODE == 'pr'
+        run: npx -y ${cli} fix . --plan lurq-plan.json --apply --max \${{ env.MAX_UPGRADES }}
 
       - name: Apply upgrades
         if: env.LURQ_MODE == 'pr'
@@ -196,10 +233,17 @@ jobs:
                 "sequenceNote" is present, the sequence could not be planned,
                 treat that dependency as a migration and skip it.
 
+            A step before you has ALREADY APPLIED every change lurq could
+            prove: renamed call sites where the package itself proves the
+            replacement, and the range bump in every manifest for those
+            upgrades. Read the files before assuming any of it is undone — you
+            cannot run git, so the working tree is the only record. Your job is
+            what remains, and re-doing applied work risks reverting it.
+
             Take at most \${{ env.MAX_UPGRADES }} entries, hardest first:
 
             1. Bump the dependency's range in every manifest listed in
-               "declaredIn".
+               "declaredIn", where that has not been done already.
             2. Run \`${install.split(' ')[0]} install\` so node_modules holds the
                TARGET version. Until you do, the package on disk is the old one
                and anything you read from it describes the API you are leaving.

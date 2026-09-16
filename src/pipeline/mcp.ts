@@ -34,7 +34,7 @@ import {
 import { recordObservation, upsertClaim, upsertEntity } from '../db/graph';
 import { MAX_PAGES, probeMcpServer, mcpServerOracle } from '../graph/oracles/mcpServer';
 import { sniffMissingEnv } from '../mcpScan/errors';
-import { getSandbox } from '../sandbox/index';
+import { getSandbox, isolationAvailable } from '../sandbox/index';
 import type { Sandbox } from '../sandbox/types';
 import { MCP_TIER, mcpSurface, surfaceHash, type McpTool } from '../surface/mcp';
 import {
@@ -170,7 +170,10 @@ export async function extractAndStoreMcp(
   const placeholders: Record<string, string> = {};
   for (const m of missing) placeholders[m.name] = PLACEHOLDER_VALUE;
 
-  const sandbox = opts.sandbox ?? (await getSandbox());
+  // Isolation is required, not preferred: the next two lines install a
+  // third-party package and start it. An injected sandbox means the caller
+  // already chose the driver on purpose (tests, the operator's own box).
+  const sandbox = opts.sandbox ?? (await getSandbox({ isolated: true }));
   const { probe, stderr } = await probeMcpServer(sandbox, server, version, {
     args: manifest?.args ?? [],
     env: placeholders,
@@ -323,7 +326,6 @@ export async function drainMcpQueue(
   db: Database,
   opts: { limit?: number; sandbox?: Sandbox } = {},
 ): Promise<McpDrainSummary> {
-  const pending = await getPendingSurfaces(db, opts.limit ?? MCP_PER_CYCLE, 'mcp_server');
   const s: McpDrainSummary = {
     drained: 0,
     stored: 0,
@@ -336,6 +338,21 @@ export async function drainMcpQueue(
     failed: 0,
     backfilled: 0,
   };
+
+  // Checked before anything is claimed, and this ordering is the point. A
+  // sandbox failure inside the loop counts an attempt and, at MAX_ATTEMPTS,
+  // DROPS the queue row — so an unset E2B_API_KEY would quietly delete the work
+  // instead of waiting for someone to set it. Refusing here leaves the queue
+  // exactly as it was.
+  if (!opts.sandbox && !isolationAvailable()) {
+    logger.error(
+      { limit: opts.limit ?? MCP_PER_CYCLE },
+      'mcp: drain skipped — no VM isolation configured. Set E2B_API_KEY, or LURQ_ALLOW_LOCAL_SANDBOX=1 to accept local execution of untrusted servers. The queue is untouched.',
+    );
+    return s;
+  }
+
+  const pending = await getPendingSurfaces(db, opts.limit ?? MCP_PER_CYCLE, 'mcp_server');
 
   for (const item of pending) {
     s.drained++;
