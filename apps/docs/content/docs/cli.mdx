@@ -67,7 +67,7 @@ counted as such, never reported clean.
 
 ## Upgrades
 
-These two run where your code is — a laptop or a CI runner:
+These run where your code is — a laptop or a CI runner:
 
 ```bash
 # what's behind, and what each upgrade removes from its API  (needs your lurq key)
@@ -78,6 +78,9 @@ lurq check-upgrade . --plan lurq-plan.json --exit-code
 
 # or name the upgrades directly, no plan needed
 lurq check-upgrade . --upgrade commander@11.1.0..12.1.0 --upgrade zod@3.23.8..4.0.0
+
+# and write the changes that need no judgement
+lurq fix .
 ```
 
 `check-upgrade` compares both versions' npm tarballs against the symbols your
@@ -126,6 +129,80 @@ counted as safe.
 `--report` sends the result to your lurq dashboard as well (it needs an API key,
 from `--api-key` or `LURQ_API_KEY`). It's opt-in and never changes the outcome of
 the check.
+
+### Writing the fix
+
+`check-upgrade` tells you what breaks. `lurq fix` writes the part of it that
+needs no judgement, and hands the rest to your agent with the facts it needs.
+
+```bash
+# work out what moved, and show the diff       (one lookup needs your lurq key)
+lurq fix .
+
+# name the versions yourself, and it needs nothing
+lurq fix . --upgrade cookie@1.1.1..2.0.1
+
+# write the files
+lurq fix . --apply
+
+# file every finding as a GitHub code scanning alert
+lurq fix . --sarif lurq.sarif
+```
+
+With neither `--plan` nor `--upgrade` it works out what moved by itself, so you
+never have to look up a version to pass one in. That single lookup is the only
+part that talks to lurq, and it applies your repo's selection policy — an
+upgrade the policy holds is not attempted. Naming the versions yourself keeps
+the entire run offline, exactly like `check-upgrade`.
+
+Nothing is written until `--apply`; the default prints a unified diff, and
+`git apply` accepts it:
+
+```text
+Would write 2 file(s) (pass --apply):
+  rename parse to parseCookie — src/alias.ts, src/app.ts
+
+--- a/src/app.ts
++++ b/src/app.ts
+@@ -1,4 +1,4 @@
+-import { parse } from 'cookie';
++import { parseCookie } from 'cookie';
+```
+
+Only a rename the package itself proves is ever written — the old version
+exported both names from one declaration and the new one still exports the
+survivor. That makes the rewrite mechanical rather than a guess. Whether a given
+upgrade qualifies depends on the exact versions: cookie 1.1.1 → 2.0.1 does,
+because 1.1.x shipped `parseCookie` alongside `parse`; 1.0.2 → 2.0.0 does not.
+
+Everything else becomes a brief instead of an edit, carrying the exports the new
+version actually ships with their kinds and arities — the facts an agent doing
+the rewrite cannot look up, since it has no network and its training data is the
+stale source this is correcting. Two candidates is a choice, not a fix, so it is
+briefed too.
+
+Refusals are per file. A file where the imported name is declared twice can't
+have its call sites attributed to the import, so that file is briefed while the
+rest are still rewritten:
+
+```text
+1 change(s) lurq will not make for you:
+  parse was renamed to parseCookie, but 1 file(s) need a person:
+  src/shadowed.ts (parse is declared more than once)
+```
+
+An aliased import is rewritten once, at the import, because every call site
+still reads the local name. Type-only references are skipped, subpath imports
+keep their own surface, and every edit records the bytes it was computed from —
+so if a file changes between the scan and the write, nothing is written at all
+rather than a rename landing in the wrong place.
+
+`--sarif` writes SARIF 2.1.0 for `github/codeql-action/upload-sarif`, which
+gives each finding dedup, assignment and closing itself when it stops
+reproducing. Proven renames carry the replacement as a SARIF fix, so the
+suggested change is visible in the alert; briefs carry the agent instruction
+instead. `--exit-code` exits 1 when anything is left for a person or an agent to
+do, and `--json` prints the whole result.
 
 ## Before you publish
 

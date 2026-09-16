@@ -21,7 +21,7 @@
  * anyone runs a tool that edits their source, the correct output is something
  * they can read.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deterministic, editsByFile, applyEdits, type Finding } from '../fix/types';
 import { unifiedDiff } from '../fix/diff';
@@ -43,6 +43,12 @@ export interface FixOpts {
   json?: boolean;
   /** Exit 1 when something is left for a human or an agent to do. */
   exitCode?: boolean;
+  /**
+   * Write SARIF here, for GitHub code scanning. That is where a finding gets a
+   * lifecycle lurq would otherwise have to build: dedup, assignment, and
+   * closing itself when it stops reproducing.
+   */
+  sarif?: string;
 }
 
 interface FixResult {
@@ -178,6 +184,25 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   if (opts.apply && writes.size > 0) {
     const { writeFileAtomic } = await import('./installSkill');
     for (const [file, contents] of writes) writeFileAtomic(join(dir, file), contents);
+  }
+
+  if (opts.sarif) {
+    const { toSarif } = await import('../fix/sarif');
+    const { VERSION } = await import('../core/constants');
+    const sarif = toSarif(findings, {
+      version: VERSION,
+      // Read from disk rather than reusing the staged text: regions must
+      // describe the file as it is, not as it would be after the fix.
+      read: (file) => {
+        try {
+          return readFileSync(join(dir, file), 'utf8');
+        } catch {
+          return null;
+        }
+      },
+    });
+    writeFileSync(opts.sarif, `${JSON.stringify(sarif, null, 2)}\n`, 'utf8');
+    console.error(`wrote ${opts.sarif}`);
   }
 
   if (opts.json) {

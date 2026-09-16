@@ -357,6 +357,7 @@ export function buildProgram(): Command {
     .option('--apply', 'write the files (default: print the diff and change nothing)')
     .option('--json', 'output the result as JSON')
     .option('--exit-code', 'exit 1 when something is left for a human or an agent to do')
+    .option('--sarif <file>', 'write SARIF for GitHub code scanning (upload with codeql-action/upload-sarif)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
     .option('--repo <owner/name>', "apply this repo's policy (defaults to $GITHUB_REPOSITORY)")
@@ -369,6 +370,7 @@ export function buildProgram(): Command {
           apply?: boolean;
           json?: boolean;
           exitCode?: boolean;
+          sarif?: string;
           url?: string;
           apiKey?: string;
           repo?: string;

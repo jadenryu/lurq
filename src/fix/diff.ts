@@ -38,6 +38,21 @@ function lineOf(starts: number[], offset: number): number {
   return lo;
 }
 
+/**
+ * 1-based line and column for a character offset.
+ *
+ * Everywhere else in this codebase that number comes from the TypeScript
+ * compiler, which needs a parsed SourceFile. Here there is only the file's text
+ * and an offset, and re-parsing a file to learn which line a byte is on would
+ * be absurd — so this shares the line index the diff already builds, and both
+ * the diff and the SARIF report therefore agree about where a change is.
+ */
+export function positionAt(text: string, offset: number): { line: number; column: number } {
+  const starts = lineStarts(text);
+  const line = lineOf(starts, Math.max(0, Math.min(offset, text.length)));
+  return { line: line + 1, column: offset - starts[line]! + 1 };
+}
+
 interface Hunk {
   edits: Edit[];
   firstLine: number;
