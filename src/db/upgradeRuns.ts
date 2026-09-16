@@ -79,6 +79,65 @@ export async function listRunsForRepo(
     .limit(limit);
 }
 
+/**
+ * Per-repo upkeep activity for one owner.
+ *
+ * `getUpgradeImpact` answers "how much has lurq caught for me" across an
+ * account. This answers a different question the dashboard cannot currently
+ * ask: for THIS repository, has the workflow ever actually run? A repo can be
+ * armed in the database with the workflow never committed — `policy.enabled`
+ * true, zero runs — and today it is indistinguishable from one opening pull
+ * requests every week.
+ *
+ * Keyed on `repoFullName`, never `repoId`: that column is nullable for runs
+ * from a repository lurq has no GitHub App installation on, and the schema
+ * comment above it says losing those would bias every impact figure. The same
+ * reasoning applies here — a repo running the workflow without the App
+ * installed is exactly the case worth seeing.
+ *
+ * Facts only, deliberately no verdict. Absence of runs does NOT mean the
+ * workflow is missing: a repo with nothing behind reports nothing, so "never
+ * ran" is ambiguous with "nothing to do". The useful inference — armed, still
+ * behind, and never reported — needs drift, which belongs to the caller.
+ */
+export interface RepoUpkeep {
+  /** `owner/name`, as the workflow reports it from GITHUB_REPOSITORY. */
+  repoFullName: string;
+  /** Most recent reported run, all time. Null is impossible here: a row exists. */
+  lastRunAt: Date;
+  /** Rows recorded, deduped to one per package per target per run by the schema. */
+  runs: number;
+  /** Runs that reached a pull request — the only evidence upkeep is landing. */
+  delivered: number;
+  /** Runs the workflow reported as failed, which a green armed badge hides. */
+  failed: number;
+}
+
+/**
+ * One row per repository that has ever reported a run, for one owner.
+ *
+ * Returned as a Map so a caller joining this onto a repo list does one query
+ * and one lookup per repo, rather than a query per repo.
+ */
+export async function upkeepByRepo(
+  db: Database,
+  ownerId: string,
+): Promise<Map<string, RepoUpkeep>> {
+  const rows = await db
+    .select({
+      repoFullName: upgradeRuns.repoFullName,
+      lastRunAt: sql<Date>`max(${upgradeRuns.createdAt})`,
+      runs: sql<number>`count(*)::int`,
+      delivered: sql<number>`count(*) filter (where ${upgradeRuns.status} in ('pr_open','merged'))::int`,
+      failed: sql<number>`count(*) filter (where ${upgradeRuns.status} = 'failed')::int`,
+    })
+    .from(upgradeRuns)
+    .where(eq(upgradeRuns.ownerId, ownerId))
+    .groupBy(upgradeRuns.repoFullName);
+
+  return new Map(rows.map((r) => [r.repoFullName, { ...r, lastRunAt: new Date(r.lastRunAt) }]));
+}
+
 export interface UpgradeImpact {
   /** Upgrades analysed in the window. */
   analysed: number;
