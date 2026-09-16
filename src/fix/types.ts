@@ -44,6 +44,14 @@ export interface Edit {
   start: number;
   end: number;
   text: string;
+  /**
+   * What the range held when the detector read it. Offsets are only meaningful
+   * against those exact bytes, and between detection and the write the file can
+   * move — another agent edits it, a formatter runs, the branch changes. Set it
+   * and every apply path checks it, so a stale offset is a refusal instead of a
+   * rename dropped into the middle of an unrelated identifier.
+   */
+  was?: string;
 }
 
 /** A brief for the agent that runs in the user's own CI, when no rule can do it. */
@@ -115,6 +123,12 @@ export function applyEdits(contents: string, edits: Edit[]): string {
   for (const e of [...sorted].reverse()) {
     if (e.start < 0 || e.end > out.length || e.end < e.start) {
       throw new Error(`edit out of range: ${e.start}-${e.end} in ${e.file} (${out.length} chars)`);
+    }
+    const found = out.slice(e.start, e.end);
+    if (e.was !== undefined && found !== e.was) {
+      throw new Error(
+        `${e.file} changed since it was read: expected ${JSON.stringify(e.was)} at ${e.start}-${e.end}, found ${JSON.stringify(found)}`,
+      );
     }
     out = out.slice(0, e.start) + e.text + out.slice(e.end);
   }

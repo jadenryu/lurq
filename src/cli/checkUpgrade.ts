@@ -19,7 +19,7 @@ import type { UpgradeTarget } from '../surface/upgrade';
  * this is the gate, and a monorepo past the default is exactly the codebase
  * where an unread file hides a call site. Past it, the report says so.
  */
-const SCAN_LIMIT = 20_000;
+export const SCAN_LIMIT = 20_000;
 
 /** `pkg@from..to`, the repeatable `--upgrade` form. */
 export function parseUpgradeSpec(spec: string): UpgradeTarget {

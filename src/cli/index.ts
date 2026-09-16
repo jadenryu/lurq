@@ -341,6 +341,29 @@ export function buildProgram(): Command {
       },
     );
 
+  // The half of check-upgrade that writes. Only changes lurq can prove from the
+  // two tarballs — a symbol renamed within one declaration — and a diff by
+  // default, because the first run of anything that edits your source should be
+  // readable before it is trusted.
+  program
+    .command('fix')
+    .argument('[dir]', 'project directory to scan (default: current)', '.')
+    .description('write the upgrade changes that need no judgement, and brief the agent on the rest')
+    .option('--plan <file>', 'targets from `upgrade-plan --json`')
+    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. cookie@0.6.0..1.0.0')
+    .option('--apply', 'write the files (default: print the diff and change nothing)')
+    .option('--json', 'output the result as JSON')
+    .option('--exit-code', 'exit 1 when something is left for a human or an agent to do')
+    .action(
+      async (
+        dir: string,
+        opts: { plan?: string; upgrade?: string[]; apply?: boolean; json?: boolean; exitCode?: boolean },
+      ) => {
+        const { runFix } = await import('./fix');
+        await runFix(dir, opts);
+      },
+    );
+
   // The same diff, pointed at the author instead of the consumer: does the
   // version about to be published match what this release actually did to the
   // API? Needs no key and no network to us — just the registry tarball.
