@@ -191,8 +191,10 @@ function isStalled(repo: DashboardRepo): boolean {
  * all-`checked` history is evidence and `delivered === 0` is a guess.
  *
  * Kept apart from `isStalled` because the fix differs: that one needs the
- * workflow committed, this one needs the mode changed in a file already in
- * their repo — which the autopilot setting on this page does not rewrite.
+ * workflow committed, this one needs the workflow file REPLACED. A workflow
+ * generated before lurq read this setting at run time has the mode baked into
+ * it, and nothing here can reach that file — the GitHub App is
+ * Contents:read-only by design.
  */
 function isAnalysingOnly(repo: DashboardRepo): boolean {
   const upkeep = repo.upkeep;
@@ -210,7 +212,7 @@ function lastRunTitle(repo: DashboardRepo): string {
   }
   const counts = `${upkeep.runs} run(s), ${upkeep.delivered} reached a pull request${upkeep.failed ? `, ${upkeep.failed} failed` : ""}`;
   return isAnalysingOnly(repo)
-    ? `${counts}. Every run only analysed — the committed workflow is still in comment mode, which the autopilot setting here does not change.`
+    ? `${counts}, and nothing opened. This repository's workflow file was committed before lurq read the autopilot setting at run time, or pins the mode itself — re-copy it from the repository page to let this setting govern runs.`
     : counts;
 }
 

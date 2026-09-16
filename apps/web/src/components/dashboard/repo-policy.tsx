@@ -121,7 +121,7 @@ export function RepoPolicyPanel({
       <div className="mt-5 space-y-4">
         <Row
           label="Let lurq open upgrade pull requests"
-          description="Runs in your own GitHub Actions on a schedule. lurq supplies the symbol-level migration brief; the agent edits, runs your test suite, and opens a pull request. Your source never leaves your CI."
+          description="Runs in your own GitHub Actions on a schedule. lurq supplies the symbol-level migration brief; the agent edits, runs your test suite, and opens a pull request. Your source never leaves your CI. Each run reads this setting when it starts, so a change here governs the next one — except for a workflow file committed before that was true, which pins its own mode until you re-copy it."
         >
           <Button
             variant={policy.enabled ? "default" : "outline"}
