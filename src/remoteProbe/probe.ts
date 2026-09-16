@@ -211,7 +211,7 @@ async function handshakeToolsList(
   fetch: SafeFetch,
   url: string,
   kind: 'streamable-http' | 'sse',
-  opts: { requestTimeoutMs: number; maxPages: number },
+  opts: { requestTimeoutMs: number; maxPages: number; signal?: AbortSignal },
 ): Promise<ToolsRead> {
   const client = new Client(CLIENT_INFO, { capabilities: {} });
   const target = new URL(url);
@@ -223,12 +223,16 @@ async function handshakeToolsList(
         })
       : new SSEClientTransport(target, { fetch: fetch as never, eventSourceInit: { fetch: fetch as never } });
   try {
-    await client.connect(transport, { timeout: opts.requestTimeoutMs });
+    // The budget, not just the per-request timeout: two handshake attempts each
+    // taking the full requestTimeoutMs would otherwise run well past the cap
+    // this probe claims to hold, since the loop only checks it between attempts.
+    await client.connect(transport, { timeout: opts.requestTimeoutMs, signal: opts.signal });
     const pages: unknown[][] = [];
     let cursor: string | undefined;
     for (let page = 0; page < opts.maxPages; page++) {
       const res = await client.request({ method: 'tools/list', params: cursor ? { cursor } : {} }, ToolsPage, {
         timeout: opts.requestTimeoutMs,
+        signal: opts.signal,
       });
       pages.push(res.tools ?? []);
       cursor = res.nextCursor || undefined;
@@ -313,7 +317,7 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
     for (const kind of ['streamable-http', 'sse'] as const) {
       if (budget.aborted) break;
       try {
-        read = await handshakeToolsList(opts.fetch, identity.url, kind, { requestTimeoutMs, maxPages });
+        read = await handshakeToolsList(opts.fetch, identity.url, kind, { requestTimeoutMs, maxPages, signal: budget });
         mode = 'initialize';
         transport = kind;
         break;

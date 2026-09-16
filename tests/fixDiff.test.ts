@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { unifiedDiff } from '../src/fix/diff';
 import type { Edit } from '../src/fix/types';
@@ -67,10 +71,75 @@ describe('unifiedDiff', () => {
     expect(headers[1]).toBe('@@ -9,4 +10,4 @@');
   });
 
-  it('handles a change on the last line of a file with no trailing newline', () => {
+  it('marks both sides when the file has no trailing newline, which git requires', () => {
     const src = 'a\nb\nc';
     const out = unifiedDiff('src/a.ts', src, [edit({ start: 4, end: 5, text: 'C', was: 'c' })]);
-    expect(out).toBe(['--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,3 +1,3 @@', ' a', ' b', '-c', '+C', ''].join('\n'));
+    expect(out).toBe(
+      [
+        '--- a/src/a.ts',
+        '+++ b/src/a.ts',
+        '@@ -1,3 +1,3 @@',
+        ' a',
+        ' b',
+        '-c',
+        '\\ No newline at end of file',
+        '+C',
+        '\\ No newline at end of file',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('marks the final context line when the change is above it', () => {
+    const src = 'a\nb\nc\nd';
+    const out = unifiedDiff('src/a.ts', src, [edit({ start: 0, end: 1, text: 'A', was: 'a' })]);
+    expect(out.endsWith(' d\n\\ No newline at end of file\n')).toBe(true);
+  });
+
+  it('says nothing about newlines for a file that ends in one', () => {
+    expect(unifiedDiff('src/a.ts', 'a\nb\n', [edit({ start: 0, end: 1, text: 'A', was: 'a' })])).not.toContain(
+      'No newline',
+    );
+  });
+});
+
+/**
+ * The claim in diff.ts is that `git apply` accepts this output. That is not
+ * something to assert by reading the format spec — the first version of this
+ * renderer omitted the no-newline marker and git rejected every patch for a
+ * file that lacked a trailing newline. So git itself is the assertion.
+ */
+describe('git apply', () => {
+  const check = (name: string, before: string, edits: Edit[]) => {
+    const dir = mkdtempSync(join(tmpdir(), 'lurq-gitapply-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: dir });
+      mkdirSync(join(dir, 'src'), { recursive: true });
+      writeFileSync(join(dir, name), before, 'utf8');
+      writeFileSync(join(dir, 'p.patch'), unifiedDiff(name, before, edits), 'utf8');
+      // Throws with git's own message if the patch is malformed or does not fit.
+      execFileSync('git', ['apply', '--check', '--verbose', 'p.patch'], { cwd: dir, stdio: 'pipe' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it('accepts a patch for a file that ends in a newline', () => {
+    expect(() => check('src/a.ts', numbered, [edit({ ...at(6, 'line6'), text: 'SIX', was: 'line6' })])).not.toThrow();
+  });
+
+  it('accepts a patch for a file that does not end in a newline', () => {
+    const src = 'line1\nline2\nline3';
+    expect(() => check('src/a.ts', src, [edit({ start: 12, end: 17, text: 'THREE', was: 'line3' })])).not.toThrow();
+  });
+
+  it('accepts a multi-hunk patch', () => {
+    expect(() =>
+      check('src/a.ts', numbered, [
+        edit({ ...at(1, 'line1'), text: 'ONE', was: 'line1' }),
+        edit({ ...at(12, 'line12'), text: 'TWELVE', was: 'line12' }),
+      ]),
+    ).not.toThrow();
   });
 
   it('refuses to print a diff for an offset that no longer holds what was read', () => {

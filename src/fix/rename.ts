@@ -9,12 +9,21 @@
  * `oldName` on one declaration, and a later major drops `oldName`. Then the
  * package itself states the correspondence and the rewrite is mechanical.
  *
- * It is deliberately narrow, and most removals do not qualify — cookie 1→2
- * drops `parse` and adds `parseCookie`, but `parseCookie` did not exist at 1.x,
- * so nothing in the package says they correspond. Those become a brief for the
- * agent carrying the target's real exports, never an edit. Guessing from name
- * similarity is how a fixer writes a confident wrong call site, which is worse
- * than the error it replaced.
+ * It is deliberately narrow, and whether a real upgrade qualifies turns on the
+ * exact versions. Measured, not assumed: cookie 1.1.1 → 2.0.1 DOES prove
+ * `parse` → `parseCookie`, because 1.1.x shipped both names from the same
+ * declaration. cookie 1.0.2 → 2.0.0 does not, because `parseCookie` did not
+ * exist yet at 1.0.2 — same package, same rename, and only one of the two pairs
+ * is provable.
+ *
+ * Everything unprovable becomes a brief for the agent carrying the target's
+ * real exports, never an edit. Guessing from name similarity is how a fixer
+ * writes a confident wrong call site, which is worse than the error it
+ * replaced.
+ *
+ * Refusals are per FILE, not per package: the files that can be rewritten are,
+ * and the ones that cannot come back as a brief naming them. A rename proven
+ * across nine files is not abandoned because the tenth shadows the name.
  *
  * Refused, every time:
  *   - more than one survivor: two candidates is a choice, and a choice is not
@@ -30,8 +39,8 @@
  *     subpath has its own surface.
  *   - anything missing offsets, which means the scanner did not follow it.
  *
- * An aliased import needs ONE edit: `{ parse as readCookie }` becomes
- * `{ parseCookie as readCookie }` and every call site still reads `readCookie`.
+ * An aliased import needs ONE edit: `{ oldName as local }` becomes
+ * `{ newName as local }` and every call site still reads `local`.
  * A bare import needs the import and every use.
  */
 import type { BreakingFinding, UpgradeReport } from '../surface/upgrade';
@@ -56,6 +65,8 @@ export interface RenameOptions {
 interface Refusal {
   symbol: string;
   to: string[];
+  /** The file that refused it. Absent when the refusal is about the whole project. */
+  file?: string;
   reason: string;
 }
 
@@ -69,47 +80,83 @@ function isRootSpecifier(ref: SymbolReference, pkg: string): boolean {
   return ref.specifier === pkg;
 }
 
-/** Every edit for one proven rename, or null when any reference refuses it. */
+interface RefusedFile {
+  file: string;
+  reason: string;
+}
+
+/**
+ * Edits for one proven rename, per file, plus the files that refused it.
+ *
+ * Grouped by file because a refusal is a fact about ONE file. This used to
+ * return on the first bad reference, which threw away the edits already
+ * collected for every other file — so one shadowed local in the tenth file
+ * cancelled a rename that was proven and safe in the nine before it. The tool
+ * refused work it had already done, and the user got "will not rewrite it
+ * here" for a project it could have fixed almost all of.
+ */
 function editsFor(
   refs: SymbolReference[],
   to: string,
   pkg: string,
-): { edits: Edit[]; files: string[] } | { refusedBecause: string } {
-  const edits: Edit[] = [];
-  const files = new Set<string>();
-
+): { edits: Edit[]; files: string[]; refusedFiles: RefusedFile[] } {
+  const byFile = new Map<string, SymbolReference[]>();
   for (const ref of refs) {
-    if (!isRootSpecifier(ref, pkg)) continue; // a subpath has its own surface
-    if (ref.via === 'type-only') continue; // erased before runtime
-    if (!REWRITABLE.has(ref.via)) {
-      return { refusedBecause: `reached as ${ref.via} in ${ref.file}, where the export name is not what the code writes` };
-    }
-    if (ref.shadowed) {
-      return { refusedBecause: `${ref.local ?? ref.symbol} is declared more than once in ${ref.file}` };
-    }
-    if (ref.nameStart === undefined || ref.nameEnd === undefined) {
-      return { refusedBecause: `no recorded position for the import in ${ref.file}` };
-    }
+    const list = byFile.get(ref.file);
+    if (list) list.push(ref);
+    else byFile.set(ref.file, [ref]);
+  }
 
-    files.add(ref.file);
-    // `was` is the identifier the scanner read at that range: the exported name
-    // at the import, the local name at a use. It is what makes a stale offset a
-    // refusal rather than a rename written into unrelated code.
-    edits.push({ file: ref.file, start: ref.nameStart, end: ref.nameEnd, text: to, was: ref.symbol });
+  const edits: Edit[] = [];
+  const files: string[] = [];
+  const refusedFiles: RefusedFile[] = [];
 
-    // An aliased import keeps its local name, so the uses are already correct.
-    if (ref.aliased) continue;
-    const local = ref.local ?? ref.symbol;
-    for (const use of ref.calls ?? []) {
-      if (use.start === undefined || use.end === undefined) {
-        return { refusedBecause: `a use of ${local} in ${ref.file} has no recorded position` };
+  for (const [file, fileRefs] of byFile) {
+    const fileEdits: Edit[] = [];
+    let refused: string | null = null;
+
+    for (const ref of fileRefs) {
+      if (!isRootSpecifier(ref, pkg)) continue; // a subpath has its own surface
+      if (ref.via === 'type-only') continue; // erased before runtime
+      if (!REWRITABLE.has(ref.via)) {
+        refused = `reached as ${ref.via}, where the export name is not what the code writes`;
+        break;
       }
-      edits.push({ file: ref.file, start: use.start, end: use.end, text: to, was: local });
+      if (ref.shadowed) {
+        refused = `${ref.local ?? ref.symbol} is declared more than once`;
+        break;
+      }
+      if (ref.nameStart === undefined || ref.nameEnd === undefined) {
+        refused = 'no recorded position for the import';
+        break;
+      }
+
+      // `was` is the identifier the scanner read at that range: the exported
+      // name at the import, the local name at a use. It is what makes a stale
+      // offset a refusal rather than a rename written into unrelated code.
+      fileEdits.push({ file, start: ref.nameStart, end: ref.nameEnd, text: to, was: ref.symbol });
+
+      // An aliased import keeps its local name, so the uses are already correct.
+      if (ref.aliased) continue;
+      const local = ref.local ?? ref.symbol;
+      for (const use of ref.calls ?? []) {
+        if (use.start === undefined || use.end === undefined) {
+          refused = `a use of ${local} has no recorded position`;
+          break;
+        }
+        fileEdits.push({ file, start: use.start, end: use.end, text: to, was: local });
+      }
+      if (refused) break;
+    }
+
+    if (refused) refusedFiles.push({ file, reason: refused });
+    else if (fileEdits.length > 0) {
+      files.push(file);
+      edits.push(...fileEdits);
     }
   }
 
-  if (edits.length === 0) return { refusedBecause: 'nothing in this project references it at the package root' };
-  return { edits, files: [...files] };
+  return { edits, files, refusedFiles };
 }
 
 /** Deduplicate identical ranges: one identifier can be recorded by two claims. */
@@ -135,9 +182,10 @@ export function renameFindings(breaking: BreakingFinding, opts: RenameOptions): 
     const files = [...new Set(removed.refs.map((r) => r.file))];
 
     if (to.length === 0) {
-      // No same-declaration proof, which is the common case: cookie 1→2 drops
-      // `parse` and adds `parseCookie`, but `parseCookie` did not exist at 1.x,
-      // so nothing in the package states the correspondence.
+      // No same-declaration proof, which is the common case. cookie 1.0.2 → 2.0.0
+      // is one: `parse` is gone and `parseCookie` is the replacement, but
+      // `parseCookie` did not exist at 1.0.2, so nothing in the package states
+      // the correspondence. (From 1.1.1 it does — see the header.)
       //
       // Returning nothing here is the failure that makes a fixer useless — the
       // upgrade is still blocking and the user is still stuck. So it becomes a
@@ -190,42 +238,69 @@ export function renameFindings(breaking: BreakingFinding, opts: RenameOptions): 
     }
 
     const target = to[0]!;
-    const result = editsFor(removed.refs, target, opts.packageName);
-    if ('refusedBecause' in result) {
-      refused.push({ symbol: removed.symbol, to, reason: result.refusedBecause });
+    const proof = `${version}: ${removed.symbol} and ${target} were exported from one declaration at ${breaking.fromVersion ?? 'the source version'}`;
+    const manualTask = (taskFiles: string[], extra: string[] = []) => ({
+      instruction: `Rename ${removed.symbol} to ${target} where it is imported from ${breaking.package}.`,
+      files: taskFiles,
+      evidence: [`${target} exists at ${breaking.toVersion ?? 'the target version'}`, ...extra],
+    });
+
+    const { edits: collected, files: editedFiles, refusedFiles } = editsFor(removed.refs, target, opts.packageName);
+    const edits = dedupe(collected);
+
+    // The two halves are independent: a project can have most of its files
+    // rewritten and get a brief for the rest, which is the whole point of
+    // refusing per file. They carry different codes so acknowledging one does
+    // not silence the other.
+    if (edits.length > 0) {
       findings.push({
         domain: 'package',
         code,
         severity: breaking.severity,
-        detail: `${removed.symbol} was renamed to ${target} in ${version}, but lurq will not rewrite it here: ${result.refusedBecause}`,
-        evidence: `${version}: ${removed.symbol} and ${target} were exported from one declaration at ${breaking.fromVersion ?? 'the source version'}`,
+        detail: `${removed.symbol} was renamed to ${target} in ${version}: ${edits.length} occurrence(s) in ${editedFiles.length} file(s)`,
+        file: editedFiles[0],
+        evidence: `${proof}, and ${target} still exists`,
+        fix: { summary: `rename ${removed.symbol} to ${target}`, edits, verify: ['typecheck', 'tests'] },
+      });
+    }
+
+    if (refusedFiles.length > 0) {
+      for (const r of refusedFiles) refused.push({ symbol: removed.symbol, to, file: r.file, reason: r.reason });
+      findings.push({
+        domain: 'package',
+        code: `${code}:manual`,
+        severity: breaking.severity,
+        detail: `${removed.symbol} was renamed to ${target} in ${version}, but ${refusedFiles.length} file(s) need a person: ${refusedFiles
+          .map((r) => `${r.file} (${r.reason})`)
+          .join('; ')}`,
+        file: refusedFiles[0]!.file,
+        evidence: proof,
         fix: {
-          summary: `rename ${removed.symbol} to ${target} by hand`,
-          task: {
-            instruction: `Rename ${removed.symbol} to ${target} where it is imported from ${breaking.package}.`,
-            files: [...new Set(removed.refs.map((r) => r.file))],
-            evidence: [`${target} exists at ${breaking.toVersion ?? 'the target version'}`],
-          },
+          summary: `rename ${removed.symbol} to ${target} in ${refusedFiles.length} file(s) lurq will not touch`,
+          // The reasons are already in `detail`; repeating them as evidence put
+          // them under the "use one of these" label meant for real exports.
+          task: manualTask(refusedFiles.map((r) => r.file)),
           verify: ['typecheck', 'tests'],
         },
       });
-      continue;
     }
 
-    const edits = dedupe(result.edits);
-    findings.push({
-      domain: 'package',
-      code,
-      severity: 'blocking',
-      detail: `${removed.symbol} was renamed to ${target} in ${version}: ${edits.length} occurrence(s) in ${result.files.length} file(s)`,
-      file: result.files[0],
-      evidence: `${version}: ${removed.symbol} and ${target} were exported from one declaration at ${breaking.fromVersion ?? 'the source version'}, and ${target} still exists`,
-      fix: {
-        summary: `rename ${removed.symbol} to ${target}`,
-        edits,
-        verify: ['typecheck', 'tests'],
-      },
-    });
+    if (edits.length === 0 && refusedFiles.length === 0) {
+      const reason = 'nothing in this project references it at the package root';
+      refused.push({ symbol: removed.symbol, to, reason });
+      findings.push({
+        domain: 'package',
+        code,
+        severity: breaking.severity,
+        detail: `${removed.symbol} was renamed to ${target} in ${version}, but lurq will not rewrite it here: ${reason}`,
+        evidence: proof,
+        fix: {
+          summary: `rename ${removed.symbol} to ${target} by hand`,
+          task: manualTask([...new Set(removed.refs.map((r) => r.file))]),
+          verify: ['typecheck', 'tests'],
+        },
+      });
+    }
   }
 
   return { findings, refused };

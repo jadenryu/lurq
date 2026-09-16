@@ -8,6 +8,7 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { CLIENT_PROFILES } from '../src/clients/profiles';
 import { validRegistryName } from '../src/mcp/publicMcpServers';
 import { emptySnapshot } from '../src/mcpScan/snapshot';
 import type { ProbeResult } from '../src/remoteProbe/types';
@@ -107,8 +108,11 @@ describe.skipIf(!TEST_DB)('public MCP server pages against Postgres', () => {
       endpoint: { url: `https://w.${host}/mcp`, status: 'open', authMode: 'none', toolNames: ['forecast'] },
       otherEndpoints: 0,
     });
-    expect(body.clients.length).toBeGreaterThanOrEqual(21);
+    expect(body.clients).toHaveLength(CLIENT_PROFILES.length);
     expect(body.summary.works).toBeGreaterThan(0);
+    // Every client lands in exactly one bucket, so a breakdown that loses or
+    // double-counts clients fails here rather than passing on `works > 0`.
+    expect(Object.values(body.summary).reduce((a, b) => a + b, 0)).toBe(CLIENT_PROFILES.length);
     const text = JSON.stringify(body);
     expect(text).not.toContain('secret prose');
     expect(text).not.toContain('inputSchema');

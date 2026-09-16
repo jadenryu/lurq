@@ -3,6 +3,7 @@ import { emptySnapshot, type Snapshot } from '../src/mcpScan/snapshot';
 import { authHash, contractRow, describeAuthChange, detectChanges } from '../src/remoteProbe/changes';
 import { laneByHost } from '../src/remoteProbe/drain';
 import type { AuthProfile, OAuthProfile, ProbeResult } from '../src/remoteProbe/types';
+import type { SnapshotDiff } from '../src/mcpScan/analyze';
 
 const oauth = (over: Partial<OAuthProfile> = {}): OAuthProfile => ({
   resourceMetadataUrl: 'https://x.dev/.well-known/oauth-protected-resource',
@@ -106,8 +107,11 @@ describe('detectChanges', () => {
     );
     expect(changes).toHaveLength(1);
     expect(changes[0]).toMatchObject({ kind: 'contract', fromKey: 'c1', toKey: 'c2' });
-    expect(['moderate', 'high', 'critical']).toContain(changes[0]!.severity);
-    expect(changes[0]!.summary).toMatch(/delete_all|removed|required/i);
+    expect(changes[0]!.severity).toBe('high');
+    // The removed tool, from the structured diff rather than the prose summary:
+    // a summary regex passes on plenty of wrong diffs, and `diff` is what the
+    // dashboard and the alerts actually read.
+    expect((changes[0]!.diff as SnapshotDiff).contract.removedTools).toEqual(['delete_all']);
   });
 
   it('reports an auth change only when both sides were established', () => {

@@ -120,6 +120,23 @@ describe('what it refuses', () => {
     expect(fix.task!.files).toEqual(['src/bare.ts']);
   });
 
+  it('rewrites the files it can and briefs only the one it cannot', () => {
+    const { findings, refused } = plan([
+      { symbol: 'parse', renamedTo: ['parseCookie'], refs: [...refsIn('src/bare.ts'), ...refsIn('src/shadowed.ts')] },
+    ]);
+    expect(findings).toHaveLength(2);
+
+    // The proven file is still rewritten: one bad file does not cancel the rest.
+    const auto = findings.find((f) => f.code === 'renamed-export:cookie:parse')!;
+    expect(Object.keys(applied(auto))).toEqual(['src/bare.ts']);
+    expect(applied(auto)['src/bare.ts']).toContain("import { parseCookie } from 'cookie';");
+
+    const manual = findings.find((f) => f.code.endsWith(':manual'))!;
+    expect(manual.fix!.edits).toBeUndefined();
+    expect(manual.fix!.task!.files).toEqual(['src/shadowed.ts']);
+    expect(refused.map((r) => r.file)).toEqual(['src/shadowed.ts']);
+  });
+
   it('refuses a reference with no recorded position', () => {
     const stripped: SymbolReference[] = refsIn('src/bare.ts').map((r) => ({ ...r, nameStart: undefined, nameEnd: undefined }));
     const { refused } = plan([{ symbol: 'parse', renamedTo: ['parseCookie'], refs: stripped }]);

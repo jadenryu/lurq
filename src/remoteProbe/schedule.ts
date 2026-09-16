@@ -10,7 +10,9 @@
  *     changed, because releases come in bursts
  *   - a dead one backs off exponentially to a week, so a registry full of
  *     abandoned demos costs almost nothing, yet a revived one is noticed
- *   - an endpoint lurq's own policy refuses is not asked again for a month
+ *   - an endpoint lurq never attempts is not asked again for a month: either its
+ *     host is one our own policy refuses, or its URL is still a template with an
+ *     unfilled placeholder, which no amount of probing will resolve
  *
  * Jitter is derived from the endpoint id rather than random, so the schedule is
  * reproducible in tests and thousands of endpoints first seen in the same sync do

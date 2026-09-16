@@ -1,8 +1,11 @@
 /**
  * What lurq can do, as data.
  *
- * lurq has eleven MCP tools, sixteen CLI commands and seven dashboard pages, and
- * the honest problem with that is nobody — human or agent — holds the map. An
+ * lurq's surface runs to sixteen MCP tools, dozens of CLI commands and a
+ * dashboard, and the honest problem with that is nobody — human or agent —
+ * holds the map. (Deliberately no exact totals for the CLI and the dashboard:
+ * this header sat on "eleven MCP tools, sixteen CLI commands" long after both
+ * numbers stopped being true, which is its own small demonstration.) An
  * agent with `verify` in its tool list still writes `npm install` and hopes; a
  * user staring at a drift number does not know `check-upgrade` is the thing that
  * tells them whether it matters. Both failures are the same failure: the

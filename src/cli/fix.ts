@@ -54,8 +54,8 @@ interface FixResult {
     /** The facts the rewrite must not invent: the exports the new version ships. */
     evidence?: string[];
   }[];
-  /** Why a proven rename was not written here. */
-  refused: { symbol: string; reason: string }[];
+  /** Why a proven rename was not written here, and in which file. */
+  refused: { symbol: string; file?: string; reason: string }[];
 }
 
 /**
@@ -110,7 +110,7 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
     files: [],
     applied: [],
     remaining: [],
-    refused: refused.map((r) => ({ symbol: r.symbol, reason: r.reason })),
+    refused: refused.map((r) => ({ symbol: r.symbol, file: r.file, reason: r.reason })),
   };
 
   // Stage every file before writing any of it. A stale offset in the fourth
@@ -180,7 +180,8 @@ export function formatFix(result: FixResult, diff: string, applied: boolean): st
 
   if (result.refused.length > 0) {
     out.push('', 'Proven renames left alone:');
-    for (const r of result.refused) out.push(`  ${r.symbol}: ${r.reason}`);
+    // The reason names the symbol, so the file is the useful prefix when there is one.
+    for (const r of result.refused) out.push(`  ${r.file ?? r.symbol}: ${r.reason}`);
   }
   return out.join('\n');
 }

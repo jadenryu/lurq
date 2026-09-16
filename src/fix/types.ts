@@ -25,7 +25,15 @@ export type FixDomain = 'package' | 'mcp-config' | 'env' | 'api';
 
 export type FixSeverity = 'blocking' | 'warning' | 'info';
 
-/** What a policy decides to do about a finding. */
+/**
+ * What a policy decides to do about a finding.
+ *
+ * Declared, and deliberately not yet consumed: nothing in this branch chooses
+ * an action, so these describe intent rather than behaviour. `lurq fix` today
+ * makes the one choice it can defend without a policy — apply what is proven,
+ * brief the rest — and the severity-to-action matrix lands with the
+ * zero-decision defaults.
+ */
 export type FixAction =
   /** Apply it without asking. Only ever chosen for `edits`. */
   | 'auto'

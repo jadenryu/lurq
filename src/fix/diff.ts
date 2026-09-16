@@ -13,6 +13,12 @@ import { applyEdits, type Edit } from './types';
 /** Context lines around a change. Three is what review tools and `git apply` expect. */
 const CONTEXT = 3;
 
+/**
+ * Required by the format whenever a side's last line has no newline after it.
+ * Omitting it does not merely look wrong: `git apply` refuses the entire patch.
+ */
+const NO_EOL = '\\ No newline at end of file\n';
+
 /** Offset where each line begins, so an edit range maps to line numbers. */
 function lineStarts(text: string): number[] {
   const starts = [0];
@@ -91,11 +97,19 @@ export function unifiedDiff(file: string, before: string, edits: Edit[]): string
     const head = hunk.firstLine - from;
     const tail = to - hunk.lastLine;
 
+    // A file with no final newline needs the marker, or `git apply` rejects the
+    // whole patch. Both sides carry it: the slice never ends in a newline, so
+    // if the file has none, neither side does.
+    const atEOF = to === lastRealLine && !before.endsWith('\n');
+
     out += `@@ -${from + 1},${oldLines.length} +${from + 1 + delta},${newLines.length} @@\n`;
     for (let i = 0; i < head; i++) out += ` ${oldLines[i]}\n`;
     for (let i = head; i < oldLines.length - tail; i++) out += `-${oldLines[i]}\n`;
+    if (atEOF && tail === 0) out += NO_EOL;
     for (let i = head; i < newLines.length - tail; i++) out += `+${newLines[i]}\n`;
+    if (atEOF && tail === 0) out += NO_EOL;
     for (let i = tail; i > 0; i--) out += ` ${oldLines[oldLines.length - i]}\n`;
+    if (atEOF && tail > 0) out += NO_EOL;
     delta += newLines.length - oldLines.length;
   }
   return out;
