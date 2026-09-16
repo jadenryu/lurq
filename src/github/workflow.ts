@@ -169,6 +169,19 @@ jobs:
         if: env.LURQ_MODE == 'pr'
         run: ${install}
 
+      # Everything the package itself proves, made WITHOUT a model: renamed call
+      # sites, and the range bump in every manifest declaring the dependency.
+      #
+      # After the install, not before: bumping package.json first fails \`npm ci\`
+      # outright with a lock-out-of-sync error, and the agent's own install below
+      # reconciles the lockfile afterwards. It takes the same cap the agent is
+      # given, so the two cannot disagree about blast radius, and it refuses
+      # multi-major upgrades and unplannable sequences — the same rules the
+      # prompt states below, applied by a rule instead of a model.
+      - name: Apply what needs no judgement
+        if: env.LURQ_MODE == 'pr'
+        run: npx -y ${cli} fix . --plan lurq-plan.json --apply --max \${{ env.MAX_UPGRADES }}
+
       - name: Apply upgrades
         if: env.LURQ_MODE == 'pr'
         uses: anthropics/claude-code-action@v1
@@ -196,10 +209,17 @@ jobs:
                 "sequenceNote" is present, the sequence could not be planned,
                 treat that dependency as a migration and skip it.
 
+            A step before you has ALREADY APPLIED every change lurq could
+            prove: renamed call sites where the package itself proves the
+            replacement, and the range bump in every manifest for those
+            upgrades. Read the files before assuming any of it is undone — you
+            cannot run git, so the working tree is the only record. Your job is
+            what remains, and re-doing applied work risks reverting it.
+
             Take at most \${{ env.MAX_UPGRADES }} entries, hardest first:
 
             1. Bump the dependency's range in every manifest listed in
-               "declaredIn".
+               "declaredIn", where that has not been done already.
             2. Run \`${install.split(' ')[0]} install\` so node_modules holds the
                TARGET version. Until you do, the package on disk is the old one
                and anything you read from it describes the API you are leaving.
