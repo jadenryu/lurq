@@ -79,7 +79,9 @@ import {
   getUpgradeImpact,
   listRunsForRepo,
   recordUpgradeRuns,
+  upkeepByRepo,
   MAX_RUNS_PER_POST,
+  type RepoUpkeep,
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
@@ -1142,7 +1144,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   /** Manifests are never sent to the browser — only the derived drift summary.
    *  The dependency ranges are input to our computation, not dashboard content. */
-  const toDashboardRepo = (row: RepoRow) => ({
+  const toDashboardRepo = (row: RepoRow, upkeep?: RepoUpkeep) => ({
     id: row.id,
     fullName: row.fullName,
     defaultBranch: row.defaultBranch,
@@ -1174,6 +1176,24 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       : null,
     lastScanAt: row.lastScanAt,
     lastScanError: row.lastScanError,
+    /**
+     * What this repo's own workflow has actually done, as opposed to what its
+     * policy permits. `lastScanAt` above is lurq reading the manifests from
+     * here; this is the workflow running over there, and a repo can be armed
+     * with the workflow never committed.
+     *
+     * Null means it has never reported a run — which is NOT proof the workflow
+     * is missing, since a repo with nothing behind reports nothing. Reading it
+     * as "broken" needs drift too, and the consumer has that.
+     */
+    upkeep: upkeep
+      ? {
+          lastRunAt: upkeep.lastRunAt,
+          runs: upkeep.runs,
+          delivered: upkeep.delivered,
+          failed: upkeep.failed,
+        }
+      : null,
   });
 
   /** Reject anything not matching RepoPolicy rather than merging partial input —
@@ -1337,7 +1357,12 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
     try {
       const rows = await listRepos(db, ownerId);
-      res.status(200).json({ repos: rows.map(toDashboardRepo) });
+      // One aggregate for the whole list: a query per repo would turn opening
+      // this page into N round trips for a column.
+      const upkeep = await upkeepByRepo(db, ownerId);
+      res
+        .status(200)
+        .json({ repos: rows.map((row) => toDashboardRepo(row, upkeep.get(row.fullName))) });
     } catch (err) {
       logger.error('repo list failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not list repos.' });
