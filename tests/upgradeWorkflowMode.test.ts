@@ -43,7 +43,10 @@ describe('the job-level mode', () => {
   it('still lets a repository variable and a dispatch input win', () => {
     // Precedence is explicit-first, and both explicit sources sit ahead of the
     // empty fallback in the same expression.
-    const value = job().env.LURQ_MODE;
+    // `?? ''` because reading a Record by key is indexed access, so the type
+    // is string | undefined. The assertion above is what pins the value's
+    // presence; this one only cares about the order inside it.
+    const value = job().env.LURQ_MODE ?? '';
     expect(value.indexOf('inputs.mode')).toBeLessThan(value.indexOf('vars.LURQ_MODE'));
     expect(resolveStep()!.if).toBe("env.LURQ_MODE == ''");
   });
