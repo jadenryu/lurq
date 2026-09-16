@@ -22,7 +22,8 @@
  * they can read.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
+import { manifestFindings } from '../fix/manifest';
 import { deterministic, editsByFile, applyEdits, type Finding } from '../fix/types';
 import { unifiedDiff } from '../fix/diff';
 import type { UpgradeTarget } from '../surface/upgrade';
@@ -149,7 +150,21 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   // the gate; this is the writer.
   const refs = scanReferences(dir, { limit: SCAN_LIMIT });
   const report = await checkUpgrade(targets, refs, { rootDir: dir });
-  const { findings, refused } = renamePlan(report);
+  const renames = renamePlan(report);
+
+  // The manifest is part of performing the upgrade, not a tidy-up after it:
+  // rewritten imports plus a range that still pins the old major is a tree that
+  // does not build, and the next install puts the old version back.
+  const { findManifests } = await import('./upgradePlan');
+  const manifests = manifestFindings(dir, targets, {
+    files: findManifests(dir).map((abs) => relative(dir, abs) || 'package.json'),
+  });
+
+  const findings = [...renames.findings, ...manifests.findings];
+  const refused = [
+    ...renames.refused,
+    ...manifests.refused.map((r) => ({ symbol: r.package, file: r.file, reason: r.reason })),
+  ];
 
   const result: FixResult = {
     root: dir,
@@ -217,7 +232,9 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
 export function formatFix(result: FixResult, diff: string, applied: boolean): string {
   const out: string[] = [];
   if (result.applied.length === 0 && result.remaining.length === 0) {
-    return `Nothing to fix in ${result.root}: no upgrade in this plan renames a symbol this code references.`;
+    // Both halves, because both were checked: a stale message that names only
+    // renames reads as "the manifest was not looked at".
+    return `Nothing to fix in ${result.root}: no upgrade in this plan renames a symbol this code references, and every declared range already admits its target.`;
   }
 
   if (result.applied.length > 0) {

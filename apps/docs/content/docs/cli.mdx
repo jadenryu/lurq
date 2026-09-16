@@ -169,6 +169,15 @@ Would write 2 file(s) (pass --apply):
 +import { parseCookie } from 'cookie';
 ```
 
+It bumps the declared range in the same run. Rewriting the imports and leaving
+`"cookie": "^1.1.1"` in `package.json` is a tree that does not build: the code
+now calls an export the installed version lacks, and the next `npm install`
+faithfully reinstalls the old one. Every manifest declaring the package is
+bumped, across workspaces, keeping the operator you wrote (`^`, `~`, or an exact
+pin). A range that already admits the new version is left alone rather than
+narrowed, and one whose intent is a judgement — `>=1.0.0 <2`, `1 || 2`, `1.x` —
+is reported instead of guessed at.
+
 Only a rename the package itself proves is ever written — the old version
 exported both names from one declaration and the new one still exports the
 survivor. That makes the rewrite mechanical rather than a guess. Whether a given

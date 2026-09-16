@@ -26,14 +26,17 @@
  * only through a subpath (`pkg/submodule`) with no root entry, and one whose
  * barrel chain runs deeper than MAX_HOPS. Both fall back to the README.
  *
- * The compiler is loaded LAZILY and non-fatally, and that is load-bearing for the
- * plane split (§4E): `typescript` is a devDependency, present in the operator
- * runtime but never installed for consumers of the published package (which ships
- * `dist` only). A static `import ts from 'typescript'` here is hoisted by esbuild
- * into a top-level import of the public bundle, so every `lurqrun` command — not
- * just `usage` — would die at startup with ERR_MODULE_NOT_FOUND. Deferring the
- * import to the first extraction keeps it out of the bundle's static graph, and a
- * compiler that won't load degrades to null exactly like an untyped package.
+ * The compiler is loaded LAZILY and non-fatally, so nothing here references
+ * `typescript` at module scope and a compiler that will not load degrades to
+ * null exactly like an untyped package.
+ *
+ * This used to say `typescript` was a devDependency absent from the published
+ * package, and that a static import would kill every `lurqrun` command at
+ * startup. That is no longer true: it is a real dependency, and
+ * publish-manifest.mjs strips only the self-host server stack and what tsup
+ * inlines — so consumers do install it, and `surface/references.ts` imports it
+ * statically for exactly that reason. The laziness here is now about startup
+ * cost on commands that never parse a type, not about the module existing.
  */
 import { posix } from 'node:path';
 import type * as TSApi from 'typescript';
