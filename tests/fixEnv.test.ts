@@ -233,4 +233,18 @@ describe('precision', () => {
     expect(reads).toEqual([{ name: 'CACHE_TTL', file: 'src/a.ts', line: 1, optional: true }]);
     expect(findings).toEqual([]);
   });
+
+  it('ignores a variable that selects the env file, which cannot be declared in it', () => {
+    // Measured on this repo: LURQ_ENV_FILE is read by loadEnv() to choose which
+    // file to load. Declaring it inside that file is circular, so the finding
+    // could never be cleared — a permanent nag rather than a task.
+    for (const name of ['LURQ_ENV_FILE', 'DOTENV_CONFIG_PATH', 'ENV_FILE', 'APP_ENV_FILE']) {
+      expect(at('src/a.ts', `process.env.${name};\n`).findings, name).toEqual([]);
+    }
+  });
+
+  it('still reports a variable that merely ends in FILE', () => {
+    // The rule is the `_ENV_FILE` suffix, not "anything file-shaped".
+    expect(at('src/a.ts', `process.env.UPLOAD_FILE;\n`).findings).toHaveLength(1);
+  });
 });

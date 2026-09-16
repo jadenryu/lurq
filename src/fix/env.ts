@@ -92,8 +92,22 @@ const AMBIENT_PREFIXES = [
   'XDG_',
 ];
 
+/**
+ * Variables read to FIND the env file, which therefore cannot be declared in
+ * it. `loadEnv()` reads LURQ_ENV_FILE to decide which file to load; declaring
+ * it inside the file it selects is circular, so the finding could never be
+ * cleared and reporting it is a permanent nag rather than a task.
+ *
+ * A convention rather than one project's quirk: dotenv reads
+ * DOTENV_CONFIG_PATH for the same purpose, and the `_ENV_FILE` suffix is the
+ * usual spelling elsewhere.
+ */
+const BOOTSTRAP = new Set(['DOTENV_CONFIG_PATH', 'DOTENV_CONFIG_ENCODING', 'ENV_FILE', 'ENV_PATH']);
+
+const isBootstrap = (name: string): boolean => BOOTSTRAP.has(name) || name.endsWith('_ENV_FILE');
+
 const isAmbient = (name: string): boolean =>
-  AMBIENT.has(name) || AMBIENT_PREFIXES.some((p) => name.startsWith(p));
+  AMBIENT.has(name) || isBootstrap(name) || AMBIENT_PREFIXES.some((p) => name.startsWith(p));
 
 /** A plausible variable name, so a computed access cannot inject nonsense. */
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
