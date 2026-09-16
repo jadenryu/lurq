@@ -24,11 +24,17 @@ function parsePolicy(input: unknown): RepoPolicy | null {
   // toggle looks like it worked, and nothing runs. Fixing the backend's parser
   // alone does not close that, because this one gets the request first.
   const checks = parseChecks(raw.checks);
+  // Carried for the same reason as `checks`: this route is upstream of the
+  // backend's parser, so a mode dropped here never reaches it and the user's
+  // choice is lost in transit with a successful-looking save.
+  const mode =
+    raw.mode === "comment" || raw.mode === "fix" || raw.mode === "pr" ? raw.mode : null;
   return {
     enabled: raw.enabled,
     scope: raw.scope,
     autoMerge: raw.autoMerge,
     ...(checks ? { checks } : {}),
+    ...(mode ? { mode } : {}),
   };
 }
 

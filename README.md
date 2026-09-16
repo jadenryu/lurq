@@ -310,12 +310,23 @@ unverified could not be established                         → never counted as
 |---|---|---|
 | 1. `lurq upgrade-plan`: drift, plus what each upgrade removes | your runner | lurq key |
 | 2. `lurq check-upgrade`: matched against your source, with `file:line` | your runner | nothing |
-| 3. `claude-code-action`: rewrites the named call sites and runs your tests | your runner | Anthropic credential |
-| 4. `create-pull-request`: one branch, one PR | your runner | `GITHUB_TOKEN` |
-| 5. Outcomes post back: names and counts, never source | lurq | nothing |
+| 3. `lurq fix`: applies what the package itself proves — renames, and the range bump in every manifest | your runner | nothing |
+| 4. `claude-code-action`: migrates what a rule cannot, and runs your tests | your runner | Anthropic credential |
+| 5. `create-pull-request`: one branch, one PR | your runner | `GITHUB_TOKEN` |
+| 6. Outcomes post back: names and counts, never source | lurq | nothing |
 
-The generated workflow starts in `comment` mode: it plans, checks and writes the brief to the run
-summary. Editing is opt-in per repository.
+**Three modes, and editing is opt-in.** The workflow starts in `comment`: it plans, checks, writes the
+brief to the run summary, and changes nothing. `fix` opens a pull request containing only what the
+package itself proves — renamed call sites, and the range bump in every manifest — so it needs **no
+Anthropic credential**, and it is what a newly armed repo gets. `pr` is `fix` plus the agent, for the
+changes a rule cannot make. Step 4 above is the only one that needs a model, so only `pr` does.
+
+The dashboard setting governs repos that already installed the workflow: each run reads the mode from
+the plan response rather than from the committed file.
+
+Cadence follows scope — weekly for the scopes that track breakage, since majors arrive slowly enough
+that a daily run mostly reports nothing new; daily for a repo set to advisories-only, because weekly
+can mean seven days sitting on a known CVE.
 
 **Trust model.** lurq's GitHub App is `Contents: read-only` and cannot write to any repository. Every
 write uses your own ephemeral `GITHUB_TOKEN`. The agent's allowlist is

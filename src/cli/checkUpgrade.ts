@@ -39,7 +39,7 @@ interface PlanFile {
    * What the repository's dashboard setting says this job should do. Written by
    * the server when the plan was governed; absent otherwise.
    */
-  mode?: 'pr' | 'comment';
+  mode?: 'comment' | 'fix' | 'pr';
 }
 
 /** One plan entry, as far as reading it off disk cares. */
@@ -97,10 +97,17 @@ export function planUpgrades(path: string): PlanUpgrade[] {
   return parsed.upgrades ?? [];
 }
 
+/** The three a mode may be. Anything else is not a mode we can reason about. */
+const MODES = ['comment', 'fix', 'pr'] as const;
+export type RunMode = (typeof MODES)[number];
+
+function asMode(value: unknown): RunMode | null {
+  return MODES.includes(value as RunMode) ? (value as RunMode) : null;
+}
+
 /** What the dashboard says this repo's job should do, if the server said. */
-export function planMode(path: string): 'pr' | 'comment' | null {
-  const mode = readPlanFile(path).mode;
-  return mode === 'pr' || mode === 'comment' ? mode : null;
+export function planMode(path: string): RunMode | null {
+  return asMode(readPlanFile(path).mode);
 }
 
 /**
@@ -117,14 +124,28 @@ export function planMode(path: string): 'pr' | 'comment' | null {
  * a failure, it is just not what the dashboard now claims.
  */
 export function modeDisagreement(
-  dashboard: 'pr' | 'comment' | null,
+  dashboard: RunMode | null,
   workflow: string | undefined,
 ): string | null {
-  if (!dashboard || (workflow !== 'pr' && workflow !== 'comment')) return null;
-  if (dashboard === workflow) return null;
-  return dashboard === 'pr'
-    ? 'autopilot is ON for this repository in lurq, but this workflow is pinned to comment mode and will not open pull requests. Re-copy .github/workflows/lurq-upgrade.yml from your dashboard to let the setting govern runs.'
-    : 'autopilot is OFF for this repository in lurq, but this workflow is pinned to pr mode and will still open pull requests. Re-copy .github/workflows/lurq-upgrade.yml from your dashboard to let the setting govern runs.';
+  const running = asMode(workflow);
+  if (!dashboard || !running || dashboard === running) return null;
+
+  // Stated as a consequence, not as a diff. "fix != pr" means nothing to
+  // someone reading a CI summary; "it will run the agent, which your setting
+  // does not ask for" is the thing they need to decide about.
+  const consequence =
+    running === 'comment'
+      ? 'so it will not open pull requests at all'
+      : dashboard === 'comment'
+        ? 'so it will still open pull requests'
+        : running === 'fix'
+          ? 'so it will open pull requests with only the changes lurq can prove, and will not run the agent'
+          : 'so it will run the agent, which your setting does not ask for';
+
+  return (
+    `autopilot is set to '${dashboard}' for this repository in lurq, but this workflow is pinned to '${running}' mode, ${consequence}. ` +
+    'Re-copy .github/workflows/lurq-upgrade.yml from your dashboard to let the setting govern runs.'
+  );
 }
 
 export interface FixableSplit {

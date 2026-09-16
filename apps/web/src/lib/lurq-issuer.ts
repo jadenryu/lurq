@@ -203,6 +203,14 @@ export interface RepoPolicy {
   scope: "security" | "blocking" | "all";
   autoMerge: boolean;
   /**
+   * How far the armed workflow goes. Mirrors the server's `RepoPolicy`.
+   *
+   * Absent derives from `enabled` (armed meant the agent), so a policy stored
+   * before this field behaves exactly as it did. `fix` opens a pull request
+   * with only the changes lurq can prove and needs no Anthropic credential.
+   */
+  mode?: "comment" | "fix" | "pr";
+  /**
    * Read-only checks the generated workflow should run. Mirrors the server's
    * `RepoPolicy` in src/github/types.ts — this type is declared separately, so
    * the two drift unless changed together.

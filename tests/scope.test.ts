@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyScope, scopeVerdict } from '../src/github/scope';
+import { applyScope, repoMode, scopeVerdict } from '../src/github/scope';
 import type { UpgradeBrief } from '../src/github/brief';
 import type { RepoPolicy } from '../src/github/types';
 
@@ -113,6 +113,33 @@ describe('applyScope', () => {
  * workflow or set a repository variable, so the workflow reads the mode from
  * this response instead.
  */
+describe('repoMode', () => {
+  it('reads a disarmed repo as comment even when a mode is stored', () => {
+    // THE regression. Reading `mode` before `enabled` meant a repo that had
+    // once chosen `pr` kept resolving to `pr` after autopilot was switched off,
+    // so the master switch stopped disarming anything — the one job it has.
+    expect(repoMode({ ...policy('all'), enabled: false, mode: 'pr' })).toBe('comment');
+    expect(repoMode({ ...policy('all'), enabled: false, mode: 'fix' })).toBe('comment');
+  });
+
+  it('reads an armed repo with no stored mode as pr', () => {
+    // Backward compatibility, and it is load bearing: every policy written
+    // before this field existed is in exactly this state, and armed meant the
+    // agent then. Changing this silently downgrades every existing install.
+    const { mode: _mode, ...withoutMode } = { ...policy('all'), enabled: true };
+    expect(repoMode(withoutMode)).toBe('pr');
+  });
+
+  it('honours an explicit mode on an armed repo', () => {
+    expect(repoMode({ ...policy('all'), enabled: true, mode: 'fix' })).toBe('fix');
+    expect(repoMode({ ...policy('all'), enabled: true, mode: 'pr' })).toBe('pr');
+  });
+
+  it('reads a disarmed repo with no mode as comment', () => {
+    expect(repoMode({ ...policy('all'), enabled: false })).toBe('comment');
+  });
+});
+
 describe('applyScope: the mode it reports', () => {
   it('says pr when the repository is armed', () => {
     expect(applyScope([], policy('all')).mode).toBe('pr');
@@ -120,6 +147,12 @@ describe('applyScope: the mode it reports', () => {
 
   it('says comment when the repository is not armed', () => {
     expect(applyScope([], { ...policy('all'), enabled: false }).mode).toBe('comment');
+  });
+
+  it('reports fix for a repo that chose the deterministic mode', () => {
+    // What the workflow reads at runtime, so this is the path by which a repo
+    // set to `fix` on the dashboard actually stops running the agent.
+    expect(applyScope([], { ...policy('all'), mode: 'fix' }).mode).toBe('fix');
   });
 
   it('omits the mode entirely for an unconnected checkout', () => {

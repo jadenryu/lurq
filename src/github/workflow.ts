@@ -20,6 +20,13 @@
  *     in a dependency's changelog cannot push a branch;
  *   · the job defaults to `comment` mode, which analyses and reports without
  *     touching a line. Editing is opt-in per repository.
+ *
+ * Three modes, and the middle one is the point. `fix` opens a pull request
+ * containing only what the package itself proves — renamed call sites and the
+ * range bump in every manifest — with no model and no Anthropic credential.
+ * That is the same job Dependabot does, except the call sites are migrated too,
+ * and unlike `pr` it cannot fail for want of a key. `pr` is `fix` plus the
+ * agent, for the changes a rule cannot make.
  */
 
 import { PACKAGE_NAME, VERSION } from '../core/constants';
@@ -29,6 +36,12 @@ export interface WorkflowOptions {
   cron?: string;
   /** Start in `pr` mode instead of the analyse-only default. */
   armed?: boolean;
+  /**
+   * How far the job may go, straight from `repoMode(policy)`. Takes precedence
+   * over `armed`, which stays for callers that only know armed/not and reads as
+   * the `pr`/`comment` pair it always did.
+   */
+  mode?: 'comment' | 'fix' | 'pr';
   /** Package manager install command, detected from the lockfile. */
   installCommand?: string;
   /** Max upgrades attempted per run — the blast-radius cap. */
@@ -71,6 +84,25 @@ export function cliSpec(version: string = VERSION): string {
 }
 
 const DEFAULT_CRON = '0 6 * * 1';
+/** Daily, for a repo whose policy is advisories-only. */
+const SECURITY_CRON = '0 6 * * *';
+
+/**
+ * How often the job should run, from the repo's scope.
+ *
+ * Weekly matches the arrival rate of breaking changes: across the index roughly
+ * 7% of packages ship a major in a quarter, so a daily run on a 150-dependency
+ * repo mostly spends the user's Actions minutes reporting nothing new.
+ *
+ * Advisories are the opposite. A weekly cron means up to seven days sitting on
+ * a known CVE, which is indefensible for a repo that asked for security only —
+ * that scope is a statement that this is the part they care about.
+ *
+ * One accessor, so the two cadences cannot drift apart across call sites.
+ */
+export function cronForScope(scope: 'security' | 'blocking' | 'all'): string {
+  return scope === 'security' ? SECURITY_CRON : DEFAULT_CRON;
+}
 
 /** Lockfile → install command. `npm ci` needs a lockfile, so fall back to install. */
 export function detectInstallCommand(lockfiles: string[]): string {
@@ -85,7 +117,7 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const cron = opts.cron ?? DEFAULT_CRON;
   const install = opts.installCommand ?? 'npm ci';
   const max = opts.maxUpgrades ?? 3;
-  const mode = opts.armed ? 'pr' : 'comment';
+  const mode = opts.mode ?? (opts.armed ? 'pr' : 'comment');
   const autoMerge = opts.autoMerge ?? false;
   const cli = cliSpec();
   /**
@@ -119,9 +151,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "comment = analyse only · pr = open pull requests"
+        description: "comment = analyse only · fix = PR with only provable changes (no API key) · pr = fix, plus the agent"
         type: choice
-        options: [comment, pr]
+        options: [comment, fix, pr]
         default: ${mode}
 
 # The blast radius. \`contents: write\` permits pushing a BRANCH; branch
@@ -167,7 +199,7 @@ jobs:
       # repository variable or a dispatch choice still wins. An older server or
       # an unconnected repo sends no mode and the baked-in '${mode}' stands.
       #
-      # The value is checked against the two it may be before it reaches the
+      # The value is checked against the three it may be before it reaches the
       # environment — it arrives over the network, and GITHUB_ENV is not the
       # place to trust a response.
       - name: Resolve mode
@@ -175,7 +207,7 @@ jobs:
         run: |
           MODE=$(jq -r '.mode // empty' lurq-plan.json)
           case "$MODE" in
-            pr|comment) ;;
+            pr|fix|comment) ;;
             *) MODE='${mode}' ;;
           esac
           echo "LURQ_MODE=$MODE" >> "$\{GITHUB_ENV}"
@@ -202,9 +234,10 @@ jobs:
           { echo '\`\`\`'; cat lurq-report.txt; echo '\`\`\`'; } > lurq-report.md
           cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
-${envCheck}      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops here having
-      #    changed nothing, the brief is in the run summary above, and no
-      #    Anthropic credential is needed to get this far.
+${envCheck}      # 3. Editing is opt-in. In 'comment' the job stops here having changed
+      #    nothing, with the brief in the run summary above. 'fix' and 'pr' both
+      #    continue; only 'pr' needs an Anthropic credential, which is why the
+      #    check below is gated on it alone and not on editing in general.
       - name: Check agent credentials
         if: env.LURQ_MODE == 'pr'
         env:
@@ -212,12 +245,12 @@ ${envCheck}      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops 
           OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           if [ -z "$API_KEY" ] && [ -z "$OAUTH_TOKEN" ]; then
-            echo "::error::pr mode needs one of ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. A Claude Pro/Max subscription token works for the latter. Set LURQ_MODE=comment to run analysis only."
+            echo "::error::pr mode needs one of ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. A Claude Pro/Max subscription token works for the latter. Set LURQ_MODE=fix to still open pull requests using only the changes lurq can prove (no key needed), or LURQ_MODE=comment to run analysis only."
             exit 1
           fi
 
       - name: Install dependencies
-        if: env.LURQ_MODE == 'pr'
+        if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
         run: ${install}
 
       # Everything the package itself proves, made WITHOUT a model: renamed call
@@ -230,7 +263,7 @@ ${envCheck}      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops 
       # multi-major upgrades and unplannable sequences — the same rules the
       # prompt states below, applied by a rule instead of a model.
       - name: Apply what needs no judgement
-        if: env.LURQ_MODE == 'pr'
+        if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
         run: npx -y ${cli} fix . --plan lurq-plan.json --apply --max \${{ env.MAX_UPGRADES }}
 
       - name: Apply upgrades
@@ -308,7 +341,7 @@ ${envCheck}      # 3. Editing is opt-in. Until LURQ_MODE is 'pr', the job stops 
       # 4. The workflow does version control, never the model.
       - name: Open pull request
         id: pr
-        if: env.LURQ_MODE == 'pr'
+        if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
         uses: peter-evans/create-pull-request@v7
         with:
           branch: lurq/upgrades
@@ -342,7 +375,7 @@ const MERGE_STEP = `
       #    once the repo's OWN required checks pass; lurq never makes that call.
       #    Requires "Allow auto-merge" in repository settings.
       - name: Enable auto-merge
-        if: env.LURQ_MODE == 'pr' && steps.pr.outputs.pull-request-number
+        if: (env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix') && steps.pr.outputs.pull-request-number
         env:
           GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
         run: gh pr merge --auto --squash "\${{ steps.pr.outputs.pull-request-number }}"
