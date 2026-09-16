@@ -472,6 +472,23 @@ export function demoRepos(): DashboardRepo[] {
       },
       lastScanAt: hoursAgo(h),
       lastScanError: null,
+      // Four different upkeep states on purpose, for the reason this fixture
+      // states above: a fixture where every repo looks the same lets a
+      // rendering bug read as correct.
+      //   0 armed + behind + delivering  — the working case
+      //   1 armed + behind + never ran   — stalled, so the filter and the
+      //                                    "never ran" count actually render
+      //   2 not armed + never ran        — "never", and NOT flagged: the
+      //                                    column must not cry wolf
+      //   3 not armed + has run, failing — a workflow reporting without the
+      //                                    GitHub App installed, which is why
+      //                                    the query keys on the repo name
+      upkeep: [
+        { lastRunAt: hoursAgo(20), runs: 14, delivered: 5, failed: 0 },
+        null,
+        null,
+        { lastRunAt: hoursAgo(190), runs: 6, delivered: 1, failed: 2 },
+      ][i] ?? null,
     }),
   );
 }

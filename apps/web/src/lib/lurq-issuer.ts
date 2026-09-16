@@ -213,6 +213,24 @@ export interface DashboardRepo {
   drift: RepoDriftSummary | null;
   lastScanAt: string | null;
   lastScanError: string | null;
+  /**
+   * What this repo's own workflow has done, as opposed to what its policy
+   * permits. `lastScanAt` above is lurq reading the manifests from our side;
+   * this is the workflow running on theirs, and a repo can be armed with the
+   * workflow never committed.
+   *
+   * `null` means it has never reported a run. That is NOT proof the workflow is
+   * missing — a repo with nothing behind reports nothing — so rendering it as a
+   * failure needs drift too.
+   */
+  upkeep: {
+    /** ISO string: dates arrive over the wire, like `lastScanAt`. */
+    lastRunAt: string;
+    runs: number;
+    /** Runs that reached a pull request. */
+    delivered: number;
+    failed: number;
+  } | null;
 }
 
 export interface DashboardDep {

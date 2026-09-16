@@ -167,6 +167,19 @@ function RepoRowActions({ repo, demo }: { repo: DashboardRepo; demo: boolean }) 
   );
 }
 
+/**
+ * Armed, still behind, and never reported a run.
+ *
+ * All three conditions are required. Armed with no runs is not a problem by
+ * itself — a repo with nothing to upgrade reports nothing, so silence is
+ * ambiguous with "nothing to do". It is the combination of permitted to act,
+ * work outstanding, and never heard from that means the workflow was probably
+ * never committed.
+ */
+function isStalled(repo: DashboardRepo): boolean {
+  return repo.policy.enabled && (repo.drift?.majorDrift ?? 0) > 0 && repo.upkeep === null;
+}
+
 export function ReposPanel({
   repos,
   demo,
@@ -177,6 +190,7 @@ export function ReposPanel({
   installUrl: string | null;
 }) {
   const armed = repos.filter((r) => r.policy.enabled).length;
+  const stalled = repos.filter(isStalled).length;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
@@ -190,6 +204,7 @@ export function ReposPanel({
     if (query && !repo.fullName.toLowerCase().includes(query.toLowerCase())) return false;
     if (filter === "behind") return (repo.drift?.majorDrift ?? 0) > 0;
     if (filter === "armed") return repo.policy.enabled;
+    if (filter === "stalled") return isStalled(repo);
     return true;
   });
 
@@ -229,6 +244,7 @@ export function ReposPanel({
           { id: "all", label: "All" },
           { id: "behind", label: "Behind" },
           { id: "armed", label: "Armed" },
+          { id: "stalled", label: "Stalled" },
         ]}
         activeFilter={filter}
         onFilterChange={setFilter}
@@ -242,6 +258,7 @@ export function ReposPanel({
           trailing={
             <span className="font-mono text-xs text-ink-2">
               {armed} of {repos.length} armed
+              {stalled > 0 && <span className="text-bad"> · {stalled} never ran</span>}
             </span>
           }
         />
@@ -255,6 +272,7 @@ export function ReposPanel({
                 <TableHead>coverage</TableHead>
                 <TableHead>autopilot</TableHead>
                 <TableHead>last scan</TableHead>
+                <TableHead>last run</TableHead>
                 <TableHead className="pr-5 text-right md:pr-6">&nbsp;</TableHead>
               </TableRow>
             </TableHeader>
@@ -319,6 +337,24 @@ export function ReposPanel({
                         : repo.lastScanAt
                           ? relativeTime(repo.lastScanAt)
                           : "scanning…"}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {/* A different fact from "last scan": that is lurq reading
+                        the manifests from our side, this is their workflow
+                        running on theirs. A repo can be armed with the workflow
+                        never committed, and only this column shows it. */}
+                    <span
+                      className={cn("font-mono text-xs", isStalled(repo) ? "text-bad" : "text-ink-2")}
+                      title={
+                        repo.upkeep
+                          ? `${repo.upkeep.runs} run(s), ${repo.upkeep.delivered} reached a pull request${repo.upkeep.failed ? `, ${repo.upkeep.failed} failed` : ""}`
+                          : isStalled(repo)
+                            ? "Armed and still behind, but the workflow has never reported a run \u2014 it may not be committed"
+                            : "No runs reported yet"
+                      }
+                    >
+                      {repo.upkeep ? relativeTime(repo.upkeep.lastRunAt) : "never"}
                     </span>
                   </TableCell>
                   <TableCell className="pr-5 text-right md:pr-6">
