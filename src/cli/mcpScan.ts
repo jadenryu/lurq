@@ -638,6 +638,12 @@ export interface McpCiOpts {
   force?: boolean;
   cron?: string;
   failOn?: string;
+  /**
+   * Upload findings to GitHub code scanning. Opt-in, and deliberately so: it
+   * needs `security-events: write`, and on a private repository without
+   * Advanced Security the upload step fails the job outright.
+   */
+  sarif?: boolean;
 }
 
 /**
@@ -655,7 +661,7 @@ export async function runMcpCi(dir: string | undefined, opts: McpCiOpts): Promis
   const { MCP_SCAN_WORKFLOW_PATH, renderMcpScanWorkflow, secretNameFor } = await import('../github/mcpScanWorkflow');
   const secrets = [...new Set(cfg.servers.flatMap((s) => s.unresolved.filter((v) => !v.startsWith('input:'))))];
   const needsUv = cfg.servers.some((s) => s.registry === 'pypi' || /^(uvx|uv|pipx)$/.test((s.command ?? '').split(/[\\/]/).pop() ?? ''));
-  const yaml = renderMcpScanWorkflow({ cron: opts.cron, failOn: threshold ?? 'none', secrets, needsUv, githubIssue: opts.issue !== false });
+  const yaml = renderMcpScanWorkflow({ cron: opts.cron, failOn: threshold ?? 'none', secrets, needsUv, githubIssue: opts.issue !== false, sarif: opts.sarif === true });
 
   if (opts.print) {
     process.stdout.write(yaml);
@@ -676,6 +682,13 @@ export async function runMcpCi(dir: string | undefined, opts: McpCiOpts): Promis
     console.log(yellow('no MCP servers are committed to this repository yet; the workflow scans only committed configs (.mcp.json)'));
   } else {
     console.log(dim(`scans ${cfg.servers.length} committed server(s): ${cfg.servers.map((s) => s.alias).join(', ')}`));
+  }
+  if (opts.sarif) {
+    // Worth saying before the first red run: the upload step fails the job when
+    // code scanning is off, and on a private repo that needs Advanced Security.
+    console.log(
+      dim('findings upload to code scanning; enable it under Settings → Code security, or drop --sarif'),
+    );
   }
   console.log('add these repository secrets:');
   console.log(`  ${bold('LURQ_API_KEY')}  ${dim('your lurq key, so scans are recorded to your account')}`);

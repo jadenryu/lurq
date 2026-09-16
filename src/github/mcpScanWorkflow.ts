@@ -31,9 +31,19 @@ export interface McpScanWorkflowOptions {
   needsUv?: boolean;
   /** Keep the pinned dashboard issue current. Default true. */
   githubIssue?: boolean;
+  /**
+   * File findings as GitHub code scanning alerts. Off by default, and that is
+   * not timidity: the upload needs `security-events: write`, and on a private
+   * repository without Advanced Security it fails the job outright. A default
+   * that breaks CI for the people least able to diagnose it is not a default.
+   */
+  sarif?: boolean;
 }
 
 const DEFAULT_CRON = '23 6 * * *';
+
+/** Written by the scan step, read by the upload step. Relative to the workspace. */
+const SARIF_FILE = 'lurq-mcp.sarif';
 
 /** Config files whose change should trigger a scan on the pull request itself. */
 const CONFIG_PATHS = ['.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json', '.windsurf/mcp.json'];
@@ -55,6 +65,8 @@ export function renderMcpScanWorkflow(opts: McpScanWorkflowOptions = {}): string
   if (cron.trim().split(/\s+/).length !== 5) throw new Error(`cron must have five fields; got "${cron}"`);
   const failOn = opts.failOn ?? 'high';
   const issue = opts.githubIssue !== false;
+  // Opt-in: `githubIssue` defaults on, this does not. See the option's doc.
+  const sarif = opts.sarif === true;
   const secrets = [...new Set(opts.secrets ?? [])].filter((s) => VALID_NAME.test(s) && s !== 'LURQ_API_KEY').sort();
 
   // The runner's token for the dashboard issue is named LURQ_GITHUB_ISSUE_TOKEN
@@ -74,15 +86,35 @@ export function renderMcpScanWorkflow(opts: McpScanWorkflowOptions = {}): string
 `
     : '';
 
-  const permissions = issue
-    ? `# Contents are read-only; nothing the scan reads can change code. The one write
-# keeps the pinned "lurq dashboard" issue current, with server text escaped.
-permissions:
-  contents: read
-  issues: write`
-    : `# Read-only. The scan reads tool contracts; nothing it reads can write here.
-permissions:
-  contents: read`;
+  // Built as a list rather than nested ternaries: there are now four
+  // combinations, and the block is the trust model — it should be obvious which
+  // write is present and why, not decoded from an expression.
+  const writes = [
+    ...(issue ? ['  issues: write'] : []),
+    ...(sarif ? ['  security-events: write'] : []),
+  ];
+  const why = [
+    '# Contents are read-only. The scan reads tool contracts; nothing it reads can write here.',
+    ...(issue
+      ? ['# `issues: write` keeps the pinned "lurq dashboard" issue current, with server text escaped.']
+      : []),
+    ...(sarif ? ['# `security-events: write` is what lets a finding become a code scanning alert.'] : []),
+  ];
+  const permissions = [...why, 'permissions:', '  contents: read', ...writes].join('\n');
+
+  // Built separately so the no-step case keeps the file's trailing newline: the
+  // default path is every existing user, and generated files end in one.
+  const upload = sarif
+    ? `
+      # \`always()\` because --fail-on stops the step above, and a scan that
+      # failed the job is exactly the one whose findings should be filed.
+      - name: File findings as code scanning alerts
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${SARIF_FILE}
+`
+    : '';
 
   return `# Rescans the MCP servers committed to this repository: what each one exposes,
 # what its tools tell your agents, and what changed since the last scan.
@@ -114,8 +146,8 @@ ${uv}
       # --require-upload fails the job when the scan could not be recorded, so a
       # green run always means the dashboard's history has today's scan in it.
       - name: Scan MCP servers
-        run: npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload${issue ? ' --github-issue' : ''} --fail-on ${failOn}
+        run: npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload${issue ? ' --github-issue' : ''} --fail-on ${failOn}${sarif ? ` --sarif ${SARIF_FILE}` : ''}
         env:
 ${env}
-`;
+${upload}`;
 }

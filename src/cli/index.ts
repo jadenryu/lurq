@@ -487,6 +487,10 @@ export function buildProgram(): Command {
     .option('--force', 'replace an existing workflow file')
     .option('--cron <expr>', 'schedule (default: daily 06:23 UTC)')
     .option('--fail-on <severity>', 'fail the job at this severity: critical | high | moderate | low | none', 'high')
+    .option(
+      '--sarif',
+      'also file findings as GitHub code scanning alerts (needs code scanning enabled; adds security-events: write)',
+    )
     .option('--no-issue', 'do not maintain the pinned lurq dashboard issue')
     .action(async (dir: string | undefined, opts: import('./mcpScan').McpCiOpts) => {
       const { runMcpCi } = await import('./mcpScan');
