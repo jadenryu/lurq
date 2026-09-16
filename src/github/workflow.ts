@@ -138,7 +138,11 @@ jobs:
   upgrade:
     runs-on: ubuntu-latest
     env:
-      LURQ_MODE: \${{ inputs.mode || vars.LURQ_MODE || '${mode}' }}
+      # Empty when nothing explicit set it, which the "Resolve mode" step below
+      # then fills from this repository's dashboard setting. Precedence is
+      # explicit first: a dispatch input, then a repository variable, then the
+      # dashboard, then the mode baked in when this file was generated.
+      LURQ_MODE: \${{ inputs.mode || vars.LURQ_MODE || '' }}
       MAX_UPGRADES: "${max}"
     steps:
       - uses: actions/checkout@v6
@@ -153,6 +157,29 @@ jobs:
         env:
           LURQ_API_KEY: \${{ secrets.LURQ_API_KEY }}
         run: npx -y ${cli} upgrade-plan . --json > lurq-plan.json
+
+      # Without this the autopilot switch on the dashboard would only ever
+      # affect NEW installs: lurq is Contents:read-only and cannot rewrite this
+      # file or set a repository variable, so the mode is read at runtime from
+      # the plan above, which already carries this repository's policy.
+      #
+      # Skipped entirely when something explicit already set the mode, so a
+      # repository variable or a dispatch choice still wins. An older server or
+      # an unconnected repo sends no mode and the baked-in '${mode}' stands.
+      #
+      # The value is checked against the two it may be before it reaches the
+      # environment — it arrives over the network, and GITHUB_ENV is not the
+      # place to trust a response.
+      - name: Resolve mode
+        if: env.LURQ_MODE == ''
+        run: |
+          MODE=$(jq -r '.mode // empty' lurq-plan.json)
+          case "$MODE" in
+            pr|comment) ;;
+            *) MODE='${mode}' ;;
+          esac
+          echo "LURQ_MODE=$MODE" >> "$\{GITHUB_ENV}"
+          echo "Mode for this run: $MODE" >> "$\{GITHUB_STEP_SUMMARY}"
 
       # 2. Narrow that to symbols THIS repo references. Runs entirely locally
       #    against both versions' npm tarballs, no API key, no test suite.

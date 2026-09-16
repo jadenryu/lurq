@@ -117,6 +117,21 @@ export interface ScopedPlan {
   scopeSource: 'repo-policy' | 'unconnected';
   /** How many upgrades the policy holds back. Printed, never silent. */
   outOfScope: number;
+  /**
+   * What this repository's dashboard setting says the job should do: `pr` to
+   * open pull requests, `comment` to analyse only.
+   *
+   * Here because the toggle on the dashboard was otherwise a no-op for any
+   * workflow already committed. lurq's GitHub App is Contents:read-only — it
+   * cannot rewrite that file or set a repository variable — so the mode has to
+   * be something the workflow READS, and this response is one it already
+   * fetches on every run.
+   *
+   * Absent when no policy governs the checkout, and that absence is load
+   * bearing: the workflow falls back to the mode baked in when it was
+   * generated, so a server with no opinion never disarms a repo.
+   */
+  mode?: 'pr' | 'comment';
 }
 
 /**
@@ -146,5 +161,9 @@ export function applyScope(upgrades: UpgradeBrief[], policy: RepoPolicy | null):
     scope: policy.scope,
     scopeSource: 'repo-policy',
     outOfScope: scoped.filter((u) => !u.inScope).length,
+    // Only on this branch. The unconnected branch above deliberately omits it:
+    // "no policy" is not "policy says comment", and conflating them would turn
+    // an unconnected checkout into a silent disarm.
+    mode: policy.enabled ? 'pr' : 'comment',
   };
 }
