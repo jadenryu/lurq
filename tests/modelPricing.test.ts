@@ -45,8 +45,20 @@ describe('costOf', () => {
 
 describe('reserveFor', () => {
   it('exceeds a realistic single turn, so reserving cannot undershoot', () => {
-    const reserve = reserveFor('claude-opus-5', 2048);
+    const reserve = reserveFor('claude-opus-5', 25_000, 2048);
     const realistic = costOf('claude-opus-5', { input_tokens: 20_000, output_tokens: 2048 });
     expect(reserve).toBeGreaterThan(realistic);
+  });
+
+  it('leaves an Ask turn under that route’s per-question ceiling', () => {
+    // Regression. Reserving a full 200k context per turn cost $0.42 on Sonnet,
+    // over the $0.25 a whole question is allowed, so /api/ask refused every
+    // question on turn 0 with "you have reached this hour's usage limit" and
+    // never called the model. These are Ask's own numbers: Sonnet 5, 2048
+    // output, and a conversation from its opening prefix up to the largest its
+    // caps admit (six turns of TOOL_RESULT_CHARS).
+    const QUESTION_USD = 0.25;
+    expect(reserveFor('claude-sonnet-5', 10_000, 2048)).toBeLessThan(QUESTION_USD);
+    expect(reserveFor('claude-sonnet-5', 60_000, 2048)).toBeLessThan(QUESTION_USD);
   });
 });

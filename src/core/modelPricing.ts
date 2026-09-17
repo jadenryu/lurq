@@ -60,9 +60,16 @@ export function costOf(model: string, usage: TokenUsage): number {
  * call checks. Callers reserve rather than compare against the bare total,
  * because a call's price is only known after it returns — checking
  * `spent < limit` lets the very next call overshoot by its own size.
+ *
+ * `inputTokens` is the caller's estimate of the conversation it is about to
+ * send, rather than a fixed max-context figure, because a reserve far above
+ * anything the caller can actually spend is not conservative — it is broken. A
+ * 200k-token assumption reserved $0.42 a turn on Sonnet, which is more than
+ * /api/ask allows a whole question, so every question tripped its own ceiling
+ * on turn 0 and the model was never called.
  */
-export function reserveFor(model: string, maxTokens: number): number {
+export function reserveFor(model: string, inputTokens: number, maxOutputTokens: number): number {
   const p = PRICES[model] ?? FALLBACK;
-  // Assume the output cap is reached and the input is a full large context.
-  return (200_000 * p.input + maxTokens * p.output) / 1_000_000;
+  // Assume the output cap is reached.
+  return (inputTokens * p.input + maxOutputTokens * p.output) / 1_000_000;
 }
