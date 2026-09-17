@@ -151,10 +151,15 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "comment = analyse only · fix = PR with only provable changes (no API key) · pr = fix, plus the agent"
-        type: choice
-        options: [comment, fix, pr]
-        default: ${mode}
+        # No default, and deliberately a string rather than a choice. GitHub
+        # applies an input default on EVERY dispatch, including the ones lurq
+        # sends when a new major lands — which would fill LURQ_MODE before the
+        # "Resolve mode" step could read this repo's dashboard setting, and
+        # silently pin every triggered run to whatever was baked in at
+        # generation time. Left empty, a dispatch behaves like a scheduled run.
+        description: "leave empty to use your dashboard setting; or comment / fix / pr"
+        type: string
+        required: false
 
 # The blast radius. \`contents: write\` permits pushing a BRANCH; branch
 # protection on your default branch is what stops anything landing unreviewed.

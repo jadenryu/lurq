@@ -97,7 +97,10 @@ describe('detectInstallCommand', () => {
 describe('renderWorkflow', () => {
   it('defaults to analyse-only so connecting a repo never edits it', () => {
     const yaml = renderWorkflow();
-    expect(yaml).toContain('default: comment');
+    // No dispatch-input default any more: GitHub would apply it on every
+    // lurq-triggered dispatch and shadow the dashboard setting. The guarantee
+    // now rests entirely on the two assertions below.
+    expect(yaml).not.toContain('default: comment');
     // The baked default moved rather than disappeared. The job-level env now
     // starts EMPTY so the dashboard setting can fill it at runtime, which makes
     // the fallback inside "Resolve mode" the thing that has to say `comment` —

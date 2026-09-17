@@ -141,6 +141,54 @@ export async function installationToken(installationId: number): Promise<string>
 }
 
 /** Authenticated REST GET as an installation. */
+/**
+ * POST as the installation.
+ *
+ * Separate from the GET above rather than a `method` parameter, because the
+ * failure modes differ and the mapping is the point: a 403 here is not a bug,
+ * it is the App lacking `actions: write`, which is a permission the user grants
+ * and nobody can work around from this side. Saying so is the whole value.
+ */
+export async function installationPost<T>(
+  installationId: number,
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const token = await installationToken(installationId);
+  try {
+    const res = await httpRequest<T>(`${API}${path}`, {
+      host: API_HOST,
+      ttlMs: 0, // a write is never cached
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+    });
+    return res.data;
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 403) {
+      throw new GithubAppError(
+        'The lurq GitHub App is not permitted to do this. Grant it Actions: write to let lurq start a run.',
+        403,
+      );
+    }
+    if (err instanceof HttpError && err.status === 404) {
+      // 404 rather than 403 is what GitHub returns for a workflow file that is
+      // not committed, and for a repo the installation cannot see. Both mean
+      // "there is nothing here to run", which is not an error worth retrying.
+      throw new GithubAppError('No such repository or workflow for this installation.', 404);
+    }
+    throw new GithubAppError(
+      err instanceof Error ? err.message : 'Could not call GitHub.',
+      err instanceof HttpError ? err.status : 502,
+    );
+  }
+}
+
 export async function installationGet<T>(
   installationId: number,
   path: string,
