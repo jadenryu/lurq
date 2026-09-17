@@ -17,10 +17,15 @@
  * genuinely new, and one release can only ever produce one dispatch per repo.
  * Nothing here needs its own bookkeeping, which is why this module has no state.
  *
- * REQUIRES `actions: write` on the GitHub App, which it does not have today.
- * Until that is granted every call here returns `permission-denied`, the caller
- * logs it once, and the weekly cron keeps working exactly as it does now. That
- * is the whole failure mode: no runs are lost, they just are not early.
+ * REQUIRES `actions: write` on the GitHub App, granted 2026-09-17. Note what it
+ * does NOT grant: no contents write, so lurq still cannot rewrite the workflow
+ * or set a repository variable — it can only start the file the user committed.
+ *
+ * If the permission is ever revoked, or an installation has not approved it,
+ * every call here returns `permission-denied`, the caller logs it once per
+ * release, and the weekly cron keeps working exactly as it does now. No runs
+ * are lost, they are just not early — which is why this is safe to call
+ * unconditionally rather than behind a feature check.
  */
 import { logger } from '../core/logger';
 import type { RepoRow } from '../db/schema';

@@ -9,7 +9,9 @@
  * Pro/Max subscription token will do.
  *
  * Read the `permissions:` block first — it is the entire trust model. lurq's own
- * GitHub App is Contents:read-only and can never write to anyone's repository.
+ * GitHub App holds Contents:read-only plus Actions:write, so it can read the
+ * manifests and START this workflow, and it can still never write a byte to
+ * anyone's repository, rewrite this file, or set a repository variable.
  * Every write in this loop is done by GitHub's own `GITHUB_TOKEN`: ephemeral,
  * scoped to the one repo, and limited to exactly what this file declares. The
  * user owns the file, so revoking the autopilot is `git rm`.
@@ -140,7 +142,8 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   return `# Managed by lurq, https://lurq.run
 #
 # Keeps this repository's dependencies current and rewrites the call sites an
-# upgrade breaks. lurq itself has read-only access to your code; every write
+# upgrade breaks. lurq has read-only access to your code, and may start this
+# workflow when a dependency you declare ships a breaking release; every write
 # below is made by this workflow's own GITHUB_TOKEN, scoped by the permissions
 # block. Delete this file to turn the autopilot off.
 name: lurq upgrade
