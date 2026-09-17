@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-16T12:44:01.471Z",
+  "generatedAt": "2026-09-17T12:43:12.684Z",
   "source": "live",
-  "dataAsOf": "2026-09-16T12:00:56.958Z",
-  "packages": 48506,
-  "packagesScored": 48506,
+  "dataAsOf": "2026-09-17T12:02:49.635Z",
+  "packages": 48840,
+  "packagesScored": 48840,
   "categories": 23,
-  "versionsTracked": 4341156,
-  "apiSurfaces": 36866,
+  "versionsTracked": 4366202,
+  "apiSurfaces": 37487,
   "coOccurrencePairs": 27121288,
   "stacksResolved": 15,
   "stacksHeld": 15,
@@ -20,11 +20,11 @@
     "weeksLive": 12
   },
   "lastSync": {
-    "startedAt": "2026-09-16T06:04:54.192Z",
-    "finishedAt": "2026-09-16T07:04:27.445Z",
+    "startedAt": "2026-09-17T06:00:19.236Z",
+    "finishedAt": "2026-09-17T07:01:47.109Z",
     "packagesSeen": 2508,
     "packagesUpdated": 2508,
     "status": "partial"
   },
-  "syncDays": 62
+  "syncDays": 63
 }
