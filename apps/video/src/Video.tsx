@@ -5,7 +5,7 @@ import { Fragment } from "react";
 import { AbsoluteFill, interpolate } from "remotion";
 import { color, MONO, WORDMARK } from "./brand";
 import { BASE_FPS, LogoMark, SceneTiming, useFrame, useUnit } from "./components";
-import { CloseUp, End, Everywhere, Flyover, Guess, Keep, Meet, Skyline, Teams, UpgradeShot, VerifyShot } from "./scenes";
+import { CloseUp, End, Everywhere, Flyover, Keep, Meet, Memory, Skyline, SurfaceShot, Teams, UpgradeShot } from "./scenes";
 
 /**
  * The output frame rate. 60 is the most YouTube, X and LinkedIn play back; 120 renders fine too,
@@ -27,9 +27,9 @@ const SCENES = [
   { id: "skyline", Component: Skyline, frames: 150 },
   { id: "teams", Component: Teams, frames: 130, join: dissolve(30) },
   { id: "closeup", Component: CloseUp, frames: 110, join: dissolve(24) },
-  { id: "guess", Component: Guess, frames: 220, join: dissolve(24) },
+  { id: "memory", Component: Memory, frames: 220, join: dissolve(24) },
   { id: "meet", Component: Meet, frames: 170, join: dissolve(24) },
-  { id: "verify", Component: VerifyShot, frames: 230, join: dissolve(30) },
+  { id: "surface", Component: SurfaceShot, frames: 230, join: dissolve(30) },
   { id: "flyover", Component: Flyover, frames: 110, join: dissolve(30) },
   { id: "upgrade", Component: UpgradeShot, frames: 220, join: turn() },
   { id: "keep", Component: Keep, frames: 110, join: dissolve(30) },

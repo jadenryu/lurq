@@ -1,21 +1,24 @@
 import { AbsoluteFill, Easing } from "remotion";
 import { AGENT_LOGOS, color, HEADLINE_LINE_1, HEADLINE_LINE_2, IDE_HEADING, INSTALL_COMMAND, MONO, SANS, WORDMARK } from "./brand";
 import { Carousel3D, Chip, Clip, Footnote, Frame, Ground, Icon, Logo3D, ProductCard, progress, Typed, useFrame, useSquare, useUnit, Words } from "./components";
-import { arrowRight, shieldCheck, triangleAlert } from "./icons";
+import { arrowRight, check, shieldCheck } from "./icons";
 
 /*
- * The one number is quoted from its source, footnoted on screen: Spracklen et al., "We Have a
- * Package for You!", USENIX Security 2025. Open-source code models hallucinated at least 21.7%
- * of the packages they suggested, on average, which is "more than 1 in 5".
+ * THE THESIS, and it is the landing page's: a model answers from memory, and the memory has a
+ * date on it. The video's spine is code written for an API that has since moved, not a package
+ * that never existed. Keep it that way; see content/copy.ts HEADLINE_LINE_1/2.
+ *
+ * Every number and every line of output on screen is real:
+ *   - The zod delta is lurq's own answer for `usage zod --known 3.23.8` at 4.1.12: ZodEffects is
+ *     gone, Schema is a proven rename to ZodType. diff_surface returns it verdict verified_true,
+ *     read from shipped JavaScript.
+ *   - The 2,805 is apps/web/src/content/generated/drift.json, newest-cutoff bucket, read on the
+ *     date in the footnote. Do not add a number this file cannot point at.
  *
  * The floating check names are what lurq actually evaluates (see the lurq MCP tool descriptions
- * and src/surface/upgrade.ts): hallucinated and typosquatted names, advisories and deprecations
- * for verify; proven renames, removed symbols, call arity and a type check for check-upgrade.
+ * and src/surface/upgrade.ts): exported symbols, signatures, renames and removals for usage;
+ * proven renames, removed symbols, call arity and a type check for check-upgrade.
  */
-
-// A name that is not on npm (checked against the registry). The verdict lines are
-// lurq's real `verify` output for it.
-const FAKE_PACKAGE = "next-auth-session-helpers";
 
 /** Size of a full-frame super over footage. */
 function useSuperSize(): number {
@@ -71,21 +74,21 @@ export function CloseUp() {
   );
 }
 
-export function Guess() {
+export function Memory() {
   const u = useUnit();
   const square = useSquare();
   return (
     <AbsoluteFill>
       <Ground />
       <Frame justify="center" align="center" style={{ gap: 48 * u }}>
-        <Words text="But agents guess." at={108} size={square ? 70 : 92} style={{ textAlign: "center" }} />
-        <ProductCard at={4} label="install" agent accent={{ kind: "danger", at: 104 }}>
-          <div style={{ fontFamily: MONO, fontSize: (square ? 24 : 28) * u, color: color.ink2 }}>● I'll add a helper package for sessions.</div>
-          <Typed text={`npm install ${FAKE_PACKAGE}`} at={40} size={square ? 30 : 38} until={104} />
+        <Words text="For the version it remembers." at={108} size={square ? 70 : 92} style={{ textAlign: "center" }} />
+        <ProductCard at={4} label="write" agent accent={{ kind: "danger", at: 104 }}>
+          <div style={{ fontFamily: MONO, fontSize: (square ? 24 : 28) * u, color: color.ink2 }}>● I'll wrap the schema in a ZodEffects.</div>
+          <Typed text={`import { ZodEffects } from "zod"`} at={40} size={square ? 30 : 38} until={104} />
         </ProductCard>
-        <Words text="More than 1 in 5 packages suggested by open-source models are made up." at={140} size={square ? 30 : 36} weight={500} tone="ink2" stagger={3} style={{ textAlign: "center", maxWidth: 1100 * u }} />
+        <Words text="2,805 packages the newest model knew have shipped a new major since its cutoff." at={140} size={square ? 30 : 36} weight={500} tone="ink2" stagger={3} style={{ textAlign: "center", maxWidth: 1100 * u }} />
       </Frame>
-      <Footnote at={150}>Spracklen et al., USENIX Security 2025</Footnote>
+      <Footnote at={150}>lurq index, read 17 Sep 2026</Footnote>
     </AbsoluteFill>
   );
 }
@@ -111,7 +114,8 @@ export function Meet() {
   );
 }
 
-export function VerifyShot() {
+// lurq's real `usage zod --known 3.23.8` delta at 4.1.12, in the CLI's own output shape.
+export function SurfaceShot() {
   const frame = useFrame();
   const u = useUnit();
   const square = useSquare();
@@ -119,14 +123,17 @@ export function VerifyShot() {
     <AbsoluteFill>
       <Ground />
       <Frame justify="center" align="center" style={{ gap: 70 * u }}>
-        <Words text="It checks every package before it's installed." at={8} size={square ? 52 : 66} style={{ textAlign: "center", maxWidth: 1300 * u }} />
-        <ProductCard at={30} label="verify" checks={["made-up names", "typosquats", "advisories", "deprecations"]} accent={{ kind: "trace", at: 62 }}>
-          <Typed text={`lurq verify ${FAKE_PACKAGE}`} at={60} size={square ? 30 : 38} until={118} />
-          <Chip at={120} tone="bad">
-            <Icon node={triangleAlert} at={124} size={30} tone="bad" strokeWidth={2} />
-            NOT A REAL PACKAGE
+        <Words text="It reads the API your installed version actually ships." at={8} size={square ? 52 : 66} style={{ textAlign: "center", maxWidth: 1300 * u }} />
+        <ProductCard at={30} label="usage" checks={["exported symbols", "signatures", "renames", "removals"]} accent={{ kind: "trace", at: 62 }}>
+          <Typed text="lurq usage zod --known 3.23.8" at={60} size={square ? 30 : 38} until={118} />
+          <Chip at={120} tone="good">
+            <Icon node={check} at={124} size={30} tone="good" strokeWidth={2} />
+            READ FROM THE SHIPPED CODE
           </Chip>
-          <div style={{ opacity: progress(frame, 136, 30), fontFamily: MONO, fontSize: (square ? 22 : 26) * u, color: color.ink2 }}>No such package on npm. This name does not exist.</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 * u, fontFamily: MONO, fontSize: (square ? 26 : 32) * u }}>
+            <div style={{ opacity: progress(frame, 136, 26), color: color.bad }}>- ZodEffects</div>
+            <div style={{ opacity: progress(frame, 152, 26), color: color.warn }}>~ Schema → ZodType</div>
+          </div>
         </ProductCard>
       </Frame>
     </AbsoluteFill>
@@ -139,7 +146,7 @@ export function Flyover() {
     <AbsoluteFill>
       <Clip name="tower" shade={0.35} letterbox drift={-1} />
       <Frame style={{ paddingBottom: useAboveBars() }}>
-        <Words text="Every install, verified." at={14} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
+        <Words text="Written for what's installed." at={14} size={useSuperSize()} style={{ maxWidth: 1300 * u }} />
       </Frame>
     </AbsoluteFill>
   );
