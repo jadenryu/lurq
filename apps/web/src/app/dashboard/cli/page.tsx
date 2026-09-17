@@ -23,6 +23,8 @@ export default async function CliConnectPage({
   const port =
     Number.isInteger(rawPort) && rawPort >= 1024 && rawPort <= 65535 ? rawPort : null;
   const nonce = typeof params.nonce === "string" ? params.nonce.slice(0, 128) : null;
+  // Set by the CLI: an agent's shell started this sign-in, or the setup wizard did.
+  const via = params.via === "agent" ? "agent" : "terminal";
 
   return (
     <div>
@@ -31,7 +33,7 @@ export default async function CliConnectPage({
         subtitle="One click, and the key lands in the terminal that sent you here."
       />
       <PageBody>
-        <CliHandoff port={port} nonce={nonce} />
+        <CliHandoff port={port} nonce={nonce} via={via} />
       </PageBody>
     </div>
   );

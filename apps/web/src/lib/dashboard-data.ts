@@ -46,6 +46,8 @@ import {
   fetchContributions,
   fetchKeys,
   fetchOutcomes,
+  fetchPinnedEndpoints,
+  fetchPublicEndpoint,
   fetchRepo,
   fetchRepoBrief,
   fetchRepos,
@@ -56,6 +58,8 @@ import {
   type DashboardOutcome,
   type DashboardRepo,
   type DashboardUsage,
+  type PublicEndpointDetail,
+  type PublicEndpointPin,
   type RepoAlert,
   type RepoBrief,
   type RepoDetailPayload,
@@ -406,6 +410,20 @@ export function loadMcpServers(): Promise<Loaded<McpServersPayload>> {
 /** One server's contract, findings and history. Null when it is not this account's. */
 export function loadMcpServer(id: number): Promise<Loaded<McpServerDetail | null>> {
   return load((ownerId) => fetchMcpServer(ownerId, id), () => demoMcpServerDetail(id), null);
+}
+
+/** The account's pinned public MCP servers, and which changed since pinning. */
+export function loadPinnedEndpoints(): Promise<Loaded<PublicEndpointPin[]>> {
+  return load(fetchPinnedEndpoints, () => [], []);
+}
+
+/**
+ * A registry-listed remote MCP endpoint as lurq's probe reads it, with this
+ * account's pin and acknowledgements. There is no demo fixture for it: a demo
+ * account reaching this page gets not-found rather than invented probe data.
+ */
+export function loadPublicEndpoint(id: number): Promise<Loaded<PublicEndpointDetail | null>> {
+  return load((ownerId) => fetchPublicEndpoint(ownerId, id), () => null, null);
 }
 
 const DEFAULT_NOTIFICATIONS: NotificationPreferences = { urgentEmail: true, weeklyDigest: false, emailConfigured: false };

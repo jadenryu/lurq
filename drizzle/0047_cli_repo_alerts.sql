@@ -1,0 +1,2 @@
+ALTER TABLE "repo_alerts" ALTER COLUMN "repo_id" DROP NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "repo_alerts_cli_dedup_idx" ON "repo_alerts" USING btree ("owner_id","repo_full_name","package_name","to_version") WHERE repo_id is null;

@@ -9,7 +9,10 @@ vi.mock('../src/db/apiSurfaces', () => ({
   getStoredSurface: vi.fn(),
   upsertSurface: vi.fn(),
 }));
-vi.mock('../src/usage/extract', () => ({ extractSurface: vi.fn() }));
+vi.mock('../src/usage/extract', () => ({
+  extractSurface: vi.fn(),
+  typesPackageName: (name: string) => `@types/${name}`,
+}));
 
 import { getOrExtractSurface, resetSurfaceInflight } from '../src/usage/service';
 import { handleUsage } from '../src/mcp/handlers';
@@ -134,7 +137,7 @@ describe('handleUsage — first request populates the cache', () => {
     expect(upsertSurface).toHaveBeenCalledWith(db, 'puppeteer', '24.14.0', SURFACE);
   });
 
-  it('keeps the README-fallback note when extraction yields nothing', async () => {
+  it('says what to do instead when extraction yields nothing', async () => {
     getStoredSurface.mockResolvedValue(null);
     extractSurface.mockResolvedValue(null);
 
@@ -142,7 +145,10 @@ describe('handleUsage — first request populates the cache', () => {
 
     expect(out.available).toBe(false);
     expect(out.surface).toBeNull();
-    expect(out.note).toMatch(/fall back to the README/);
+    // The README is not in the response, so pointing at it was a dead end.
+    expect(out.note).not.toMatch(/fall back to the README/);
+    expect(out.note).toContain('resolve_surface');
+    expect(out.note).toContain('https://www.npmjs.com/package/left-pad/v/1.3.0');
   });
 
   it('read-throughs knownVersion too, so a delta needs neither version pre-warmed', async () => {

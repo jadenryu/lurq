@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
+import { motion, useReducedMotion } from 'framer-motion';
 
 import {
   PRICING_BODY,
@@ -16,6 +17,8 @@ import { CONTACT_EMAIL } from '@/content/copy';
 import { useRevealOnce } from '@/lib/use-reveal-once';
 import {
   ANNUAL_DISCOUNT,
+  GRACE_CALLS_PER_DAY,
+  OVERAGE_CAP_MULTIPLE,
   PLAN_LIST,
   annualPriceCents,
   type BillingInterval,
@@ -104,7 +107,7 @@ function BuyButton({ plan, interval }: { plan: Plan; interval: BillingInterval }
   // come back, rather than opening Stripe for an account that does not exist.
   if (!isSignedIn) {
     return (
-      <Link href={`/sign-up?next=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
+      <Link href={`/sign-up?redirect_url=${encodeURIComponent('/#pricing')}`} className={BTN_FILLED}>
         {`Start ${plan.name}`}
       </Link>
     );
@@ -216,6 +219,7 @@ function PlanCard({
 }) {
   // Team, not Pro: it is the plan the ladder is built to sell.
   const featured = plan.tier === 'team';
+  const reduce = useReducedMotion();
 
   return (
     <article
@@ -239,9 +243,17 @@ function PlanCard({
 
       <p className="mt-5 flex items-baseline gap-1">
         {plan.priceFrom ? <span className="mr-0.5 text-[13px] text-ink-3">from</span> : null}
-        <span className="font-sans text-[34px] font-medium leading-none tracking-[-0.03em] text-ink">
+        {/* Keyed on the label, so only prices that actually change replay: Free
+            stays still while the paid cards roll to their yearly figure. */}
+        <motion.span
+          key={priceLabel(plan, interval)}
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+          className="inline-block font-sans text-[34px] font-medium leading-none tracking-[-0.03em] text-ink tabular-nums"
+        >
           {priceLabel(plan, interval)}
-        </span>
+        </motion.span>
         <span className="text-[13px] text-ink-3">{plan.perSeat ? '/seat/mo' : '/mo'}</span>
       </p>
       {interval === 'year' && plan.paid && !plan.contactOnly ? (
@@ -254,6 +266,16 @@ function PlanCard({
       <p className="mt-4 border-t border-edge pt-4 text-[13px] font-medium text-ink">
         {allowanceLabel(plan)}
       </p>
+      {/* What happens past the pool is part of the price, so it sits with the
+          allowance rather than in the note under the cards. Read from plans.ts,
+          the same numbers http.ts and billing/overage.ts act on. */}
+      {plan.monthlyCalls !== null ? (
+        <p className="mt-1.5 text-[12px] leading-[1.5] text-ink-3">
+          {plan.overageCentsPer1k && interval === 'month'
+            ? `Past the pool: $${plan.overageCentsPer1k / 100} per 1,000 calls, up to ${OVERAGE_CAP_MULTIPLE}x the pool`
+            : `Past the limit: ${GRACE_CALLS_PER_DAY} calls a day until the month turns`}
+        </p>
+      ) : null}
       <p className="mt-2 text-[13px] leading-[1.6] text-ink-2">{plan.tagline}</p>
 
       <div className="mt-6 flex-1">
@@ -286,6 +308,7 @@ function PlanCard({
 export function Pricing() {
   const { ref, played } = useRevealOnce<HTMLDivElement>();
   const [interval, setBilling] = useState<BillingInterval>('month');
+  const reduce = useReducedMotion();
 
   return (
     <section id="pricing" className="w-full py-24 min-[900px]:py-32">
@@ -316,18 +339,32 @@ export function Pricing() {
               type="button"
               aria-pressed={interval === value}
               onClick={() => setBilling(value)}
-              className={`rounded-full px-3.5 py-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark ${
-                interval === value ? 'bg-ink text-ground' : 'text-ink-2 hover:text-ink'
+              className={`relative rounded-full px-3.5 py-1.5 transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark ${
+                interval === value ? 'text-ground' : 'text-ink-2 hover:text-ink'
               }`}
             >
-              {value === 'month' ? 'Monthly' : `Yearly, ${Math.round(ANNUAL_DISCOUNT * 100)}% off`}
+              {/* One pill that slides between the two options, same layoutId
+                  trick as the dashboard nav indicator. */}
+              {interval === value ? (
+                <motion.span
+                  layoutId="pricing-interval-pill"
+                  aria-hidden
+                  className="absolute inset-0 rounded-full bg-ink"
+                  transition={
+                    reduce ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 42, mass: 0.7 }
+                  }
+                />
+              ) : null}
+              <span className="relative">
+                {value === 'month' ? 'Monthly' : `Yearly, ${Math.round(ANNUAL_DISCOUNT * 100)}% off`}
+              </span>
             </button>
           ))}
         </div>
 
         <div
           ref={ref}
-          data-playing={played ? 'true' : 'false'}
+          data-playing={played === undefined ? undefined : String(played)}
           className="room-price-grid mt-12 grid grid-cols-1 items-stretch gap-3 min-[720px]:grid-cols-2 min-[1080px]:grid-cols-4"
         >
           {PLAN_LIST.map((plan, i) => (

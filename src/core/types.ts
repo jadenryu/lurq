@@ -343,8 +343,8 @@ export interface SurfaceDelta {
 export interface UsageOutput {
   package: string;
   version: string | null;
-  /** Extracted export list, or null when types are unavailable (falls back to
-   *  the README, which is already fetched). */
+  /** One page (USAGE_PAGE_SIZE) of the extracted export list, or null when
+   *  types are unavailable. */
   surface: ExportSymbol[] | null;
   available: boolean;
   /** Declared `engines` for this exact version (e.g. `{ node: ">=20" }`), or null
@@ -362,6 +362,12 @@ export interface UsageOutput {
    *  for and could not be produced — silence about a requested comparison reads
    *  as "no changes", which is the one thing it never means. */
   deltaNote?: string;
+  /** Size of the surface (after `query`), when `surface` is one page of it. */
+  totalSymbols?: number;
+  /** The surface is a default export typed by an interface whose members hold
+   *  the real API and are not enumerated; `note` says where to read them. */
+  shallow?: boolean;
+  /** Why the surface is missing, partial, or shallow, and what to do about it. */
   note?: string;
 }
 
@@ -463,7 +469,9 @@ export interface EvaluateOutput {
   archived: boolean;
   /** The shared safety call — identical to what `verify` and `audit` return. */
   verdict: SecurityVerdict;
-  advisories: Advisory[];
+  /** Top advisories by severity. Null (absent once compacted) = not checked
+   *  yet, never "none"; `verdict.unknowns` says so in words. */
+  advisories: Advisory[] | null;
   summary: string | null;
   usageGuide: UsageGuide | null;
   repoUrl: string | null;

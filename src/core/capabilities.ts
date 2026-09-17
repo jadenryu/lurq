@@ -1,8 +1,11 @@
 /**
  * What lurq can do, as data.
  *
- * lurq has eleven MCP tools, sixteen CLI commands and seven dashboard pages, and
- * the honest problem with that is nobody — human or agent — holds the map. An
+ * lurq's surface runs to sixteen MCP tools, dozens of CLI commands and a
+ * dashboard, and the honest problem with that is nobody — human or agent —
+ * holds the map. (Deliberately no exact totals for the CLI and the dashboard:
+ * this header sat on "eleven MCP tools, sixteen CLI commands" long after both
+ * numbers stopped being true, which is its own small demonstration.) An
  * agent with `verify` in its tool list still writes `npm install` and hopes; a
  * user staring at a drift number does not know `check-upgrade` is the thing that
  * tells them whether it matters. Both failures are the same failure: the
@@ -142,6 +145,25 @@ export const CAPABILITIES: Capability[] = [
     aliases: ['mcp', 'schema drift', 'tool drift', 'readOnlyHint', 'breaking', 'agent'],
   },
   {
+    id: 'connect-check',
+    title: 'Check a server works in your client',
+    question: 'Will this MCP server work in Claude, ChatGPT, Cursor or VS Code, and what does it need?',
+    answer:
+      'Per-client verdicts (works, needs setup, blocked, unknown) for one MCP server, from a credential-free probe of its endpoint and each client’s documented constraints: how it authenticates and whether that client can sign in to it, spec deviations strict clients refuse, tool names and schemas the client rejects. Returns the setup steps and ready-to-paste config in each client’s own format.',
+    mcp: 'connect_check',
+    cli: 'lurq connect-check <server> --client <client>',
+    aliases: ['connect', 'oauth', 'auth', 'connector', 'setup', 'install', 'config', 'claude.ai', 'chatgpt', 'cursor', 'vscode', 'remote server', '401'],
+  },
+  {
+    id: 'mcp-pin',
+    title: 'Get alerted when a server changes',
+    question: 'How do I know if a remote MCP server I approved changes its tools or sign-in?',
+    answer:
+      'Pin the server as it is now. lurq re-reads every remote endpoint in the official registry on a schedule and alerts the account (email, Slack, the agent itself) when a pinned server’s tools, sign-in path or availability change — approved keeps meaning what was approved. Servers in your uploaded mcp-scan results are watched the same way without pinning.',
+    cli: 'lurq mcp-pin <url-or-registry-name>',
+    aliases: ['pin', 'approve', 'watch', 'alert', 'rug pull', 'drift', 'changed', 'monitor', 'remote'],
+  },
+  {
     id: 'diagram',
     title: 'Draw the stack',
     question: 'Can I see this as a diagram?',
@@ -218,7 +240,7 @@ export const CAPABILITIES: Capability[] = [
     id: 'usage-dashboard',
     title: 'See how lurq is being used',
     question: 'Who on my team is calling lurq, and how much?',
-    answer: 'Call volume by tool and by day, plus the outcomes reported back after a recommendation.',
+    answer: 'Call volume by tool and by day, plus the outcomes agents reported back about the packages they chose.',
     page: '/dashboard/usage',
     aliases: ['activity', 'analytics', 'volume', 'calls', 'team', 'adoption', 'heatmap'],
   },
@@ -246,7 +268,7 @@ export const CAPABILITIES: Capability[] = [
     title: 'Tell lurq how it went',
     question: 'How does lurq learn from what I picked?',
     answer:
-      'An opt-in report of whether you took the recommendation and whether it built. Coarse signal only — never source code.',
+      'An opt-in report of whether you went with a package lurq checked and whether it built. Coarse signal only — never source code.',
     mcp: 'report_outcome',
     aliases: ['feedback', 'outcome', 'accepted', 'flywheel', 'learn'],
   },

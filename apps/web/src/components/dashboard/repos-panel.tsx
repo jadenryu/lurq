@@ -167,6 +167,55 @@ function RepoRowActions({ repo, demo }: { repo: DashboardRepo; demo: boolean }) 
   );
 }
 
+/**
+ * Armed, still behind, and never reported a run.
+ *
+ * All three conditions are required. Armed with no runs is not a problem by
+ * itself — a repo with nothing to upgrade reports nothing, so silence is
+ * ambiguous with "nothing to do". It is the combination of permitted to act,
+ * work outstanding, and never heard from that means the workflow was probably
+ * never committed.
+ */
+function isStalled(repo: DashboardRepo): boolean {
+  return repo.policy.enabled && (repo.drift?.majorDrift ?? 0) > 0 && repo.upkeep === null;
+}
+
+/**
+ * Armed, reporting runs, and every one of them only analysed.
+ *
+ * A different failure from `isStalled`: the workflow is committed and running,
+ * it just never gets past a comment. This reads the count the API returns
+ * rather than inferring from `delivered === 0`, because a healthy repo with
+ * nothing worth a pull request also delivers nothing — `checked` is defined as
+ * "analysed only (comment mode, or the agent step was not armed)", so an
+ * all-`checked` history is evidence and `delivered === 0` is a guess.
+ *
+ * Kept apart from `isStalled` because the fix differs: that one needs the
+ * workflow committed, this one needs the workflow file REPLACED. A workflow
+ * generated before lurq read this setting at run time has the mode baked into
+ * it, and nothing here can reach that file — the GitHub App is
+ * Contents:read-only by design.
+ */
+function isAnalysingOnly(repo: DashboardRepo): boolean {
+  const upkeep = repo.upkeep;
+  if (!upkeep || !repo.policy.enabled) return false;
+  return upkeep.runs > 0 && upkeep.analysedOnly === upkeep.runs;
+}
+
+/** The hover text for the last-run cell, which has four distinct cases. */
+function lastRunTitle(repo: DashboardRepo): string {
+  const upkeep = repo.upkeep;
+  if (!upkeep) {
+    return isStalled(repo)
+      ? "Armed and still behind, but the workflow has never reported a run — it may not be committed"
+      : "No runs reported yet";
+  }
+  const counts = `${upkeep.runs} run(s), ${upkeep.delivered} reached a pull request${upkeep.failed ? `, ${upkeep.failed} failed` : ""}`;
+  return isAnalysingOnly(repo)
+    ? `${counts}, and nothing opened. This repository's workflow file was committed before lurq read the autopilot setting at run time, or pins the mode itself — re-copy it from the repository page to let this setting govern runs.`
+    : counts;
+}
+
 export function ReposPanel({
   repos,
   demo,
@@ -177,6 +226,8 @@ export function ReposPanel({
   installUrl: string | null;
 }) {
   const armed = repos.filter((r) => r.policy.enabled).length;
+  const stalled = repos.filter(isStalled).length;
+  const analysing = repos.filter(isAnalysingOnly).length;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
@@ -190,6 +241,10 @@ export function ReposPanel({
     if (query && !repo.fullName.toLowerCase().includes(query.toLowerCase())) return false;
     if (filter === "behind") return (repo.drift?.majorDrift ?? 0) > 0;
     if (filter === "armed") return repo.policy.enabled;
+    // One chip for both: the question being asked is "which armed repo is not
+    // actually landing anything", and a chip nobody clicks costs the same room
+    // as one everybody does. The row badges still say which of the two it is.
+    if (filter === "stalled") return isStalled(repo) || isAnalysingOnly(repo);
     return true;
   });
 
@@ -229,6 +284,7 @@ export function ReposPanel({
           { id: "all", label: "All" },
           { id: "behind", label: "Behind" },
           { id: "armed", label: "Armed" },
+          { id: "stalled", label: "Stalled" },
         ]}
         activeFilter={filter}
         onFilterChange={setFilter}
@@ -242,6 +298,12 @@ export function ReposPanel({
           trailing={
             <span className="font-mono text-xs text-ink-2">
               {armed} of {repos.length} armed
+              {stalled > 0 && <span className="text-bad"> · {stalled} never ran</span>}
+              {/* Never summed with `stalled`: you fix them differently, the
+                  same rule the risk column follows. */}
+              {analysing > 0 && (
+                <span className="text-warn"> · {analysing} analysing only</span>
+              )}
             </span>
           }
         />
@@ -255,6 +317,7 @@ export function ReposPanel({
                 <TableHead>coverage</TableHead>
                 <TableHead>autopilot</TableHead>
                 <TableHead>last scan</TableHead>
+                <TableHead>last run</TableHead>
                 <TableHead className="pr-5 text-right md:pr-6">&nbsp;</TableHead>
               </TableRow>
             </TableHeader>
@@ -319,6 +382,25 @@ export function ReposPanel({
                         : repo.lastScanAt
                           ? relativeTime(repo.lastScanAt)
                           : "scanning…"}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {/* A different fact from "last scan": that is lurq reading
+                        the manifests from our side, this is their workflow
+                        running on theirs. A repo can be armed with the workflow
+                        never committed, and only this column shows it. */}
+                    <span
+                      className={cn(
+                        "font-mono text-xs",
+                        isStalled(repo)
+                          ? "text-bad"
+                          : isAnalysingOnly(repo)
+                            ? "text-warn"
+                            : "text-ink-2",
+                      )}
+                      title={lastRunTitle(repo)}
+                    >
+                      {repo.upkeep ? relativeTime(repo.upkeep.lastRunAt) : "never"}
                     </span>
                   </TableCell>
                   <TableCell className="pr-5 text-right md:pr-6">

@@ -55,36 +55,37 @@ import {
   entitlementFor,
   isAllowed,
   getSubscription,
-  getSubscriptionByCustomer,
   type Entitlement,
 } from '../db/subscriptions';
 import {
   billingEnabled,
-  constructEvent,
   createCheckoutSession,
   isCheckoutOrigin,
   createPortalSession,
-  handleEvent,
 } from '../billing/stripe';
 import { GRACE_CALLS_PER_DAY, PLANS, type Tier } from '../core/plans';
+import { agentClient, initializeInfo } from './clientInfo';
 import { registerPublicPackageRoutes } from './publicPackages';
+import { registerPublicUpgradeRoutes } from './publicUpgrades';
 import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
-import { applyScope } from '../github/scope';
+import { applyScope, permits } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
 import {
   findRepoIdByFullName,
   getUpgradeImpact,
   listRunsForRepo,
   recordUpgradeRuns,
+  upkeepByRepo,
   MAX_RUNS_PER_POST,
+  type RepoUpkeep,
 } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
-import { parseTarget, publicScan, type PublicScan } from '../github/publicScan';
+import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
 import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
 import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
@@ -93,12 +94,19 @@ import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
+import { registerPublicMcpRoutes } from './publicMcpRoutes';
+import { registerPublicMcpServerRoutes } from './publicMcpServers';
 import { registerNotificationRoutes } from './notificationRoutes';
 import { registerChannelRoutes } from './channelRoutes';
+import { registerBuilderScanRoutes } from './builderScanRoutes';
 import { secretKey } from '../core/secretBox';
 import { channelsAllowed } from '../notify/channelRun';
 import { postJson } from '../notify/safeHttp';
+import { agentAlertNotice } from '../notify/sources';
+import { PACKAGE_NAME } from '../core/constants';
 import { renderPrometheus } from './metrics';
+import { alert, errorKind } from '../core/alert';
+import { processStripeWebhook } from '../billing/webhook';
 
 interface AuthedRequest extends Request {
   lurqKey?: ApiKeyRow;
@@ -114,6 +122,10 @@ interface RawBodyRequest extends Request {
 function rpcError(code: number, message: string) {
   return { jsonrpc: '2.0' as const, error: { code, message }, id: null };
 }
+
+/** The next step for a caller with no working key, appended to both 401s. */
+export const GET_A_KEY =
+  'Get a key at https://www.lurq.run/dashboard/keys, or run `npx lurqrun` to set one up.';
 
 /** One cached public scan: the answer, when it was taken, and how long it holds. */
 export interface ScanCacheEntry {
@@ -155,7 +167,10 @@ export function scanTtl(scan: PublicScan | null): number {
 
 /** A builder profile holds only as long as its least settled repo. */
 export function profileTtl(profile: BuilderProfile | null): number {
-  return profile ? Math.min(SCAN_TTL_MS, ...profile.repos.map(scanTtl)) : SCAN_PROVISIONAL_TTL_MS;
+  if (!profile) return SCAN_PROVISIONAL_TTL_MS;
+  // Repos GitHub did not answer for: the next read may get them, so hold briefly.
+  if (profile.coverage?.unreadManifests.length) return SCAN_PROVISIONAL_TTL_MS;
+  return Math.min(SCAN_TTL_MS, ...profile.repos.map(scanTtl));
 }
 
 /**
@@ -323,6 +338,20 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   const app = express();
   app.set('trust proxy', 1); // Railway terminates TLS at the edge.
   app.use(helmet());
+  // Operator alert on any 5xx, whichever route produced it: most routes catch
+  // their own failures and answer 500 themselves, so the terminal error handler
+  // alone would miss nearly all of them. On `finish`, so it runs after the
+  // response is out and cannot slow or fail it. The route pattern rather than
+  // the path keeps ids out of the message. The two webhooks alert with their own
+  // detail, so they are skipped here rather than reported twice.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.on('finish', () => {
+      if (res.statusCode < 500 || req.path === '/billing/webhook') return;
+      const route = (req.route as { path?: unknown } | undefined)?.path;
+      alert('server-error', `${req.method} ${typeof route === 'string' ? route : req.path} answered ${res.statusCode}`);
+    });
+    next();
+  });
   // `verify` keeps the bytes the parser already had in hand. GitHub signs the raw
   // body, and a re-serialized parse result is not byte-identical, so the webhook
   // signature is uncheckable without this. Costs a reference, not a copy.
@@ -384,6 +413,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // Public, keyless package summaries for the lurq.run/npm pages. Behind the IP
   // limiter only; publicPackages.ts keeps them to a summary of the top packages.
   registerPublicPackageRoutes(app, db, ipLimiter);
+  registerPublicUpgradeRoutes(app, db, ipLimiter);
+  // Public MCP server summaries for lurq.run/mcp pages; publicMcpServers.ts keeps them to a summary.
+  registerPublicMcpServerRoutes(app, db, ipLimiter);
 
   app.get('/capabilities', ipLimiter, (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
@@ -505,23 +537,37 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       if (!profile) missing();
       else res.json(profile);
     } catch (err) {
+      if (err instanceof GitHubUnavailableError) {
+        // Not cached: the next request may get through, and a cached failure
+        // would turn one rate-limited minute into a quarter hour of "try again".
+        logger.warn(`profile scan: ${err.message}`);
+        res.status(503).json({
+          error: "GitHub didn't answer (a rate limit or a timeout), so nothing could be read. Try again in a minute.",
+        });
+        return;
+      }
       logger.error('profile scan failed:', formatError(err));
       res.status(502).json({ error: 'Could not read that profile.' });
     }
   });
 
   // Bearer API-key auth: resolve and attach the key, or 401.
+  //
+  // The 401 text is usually the first thing a new user sees, pasted from their
+  // agent's MCP log, so it says where a key comes from. Deliberately no
+  // WWW-Authenticate header: lurq has no OAuth, and MCP clients that see one
+  // start OAuth discovery and bury this message under a failed sign-in flow.
   const auth = async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
     const header = req.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token) {
-      res.status(401).json(rpcError(-32001, 'Missing API key. Pass Authorization: Bearer <key>.'));
+      res.status(401).json(rpcError(-32001, `Missing API key. Pass Authorization: Bearer <key>. ${GET_A_KEY}`));
       return;
     }
     try {
       const row = await lookupActiveKey(db, token);
       if (!row) {
-        res.status(401).json(rpcError(-32001, 'Invalid or revoked API key.'));
+        res.status(401).json(rpcError(-32001, `Invalid or revoked API key. ${GET_A_KEY}`));
         return;
       }
       req.lurqKey = row;
@@ -877,48 +923,19 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * requireIssuerSecret or the IP limiter: Stripe calls it from its own ranges
    * and a burst of retries must not be throttled into looking like an outage.
    *
-   * Answers 200 for anything it managed to verify, including events it does not
-   * act on. A non-2xx makes Stripe retry for three days, so reserving failure
-   * for "we could not verify this at all" is what keeps the retry queue honest.
+   * Processes before answering, and answers 5xx when processing fails so Stripe
+   * retries. The status contract lives in billing/webhook.ts.
    */
   app.post('/billing/webhook', async (req: Request, res: Response) => {
-    const raw = (req as RawBodyRequest).rawBody;
     const signature = req.headers['stripe-signature'];
-    let event;
-    try {
-      event = await constructEvent(
-        raw ?? '',
-        typeof signature === 'string' ? signature : undefined,
-      );
-    } catch (err) {
-      logger.warn(
-        `billing webhook: bad signature: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      res.status(400).json({ error: 'Invalid signature.' });
-      return;
-    }
-    if (!event) {
-      res.status(404).end();
-      return;
-    }
-
-    // Acknowledge before doing the work. Stripe times out at 20 seconds and a
-    // retry of an already-applied event is wasted round trips on both sides.
-    res.status(200).json({ received: true });
-    try {
-      const outcome = await handleEvent(db, event);
-      logger.info(`billing webhook: ${outcome}`);
-      // The plan just moved. Drop the cached entitlement so the next call sees
-      // it immediately rather than up to a minute later — the one moment the
-      // staleness would be felt is the moment someone has just paid.
-      const object = event.data.object as { customer?: unknown };
-      if (typeof object.customer === 'string') {
-        const row = await getSubscriptionByCustomer(db, object.customer);
-        if (row) invalidateEntitlement(row.ownerId);
-      }
-    } catch (err) {
-      logger.error('billing webhook failed:', formatError(err));
-    }
+    const reply = await processStripeWebhook(
+      db,
+      (req as RawBodyRequest).rawBody,
+      typeof signature === 'string' ? signature : undefined,
+      invalidateEntitlement,
+    );
+    if (reply.body === undefined) res.status(reply.status).end();
+    else res.status(reply.status).json(reply.body);
   });
 
   app.post('/keys', requireIssuerSecret, async (req: Request, res: Response) => {
@@ -1127,7 +1144,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
 
   /** Manifests are never sent to the browser — only the derived drift summary.
    *  The dependency ranges are input to our computation, not dashboard content. */
-  const toDashboardRepo = (row: RepoRow) => ({
+  const toDashboardRepo = (row: RepoRow, upkeep?: RepoUpkeep) => ({
     id: row.id,
     fullName: row.fullName,
     defaultBranch: row.defaultBranch,
@@ -1159,6 +1176,28 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       : null,
     lastScanAt: row.lastScanAt,
     lastScanError: row.lastScanError,
+    /**
+     * What this repo's own workflow has actually done, as opposed to what its
+     * policy permits. `lastScanAt` above is lurq reading the manifests from
+     * here; this is the workflow running over there, and a repo can be armed
+     * with the workflow never committed.
+     *
+     * Null means it has never reported a run — which is NOT proof the workflow
+     * is missing, since a repo with nothing behind reports nothing. Reading it
+     * as "broken" needs drift too, and the consumer has that.
+     */
+    upkeep: upkeep
+      ? {
+          lastRunAt: upkeep.lastRunAt,
+          runs: upkeep.runs,
+          delivered: upkeep.delivered,
+          failed: upkeep.failed,
+          // Every run only analysed. With `runs`, this is what distinguishes a
+          // repo whose committed workflow never got past comment mode from one
+          // that simply had nothing worth a pull request.
+          analysedOnly: upkeep.analysedOnly,
+        }
+      : null,
   });
 
   /** Reject anything not matching RepoPolicy rather than merging partial input —
@@ -1170,7 +1209,28 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     if (typeof raw.enabled !== 'boolean') return null;
     if (typeof raw.autoMerge !== 'boolean') return null;
     if (raw.scope !== 'security' && raw.scope !== 'blocking' && raw.scope !== 'all') return null;
-    return { enabled: raw.enabled, scope: raw.scope, autoMerge: raw.autoMerge };
+    // Checks are carried through, and that is not a formality: setRepoPolicy
+    // REPLACES the stored policy wholesale and the dashboard PATCHes the whole
+    // object, so rebuilding a three-key policy here would erase a granted check
+    // the next time anyone toggled autopilot — a setting lost with no error and
+    // nothing in the response to show it happened.
+    const checks = parseChecks(raw.checks);
+    return {
+      enabled: raw.enabled,
+      scope: raw.scope,
+      autoMerge: raw.autoMerge,
+      ...(checks ? { checks } : {}),
+    };
+  }
+
+  /**
+   * Absent or malformed reads as not granted, never as a permissive default.
+   * An explicit `false` and a missing key mean the same thing, so only a
+   * granted check is stored.
+   */
+  function parseChecks(input: unknown): RepoPolicy['checks'] | null {
+    if (!input || typeof input !== 'object') return null;
+    return { env: (input as Record<string, unknown>).env === true };
   }
 
   /**
@@ -1301,10 +1361,15 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       await syncInstallation(ownerId, action.installationId, action.added);
     } catch (err) {
       // The ack already went out; GitHub will not retry. Logged rather than
-      // thrown, and the next nightly scan reconciles anything missed.
+      // thrown, and the next nightly scan reconciles anything missed — but
+      // alerted, because until then the repo is missing from someone's dashboard.
       logger.error(
         `webhook handling failed for installation ${action.installationId}:`,
         err instanceof Error ? err.message : String(err),
+      );
+      alert(
+        'github-webhook',
+        `${action.kind} for installation ${action.installationId} failed (${errorKind(err)})`,
       );
     }
   });
@@ -1317,7 +1382,12 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     }
     try {
       const rows = await listRepos(db, ownerId);
-      res.status(200).json({ repos: rows.map(toDashboardRepo) });
+      // One aggregate for the whole list: a query per repo would turn opening
+      // this page into N round trips for a column.
+      const upkeep = await upkeepByRepo(db, ownerId);
+      res
+        .status(200)
+        .json({ repos: rows.map((row) => toDashboardRepo(row, upkeep.get(row.fullName))) });
     } catch (err) {
       logger.error('repo list failed:', err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: 'Could not list repos.' });
@@ -1370,6 +1440,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           installCommand: row.installCommand ?? undefined,
           armed: row.policy.enabled,
           autoMerge: row.policy.autoMerge,
+          // Through the one accessor, so the permission cannot be read here as
+          // `row.policy.checks?.env` and somewhere else as something truthier.
+          checkEnv: permits(row.policy, 'env'),
         });
         res.status(200).json({
           repo: {
@@ -1682,6 +1755,23 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     return ownerId;
   };
 
+  // Usage row a session-start hook leaves, which is how the server knows an account's agents run lurq's hooks.
+  const SESSION_START_USAGE = 'session-start';
+
+  // What the session-start hook prints: the same open urgent changes tool results carry.
+  app.get('/alerts', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
+    const ownerId = keyOwner(req, res);
+    if (!ownerId) return;
+    try {
+      res.status(200).json({ notice: await agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, '')) });
+      capture(ownerId, 'agent_session_start', { agent: agentClient(req.query.agent) });
+      void recordUsage(db, ownerId, SESSION_START_USAGE);
+    } catch (err) {
+      logger.error('alerts read failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read alerts.' });
+    }
+  });
+
   app.get('/policy', ipLimiter, auth, keyLimiter, async (req: Request, res: Response) => {
     const ownerId = keyOwner(req, res);
     if (!ownerId) return;
@@ -1742,6 +1832,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     keyOwner,
   });
 
+  // ── Public MCP endpoints: pins and acks (API key), detail pages (issuer) ────
+  registerPublicMcpRoutes(app, {
+    db,
+    ipLimiter,
+    auth: auth as unknown as RequestHandler,
+    keyLimiter,
+    requireIssuerSecret,
+    ownerFrom,
+    keyOwner,
+  });
+
   // ── Account email: preferences and unsubscribe (issuer) ────────────────────
   registerNotificationRoutes(app, { db, requireIssuerSecret, ownerFrom });
   registerChannelRoutes(app, {
@@ -1753,6 +1854,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     allowed: (ownerId) => channelsAllowed(db, ownerId),
     post: (url, m) => postJson(url, m.payload, m.headers),
   });
+
+  registerBuilderScanRoutes(app, { db, requireIssuerSecret, ownerFrom });
 
   // ── Autopilot CI surface (API-key authenticated, same as /mcp) ─────────────
   //
@@ -1857,16 +1960,61 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     },
   );
 
+  // Open urgent changes ride on tool results (see agentNotice). Only tools/call
+  // pays for the lookup, and a failed lookup never fails the call.
+  // ponytail: two indexed queries per tool call; cache per owner for ~60s if MCP latency shows it.
+  // An account whose agents have never started a session through lurq's hooks hears
+  // that the user can turn them on, at most once a day.
+  // ponytail: in memory, so each replica nudges once a day; a table if that gets noisy.
+  let nudgeDay = '';
+  const nudged = new Set<string>();
+  const setupNotice = async (ownerId: string): Promise<string | null> => {
+    const day = new Date().toISOString().slice(0, 10);
+    if (day !== nudgeDay) {
+      nudgeDay = day;
+      nudged.clear();
+    }
+    if (nudged.has(ownerId)) return null;
+    nudged.add(ownerId);
+    const tools = await getUsageByTool(db, ownerId, 30);
+    if (tools.some((t) => t.tool === SESSION_START_USAGE)) return null;
+    return (
+      "lurq: this account's agents are not using lurq's automatic checks (installs verified before they run, alerts at session start). " +
+      `Mention once to the user that \`npx ${PACKAGE_NAME} setup\` turns them on for Claude Code, Codex and Cursor.`
+    );
+  };
+
+  const alertNotice = async (ownerId: string | null, body: unknown): Promise<string | null> => {
+    if (!ownerId || (body as { method?: unknown } | null)?.method !== 'tools/call') return null;
+    try {
+      const notices = await Promise.all([
+        agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, '')),
+        setupNotice(ownerId),
+      ]);
+      return notices.filter(Boolean).join('\n\n') || null;
+    } catch (err) {
+      logger.error('agent alert lookup failed:', err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  };
+
   const serveMcp = async (req: Request, res: Response) => {
     // Stateless: a fresh server+transport per request, sharing the one DB pool.
     // Thread the authenticated key's owner identity into the tools (§3.1). An
     // anonymous discovery request has no key, so no owner and no quota notice,
     // and it cannot reach a tool that would use either.
     const authed = req as AuthedRequest;
-    const server = buildMcpServer(db, {
-      ownerId: authed.lurqKey?.ownerId ?? null,
-      notice: quotaNotice(authed.entitlement),
-    });
+    const ownerId = authed.lurqKey?.ownerId ?? null;
+    // Which agent this is (clientInfo.ts): the id setup wrote into its config,
+    // and on the handshake, the client's own name, which covers hand-written
+    // configs too. Keyless discovery has no owner, so capture sends nothing.
+    const client = agentClient(req.headers['x-lurq-client']);
+    const handshake = initializeInfo(req.body);
+    if (handshake) {
+      capture(ownerId, 'mcp_initialized', { client, clientName: handshake.name, clientVersion: handshake.version });
+    }
+    const notices = [quotaNotice(authed.entitlement), await alertNotice(ownerId, req.body)];
+    const server = buildMcpServer(db, { ownerId, client, notice: notices.filter(Boolean).join('\n\n') || null });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

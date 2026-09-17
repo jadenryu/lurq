@@ -26,7 +26,9 @@ export class RemoteError extends Error {
  * must not trigger that: re-running setup will not fix a revoked key.
  */
 export class MissingKeyError extends RemoteError {
-  constructor(message = 'No API key configured. Run `lurq setup` to connect this machine.') {
+  constructor(
+    message = 'No API key configured. Run `npx lurqrun setup` to connect this machine; from an agent\'s shell it prints a sign-in link to give the user.',
+  ) {
     super(message, 401);
     this.name = 'MissingKeyError';
   }
@@ -251,6 +253,12 @@ export interface RemotePlan {
   scope?: 'security' | 'blocking' | 'all';
   scopeSource?: 'repo-policy' | 'unconnected';
   outOfScope?: number;
+  /**
+   * What the repository's dashboard setting says the job should do. Absent from
+   * an older server, and absent for an unconnected checkout — in both cases the
+   * workflow keeps the mode baked into it.
+   */
+  mode?: 'pr' | 'comment';
 }
 
 export function fetchUpgradePlan(
@@ -291,6 +299,12 @@ export function reportUpgradeRuns(
   opts: RemoteOptions = {},
 ): Promise<{ recorded: number; rejected: number }> {
   return post<{ recorded: number; rejected: number }>('/upgrade-runs', { runs }, opts);
+}
+
+/** The account's open urgent changes, worded for an agent. Null when there are none. */
+export async function getAlerts(opts: RemoteOptions & { agent?: string } = {}): Promise<string | null> {
+  const path = opts.agent ? `/alerts?agent=${encodeURIComponent(opts.agent)}` : '/alerts';
+  return (await request<{ notice: string | null }>('GET', path, undefined, opts)).notice;
 }
 
 /** The account's selection policy, as the dashboard would save it. */
@@ -372,4 +386,35 @@ export function uploadMcpScan(
   opts: RemoteOptions = {},
 ): Promise<McpScanUploadResult> {
   return post<McpScanUploadResult>('/mcp-scans', body, { timeoutMs: 120_000, ...opts });
+}
+
+/** One pinned remote MCP endpoint, measured against what lurq's probe reads now. */
+export interface RemotePin {
+  endpointId: number;
+  url: string;
+  note: string | null;
+  pinnedAt: string;
+  status: string | null;
+  lastProbedAt: string | null;
+  contractChanged: boolean;
+  authChanged: boolean;
+  openChanges: number;
+  worstOpen: string | null;
+}
+
+export async function listMcpPins(opts: RemoteOptions = {}): Promise<RemotePin[]> {
+  return (await request<{ pins: RemotePin[] }>('GET', '/mcp-pins', undefined, opts)).pins ?? [];
+}
+
+/** Pin a remote MCP server as it is now; re-pinning approves a change you reviewed. */
+export async function pinMcpServer(server: string, note?: string, opts: RemoteOptions = {}): Promise<RemotePin | null> {
+  return (await post<{ pin: RemotePin | null }>('/mcp-pins', { server, ...(note ? { note } : {}) }, opts)).pin;
+}
+
+export async function unpinMcpServer(server: string, opts: RemoteOptions = {}): Promise<boolean> {
+  return (await post<{ unpinned: boolean }>('/mcp-pins/unpin', { server }, opts)).unpinned;
+}
+
+export async function acknowledgePublicMcpChange(changeId: number, opts: RemoteOptions = {}): Promise<boolean> {
+  return (await post<{ acknowledged: boolean }>(`/mcp-public-changes/${changeId}/acknowledge`, {}, opts)).acknowledged;
 }

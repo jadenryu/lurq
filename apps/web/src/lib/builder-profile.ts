@@ -16,6 +16,12 @@ export interface ScanDep {
   majorsBehind: number;
   deprecated: boolean;
   advisories: number;
+  /** Absent on scans saved before these existed; see depStatus/depLabel in builder-brief.ts for the fallback. */
+  status?: "current" | "behind" | "major" | "unknown";
+  /** `range-floor`: the index had no versions, so this is the range's minimum, not what an install picks. */
+  resolvedFrom?: "index" | "range-floor";
+  /** `resolved`: advisories affecting that exact version. `package`: advisories on the package's latest release. */
+  advisoriesAt?: "resolved" | "package";
 }
 
 export interface ScanConflict {
@@ -34,6 +40,8 @@ export interface RepoStack {
   anyDrift: number;
   deprecated: number;
   advisories: number;
+  /** Every tracked dependency's advisories were checked at its resolved version. */
+  advisoriesExact?: boolean;
   conflicts: number;
   deps: ScanDep[];
   conflictDetail: ScanConflict[];
@@ -59,6 +67,16 @@ export interface BuilderProfile {
     languages: { name: string; repos: number }[];
   };
   repos: RepoStack[];
+  /** What the GitHub read covered. Absent on profiles saved before it existed. */
+  coverage?: {
+    reposListed: number;
+    /** GitHub had more repos than were read: counts cover the most recently pushed. */
+    reposCapped: boolean;
+    /** Repos whose package.json could not be read (rate limit, timeout), not repos without one. */
+    unreadManifests: string[];
+  };
+  /** Absent on profiles from before the MCP section. */
+  mcp?: ProfileMcp;
 }
 
 /**
@@ -66,9 +84,92 @@ export interface BuilderProfile {
  * cut of it, which keeps the archetype and the first repo's head and counts
  * what it dropped so the ask can be stated in the visitor's own numbers.
  */
+/** Mirrors src/github/builderMcp.ts; what each status means is there. */
+export type McpServerStatus =
+  | "probed"
+  | "queued"
+  | "handshake-failed"
+  | "needs-config"
+  | "undeclared"
+  | "remote-only"
+  | "not-probed";
+
+export interface McpToolDetail {
+  name: string;
+  required: string[];
+  params: string[];
+  readOnly: boolean;
+  destructive: boolean;
+  output: boolean;
+  deprecated: boolean;
+}
+
+export interface ProfileMcpServer {
+  alias: string;
+  kind: "npm-stdio" | "remote" | "local" | "other-registry";
+  packageName: string | null;
+  endpoint: string | null;
+  status: McpServerStatus;
+  tools: number;
+  writes: number;
+  destroys: number;
+  requiredConfig: string[];
+  /** Absent on scans from before tool schemas were carried. */
+  toolDetail?: McpToolDetail[];
+}
+
+export interface ProfileMcp {
+  configs: {
+    repo: string;
+    files: string[];
+    servers: ProfileMcpServer[];
+    collisions: { tool: string; servers: string[]; writes: boolean }[];
+    totalTools: number | null;
+    estimatedContextTokens: number | null;
+  }[];
+  builds: (ProfileMcpServer & { repo: string })[];
+  unreadFiles: number;
+}
+
 export interface BuilderReport extends Omit<BuilderProfile, "traits"> {
   traits: Trait[] | null;
-  locked: { repos: number; deps: number; conflicts: number } | null;
+  /** `mcp`: MCP configs and servers left out of a signed-out report. */
+  locked: { repos: number; deps: number; conflicts: number; mcp?: number } | null;
+  /** When the account's saved copy was taken. Absent for a visitor; null when saving failed. */
+  savedAt?: string | null;
+  /** Percentile ranks against other scanned builders. Signed-in reports only; null when unavailable. */
+  standing?: BuilderStanding | null;
+}
+
+/** Mirrors src/github/builderStanding.ts; the reasoning for each metric is there. */
+export type StandingMetricId = "repos" | "active90" | "stars" | "behindShare" | "majorShare" | "advisoryRate";
+
+export interface StandingMetric {
+  id: StandingMetricId;
+  better: "higher" | "lower";
+  /** A count, a 0–1 share, or advisories per 100 dependencies. */
+  value: number;
+  /** 0–100: the share of compared builders this one is ahead of, ties counting half. */
+  percentile: number;
+  population: number;
+}
+
+export interface BuilderStanding {
+  population: number;
+  minimum: number;
+  /** Only metrics with enough builders to rank against; empty means not enough scans yet. */
+  metrics: StandingMetric[];
+}
+
+/** One row of the saved list: enough for a card, never the dependency rows. */
+export interface SavedBuilderScan {
+  target: string;
+  login: string;
+  archetype: ArchetypeId;
+  avatarUrl: string;
+  traits: Trait[];
+  stats: BuilderProfile["stats"];
+  scannedAt: string;
 }
 
 /** Dependency rows a signed-out visitor reads on the one repo they get. */
@@ -96,3 +197,36 @@ export const ARCHETYPES: Record<ArchetypeId, { name: string; trait: string; line
     line: "What you build stays current. Your dependencies sit where most people's don't: up to date.",
   },
 };
+
+/** One advisory, as the `evaluate` tool returns it (its five most severe). */
+export interface DepAdvisory {
+  id: string;
+  severity: string;
+  summary: string;
+}
+
+/** What `diff_surface` found between the version a repo resolves and the latest. */
+export interface DepDiff {
+  fromVersion: string;
+  toVersion: string;
+  verdict: string;
+  /** Set when no comparison could be made yet; the lists are then empty and mean nothing. */
+  inconclusive?: string;
+  removed: { path: string; kind: string }[];
+  renamed: { path: string; to: string[] }[];
+  arityChanged: { path: string; from: number | null; to: number | null }[];
+  typeOnlyRemoved: string[];
+  deprecated: string[];
+}
+
+/**
+ * What /api/scan/dep returns for one opened dependency. A side is null when the
+ * row did not need it or it could not be read; `unavailable` then says why.
+ */
+export interface DepDetail {
+  diff: DepDiff | null;
+  advisories: DepAdvisory[] | null;
+  deprecated: boolean | string | null;
+  reasons: string[];
+  unavailable: string[];
+}

@@ -10,7 +10,16 @@ import { Pricing } from "@/components/site/pricing";
 import { SiteFooter } from "@/components/site/footer";
 import { Faq } from "@/components/site/faq";
 import { Contact } from "@/components/site/contact";
+import type { Metadata } from "next";
 import { StructuredData } from "@/components/site/structured-data";
+
+// The markdown alternate, for agents that fetch the page (app/index.md). Declared
+// here rather than in the root layout, where every page would inherit a claim that
+// the homepage's markdown is its own. Replaces the layout's alternates, so the
+// canonical is restated.
+export const metadata: Metadata = {
+  alternates: { canonical: "/", types: { "text/markdown": "/index.md" } },
+};
 
 /**
  * ORDER. Claim, compatibility, demonstration, problem, surface, schema,

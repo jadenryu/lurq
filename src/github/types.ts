@@ -40,8 +40,23 @@ export interface DepDrift {
   /** Major versions between `resolved` and `latest`. 0 = current. */
   majorsBehind: number;
   deprecated: boolean;
-  /** Count of known advisories on the package. */
+  /** Known advisories; `advisoriesAt` says for which version. */
   advisories: number;
+  /**
+   * How `resolved` compares to `latest`. `major` includes a 0.x minor bump, which
+   * semver treats as breaking. `unknown` when either side is missing or not a
+   * valid version, and it is never shown as current.
+   */
+  status: 'current' | 'behind' | 'major' | 'unknown';
+  /** Where `resolved` came from: the index's version list, or the range's own floor when the index has none. */
+  resolvedFrom: 'index' | 'range-floor';
+  /**
+   * What `advisories` counts. `resolved`: OSV advisories affecting that exact
+   * version. `package`: deps.dev's advisories for the package's latest release,
+   * kept only when the version check could not run, and not evidence about the
+   * version this repo uses.
+   */
+  advisoriesAt: 'resolved' | 'package';
 }
 
 /** A resolved transitive dependency carrying a risk signal worth reporting. */
@@ -133,6 +148,8 @@ export interface RepoDrift {
   deprecated: number;
   /** Total advisories across tracked deps. */
   advisories: number;
+  /** Every tracked dep's advisories were checked at its resolved version (none fell back to the package-level count). */
+  advisoriesExact: boolean;
   /** Per-dep detail, worst-drift first. Capped — see REPO_DRIFT_DETAIL_CAP. */
   deps: DepDrift[];
   /**
@@ -181,12 +198,38 @@ export interface RepoPolicy {
    * only setting that lets lurq change a default branch. Default false, always.
    */
   autoMerge: boolean;
+  /**
+   * Read-only checks this repo's generated workflow should run, beyond the
+   * upgrade gate it always runs.
+   *
+   * Optional, and ABSENT MEANS ON for everything in here — see `permits()` for
+   * the rule and why it is a split. Every member of `checks` must be read-only:
+   * no key, no network, no writes, and unable to fail a build on its own. That
+   * is what makes a permissive default honest, and it is the condition for
+   * adding a field here rather than to a future `writes` block, which defaults
+   * off.
+   *
+   * Only an explicit `false` turns one off, so a user's decision survives and a
+   * missing key is not mistaken for one.
+   */
+  checks?: {
+    /** `lurq check-env`: variables the code reads that nothing declares. */
+    env?: boolean;
+  };
 }
+
+/** A check a policy can grant. One name, so no site spells it its own way. */
+export type RepoCheck = 'env';
 
 export const DEFAULT_REPO_POLICY: RepoPolicy = {
   enabled: false,
   scope: 'blocking',
   autoMerge: false,
+  // Stated rather than relied upon. `permits()` already reads an absent
+  // `checks` as on, so a repo connected before this shipped behaves the same as
+  // a new one — which is the point of the inversion. Writing it here keeps the
+  // default visible in the policy the dashboard round-trips.
+  checks: { env: true },
 };
 
 /**

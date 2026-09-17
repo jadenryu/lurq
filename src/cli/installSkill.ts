@@ -17,14 +17,27 @@
  * `{ serverUrl, headers }`; Gemini CLI uses `{ httpUrl, headers }` (`url` there
  * means SSE); Codex (TOML) uses `url` + an inline `http_headers` table.
  */
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import type { HookAgent } from './hook';
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { DEFAULT_ENDPOINT, PACKAGE_NAME } from '../core/constants';
 import { logger } from '../core/logger';
 import { packageRoot } from '../core/paths';
-import { lurqHome, resolveApiKey } from '../core/userConfig';
+import { lurqHome, readUserConfig, resolveApiKey, writeUserConfig } from '../core/userConfig';
 
 const ENV_KEYS = [
   'DATABASE_URL',
@@ -220,27 +233,61 @@ export interface InstallResult {
   message?: string;
   /** Where the standing-instructions file landed, when the agent supports one. */
   instructionsPath?: string;
+  /** Where lurq's hooks landed (Claude Code, Codex, Cursor). */
+  hookPath?: string;
 }
 
-function readJsonObject(path: string): Record<string, any> {
+export function readJsonObject(path: string): Record<string, any> {
   if (!existsSync(path)) return {};
   const text = readFileSync(path, 'utf8').trim();
   if (!text) return {};
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    // Cursor and VS Code accept comments and trailing commas in these files, and
+    // JSON.parse does not. Rewriting the file would drop the user's comments, so
+    // stop and say what to do instead of printing "Unexpected token '/'".
+    throw new Error(
+      `${path} is not plain JSON (${err instanceof Error ? err.message : String(err)}). ` +
+        'If it has comments or trailing commas, lurq will not rewrite it and lose them: ' +
+        'remove them and re-run, or edit the "lurq" server entry by hand.',
+    );
+  }
 }
+
+/** Owner-only, for new files: most of what setup writes carries the API key. */
+const KEY_FILE_MODE = 0o600;
 
 /**
  * Write via a temp file + rename, which is atomic within a directory. These are
  * the user's own agent configs — `~/.claude.json` holds Claude Code's entire
  * project state — and a crash partway through a plain write truncates the file.
  * A reader sees either the old config or the new one, never a half-written one.
+ *
+ * Two things a rename gets wrong by default, both fixed here:
+ *  - Permissions. The temp file took the umask, so a 0600 `~/.cursor/mcp.json`
+ *    came back 0644, readable by every account on the machine with the key in
+ *    it. An existing file keeps its mode; a new one gets `newFileMode`.
+ *  - Symlinks. Dotfile managers (stow, chezmoi, home-manager) keep these configs
+ *    as links into a repository, and renaming onto the link replaced it with a
+ *    plain file, quietly forking the user's config. We write to the link's target.
  */
-function writeFileAtomic(path: string, contents: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.lurq-${process.pid}.tmp`;
+export function writeFileAtomic(path: string, contents: string, newFileMode = KEY_FILE_MODE): void {
+  let target = path;
+  let mode = newFileMode;
   try {
-    writeFileSync(tmp, contents, 'utf8');
-    renameSync(tmp, path);
+    target = realpathSync(path);
+    mode = statSync(target).mode & 0o777;
+  } catch {
+    // Not there yet (or a dangling link, written as a new file at the path).
+  }
+  mkdirSync(dirname(target), { recursive: true });
+  const tmp = `${target}.lurq-${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, contents, { encoding: 'utf8', mode });
+    // writeFileSync's mode is filtered through the umask; chmod is not.
+    chmodSync(tmp, mode);
+    renameSync(tmp, target);
   } catch (err) {
     try {
       rmSync(tmp, { force: true });
@@ -251,7 +298,7 @@ function writeFileAtomic(path: string, contents: string): void {
   }
 }
 
-function writeJson(path: string, obj: unknown): void {
+export function writeJson(path: string, obj: unknown): void {
   writeFileAtomic(path, JSON.stringify(obj, null, 2) + '\n');
 }
 
@@ -274,7 +321,10 @@ export function buildRemoteServerEntry(
   agentId: string,
   opts: { url: string; apiKey: string },
 ): Record<string, any> {
-  const headers = { Authorization: `Bearer ${opts.apiKey}` };
+  // X-Lurq-Client names the agent this entry belongs to, so the server can say
+  // which agents calls come from without the CLI sending anything of its own
+  // (src/mcp/clientInfo.ts).
+  const headers = { Authorization: `Bearer ${opts.apiKey}`, 'X-Lurq-Client': agentId };
   switch (agentId) {
     case 'cursor':
     case 'kiro':
@@ -312,7 +362,7 @@ export function buildRemoteTomlBlock(opts: { url: string; apiKey: string }): str
     [
       '[mcp_servers.lurq]',
       `url = ${JSON.stringify(opts.url)}`,
-      `http_headers = { Authorization = ${JSON.stringify(`Bearer ${opts.apiKey}`)} }`,
+      `http_headers = { Authorization = ${JSON.stringify(`Bearer ${opts.apiKey}`)}, X-Lurq-Client = "codex" }`,
     ].join('\n') + '\n'
   );
 }
@@ -367,7 +417,7 @@ function installTomlBlock(spec: AgentSpec, block: string): InstallResult {
 /** Delimit the block we own inside a context file the user also writes in, so a
  *  re-run replaces our text and leaves theirs alone. HTML comments render as
  *  nothing in every markdown viewer these agents use. */
-const BLOCK_START = '<!-- lurq:start -->';
+export const BLOCK_START = '<!-- lurq:start -->';
 const BLOCK_END = '<!-- lurq:end -->';
 
 /** One-line trigger description for the Claude Code skill's frontmatter. This is
@@ -407,6 +457,21 @@ export function upsertMarkedBlock(text: string, block: string): string {
   return `${text.slice(0, start)}${wrapped}${after.replace(/^\n*/, '\n')}`;
 }
 
+/**
+ * The inverse of `upsertMarkedBlock`: `text` without our block, or unchanged
+ * when there is none. The blank line that separated the block from the user's
+ * text goes with it, so setup followed by uninstall gives the file back as it was.
+ */
+export function removeMarkedBlock(text: string): string {
+  const start = text.indexOf(BLOCK_START);
+  if (start === -1) return text;
+  const endAt = text.indexOf(BLOCK_END, start);
+  const before = text.slice(0, start).replace(/\s+$/, '');
+  const after = endAt === -1 ? '' : text.slice(endAt + BLOCK_END.length).replace(/^\s+/, '');
+  const joined = [before, after].filter(Boolean).join('\n\n');
+  return joined ? joined.replace(/\s*$/, '\n') : '';
+}
+
 /** The `~/.claude/skills/lurq/SKILL.md` body: frontmatter + the full guide. */
 export function buildSkillFile(guide: string): string {
   return [
@@ -435,15 +500,151 @@ export function installInstructions(spec: AgentSpec): string | null {
     const brief = template('agent-rules.md');
     if (!brief) return null;
     const current = existsSync(target.path) ? readFileSync(target.path, 'utf8') : '';
-    writeFileAtomic(target.path, upsertMarkedBlock(current, brief));
+    // Instructions hold no secret, so a new file gets the ordinary mode.
+    writeFileAtomic(target.path, upsertMarkedBlock(current, brief), 0o644);
     return target.path;
   }
 
   // Ours alone, and loaded on demand, so the full guide fits.
   const guide = template('skill-instructions.md');
   if (!guide) return null;
-  writeFileAtomic(target.path, target.kind === 'skill' ? buildSkillFile(guide) : guide);
+  writeFileAtomic(target.path, target.kind === 'skill' ? buildSkillFile(guide) : guide, 0o644);
   return target.path;
+}
+
+// ── Agent hooks ──────────────────────────────────────────────────────────────
+
+interface HookTarget {
+  label: string;
+  path: () => string;
+  /** Cursor lists commands directly under an event; Claude Code and Codex nest them in matcher groups. */
+  flat: boolean;
+  hooks: { event: string; matcher?: string; arg: string; timeout: number }[];
+}
+
+/** Where each agent reads user-level hooks, and the lurq hooks it gets there. See hook.ts. */
+const HOOK_TARGETS: Record<HookAgent, HookTarget> = {
+  claude: {
+    label: 'Claude Code hooks',
+    // Hooks live in settings.json; Claude Code's MCP servers are in ~/.claude.json.
+    path: () => home('.claude', 'settings.json'),
+    flat: false,
+    hooks: [
+      { event: 'SessionStart', matcher: 'startup|clear|compact', arg: 'session-start', timeout: 10 },
+      { event: 'UserPromptSubmit', arg: 'prompt', timeout: 5 },
+      { event: 'PreToolUse', matcher: 'Bash|Edit|Write|MultiEdit', arg: 'pre-tool-use', timeout: 30 },
+    ],
+  },
+  codex: {
+    label: 'Codex hooks',
+    path: () => home('.codex', 'hooks.json'),
+    flat: false,
+    hooks: [
+      { event: 'SessionStart', matcher: 'startup|clear|compact', arg: 'session-start', timeout: 10 },
+      { event: 'UserPromptSubmit', arg: 'prompt', timeout: 5 },
+      { event: 'PreToolUse', matcher: 'Bash|apply_patch', arg: 'pre-tool-use', timeout: 30 },
+    ],
+  },
+  cursor: {
+    label: 'Cursor hooks',
+    path: () => home('.cursor', 'hooks.json'),
+    flat: true,
+    hooks: [
+      { event: 'sessionStart', arg: 'session-start', timeout: 10 },
+      { event: 'beforeShellExecution', arg: 'pre-tool-use', timeout: 30 },
+      { event: 'postToolUse', matcher: 'Shell', arg: 'post-tool-use', timeout: 5 },
+    ],
+  },
+};
+
+const AGENT_HOOKS: Record<string, HookAgent> = { 'claude-code': 'claude', codex: 'codex', cursor: 'cursor' };
+
+/** The hook family for a setup agent id, or null when it has no hooks. */
+export const hookAgentFor = (specId: string): HookAgent | null => AGENT_HOOKS[specId] ?? null;
+export const hooksPath = (agent: HookAgent): string => HOOK_TARGETS[agent].path();
+export const hooksLabel = (agent: HookAgent): string => HOOK_TARGETS[agent].label;
+
+/** A command setup wrote for any agent: `<lurq> hook [--agent x] <event>`. */
+const isLurqCommand = (h: any): boolean =>
+  typeof h?.command === 'string' && / hook (--agent [a-z]+ )?(session-start|prompt|pre-tool-use|post-tool-use)$/.test(h.command);
+
+const holdsLurq = (g: any): boolean => isLurqCommand(g) || (Array.isArray(g?.hooks) && g.hooks.some(isLurqCommand));
+
+export const hasLurqHooks = (config: Record<string, any>): boolean =>
+  Object.values(config.hooks ?? {}).some((groups) => Array.isArray(groups) && groups.some(holdsLurq));
+
+/** `config` without lurq's hooks. A group that held only ours goes, and so does an event or `hooks` left empty. */
+export function withoutLurqHooks(config: Record<string, any>): Record<string, any> {
+  if (!hasLurqHooks(config)) return config;
+  const hooks: Record<string, any> = {};
+  for (const [event, groups] of Object.entries(config.hooks)) {
+    if (!Array.isArray(groups)) {
+      hooks[event] = groups;
+      continue;
+    }
+    const kept = groups.flatMap((g: any) => {
+      if (isLurqCommand(g)) return [];
+      if (!holdsLurq(g)) return [g];
+      const rest = g.hooks.filter((h: unknown) => !isLurqCommand(h));
+      return rest.length ? [{ ...g, hooks: rest }] : [];
+    });
+    if (kept.length || groups.length === 0) hooks[event] = kept;
+  }
+  const next: Record<string, any> = { ...config, hooks };
+  if (Object.keys(hooks).length === 0) delete next.hooks;
+  return next;
+}
+
+/** `config` with exactly one of each lurq hook for `agent`, after whatever hooks the user has. */
+export function withLurqHooks(config: Record<string, any>, agent: HookAgent, lurq: string): Record<string, any> {
+  const target = HOOK_TARGETS[agent];
+  const base = withoutLurqHooks(config);
+  const hooks: Record<string, any> = { ...base.hooks };
+  const flag = agent === 'claude' ? '' : ` --agent ${agent}`;
+  for (const h of target.hooks) {
+    const command = `${lurq} hook${flag} ${h.arg}`;
+    const matcher = h.matcher ? { matcher: h.matcher } : {};
+    const entry = target.flat
+      ? { command, ...matcher, timeout: h.timeout }
+      : { ...matcher, hooks: [{ type: 'command', command, timeout: h.timeout }] };
+    hooks[h.event] = [...(Array.isArray(hooks[h.event]) ? hooks[h.event] : []), entry];
+  }
+  // Cursor's hooks.json requires a schema version.
+  return target.flat ? { version: 1, ...base, hooks } : { ...base, hooks };
+}
+
+/** The lurq command an agent's hooks run. Cursor is a GUI app that may not inherit the shell's PATH, so it gets the absolute path. */
+export function lurqCommandFor(agent: HookAgent, invocation: { command: string; path?: string }): string {
+  if (agent !== 'cursor' || !invocation.path) return invocation.command;
+  return /\s/.test(invocation.path) ? JSON.stringify(invocation.path) : invocation.path;
+}
+
+/** Whether setup's lurq MCP entry is in this agent's config: the consent automatic hooks ride on. */
+export function hasLurqEntry(spec: AgentSpec): boolean {
+  try {
+    if (!existsSync(spec.path)) return false;
+    if (spec.format === 'toml') return readFileSync(spec.path, 'utf8').includes('[mcp_servers.lurq]');
+    const servers = readJsonObject(spec.path)[spec.format === 'servers' ? 'servers' : 'mcpServers'];
+    return !!servers && typeof servers === 'object' && Object.hasOwn(servers, 'lurq');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Install lurq's hooks for one agent (see hook.ts) and record that lurq did. Null
+ * when `lurq` is not on PATH, since the hooks run on every prompt and tool call and
+ * resolving `npx` each time costs more than they are worth, and for Codex when the
+ * user already keeps hooks inline in config.toml (Codex warns when one layer has both).
+ */
+export function installHooks(agent: HookAgent, path = hooksPath(agent), invocation = lurqInvocation()): string | null {
+  if (!invocation.onPath) return null;
+  const codexToml = home('.codex', 'config.toml');
+  if (agent === 'codex' && existsSync(codexToml) && /^\s*\[\[?hooks[.\]]/m.test(readFileSync(codexToml, 'utf8'))) return null;
+  const lurq = lurqCommandFor(agent, invocation);
+  writeJson(path, withLurqHooks(readJsonObject(path), agent, lurq));
+  writeUserConfig({ hooks: { ...readUserConfig().hooks, [agent]: { command: lurq } } });
+  return path;
 }
 
 /** Apply the lurq entry to one agent's config, in the given mode. */
@@ -469,6 +670,14 @@ export function installAgent(spec: AgentSpec, mode: InstallMode): InstallResult 
       result.message = `MCP entry written; instructions file failed: ${
         err instanceof Error ? err.message : String(err)
       }`;
+    }
+    const hookAgent = hookAgentFor(spec.id);
+    if (hookAgent) {
+      try {
+        result.hookPath = installHooks(hookAgent) ?? undefined;
+      } catch (err) {
+        result.message = `MCP entry written; hooks failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
     }
     return result;
   } catch (err) {
@@ -520,7 +729,7 @@ export function resolveAgents(target: string): AgentSpec[] {
  * whether the file exists and is executable, and spawning would load the whole
  * CLI bundle to find out, then hang if what is on PATH happens to be broken.
  */
-export function lurqInvocation(): { command: string; onPath: boolean } {
+export function lurqInvocation(): { command: string; onPath: boolean; path?: string } {
   // On Windows the shim is `lurq.cmd`; the empty string covers the extensionless
   // shell script npm writes everywhere else.
   const candidates = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
@@ -528,8 +737,9 @@ export function lurqInvocation(): { command: string; onPath: boolean } {
     if (!dir) continue;
     for (const ext of candidates) {
       try {
-        accessSync(join(dir, `lurq${ext}`), constants.X_OK);
-        return { command: 'lurq', onPath: true };
+        const path = join(dir, `lurq${ext}`);
+        accessSync(path, constants.X_OK);
+        return { command: 'lurq', onPath: true, path };
       } catch {
         // Not here, or not executable. Keep looking.
       }
@@ -563,6 +773,12 @@ export function printInstallReport(
       console.log(`  ✓ ${spec.label.padEnd(26)} ${short(r.instructionsPath!)}`);
     }
   }
+  const hooked = results.filter((r) => r.hookPath);
+  if (hooked.length) {
+    console.log('\nHooks (installs verified first, lurq suggested where it helps):');
+    for (const r of hooked) console.log(`  ✓ ${specs.find((s) => s.id === r.agent)!.label.padEnd(26)} ${short(r.hookPath!)}`);
+    if (hooked.some((r) => r.agent === 'codex')) console.log('  • Codex skips new hooks until you trust them: run /hooks in Codex once.');
+  }
   if (instructionsPath) console.log(`\nFull guide: ${short(instructionsPath)}`);
 
   console.log('\nNext steps:');
@@ -572,12 +788,12 @@ export function printInstallReport(
   } else {
     console.log('  1. Restart the agent so it picks up the new MCP server.');
   }
-  console.log('  • Ask it to recommend a library. It should call lurq.');
+  console.log('  • Ask it to add a package. It should check the package with lurq first.');
   // The invocation that actually works on THIS machine, not the one we wish
   // they had. Printing `lurq …` to someone who ran the wizard from npx and
   // declined the global install sends them straight to "command not found".
   const { command, onPath } = lurqInvocation();
-  console.log(`  • Or use the terminal directly: \`${command} recommend "a form library for React"\`.`);
+  console.log(`  • Or use the terminal directly: \`${command} verify zod\`.`);
   if (!onPath) {
     // No em dash: b7a6d1b took them out of everything a user reads.
     console.log(`\n  There is no \`lurq\` command on this machine yet. Everything above`);

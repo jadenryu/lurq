@@ -1,5 +1,5 @@
 /**
- * MCP server (§12). Exposes recommend / evaluate / compare / verify over stdio.
+ * MCP server (§12). Exposes lurq's evidence tools (verify, evaluate, compat, usage, …) over stdio.
  * Inputs are validated with zod; outputs are compact JSON text (§12.4).
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -11,13 +11,14 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import semver from 'semver';
+import { getConfig } from '../core/config';
 import { SERVER_NAME, VERSION } from '../core/constants';
-import { CATEGORIES, type Category } from '../core/types';
 import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
 import { logger } from '../core/logger';
 import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
 import { handleMcpDrift, handleMcpSurface } from './mcpHandlers';
+import { CLIENT_IDS } from '../clients/types';
 import { handleAudit } from './auditHandler';
 import {
   handleCompare,
@@ -40,8 +41,6 @@ import {
 } from './toolDescriptions';
 import { recordUsage } from '../db/usage';
 import { capture } from '../core/analytics';
-
-const confidenceEnum = z.enum(['proven', 'emerging', 'promising', 'unproven']);
 
 // Validate package names at the trust boundary. A name flows straight into a
 // registry URL (`registry.npmjs.org/${name}`) and the response cache key, so
@@ -72,17 +71,6 @@ export const exactVersion = z
   .max(256)
   .refine((v) => semver.valid(v) !== null, 'Must be an exact semver version, e.g. "19.0.0"');
 
-// No `runtime` filter: lurq stores no per-package runtime signal, so the field
-// was accepted and silently ignored — an agent asking for browser-only packages
-// got the unfiltered list back. Restore it when ingestion records the manifest's
-// `browser` field / `exports` browser condition, not before.
-const constraintsSchema = z
-  .object({
-    license: z.string().optional(),
-    maxBundleKb: z.number().positive().optional(),
-    minConfidence: confidenceEnum.optional(),
-  })
-  .optional();
 
 /** Wrap any result object as a compact MCP text response. `compact` strips
  *  null/empty fields so the agent's context only carries signal (§12.4). */
@@ -101,6 +89,18 @@ export interface ServerContext {
   ownerId?: string | null;
   /** Appended to every tool result: the quota notice once an account is past its pool. */
   notice?: string | null;
+  /** The coding agent this connection belongs to, when its config names one (clientInfo.ts). */
+  client?: string | null;
+  /**
+   * This server runs beside the user's files (the stdio path), so tools that
+   * read the project may be registered.
+   *
+   * Set at the stdio call site only. The hosted server shares this builder
+   * verbatim, and there the files are not there — a filesystem tool would
+   * answer about an empty directory, which reads to a model as "your project
+   * is clean". Absent means not local, like every other permission here.
+   */
+  local?: boolean;
 }
 
 /**
@@ -111,9 +111,24 @@ export interface ServerContext {
  */
 const SERVER_INSTRUCTIONS = [
   'lurq answers npm package questions from evidence instead of training data.',
-  'Call verify before installing any package, compat before committing to a set of versions, and recommend before picking a library or hand-rolling something that may already exist.',
+  'Call verify before installing any package, compat before committing to a set of versions, and usage before writing code against a package API that may have moved.',
+  'When choosing a library, bring the candidates you know and check them with compare or evaluate: lurq verifies choices, it does not search for them.',
+  'If unsure which tool fits, call capabilities.',
   'When lurq flags a problem (a package that does not exist, a deprecation, an advisory, a version conflict), tell the user what it found and that it came from lurq, with the evidence it returned.',
 ].join(' ');
+
+/**
+ * Tool behaviour hints (MCP ToolAnnotations), so a client can auto-approve the
+ * safe calls and gate the one that writes.
+ *
+ * Read-only is from the caller's side: a lookup may ingest, cache or queue an
+ * extraction inside lurq, but nothing the agent or its user owns changes, and
+ * repeating it is harmless. `openWorldHint` marks the tools that can reach the
+ * live npm registry, CDN or OSV during the request, as opposed to answering
+ * from lurq's own index.
+ */
+const READ_INDEX = { readOnlyHint: true, openWorldHint: false } as const;
+const READ_LIVE = { readOnlyHint: true, openWorldHint: true } as const;
 
 export function buildMcpServer(
   db: ReturnType<typeof createDb>['db'],
@@ -128,7 +143,7 @@ export function buildMcpServer(
   // usage counter for the dashboard (§ dashboard v1 phase 2). The counter is
   // recorded in a finally so an errored call still counts; recordUsage no-ops
   // when ctx.ownerId is null (stdio/local or operator keys with no account).
-  // The PostHog event carries the tool name and outcome only, never arguments,
+  // The PostHog event carries the tool name, outcome and calling agent only, never arguments,
   // and no-ops under the same null-owner rule (src/core/analytics.ts).
   const run = <T>(tool: string, fn: () => Promise<T>): Promise<T> =>
     (async () => {
@@ -139,7 +154,7 @@ export function buildMcpServer(
         return result;
       } finally {
         void recordUsage(db, ctx.ownerId ?? null, tool);
-        capture(ctx.ownerId, 'tool_called', { tool, ok });
+        capture(ctx.ownerId, 'tool_called', { tool, ok, client: ctx.client ?? null });
       }
     })();
 
@@ -156,7 +171,8 @@ export function buildMcpServer(
     {
       title: 'Evaluate a package',
       description:
-        'Full evidence read for one npm package: scores, signals, advisories, summary, and a usage guide. Fetches & scores on demand if not yet tracked.',
+        "Full evidence read for one npm package: health and quality scores and the signals behind them, advisories, the shared safety verdict, a summary and a usage guide. Use it when a choice needs more than verify's install gate. Enforces the account's dependency policy. A package lurq has never tracked is fetched and scored on demand, waiting up to ~4 seconds; if scoring takes longer the result is `tracked: false` with a note to retry in a few seconds, which is not an answer about the package.",
+      annotations: READ_LIVE,
       inputSchema: {
         package: npmName.describe('npm package name'),
       },
@@ -173,7 +189,8 @@ export function buildMcpServer(
     {
       title: 'Read the dependency policy',
       description:
-        "The rules this account's selection policy enforces on which packages you may add: denied packages (with the reason), license allowlist, confidence, advisory, adoption, staleness and bundle-size floors. Read it once before choosing dependencies so you pick an allowed package first; recommend and evaluate already enforce it. Read-only.",
+        "The rules this account's selection policy enforces on which packages you may add: denied packages (with the reason), license allowlist, confidence, advisory, adoption, staleness and bundle-size floors. Read it once before choosing dependencies so you pick an allowed package first; evaluate already enforces it. Read-only.",
+      annotations: READ_INDEX,
       inputSchema: {},
     },
     async () => reply(await run('policy', () => handlePolicy(db, ctx.ownerId ?? null))),
@@ -183,7 +200,9 @@ export function buildMcpServer(
     'compare',
     {
       title: 'Compare packages',
-      description: 'Side-by-side comparison of 2–5 npm packages, ranked by health score.',
+      description:
+        'Side-by-side comparison of 2–5 npm packages you are choosing between, ranked by health score. Untracked names are fetched on demand; one still being scored comes back under `pending` (retry shortly), and a name not on npm under `notFound`.',
+      annotations: READ_LIVE,
       inputSchema: {
         packages: z.array(npmName).min(2).max(5).describe('2–5 npm package names'),
       },
@@ -196,6 +215,7 @@ export function buildMcpServer(
     {
       title: 'Check package compatibility',
       description: COMPAT_DESCRIPTION,
+      annotations: READ_LIVE,
       inputSchema: {
         packages: z.array(npmName).min(2).max(30).describe(COMPAT_PACKAGES_DESCRIPTION),
         versions: z.record(exactVersion).optional().describe(COMPAT_VERSIONS_DESCRIPTION),
@@ -210,11 +230,18 @@ export function buildMcpServer(
     {
       title: 'Verify a package',
       description: VERIFY_DESCRIPTION,
+      annotations: READ_LIVE,
       inputSchema: {
         package: npmName.describe('npm package name to verify'),
       },
     },
-    async (args) => reply(await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null))),
+    async (args) => {
+      const result = await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null));
+      // A package worth installing is a package about to be coded against, from memory.
+      const usable = result.exists && result.verdict.level !== 'invalid' && result.verdict.level !== 'high';
+      const next = `Before writing code against ${args.package}, call usage with it (and knownVersion if you remember one): its API may have moved since your training.`;
+      return reply(usable ? { ...result, next } : result);
+    },
   );
 
   server.registerTool(
@@ -222,7 +249,8 @@ export function buildMcpServer(
     {
       title: 'Version-exact API surface + drift',
       description:
-        "Get a package version's real public API, the exported symbols and signatures extracted from its shipped .d.ts, exact to the version, none of it in the model's training data. Pass knownVersion (e.g. the version you were trained on) to get the precise delta: what was added, removed, renamed, or changed. Also returns the version's declared engines (Node/runtime floor) so you don't write code against a version the target runtime cannot install. Use before writing code against a package whose API may have moved. For framework file/convention changes (not exported symbols), consult the official migration guide / Context7 instead.",
+        "A package version's TYPED API: exported symbols and their signatures from its shipped .d.ts (or DefinitelyTyped), exact to the version, none of it in the model's training data. Use before writing code against a package whose API may have moved. For whether a name exists at RUNTIME (what decides if an import throws) use resolve_surface; for is-it-safe-to-install use verify. Pass knownVersion (e.g. the version you were trained on) to get the precise delta: added, removed, renamed, changed. Also returns the version's declared engines (Node/runtime floor). Large surfaces are paged, 80 symbols per call: `totalSymbols` is the size, `query` filters by name, `offset` pages. `shallow: true` means the API lives on an interface's members that are not listed, and the note says where to read them. For framework file/convention changes (not exported symbols), consult the official migration guide / Context7 instead.",
+      annotations: READ_LIVE,
       inputSchema: {
         package: npmName.describe('npm package name'),
         version: z.string().optional().describe('Target version (defaults to latest)'),
@@ -230,6 +258,17 @@ export function buildMcpServer(
           .string()
           .optional()
           .describe('A version you already know; returns the API delta from it to the target'),
+        query: z
+          .string()
+          .max(100)
+          .optional()
+          .describe('Part of a symbol name (case-insensitive); returns only matching symbols'),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Index of the first symbol to return, to page past the first 80'),
       },
     },
     async (args) => reply(await run('usage', () => handleUsage(db, args))),
@@ -241,6 +280,7 @@ export function buildMcpServer(
       title: 'Reference architecture diagram',
       description:
         'Emit a reference-architecture Mermaid diagram for a stack you have already chosen (package names). A labeled starting point keyed by layer, not a validated architecture, and not an architecture designer.',
+      annotations: READ_INDEX,
       inputSchema: {
         stack: z
           .array(npmName)
@@ -256,7 +296,8 @@ export function buildMcpServer(
     {
       title: 'Version-exact runtime surface',
       description:
-        "What a package version ACTUALLY exports at runtime, extracted from its shipped JavaScript rather than from documentation or the model's memory. Call before writing code against a package whose API may have moved. Runtime existence is what decides whether an import throws; a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction, UNKNOWN never means the symbol is absent.",
+        "What a package version ACTUALLY exports at runtime, extracted from its shipped JavaScript rather than from documentation or the model's memory: names and arity, not type signatures (use usage for those). Call before writing code against a package whose API may have moved. Runtime existence is what decides whether an import throws; a removed type breaks tsc, a removed runtime symbol breaks the program. A miss returns UNKNOWN and queues extraction, UNKNOWN never means the symbol is absent.",
+      annotations: READ_LIVE,
       inputSchema: {
         package: npmName.describe('npm package name'),
         version: z.string().optional().describe('Exact version; omit for the latest extracted'),
@@ -271,13 +312,30 @@ export function buildMcpServer(
       title: 'Surface diff between two versions',
       description:
         'What changed in a package\'s runtime surface between two versions: symbols removed, added, and arity changes, plus renames the package itself proves (a removed name that shared one declaration with a name the new version still exports). Removals break `node`; type-only removals are returned separately because they break `tsc` instead. Answers "when did this stop working" from static comparison, with no install required. Use before an upgrade, and to explain a break after one.',
+      annotations: READ_LIVE,
       inputSchema: {
         package: npmName.describe('npm package name'),
         fromVersion: z.string().describe('Version you are on'),
         toVersion: z.string().describe('Version you are moving to'),
       },
     },
-    async (args) => reply(await run('diff_surface', () => handleDiffSurface(db, args))),
+    async (args) =>
+      reply(
+        await run('diff_surface', async () => {
+          const diff = await handleDiffSurface(db, args);
+          if (diff.verdict === 'unknown') return diff;
+          // The public page for this major jump, when it has one. Never fails the tool.
+          const { upgradeGuideFor } = await import('./publicUpgrades');
+          const guide = await upgradeGuideFor(
+            db,
+            args.package,
+            args.fromVersion,
+            args.toVersion,
+            getConfig().LURQ_WEB_URL,
+          ).catch(() => null);
+          return guide ? { ...diff, upgradeGuide: guide } : diff;
+        }),
+      ),
   );
 
   server.registerTool(
@@ -286,6 +344,7 @@ export function buildMcpServer(
       title: 'Do these MCP servers coexist?',
       description:
         "Check whether a set of MCP servers can be wired into one agent together. The npm question does not apply — servers are separate processes with nothing to resolve between them. They clash in the single flat TOOL NAMESPACE the agent assembles from all of them: two servers exposing the same tool name leave the agent unable to express which it means, and nothing errors, one simply shadows the other. Also reports the standing context cost, since every tool's schema rides in every request. Pass `tools` for a server when you already hold its tool list (any server: remote, PyPI, Docker, private) and it is analysed as-is; otherwise the npm server's probed surface is used, and one that has not been probed makes the answer UNKNOWN, never clean.",
+      annotations: READ_INDEX,
       inputSchema: {
         servers: z
           .array(
@@ -340,6 +399,7 @@ export function buildMcpServer(
       title: "An MCP server's tool contract",
       description:
         "What an MCP server ACTUALLY exposes: every tool, its required and optional parameters, and its behaviour annotations, read from a live `tools/list` handshake in a sandbox rather than from a README or the model's memory. Call before wiring an agent to a server, or when a tool call is failing for reasons the error does not explain. Also returns `requires` — the API keys and settings the server declares it needs — and `configRequest`, a ready-made line to put in front of your user when something is missing, so 'it needs a token' never presents as 'it is broken'. A miss returns UNKNOWN and queues a probe; UNKNOWN never means the server has no tools.",
+      annotations: READ_LIVE,
       inputSchema: {
         server: npmName.describe('npm package name of the MCP server'),
         version: z.string().optional().describe('Exact version; omit for the latest probed'),
@@ -354,6 +414,7 @@ export function buildMcpServer(
       title: 'MCP tool-contract drift between two versions',
       description:
         "What moved in an MCP server's tool contract between two versions: tools removed, parameters that became required, types narrowed, and annotation flips. Two findings here have no npm equivalent and are why this exists. SILENT DRIFT is a schema that changed while its description stayed byte-identical, invisible to anyone reading a changelog. PRIVILEGE WIDENING is a tool that stopped being read-only or started being destructive, which does not break anything and is worse than a break. Use before upgrading a server an agent depends on.",
+      annotations: READ_INDEX,
       inputSchema: {
         server: npmName.describe('npm package name of the MCP server'),
         fromVersion: z.string().describe('Version you are on'),
@@ -364,11 +425,85 @@ export function buildMcpServer(
   );
 
   server.registerTool(
+    'connect_check',
+    {
+      title: 'Will this MCP server work in my client?',
+      description:
+        "Before wiring an MCP server into a client, find out whether it will work there and exactly what it takes. Accepts an endpoint URL, an official-registry server name, or an npm package name. Answers per client (Claude Code, Claude.ai, ChatGPT, Cursor, VS Code, Codex, Gemini CLI and more): WORKS; NEEDS_SETUP with the steps (a key to send as a header, an OAuth client to pre-register and the redirect URIs to allow, a URL placeholder to fill); BLOCKED with the reason and which side causes it; or UNKNOWN when a decisive fact is not established. Built from a credential-free probe of the endpoint (whether it answers, how it authenticates, which OAuth registration methods it offers, spec deviations strict clients refuse, tool names and schemas) and from primary-sourced client constraints. Returns ready-to-paste config in each client's own format, with placeholder values. Tell the user what it found, including which client it was checked for. UNKNOWN never means it will not work.",
+      annotations: READ_LIVE,
+      inputSchema: {
+        server: z
+          .string()
+          .trim()
+          .min(1)
+          .max(2048)
+          .describe('Endpoint URL (https://…), official registry name (io.github.acme/weather), or npm package name'),
+        client: z.enum(CLIENT_IDS).optional().describe('One client to check, e.g. claude-code, cursor, chatgpt; omit for every client'),
+      },
+    },
+    async (args) =>
+      reply(
+        await run('connect_check', async () => {
+          const [{ handleConnectCheck }, { sharedSafeFetch }] = await Promise.all([import('../connect/check'), import('../core/safeFetch')]);
+          return handleConnectCheck(db, { server: args.server, client: args.client ?? null }, { liveProbe: { fetch: sharedSafeFetch() } });
+        }),
+      ),
+  );
+
+  // Registered only beside the user's files. Every other tool here is
+  // argument-fed or index-backed and works identically hosted; this one reads
+  // the project, so on the hosted path it is absent rather than empty.
+  if (ctx.local) {
+    server.registerTool(
+      'upkeep',
+      {
+        title: 'What needs fixing in this project',
+        description:
+          "The upkeep plan for the project you are editing, read from its own files. Returns findings across domains: environment variables the code reads that no .env file declares, and — when you pass `upgrade` — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Each finding carries either exact edits (a rename the package proves, byte ranges you can apply) or a brief with the facts you cannot look up: the exports the target version actually ships, with their kinds and arities. A domain that could not run says so; a skipped domain is never the same as a clean one. Needs no API key. Use it before editing a project you have just opened, or after an upgrade to see what it broke.",
+        annotations: READ_LIVE,
+        inputSchema: {
+          dir: z
+            .string()
+            .max(4096)
+            .optional()
+            .describe('Project root. Defaults to the working directory this server was started in.'),
+          upgrade: z
+            .array(
+              z.object({
+                package: npmName,
+                fromVersion: z.string().min(1).max(100),
+                toVersion: z.string().min(1).max(100),
+              }),
+            )
+            .max(50)
+            .optional()
+            .describe(
+              'Upgrades to assess. Without this the package domain is skipped, because working out what moved needs the index and this tool runs without a key.',
+            ),
+          domains: z
+            .array(z.enum(['package', 'mcp-config', 'env', 'api']))
+            .max(4)
+            .optional()
+            .describe('Limit to these domains. Default: every domain with a detector.'),
+        },
+      },
+      async (args) =>
+        reply(
+          await run('upkeep', async () => {
+            const { handleUpkeep } = await import('./upkeepHandler');
+            return handleUpkeep(args);
+          }),
+        ),
+    );
+  }
+
+  server.registerTool(
     'audit',
     {
       title: 'Audit a whole project',
       description:
         "Assess an entire project's dependencies in ONE call: which packages are outdated, deprecated or carry advisories for the exact installed version, and which configured MCP servers have drifted, need credentials, or cannot be observed at all. Send the inventory you read locally (names and versions only — never source). Returns a per-item verdict plus an explicit coverage count: how many were answered, how many are queued because the index has not seen them, and how many were skipped and why. An item lurq could not assess is reported as unassessed, never as clean.",
+      annotations: READ_LIVE,
       inputSchema: {
         packages: z
           .array(
@@ -419,6 +554,7 @@ export function buildMcpServer(
       title: 'What lurq can do',
       description:
         "Look up which lurq tool answers a situation, and what to run next. Call when you're unsure whether lurq covers something (an upgrade, a licence rule, a version's exact exports, publishing a package) instead of guessing or skipping it. Returns matching capabilities with the tool or command to use.",
+      annotations: READ_INDEX,
       inputSchema: {
         query: z
           .string()
@@ -433,11 +569,19 @@ export function buildMcpServer(
   server.registerTool(
     'report_outcome',
     {
-      title: 'Report a recommendation outcome',
+      title: 'Report how a package worked out',
       description:
-        'Opt-in feedback after acting on a lurq recommendation: report whether you went with the package and whether it built. No source code, only the coarse decision + a build signal. Helps lurq learn which packages agents actually succeed with; safe to skip.',
+        "Opt-in feedback after you act on lurq's evidence about a package (verify, evaluate, compare, compat): whether you went with it and whether it built. No source code, only the coarse decision + a build signal. Helps lurq learn which packages agents actually succeed with; safe to skip.",
+      // The one tool that writes: each call appends a row, so a repeat is a
+      // second report, not a no-op.
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
       inputSchema: {
-        package: npmName.describe('The package that was recommended'),
+        package: npmName.describe('The package you decided on'),
         accepted: z.boolean().describe('Did you go with this package?'),
         buildSignal: z
           .enum(['installed', 'compiled', 'tests_passed', 'failed'])
@@ -447,7 +591,7 @@ export function buildMcpServer(
           .string()
           .max(500)
           .optional()
-          .describe('The original need this was recommended for (no source code)'),
+          .describe('What you needed the package for, in plain words (no source code)'),
       },
     },
     // ownerId comes from the authenticated key (ctx), NOT the tool arguments —
@@ -473,9 +617,28 @@ export function buildMcpServer(
   return server;
 }
 
+/**
+ * Why `lurq serve` will not start, in words a user can act on.
+ *
+ * Failing before the handshake was chosen over starting with DB-backed tools
+ * erroring one call at a time. A server that connects looks healthy in the
+ * client's MCP list, and several handlers deliberately swallow a failed index
+ * read and degrade (`verify` answers without its typosquat corpus, for one), so
+ * an agent could get an answer that is quietly missing a safety signal. This
+ * message lands in the client's MCP server log, which is where a user looks
+ * when a server shows as failed.
+ */
+export const SERVE_NEEDS_DATABASE =
+  '`lurq serve` answers from a local lurq index and needs DATABASE_URL, which is not set. ' +
+  'To use lurq from an agent without running your own index, connect it to the hosted service instead: ' +
+  'run `npx lurqrun` and it writes the MCP entry for your assistants. ' +
+  'To self-host, set DATABASE_URL to a migrated lurq index.';
+
 export async function startMcpServer(): Promise<void> {
+  if (!getConfig().DATABASE_URL) throw new Error(SERVE_NEEDS_DATABASE);
   const { db, close } = createDb();
-  const server = buildMcpServer(db);
+  // The one place `local` is set: this process runs beside the user's project.
+  const server = buildMcpServer(db, { local: true });
 
   const shutdown = async () => {
     try {

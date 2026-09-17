@@ -22,11 +22,11 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { usePathname } from "next/navigation";
 
 /** One curve for the whole surface. Matches --ease in tokens.css (expo-out). */
-const EASE = [0.16, 1, 0.3, 1] as const;
+export const EASE = [0.16, 1, 0.3, 1] as const;
 
 /** Rise distance. Small on purpose: this is a hint that content arrived, not a
  *  slide. Past ~12px it starts to read as the page assembling itself. */
-const RISE = 8;
+export const RISE = 8;
 
 /**
  * Wraps a dashboard route's content so a navigation reads as a change of view.

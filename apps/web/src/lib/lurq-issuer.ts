@@ -5,6 +5,10 @@
  * the shared LURQ_ISSUER_SECRET. Never import this from a "use client" file.
  */
 
+// Relative: root tests reach this file through other web modules, where `@/`
+// does not resolve.
+import type { BuilderProfile, BuilderStanding, SavedBuilderScan } from "./builder-profile";
+
 export interface DashboardKey {
   id: number;
   prefix: string;
@@ -198,6 +202,18 @@ export interface RepoPolicy {
   enabled: boolean;
   scope: "security" | "blocking" | "all";
   autoMerge: boolean;
+  /**
+   * Read-only checks the generated workflow should run. Mirrors the server's
+   * `RepoPolicy` in src/github/types.ts — this type is declared separately, so
+   * the two drift unless changed together.
+   *
+   * Absent means NOT GRANTED, never a permissive default: a policy stored
+   * before checks existed has no such key.
+   */
+  checks?: {
+    /** `lurq check-env`: variables the code reads that nothing declares. */
+    env?: boolean;
+  };
 }
 
 export interface DashboardRepo {
@@ -209,6 +225,31 @@ export interface DashboardRepo {
   drift: RepoDriftSummary | null;
   lastScanAt: string | null;
   lastScanError: string | null;
+  /**
+   * What this repo's own workflow has done, as opposed to what its policy
+   * permits. `lastScanAt` above is lurq reading the manifests from our side;
+   * this is the workflow running on theirs, and a repo can be armed with the
+   * workflow never committed.
+   *
+   * `null` means it has never reported a run. That is NOT proof the workflow is
+   * missing — a repo with nothing behind reports nothing — so rendering it as a
+   * failure needs drift too.
+   */
+  upkeep: {
+    /** ISO string: dates arrive over the wire, like `lastScanAt`. */
+    lastRunAt: string;
+    runs: number;
+    /** Runs that reached a pull request. */
+    delivered: number;
+    failed: number;
+    /**
+     * Runs that only analysed (`checked`). When this equals `runs`, the
+     * committed workflow never got past comment mode — which is different from
+     * a repo that had nothing worth a pull request, and is the only sound way
+     * to tell those apart.
+     */
+    analysedOnly: number;
+  } | null;
 }
 
 export interface DashboardDep {
@@ -261,7 +302,9 @@ export async function fetchRepos(ownerId: string): Promise<DashboardRepo[]> {
  */
 export interface RepoAlert {
   id: number;
-  repoId: number;
+  /** Null when the repo is not connected: lurq heard about it from a
+   *  `check-upgrade` run, so there is no repo page to link to. */
+  repoId: number | null;
   repoFullName: string;
   packageName: string;
   /** The range the repo declared when the release landed. */
@@ -857,6 +900,115 @@ export async function acknowledgeMcpChange(ownerId: string, eventId: number): Pr
   return true;
 }
 
+// ── Public MCP endpoints (registry-listed, probed without credentials) ──────
+
+export type PublicEndpointStatus =
+  | "open"
+  | "auth_required"
+  | "not_found"
+  | "server_error"
+  | "unreachable"
+  | "dns_failed"
+  | "blocked"
+  | "protocol_error"
+  | "timeout"
+  | "templated";
+
+export type CompatVerdict = "works" | "needs_setup" | "blocked" | "unknown";
+
+export interface PublicEndpointChange {
+  id: number;
+  kind: "contract" | "auth" | "status";
+  severity: ScanSeverity;
+  summary: string;
+  createdAt: string;
+  acknowledged: boolean;
+}
+
+export interface PublicEndpointPin {
+  endpointId: number;
+  url: string;
+  note: string | null;
+  pinnedAt: string;
+  status: PublicEndpointStatus | null;
+  lastProbedAt: string | null;
+  contractChanged: boolean;
+  authChanged: boolean;
+  openChanges: number;
+  worstOpen: ScanSeverity | null;
+}
+
+export interface PublicEndpointDetail {
+  endpoint: {
+    id: number;
+    url: string;
+    host: string;
+    transport: string;
+    status: PublicEndpointStatus | null;
+    httpStatus: number | null;
+    auth: {
+      mode: "none" | "oauth" | "static" | "unknown";
+      oauth: { issuer: string | null; cimd: boolean; dcr: boolean; pkceS256: boolean; authorizationServers: string[] } | null;
+      declaredHeaders: { name: string; required: boolean; secret: boolean }[];
+    } | null;
+    violations: { code: string; detail: string }[];
+    protocolMode: "stateless" | "initialize" | null;
+    protocolVersion: string | null;
+    serverName: string | null;
+    serverVersion: string | null;
+    latencyMs: number | null;
+    lastError: string | null;
+    firstSeenAt: string;
+    lastProbedAt: string | null;
+    lastChangedAt: string | null;
+    removedAt: string | null;
+  };
+  servers: string[];
+  contract: { tools: McpToolInfo[]; analysis: { stats: McpServerStats; findings: McpFinding[] } } | null;
+  observations: { id: number; status: PublicEndpointStatus; httpStatus: number | null; error: string | null; probeCount: number; firstSeenAt: string; lastSeenAt: string }[];
+  changes: PublicEndpointChange[];
+  pin: PublicEndpointPin | null;
+  clients: { client: string; clientName: string; verdict: CompatVerdict; reason: string | null }[];
+  summary: Record<CompatVerdict, number>;
+}
+
+export async function fetchPinnedEndpoints(ownerId: string): Promise<PublicEndpointPin[]> {
+  const res = await issuerFetch(`/mcp-public/pins?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not read pinned servers.", 502);
+  return ((await res.json()) as { pins: PublicEndpointPin[] }).pins ?? [];
+}
+
+export async function fetchPublicEndpoint(ownerId: string, endpointId: number): Promise<PublicEndpointDetail | null> {
+  const res = await issuerFetch(`/mcp-public/${endpointId}?ownerId=${encodeURIComponent(ownerId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not read the MCP server.", 502);
+  return (await res.json()) as PublicEndpointDetail;
+}
+
+async function publicPost(path: string, ownerId: string, what: string): Promise<Response | null> {
+  const res = await issuerFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError(`Could not ${what}.`, 502);
+  return res;
+}
+
+export async function acknowledgePublicMcpChange(ownerId: string, changeId: number): Promise<boolean> {
+  return (await publicPost(`/mcp-public/changes/${changeId}/acknowledge`, ownerId, "acknowledge the change")) !== null;
+}
+
+export async function pinPublicEndpoint(ownerId: string, endpointId: number): Promise<boolean> {
+  return (await publicPost(`/mcp-public/${endpointId}/pin`, ownerId, "pin the server")) !== null;
+}
+
+export async function unpinPublicEndpoint(ownerId: string, endpointId: number): Promise<boolean> {
+  const res = await publicPost(`/mcp-public/${endpointId}/unpin`, ownerId, "unpin the server");
+  return res ? Boolean(((await res.json()) as { unpinned?: boolean }).unpinned) : false;
+}
+
 // ── Account email ────────────────────────────────────────────────────────────
 
 export interface NotificationPreferences {
@@ -977,4 +1129,47 @@ export async function removeChannel(ownerId: string, id: number): Promise<void> 
     body: JSON.stringify({ ownerId }),
   });
   if (!res.ok) throw await apiError(res, "Could not remove the channel.");
+}
+
+// ── Builder reports ─────────────────────────────────────────────────────────
+
+export interface SavedBuilderReport {
+  profile: BuilderProfile;
+  scannedAt: string;
+  standing: BuilderStanding | null;
+}
+
+export async function fetchBuilderScans(ownerId: string): Promise<SavedBuilderScan[]> {
+  const res = await issuerFetch(`/builder-scans?${new URLSearchParams({ ownerId }).toString()}`);
+  if (!res.ok) throw new LurqIssuerError("Could not load saved scans.", 502);
+  return ((await res.json()) as { scans?: SavedBuilderScan[] }).scans ?? [];
+}
+
+/** Null when nothing is saved for that target, including on an API that predates saved scans (404 either way). */
+export async function fetchBuilderScan(
+  ownerId: string,
+  target: string,
+): Promise<SavedBuilderReport | null> {
+  const res = await issuerFetch(`/builder-scans/one?${new URLSearchParams({ ownerId, target }).toString()}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new LurqIssuerError("Could not load that saved scan.", 502);
+  const { scan } = (await res.json()) as { scan: SavedBuilderReport };
+  // An API from before standings sends none: "no comparison", not an error.
+  return { ...scan, standing: scan.standing ?? null };
+}
+
+/** Saves (or overwrites) the account's copy for this target; resolves to when it was taken, and the standing. */
+export async function saveBuilderScan(
+  ownerId: string,
+  target: string,
+  profile: BuilderProfile,
+): Promise<{ scannedAt: string; standing: BuilderStanding | null }> {
+  const res = await issuerFetch("/builder-scans", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, target, profile }),
+  });
+  if (!res.ok) throw new LurqIssuerError("Could not save that scan.", 502);
+  const data = (await res.json()) as { scannedAt: string; standing?: BuilderStanding | null };
+  return { scannedAt: data.scannedAt, standing: data.standing ?? null };
 }

@@ -1,51 +1,72 @@
 ---
 title: MCP tools
-description: The eleven tools your agent can call over MCP, and what each returns.
+description: The sixteen tools your agent can call over MCP, and what each returns.
 ---
 
 Once lurq is installed, your agent can call these tools over MCP. Every response
-is compact (to stay cheap in tokens) and carries a `dataAsOf` timestamp so the
-agent knows how fresh the underlying evidence is.
+is compact (to stay cheap in tokens), and package answers carry a `dataAsOf`
+timestamp so the agent knows how fresh the underlying evidence is.
 
-| Tool | What it answers |
-| --- | --- |
-| [`recommend`](#recommend) | Best current packages for a described need |
-| [`evaluate`](#evaluate) | Full evidence read for one package |
-| [`compare`](#compare) | 2–5 packages ranked head-to-head |
-| [`verify`](#verify) | Is this package real, healthy, and not risky? |
-| [`compat`](#compat) | Will these packages actually install together? |
-| [`plan`](#plan) | Source every slot in a stack at once, checked for coherence |
-| [`usage`](#usage) | A version's *real* public API, and what changed since the one you know |
-| [`resolve_surface`](#resolve_surface) | Exactly what a version exports at runtime |
-| [`diff_surface`](#diff_surface) | What a version bump adds, removes, or re-shapes |
-| [`diagram`](#diagram) | A reference-architecture Mermaid diagram for a stack |
-| [`report_outcome`](#report_outcome) | What happened after a pick shipped |
+| Tool | Inputs | What it answers |
+| --- | --- | --- |
+| [`verify`](#verify) | `package` | Is this package real, healthy, and not risky? |
+| [`evaluate`](#evaluate) | `package` | Full evidence read for one package |
+| [`compare`](#compare) | `packages` | 2–5 packages ranked head-to-head |
+| [`policy`](#policy) | none | The rules your account's selection policy enforces |
+| [`compat`](#compat) | `packages`, `versions`, `node` | Will these packages actually install together? |
+| [`audit`](#audit) | `packages`, `mcpServers` | A whole project's dependencies and MCP servers, in one call |
+| [`diagram`](#diagram) | `stack` | A reference-architecture Mermaid diagram for a stack |
+| [`usage`](#usage) | `package`, `version`, `knownVersion` | A version's *real* public API, and what changed since the one you know |
+| [`resolve_surface`](#resolve_surface) | `package`, `version` | Exactly what a version exports at runtime |
+| [`diff_surface`](#diff_surface) | `package`, `fromVersion`, `toVersion` | What a version bump adds, removes, or re-shapes |
+| [`mcp_surface`](#mcp_surface) | `server`, `version` | An MCP server's real tool contract |
+| [`mcp_drift`](#mcp_drift) | `server`, `fromVersion`, `toVersion` | What an MCP server changed between two versions |
+| [`mcp_stack`](#mcp_stack) | `servers` | Do these MCP servers collide in one agent? |
+| [`connect_check`](#connect_check) | `server`, `client` | Will this MCP server work in my client, and what does it take? |
+| [`capabilities`](#capabilities) | `query` | Which lurq tool answers this situation |
+| [`report_outcome`](#report_outcome) | `package`, `accepted`, `buildSignal`, `need` | What happened after a pick shipped |
 
-## Choosing packages
+## Before installing a package
 
-### `recommend`
+### `verify`
 
-Best current packages for a described need.
+The anti-hallucination guard: is this package real, healthy, and not risky?
 
-- **Input:** a natural-language description of what you need.
-- **Output:** up to 5 packages, each scored, with a confidence label.
-- **Filters:** `category` and `min-confidence`.
+- **Input:** `package`, one name (possibly a misspelling or an invention).
+- **Output:** whether it exists on the live registry, a supply-chain risk level,
+  the individual risk flags, and the **suspected typosquat target** when the name
+  closely mimics a popular one.
 
-> "a form library for react" → `react-hook-form`, `@tanstack/react-form`, …
+> `verify lodahs` → not a real package (did you mean `lodash`?)
 
-Use this when the agent knows *what it needs* but not *which package* to reach
-for — including before hand-rolling something a package may already do.
+Use this **before** the agent installs a package or writes an import for one it
+"remembers."
 
 ### `evaluate`
 
 A full evidence read for a single package.
 
-- **Input:** one package name.
+- **Input:** `package`, one name.
 - **Output:** the complete score breakdown, advisories, a usage guide, the latest
   sandbox verdict, and — if the package has been superseded — the recommended
-  migration target.
+  migration target. When your account has a selection policy, whether the
+  package is allowed.
+
+A package lurq isn't tracking yet is fetched and scored on the spot; the reply
+says so, and a retry a few seconds later gets the full read.
 
 Use this when the agent has a candidate and wants the detail before committing.
+
+### `compare`
+
+Rank 2–5 packages head-to-head by health.
+
+- **Input:** `packages`, a list of 2–5 names.
+- **Output:** a ranked comparison across the scoring axes.
+
+> `compare drizzle-orm prisma typeorm`
+
+Use this when the choice is already narrowed to a shortlist.
 
 ### `policy`
 
@@ -56,34 +77,10 @@ The rules your account's selection policy enforces, read-only.
   their reason, the license allowlist, and the advisory, confidence, adoption,
   staleness and bundle-size floors.
 
-`recommend` and `evaluate` already enforce the policy; this lets the agent pick an
-allowed package first. There is deliberately no tool that changes policy. Edit it
-in the dashboard, or keep it in a file with `lurq policy pull` / `lurq policy push`
-(see the CLI reference).
-
-### `compare`
-
-Rank 2–5 packages head-to-head by health.
-
-- **Input:** a list of 2–5 package names.
-- **Output:** a ranked comparison across the scoring axes.
-
-> `compare drizzle-orm prisma typeorm`
-
-Use this when the choice is already narrowed to a shortlist.
-
-### `verify`
-
-The anti-hallucination guard: is this package real, healthy, and not risky?
-
-- **Input:** one package name (possibly a misspelling or an invention).
-- **Output:** whether it exists on the live registry, a supply-chain risk level,
-  the individual risk flags, and the **suspected typosquat target** when the name
-  closely mimics a popular one.
-
-> `verify lodahs` → not a real package (did you mean `lodash`?)
-
-Use this **before** the agent writes an import for a package it "remembers."
+`evaluate` already enforces the policy; this lets the agent pick an allowed
+package first. There is deliberately no tool that changes policy. Edit it in the
+dashboard, or keep it in a file with `lurq policy pull` / `lurq policy push`
+(see the [CLI reference](/cli#selection-policy)).
 
 ## Checking a whole stack
 
@@ -91,37 +88,61 @@ Use this **before** the agent writes an import for a package it "remembers."
 
 Will this set of packages actually install together?
 
-- **Input:** 2–8 package names — **the whole candidate stack in one call**.
-  Checking pairs separately misses conflicts that only appear across the set.
-- **Output:** an evidence-graded verdict, the exact clashing constraints, and
-  every pair that was compared.
+- **Input:**
+  - `packages`: 2–30 names — **the whole candidate stack in one call**. A
+    whole `package.json` dependency list is the intended input. Checking pairs
+    separately misses conflicts that only appear across the set.
+  - `versions` (optional): exact versions keyed by name, e.g.
+    `{ "react": "19.0.0" }`, when you're not checking latest. Ranges are
+    refused.
+  - `node` (optional): the target Node runtime (`"20"` or `"20.20.2"`), for
+    `engines.node` checks.
+- **Output:** a verdict, the exact clashing constraints, and the evidence behind
+  it.
 
-The verdict is deliberately four-valued, and the distinction matters:
+The verdict is about the set, not its pairs:
 
 | Verdict | Meaning |
 | --- | --- |
-| `conflict` | Proven incompatible — a violated peer range, or a recorded failed co-install |
-| `compatible` | **Positively evidenced** — every pair has a recorded co-install or co-resolution at these versions |
-| `likely` | No conflict found, but not proven. Absence of a declared conflict is not proof |
-| `unknown` | A member isn't in the index yet |
+| `conflict` | Proven broken — a declared peer or engine range, a recorded failed co-install, or npm's own resolver refusing the set |
+| `compatible` | npm resolved this exact set of versions |
+| `unknown` | lurq could not determine it: a member it has no version for, or a resolve that timed out |
 
-lurq never returns `compatible` on the mere absence of a declared conflict. A
-pair with no positive evidence is queued for background verification, so the next
-ask gets a real answer.
+lurq never returns `compatible` on the mere absence of a declared conflict, and
+`unknown` is never a hedge on a set it did resolve. Read-only: nothing is
+installed or executed on your machine.
 
-### `plan`
+### `audit`
 
-Turn a described program into an evidence-scored build plan.
+An entire project's dependencies and MCP servers, assessed in one call.
 
-- **Input:** a detailed description (a spec or README), or a pre-decomposed list
-  of component needs, plus optional `using: [...]` for packages you've already
-  chosen.
-- **Output:** a recommended package per component with its scores, a whole-stack
-  compatibility verdict, and a Mermaid roadmap.
+- **Input:** the inventory your agent read locally — names and versions only,
+  never source:
+  - `packages`: up to 600 entries of `{ name, range, installed }`, from
+    `package.json` and the lockfile.
+  - `mcpServers`: up to 200 entries of
+    `{ alias, kind, packageName, version, endpoint }`, from `.mcp.json` and
+    agent configs. `kind` is `npm-stdio`, `remote`, `local`, or
+    `other-registry`.
+- **Output:** a per-item verdict — outdated, deprecated, advisories for the
+  exact installed version, MCP servers that drifted, need credentials, or can't
+  be observed — plus an explicit coverage count: how many were answered, how many
+  are queued because the index hasn't seen them, and how many were skipped and
+  why.
 
-Packages you pin are treated as fixed, and the rest of the stack is planned
-*around* them. lurq sources building blocks slot-by-slot — it doesn't invent an
-architecture from a bare prompt.
+An item lurq could not assess is reported as unassessed, **never as clean**. The
+CLI equivalent is `lurq audit`.
+
+### `diagram`
+
+A reference-architecture Mermaid diagram for a stack you've already chosen.
+
+- **Input:** `stack`, the package names. Omit it to get usage guidance.
+- **Output:** a Mermaid diagram you can drop into docs or a README.
+
+A labeled starting point, not a validated architecture. Packages lurq can't
+classify go into an explicit `Unclassified` bucket and are named in the note —
+never quietly filed under a default layer.
 
 ## Writing code against a package
 
@@ -130,8 +151,8 @@ architecture from a bare prompt.
 A package version's **real** public API — the exported symbols and signatures
 extracted from its shipped `.d.ts`, exact to the version.
 
-- **Input:** a package name, an optional target `version`, and — the useful part
-  — a `knownVersion`.
+- **Input:** `package`, an optional target `version` (defaults to latest), and —
+  the useful part — a `knownVersion`.
 - **Output:** the export surface, the version's declared `engines` (so you don't
   write code against a version the target runtime can't install), and, when you
   passed `knownVersion`, the precise **delta**: what was added, removed, renamed,
@@ -146,7 +167,8 @@ training data.
 What a version **actually exports at runtime**, read from its shipped JavaScript
 rather than from documentation or memory.
 
-- **Input:** a package name and an optional exact version.
+- **Input:** `package` and an optional exact `version` (defaults to the latest
+  extracted).
 - **Output:** the runtime symbols, plus the evidence class and extraction tier
   behind the answer.
 
@@ -158,39 +180,116 @@ queues extraction — **`unknown` never means the symbol is absent.**
 
 What changed between two versions of a package.
 
-- **Input:** a package name, `fromVersion`, `toVersion`.
-- **Output:** symbols removed, added, and arity-changed — with **type-only
-  removals returned separately**, because those break `tsc` rather than `node`.
+- **Input:** `package`, `fromVersion`, `toVersion`.
+- **Output:** symbols removed, added, and arity-changed, plus renames the package
+  itself proves — with **type-only removals returned separately**, because those
+  break `tsc` rather than `node`.
 
 Answers "when did this stop working" from static comparison, with no install
 required. Use it before an upgrade, and to explain a break after one.
 
+## MCP servers
+
+The same questions, asked about the MCP servers your agent is wired to. To scan
+the servers configured on your own machine, including private and remote ones,
+use [`lurq mcp-scan`](/mcp-scan).
+
+### `mcp_surface`
+
+What an MCP server **actually exposes**, read from a live `tools/list` handshake
+in a sandbox rather than from a README or memory.
+
+- **Input:** `server`, the npm package name, and an optional exact `version`
+  (defaults to the latest probed).
+- **Output:** every tool, its required and optional parameters, and its behaviour
+  annotations; `requires`, the API keys and settings the server declares it
+  needs; and `configRequest`, a ready-made line to put in front of the user when
+  one is missing.
+
+A miss returns `unknown` and queues a probe; `unknown` never means the server has
+no tools.
+
+### `mcp_drift`
+
+What moved in an MCP server's tool contract between two versions.
+
+- **Input:** `server`, `fromVersion`, `toVersion`.
+- **Output:** tools removed, parameters that became required, types narrowed, and
+  annotation flips. Two findings have no npm equivalent: **silent drift**, a
+  schema that changed while its description stayed byte-identical, and
+  **privilege widening**, a tool that stopped being read-only or started being
+  destructive.
+
+Use it before upgrading a server an agent depends on.
+
+### `mcp_stack`
+
+Can a set of MCP servers be wired into one agent together?
+
+- **Input:** `servers`, 1–50 entries of `{ server, version, tools }`. Pass
+  `tools` (names and annotations are enough) when you already hold a server's
+  tool list — any server, remote, PyPI, Docker or private — and it is analysed
+  as-is. Otherwise `server` must be an npm package name, and lurq uses its
+  probed surface.
+- **Output:** tool-name collisions — two servers exposing the same name leave
+  the agent unable to say which it means, and nothing errors, one simply shadows
+  the other — plus the standing context cost of every tool's schema.
+
+A server that hasn't been probed makes the answer `unknown`, never clean. The CLI
+equivalent, reading your own configs live, is `lurq mcp-stack`.
+
+### `connect_check`
+
+Will an MCP server work in a given client, and what does it take to connect?
+
+- **Input:** `server` — an endpoint URL, an official registry name
+  (`io.github.acme/weather`) or an npm package name — and an optional `client`
+  (`claude-code`, `claude-ai`, `chatgpt`, `cursor`, `vscode`, `codex`,
+  `gemini-cli`, …). Omit `client` to check every client lurq has a profile for.
+- **Output:** per client, a verdict — `works`, `needs_setup` (with the steps:
+  a key to send as a header, an OAuth client to pre-register and the redirect
+  URIs to allow, a URL placeholder to fill), `blocked` (with the reason and which
+  side causes it), or `unknown` — plus ready-to-paste config in that client's own
+  format. `evidence` carries what the verdict rests on: whether the endpoint
+  answered, how it authenticates (OAuth registration methods, PKCE), spec
+  deviations strict clients refuse, the tool count, and recent contract or auth
+  changes.
+
+Server facts come from a credential-free probe of every remote endpoint in the
+official MCP registry, re-read on a schedule. Client facts come from each
+client's own documentation and source code, with sources. A URL lurq has never
+seen is probed on the spot and **not stored**. `unknown` means a decisive fact
+is not established — never that the server will not work.
+
 ## Everything else
 
-### `diagram`
+### `capabilities`
 
-A reference-architecture Mermaid diagram for a stack you've already chosen.
+Which lurq tool answers the situation in front of the agent, and what to run
+next.
 
-- **Input:** the package names in the stack.
-- **Output:** a Mermaid diagram you can drop into docs or a README.
+- **Input:** `query` (optional), what the agent is trying to do in plain words.
+  Omit it for the full menu.
+- **Output:** matching capabilities, each with the tool or command to use.
 
-A labeled starting point, not a validated architecture. Packages lurq can't
-classify go into an explicit `Unclassified` bucket and are named in the note —
-never quietly filed under a default layer.
+It reads nothing and is not counted as usage. The CLI equivalent is `lurq can`.
 
 ### `report_outcome`
 
-Opt-in feedback after acting on a recommendation.
+Opt-in feedback after acting on a package lurq returned.
 
-- **Input:** the package, whether you went with it, and a coarse build signal.
+- **Input:** `package`, `accepted` (did you go with it), an optional
+  `buildSignal` (`installed`, `compiled`, `tests_passed`, or `failed`), and an
+  optional `need`, the original need it was picked for (up to 500 characters).
 - **Output:** an acknowledgement.
 
-No source code — only the decision and whether it built. It's how lurq learns
-which packages agents actually succeed with. Safe to skip.
+No source code — only the decision, whether it built, and the need if you pass
+one. It's how lurq learns which packages agents actually succeed with. Safe to
+skip.
 
 ## Confidence labels
 
-Every recommendation carries one of four confidence labels, reflecting the
+Every scored package carries one of four confidence labels, reflecting the
 strength of the **discovered** evidence, not anyone's opinion:
 
 | Label | Meaning |
@@ -200,4 +299,4 @@ strength of the **discovered** evidence, not anyone's opinion:
 | `promising` | Early signals look good, limited history — **adoption-independent**, so a well-built new package isn't buried by an old popular one. |
 | `unproven` | Too little evidence to stand behind yet. |
 
-See [How it works](/docs/how-it-works) for how these are derived.
+See [How it works](/how-it-works) for how these are derived.

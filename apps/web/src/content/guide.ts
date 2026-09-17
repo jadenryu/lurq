@@ -86,6 +86,14 @@ export const TOOLS: GuideTool[] = [
     input: "package",
   },
   {
+    name: "upkeep",
+    group: "check",
+    purpose:
+      "The whole upkeep plan for a project, read from its own files: environment variables nothing declares, and — given the versions you are moving between — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Available when lurq runs beside your code (`lurq serve`); the hosted server cannot see your files, so it does not offer it.",
+    prompt: "what needs fixing in this project before I start?",
+    input: "optional dir · optional upgrades · optional domains",
+  },
+  {
     name: "policy",
     group: "check",
     purpose:
@@ -148,6 +156,14 @@ export const TOOLS: GuideTool[] = [
       "What an MCP server changed between two versions. Two findings have no package equivalent: silent drift, where a schema moved while its description stayed byte-identical and no changelog could have told you; and privilege widening, where a tool stopped being read-only or started being destructive \u2014 nothing breaks, which is what makes it worse than a break.",
     prompt: "did this MCP server change its tool contract?",
     input: "server \u00b7 fromVersion \u00b7 toVersion",
+  },
+  {
+    name: "connect_check",
+    group: "check",
+    purpose:
+      "Whether an MCP server will work in your client before you wire it in, and exactly what it takes: works, needs setup (a key header, a pre-registered OAuth client and the redirect URIs to allow), blocked with the reason, or unknown. Read from a credential-free probe of the server and each client\u2019s documented constraints, with config to paste in that client\u2019s own format.",
+    prompt: "will the Linear MCP server work in ChatGPT?",
+    input: "server (URL, registry name or npm package) \u00b7 optional client",
   },
   {
     name: "diagram",

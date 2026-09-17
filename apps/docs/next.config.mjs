@@ -13,6 +13,11 @@ const config = {
   // every route AND static asset under `/docs`, so the web app forwards the
   // whole prefix with a single rewrite pair.
   basePath: '/docs',
+  // /docs/<page>.md is that page as markdown (app/llms.mdx). basePath applies to
+  // rewrites too, so this matches /docs/quickstart.md, not /quickstart.md.
+  async rewrites() {
+    return [{ source: '/:path*.md', destination: '/llms.mdx/:path*' }];
+  },
   // Pin the workspace root so output tracing ignores stray lockfiles outside the repo.
   turbopack: {
     root: resolve(__dirname, '../..'),

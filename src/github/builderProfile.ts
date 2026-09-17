@@ -18,7 +18,14 @@
  * MANIFEST_TRIES raw.githubusercontent reads, and STACK_REPOS drift queries.
  */
 import type { Database } from '../db/client';
-import { getJson, rootManifest, scanManifest, type PublicScan } from './publicScan';
+import {
+  GitHubUnavailableError,
+  readGitHub,
+  rootManifestRead,
+  scanManifest,
+  type PublicScan,
+} from './publicScan';
+import { profileMcp, type ProfileMcp } from './builderMcp';
 
 export type ArchetypeId = 'shipper' | 'architect' | 'explorer' | 'steward';
 
@@ -45,6 +52,19 @@ export interface BuilderProfile {
   };
   /** Stack scans, the typed repo first when one was typed and it had a manifest. */
   repos: PublicScan[];
+  /** What the read covered, so a report never states more than it saw. */
+  coverage: ProfileCoverage;
+  /** MCP servers the repos read commit to agent configs, and repos that are MCP servers (builderMcp.ts). */
+  mcp: ProfileMcp;
+}
+
+export interface ProfileCoverage {
+  /** Repos GitHub listed, forks included, up to REPO_PAGES pages. */
+  reposListed: number;
+  /** GitHub had more repos than were read (or a later page failed): counts cover the most recently pushed. */
+  reposCapped: boolean;
+  /** Repos whose package.json could not be read (rate limit, timeout). Not the same as having none. */
+  unreadManifests: string[];
 }
 
 /** The fields of GitHub's repo listing this reads. */
@@ -116,6 +136,8 @@ export function scoreTraits(repos: GhRepo[], stacks: PublicScan[], now = Date.no
   const behind = stacks.reduce((s, x) => s + x.majorDrift + x.deprecated, 0);
   const advisories = stacks.reduce((s, x) => s + x.advisories, 0);
   const conflicts = stacks.reduce((s, x) => s + x.conflicts, 0);
+  const majors = stacks.reduce((s, x) => s + x.majorDrift, 0);
+  const deprecatedDeps = stacks.reduce((s, x) => s + x.deprecated, 0);
   // Health is a share, which on its own would crown a five-dependency toy.
   // Scaling it by how much there was to keep current means stewardship is
   // earned on a real stack.
@@ -127,7 +149,7 @@ export function scoreTraits(repos: GhRepo[], stacks: PublicScan[], now = Date.no
       id: 'shipper',
       score: saturate(active90 + started / 2, 4),
       evidence: [
-        `${plural(active90, 'repo')} pushed in the last 90 days`,
+        `${plural(active90, 'repo')} pushed to in the last 90 days (any branch)`,
         `${plural(started, 'repo')} started in the last year`,
       ],
     },
@@ -152,7 +174,8 @@ export function scoreTraits(repos: GhRepo[], stacks: PublicScan[], now = Date.no
           ? ['no indexed JavaScript dependencies to measure']
           : [
               `${plural(tracked, 'dependency', 'dependencies')} read across ${plural(stacks.length, 'repo')}`,
-              `${behind} a major behind or deprecated, ${plural(advisories, 'advisory', 'advisories')}, ${plural(conflicts, 'conflict')} at latest`,
+              // Separate counts: a dependency both a major behind and deprecated is one of each, not two of one.
+              `${majors} a major behind, ${deprecatedDeps} deprecated, ${plural(advisories, 'advisory', 'advisories')}, ${plural(conflicts, 'conflict')} at latest`,
             ],
     },
   ];
@@ -171,15 +194,71 @@ export function pickArchetype(traits: Trait[]): ArchetypeId {
  * API budget is spent. Both are "could not read that", the only failure a
  * visitor can act on.
  */
+/** Repo-list pages read, 100 repos each. Past this the counts cover the most recently pushed repos, and say so. */
+export const REPO_PAGES = 3;
+
+/** The `rel="next"` URL from a GitHub Link header, or null on the last page. */
+export function nextPageUrl(link: string | null): string | null {
+  const next = link
+    ?.split(',')
+    .map((part) => part.trim())
+    .find((part) => /rel="next"/.test(part));
+  return next?.match(/<([^>]+)>/)?.[1] ?? null;
+}
+
+/**
+ * A login's repos, most recently pushed first, up to REPO_PAGES pages.
+ *
+ * null only when GitHub says the login does not exist (404). Any other failure
+ * on the first page throws GitHubUnavailableError: there is nothing true to show,
+ * and "no such profile" would be false. A later page failing keeps what was read
+ * and marks the list capped.
+ */
+export async function listRepos(login: string): Promise<{ repos: GhRepo[]; capped: boolean } | null> {
+  let url: string | null =
+    `https://api.github.com/users/${login}/repos?sort=pushed&direction=desc&per_page=100&type=owner`;
+  const repos: GhRepo[] = [];
+  for (let page = 0; url && page < REPO_PAGES; page++) {
+    const read: Awaited<ReturnType<typeof readGitHub<GhRepo[]>>> = await readGitHub<GhRepo[]>(url);
+    if (!read.data) {
+      if (page > 0) return { repos, capped: true };
+      if (read.status === 404) return null;
+      throw new GitHubUnavailableError(read.status);
+    }
+    repos.push(...read.data);
+    url = nextPageUrl(read.link);
+  }
+  return { repos, capped: url !== null };
+}
+
+/**
+ * Repo names to try for a manifest: the typed repo first, then the ranking, each
+ * once. Case-insensitive, because GitHub names are: a typed `MyRepo` used to be
+ * scanned alongside GitHub's `myrepo`, and every one of its dependencies counted
+ * twice. The typed name takes GitHub's spelling when the list has it.
+ */
+export function manifestTries(ranked: string[], featured: string | undefined, max: number): string[] {
+  const spelled = new Map(ranked.map((name) => [name.toLowerCase(), name]));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of [...(featured ? [spelled.get(featured.toLowerCase()) ?? featured] : []), ...ranked]) {
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length === max) break;
+  }
+  return out;
+}
+
 export async function builderProfile(
   db: Database,
   login: string,
   featured?: string,
 ): Promise<BuilderProfile | null> {
-  const repos = await getJson<GhRepo[]>(
-    `https://api.github.com/users/${login}/repos?sort=pushed&direction=desc&per_page=100&type=owner`,
-  );
-  if (!repos) return null;
+  const listed = await listRepos(login);
+  if (!listed) return null;
+  const { repos, capped } = listed;
 
   const owned = repos.filter((r) => !r.fork);
   const canonical = repos[0]?.owner.login ?? login;
@@ -194,16 +273,31 @@ export async function builderProfile(
         (b.pushed_at ?? '').localeCompare(a.pushed_at ?? ''),
     )
     .map((r) => r.name);
-  const tries = [...new Set([...(featured ? [featured] : []), ...ranked])].slice(0, MANIFEST_TRIES);
+  const tries = manifestTries(ranked, featured, MANIFEST_TRIES);
 
   // raw.githubusercontent is not the REST budget, so these can run together.
-  const manifests = await Promise.all(tries.map((name) => rootManifest(canonical, name)));
+  const reads = await Promise.all(tries.map((name) => rootManifestRead(canonical, name)));
+  // A 404 is a repo with no root package.json. Anything else is a read that did
+  // not happen, and is reported as such rather than as a repo with nothing in it.
+  const unreadManifests = tries.filter((_, i) => !reads[i]!.data && reads[i]!.status !== 404);
   const found = tries
-    .flatMap((name, i) => (manifests[i] ? [{ name, manifest: manifests[i] }] : []))
+    .flatMap((name, i) => (reads[i]!.data ? [{ name, manifest: reads[i]!.data }] : []))
     .slice(0, STACK_REPOS);
-  const stacks = await Promise.all(
-    found.map((f) => scanManifest(db, canonical, f.name, f.manifest)),
-  );
+  const [stacks, mcp] = await Promise.all([
+    Promise.all(found.map((f) => scanManifest(db, canonical, f.name, f.manifest))),
+    // The same repos, read for committed MCP configs and for being MCP servers.
+    profileMcp(
+      canonical,
+      tries.map((name, i) => ({ name, manifest: reads[i]!.data })),
+      {
+        read: (repo, path) =>
+          readGitHub<unknown>(`https://raw.githubusercontent.com/${canonical}/${repo}/HEAD/${path}`, {
+            headers: { Accept: 'application/json' },
+          }),
+        surface: async (server) => (await import('../mcp/mcpHandlers')).handleMcpSurface(db, { server }),
+      },
+    ),
+  ]);
 
   const now = Date.now();
   const traits = scoreTraits(repos, stacks, now);
@@ -228,5 +322,7 @@ export async function builderProfile(
         .map(([name, count]) => ({ name, repos: count })),
     },
     repos: stacks,
+    coverage: { reposListed: repos.length, reposCapped: capped, unreadManifests },
+    mcp,
   };
 }

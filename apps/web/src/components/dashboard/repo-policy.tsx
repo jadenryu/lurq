@@ -55,6 +55,18 @@ function Row({
  * touch a default branch, and it says so, a toggle whose consequence you have
  * to infer is not consent.
  */
+/**
+ * `!== false`, the same reading as the server's `permits()` — and it must stay
+ * the same reading.
+ *
+ * A read-only check is on unless someone turns it off, so absent and `true` are
+ * the same state and only an explicit `false` is off. Spelling this `=== true`
+ * here while the server says `!== false` would render the toggle OFF for every
+ * repo connected before checks existed, while the workflow generator treated it
+ * as ON — a switch that disagrees with what it controls.
+ */
+const envOn = (p: RepoPolicy) => p.checks?.env !== false;
+
 export function RepoPolicyPanel({
   repoId,
   policy: initial,
@@ -73,7 +85,8 @@ export function RepoPolicyPanel({
   const dirty =
     policy.enabled !== initial.enabled ||
     policy.scope !== initial.scope ||
-    policy.autoMerge !== initial.autoMerge;
+    policy.autoMerge !== initial.autoMerge ||
+    envOn(policy) !== envOn(initial);
 
   async function save() {
     setSaving(true);
@@ -108,7 +121,7 @@ export function RepoPolicyPanel({
       <div className="mt-5 space-y-4">
         <Row
           label="Let lurq open upgrade pull requests"
-          description="Runs in your own GitHub Actions on a schedule. lurq supplies the symbol-level migration brief; the agent edits, runs your test suite, and opens a pull request. Your source never leaves your CI."
+          description="Runs in your own GitHub Actions on a schedule. lurq supplies the symbol-level migration brief; the agent edits, runs your test suite, and opens a pull request. Your source never leaves your CI. Each run reads this setting when it starts, so a change here governs the next one — except for a workflow file committed before that was true, which pins its own mode until you re-copy it."
         >
           <Button
             variant={policy.enabled ? "default" : "outline"}
@@ -160,6 +173,26 @@ export function RepoPolicyPanel({
             onClick={() => setPolicy((p) => ({ ...p, autoMerge: !p.autoMerge }))}
           >
             {policy.autoMerge ? "on" : "off"}
+          </Button>
+        </Row>
+
+        <Row
+          label="Check for undeclared environment variables"
+          description="Adds a read-only step to the generated workflow: variables your code reads that none of your .env files declare. It needs no API key, never writes anything, and does not fail your build."
+        >
+          {/* Not disabled on `!policy.enabled`, unlike auto-merge: this check
+              writes nothing, so it is useful precisely on a repo that has not
+              armed the agent — and gating it there would leave those repos
+              unable to turn it on at all. */}
+          <Button
+            variant={envOn(policy) ? "default" : "outline"}
+            size="sm"
+            disabled={demo}
+            onClick={() =>
+              setPolicy((p) => ({ ...p, checks: { ...p.checks, env: !envOn(p) } }))
+            }
+          >
+            {envOn(policy) ? "on" : "off"}
           </Button>
         </Row>
       </div>

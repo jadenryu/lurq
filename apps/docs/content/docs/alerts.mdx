@@ -91,14 +91,32 @@ Close the issue to stop lurq updating it, or generate the workflow with
 `lurq mcp-ci --no-issue` to leave it out. Text from MCP servers is escaped in the
 issue, so a tool description cannot mention anyone or link anywhere.
 
-## Previewing the messages
+## Remote MCP servers you run or pinned
 
-Operators can render every message from sample data:
+lurq re-reads every remote MCP server in the official registry on a schedule,
+without credentials, the same way a client first meets it. When one of those
+servers changes, the accounts that depend on it are told — through the channels
+above and through the agent itself, on its next tool call.
 
-```bash
-npm run operator -- notify-preview              # writes ./notify-preview, opens the urgent email
-npm run operator -- notify-preview --send-to you@example.com   # also sends both emails through Resend
-```
+You depend on a server, in lurq's terms, when either is true:
 
-The email templates are `src/notify/render.ts`; the Slack, Discord, Teams and
-webhook formats are `src/notify/channels.ts`.
+- **You run it.** A `lurq mcp-scan` you uploaded included it. Nothing else to do:
+  the scan you already ran is the subscription, and you are not asked to rescan.
+- **You pinned it.** `lurq mcp-pin <url-or-registry-name>` records its tools and
+  its sign-in path as approved. Re-pinning approves a change you have reviewed.
+
+Three kinds of change are urgent, and they are the ones nobody would otherwise
+notice until an agent failed:
+
+- **its tools changed** — a tool removed, a parameter that became required, a
+  description rewritten into an instruction to the model
+- **its sign-in path changed** — a new authorization server, or a registration
+  method (Client ID Metadata Documents, Dynamic Client Registration) or PKCE
+  support that your client relies on is gone
+- **it stopped answering** — calls to it will fail until it is back
+
+Everything else reaches Slack, Discord, Teams and webhooks at its own severity,
+and the weekly summary. Acknowledging is per account: one change on a shared
+server, and every account that depends on it keeps its own unread state. Each
+alert links to `/dashboard/mcp/public/<id>`, which shows the change, which
+clients the server now works in, and a button to approve it.

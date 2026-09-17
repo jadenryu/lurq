@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { FREE_DEPS, type BuilderProfile, type BuilderReport } from "@/lib/builder-profile";
+import { fetchBuilderScan, saveBuilderScan } from "@/lib/lurq-issuer";
+import { currentOwner } from "@/lib/owner";
 
 /**
  * The builder report's data, forwarded from the backend's profile scan.
@@ -75,10 +76,17 @@ function forVisitor(profile: BuilderProfile): BuilderReport {
     ...profile,
     traits: null,
     repos: first ? [{ ...first, deps: first.deps.slice(0, FREE_DEPS), conflictDetail: [] }] : [],
+    // The first MCP config and the first server built, like the first repo: the rest are the ask.
+    mcp: profile.mcp
+      ? { ...profile.mcp, configs: profile.mcp.configs.slice(0, 1), builds: profile.mcp.builds.slice(0, 1) }
+      : undefined,
     locked: {
       repos: rest.length,
       deps: first ? Math.max(0, first.deps.length - FREE_DEPS) : 0,
       conflicts: first?.conflictDetail.length ?? 0,
+      mcp: profile.mcp
+        ? Math.max(0, profile.mcp.configs.length - 1) + Math.max(0, profile.mcp.builds.length - 1)
+        : 0,
     },
   };
 }
@@ -89,6 +97,35 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Scanning isn't available right now." }, { status: 503 });
   }
 
+  const body = (await req.json().catch(() => ({}))) as { target?: unknown; fresh?: unknown };
+  const target = typeof body.target === "string" ? body.target.slice(0, 200) : "";
+  if (!target.trim()) {
+    return NextResponse.json({ error: "Enter a GitHub username or repo." }, { status: 400 });
+  }
+
+  /**
+   * SIGNED IN, A REPORT OPENED AGAIN IS THE SAVED ONE.
+   *
+   * No GitHub calls, no scan spent against the limit, and the numbers they saw
+   * last time rather than a quietly different set. "Scan again" sends `fresh`.
+   * A failed lookup (an API without the route, issuer not configured) falls
+   * through to a live scan: saving is a convenience and must never cost someone
+   * the report itself.
+   */
+  const owner = await currentOwner();
+  if (owner && body.fresh !== true) {
+    const saved = await fetchBuilderScan(owner.ownerId, target).catch(() => null);
+    if (saved) {
+      const report: BuilderReport = {
+        ...saved.profile,
+        locked: null,
+        savedAt: saved.scannedAt,
+        standing: saved.standing,
+      };
+      return NextResponse.json(report, { headers: { "Cache-Control": "private, no-store" } });
+    }
+  }
+
   const limit = checkRateLimit(`scan:${clientIp(req)}`, PER_MINUTE);
   if (!limit.ok) {
     return NextResponse.json(
@@ -97,25 +134,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as { target?: unknown };
-  const target = typeof body.target === "string" ? body.target.slice(0, 200) : "";
-  if (!target.trim()) {
-    return NextResponse.json({ error: "Enter a GitHub username or repo." }, { status: 400 });
-  }
-
   try {
-    const [res, { userId }] = await Promise.all([
-      fetch(`${base.replace(/\/$/, "")}/scan/profile`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target }),
-        // Reads GitHub, several manifests, then the index. Longer than a page
-        // load should take, short enough that a hung origin does not hold the
-        // report open.
-        signal: AbortSignal.timeout(25_000),
-      }),
-      auth(),
-    ]);
+    const res = await fetch(`${base.replace(/\/$/, "")}/scan/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+      // Reads GitHub, several manifests, then the index. Longer than a page
+      // load should take, short enough that a hung origin does not hold the
+      // report open.
+      signal: AbortSignal.timeout(25_000),
+    });
 
     /**
      * A NON-JSON BODY IS A SERVICE PROBLEM, NEVER A PROFILE PROBLEM.
@@ -142,7 +170,25 @@ export async function POST(req: Request) {
     if (!res.ok) return NextResponse.json(data, { status: res.status, headers });
 
     const profile = data as BuilderProfile;
-    const report: BuilderReport = userId ? { ...profile, locked: null } : forVisitor(profile);
+    if (!owner) return NextResponse.json(forVisitor(profile), { headers });
+
+    // Saved before answering, so the report can say it is saved and how it
+    // ranks. Never fatal, for the reason the saved lookup above gives.
+    // A read GitHub cut short (rate limit, timeout) is not saved: reopening it
+    // later would serve the gaps as the answer, with no GitHub call to fill them.
+    const stored =
+      (profile.coverage?.unreadManifests.length ?? 0) > 0
+        ? null
+        : await saveBuilderScan(owner.ownerId, target, profile).catch((err: unknown) => {
+      console.error("scan: could not save the report:", err instanceof Error ? err.message : String(err));
+      return null;
+    });
+    const report: BuilderReport = {
+      ...profile,
+      locked: null,
+      savedAt: stored?.scannedAt ?? null,
+      standing: stored?.standing ?? null,
+    };
     return NextResponse.json(report, { headers });
   } catch {
     return NextResponse.json({ error: "Could not reach the index." }, { status: 502 });

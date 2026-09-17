@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { clerkOptions, githubFirstElements } from "@/components/auth/clerk-appearance";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PostHogIdentify } from "@/components/common/posthog-identify";
@@ -81,8 +82,11 @@ export default function RootLayout({
       // through them (Clerk's account portal, a verification link opened in a
       // new tab, an <SignInButton> added later) would otherwise fall back to
       // "/" and dump a brand-new user on the marketing page.
-      signUpForceRedirectUrl="/dashboard"
-      signInForceRedirectUrl="/dashboard"
+      //
+      // Fallbacks only. These used to be forced as well, and a force redirect
+      // beats `redirect_url`, so pricing's "Start Pro" and the builder report's
+      // sign-up modal both sent a new account to /dashboard instead of back to
+      // what they were buying or reading.
       signUpFallbackRedirectUrl="/dashboard"
       signInFallbackRedirectUrl="/dashboard"
       appearance={{
@@ -90,6 +94,9 @@ export default function RootLayout({
         // Site is monochrome: override Clerk's default purple accent so its
         // buttons/links match the white CTA (and kill the purple load flash).
         variables: { colorPrimary: "#fafafa" },
+        // GitHub as the primary way in, on every modal (clerk-appearance.ts).
+        options: clerkOptions,
+        elements: githubFirstElements,
       }}
     >
       <html

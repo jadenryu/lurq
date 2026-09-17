@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// The queue drives syncOnePackage + seed promotion in the background.
+// The queue drives syncOnePackage in the background and records each request in discovery_queue.
 vi.mock('../src/pipeline/single', () => ({ syncOnePackage: vi.fn() }));
-vi.mock('../src/db/packages', () => ({ ensureSeedEntry: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../src/db/discovery', () => ({
+  enqueueDemand: vi.fn().mockResolvedValue(undefined),
+  setDiscoveryStatus: vi.fn().mockResolvedValue(undefined),
+  recordIngestFailure: vi.fn().mockResolvedValue(1),
+}));
 
 import {
   drainIngestQueue,
@@ -11,10 +15,8 @@ import {
   resetIngestQueue,
 } from '../src/pipeline/ingestQueue';
 import * as single from '../src/pipeline/single';
-import * as pkgs from '../src/db/packages';
 
 const syncOnePackage = vi.mocked(single.syncOnePackage);
-const ensureSeedEntry = vi.mocked(pkgs.ensureSeedEntry);
 const db = {} as never;
 
 /** Let queued microtasks run until the backlog drains. */
@@ -30,20 +32,18 @@ describe('ingestQueue', () => {
     vi.clearAllMocks();
   });
 
-  it('ingests a queued package and promotes it when it clears the quality bar', async () => {
+  it('ingests a queued package without adding it to the seed list, however well it scores', async () => {
     syncOnePackage.mockResolvedValue({ confidence: 'proven', category: 'utility' } as never);
     enqueueIngest(db, 'goodpkg');
     await drain();
     expect(syncOnePackage).toHaveBeenCalledWith(db, 'goodpkg', { requestedByOwnerId: null });
-    expect(ensureSeedEntry).toHaveBeenCalledWith(db, 'goodpkg', 'utility');
   });
 
-  it('ingests but does NOT promote a low-signal (unproven) package', async () => {
+  it('ingests a low-signal (unproven) package the same way', async () => {
     syncOnePackage.mockResolvedValue({ confidence: 'unproven', category: 'utility' } as never);
     enqueueIngest(db, 'obscure');
     await drain();
     expect(syncOnePackage).toHaveBeenCalledTimes(1);
-    expect(ensureSeedEntry).not.toHaveBeenCalled();
   });
 
   it('dedupes a name already in flight — one ingest, not two', async () => {
@@ -64,7 +64,6 @@ describe('ingestQueue', () => {
     enqueueIngest(db, 'boom');
     await drain();
     expect(ingestQueueDepth()).toBe(0);
-    expect(ensureSeedEntry).not.toHaveBeenCalled();
   });
 
   it('threads the requesting ownerId through to syncOnePackage (contribution attribution)', async () => {

@@ -1,6 +1,8 @@
 import { PLAN_LIST } from "@lurq/core/plans";
 import { faqs } from "@/content/faq";
 import { SITE_ORIGIN } from "@/lib/site";
+import releases from "@/content/generated/releases.json";
+import stats from "@/content/generated/stats.json";
 
 /**
  * schema.org JSON-LD for the landing page: what lurq is, what it costs, and the
@@ -22,6 +24,13 @@ export function StructuredData() {
         description:
           "Checks npm packages before an AI coding agent installs them: hallucinated and typosquatted names, security advisories, deprecated APIs and version conflicts. MCP server and CLI.",
         installUrl: "https://www.npmjs.com/package/lurqrun",
+        softwareVersion: releases.latest ?? stats.npm.latestVersion,
+        // The same product in the places an agent cross-checks it: source, package, registry entry.
+        sameAs: [
+          "https://github.com/jadenryu/lurq",
+          "https://www.npmjs.com/package/lurqrun",
+          "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.jadenryu/lurq",
+        ],
         offers: PLAN_LIST.map((plan) => ({
           "@type": "Offer",
           name: plan.name,

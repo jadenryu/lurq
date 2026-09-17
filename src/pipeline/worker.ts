@@ -12,7 +12,8 @@
  */
 import { logger } from '../core/logger';
 import { createDb } from '../db/client';
-import { getPackagesMissingSurface } from '../db/apiSurfaces';
+import { getPackagesMissingSurface, recordSurfaceMiss } from '../db/apiSurfaces';
+import { enqueueSurface, hasStoredSurface, surfaceQueueDepth } from '../db/surface';
 import { pMap } from '../core/concurrency';
 import { runDiscovery } from './discovery';
 import { drainCompatVerifyQueue } from './compat';
@@ -32,8 +33,52 @@ export interface WorkerOptions {
   surfacePerCycle?: number;
   /** MCP servers probed per cycle. Small: each one spawns a sandbox. */
   mcpPerCycle?: number;
+  /** Remote MCP endpoints probed per cycle (HTTP only, no sandbox). */
+  remoteProbesPerCycle?: number;
+  /** Sync the official MCP registry each cycle (incremental). Default true. */
+  registrySync?: boolean;
   /** Run exactly one cycle and return (for tests / cron). */
   once?: boolean;
+}
+
+export interface ExtractOutcome {
+  name: string;
+  version: string;
+  ok: boolean;
+}
+
+/** The storage operations the extraction pass needs, injected so its rules are testable. */
+export interface ExtractPassIo {
+  recordMiss(name: string, version: string): Promise<void>;
+  hasSymbolSurface(name: string, version: string): Promise<boolean>;
+  enqueueSymbolSurface(name: string, version: string): Promise<void>;
+  queueDepth(): Promise<number>;
+  headroom: number;
+}
+
+/**
+ * Record what the extraction pass learned.
+ *
+ * A failure counts against that version's attempt budget. A success is also
+ * handed to the symbol store (`entities`/`symbols`, which `resolve_surface`,
+ * `diff_surface` and `check-upgrade` read) — this pass writes only
+ * `api_surfaces`, so without it the two stores covered different packages.
+ * Handed over only while the surface queue has headroom, so demand-driven
+ * misses never wait behind this backfill. Returns how many were queued.
+ */
+export async function recordExtractOutcomes(results: ExtractOutcome[], io: ExtractPassIo): Promise<number> {
+  for (const r of results) if (!r.ok) await io.recordMiss(r.name, r.version);
+
+  let room = io.headroom - (await io.queueDepth());
+  let queued = 0;
+  for (const r of results) {
+    if (room <= 0) break;
+    if (!r.ok || (await io.hasSymbolSurface(r.name, r.version))) continue;
+    await io.enqueueSymbolSurface(r.name, r.version);
+    room--;
+    queued++;
+  }
+  return queued;
 }
 
 /** Extract surfaces for tracked packages that don't have one yet (§4D/§4G). */
@@ -47,11 +92,27 @@ async function extractSurfacesPass(limit: number): Promise<number> {
     const { getOrExtractSurface } = await import('../usage/service');
     const results = await pMap(
       missing,
-      (p) => getOrExtractSurface(handle.db, p.name, p.version).then((s) => (s ? 1 : 0)),
+      (p) =>
+        getOrExtractSurface(handle.db, p.name, p.version).then(
+          (s) => ({ ...p, ok: Boolean(s) }),
+          () => ({ ...p, ok: false }),
+        ),
       4,
     );
-    const extracted = results.reduce((a: number, b) => a + b, 0);
-    logger.info(`worker: extracted ${extracted}/${missing.length} API surfaces`);
+    const extracted = results.filter((r) => r.ok).length;
+
+    const db = handle.db;
+    const { QUEUE_HEADROOM } = await import('../mcp/publicUpgrades');
+    const followed = await recordExtractOutcomes(results, {
+      recordMiss: (name, version) => recordSurfaceMiss(db, name, version),
+      hasSymbolSurface: (name, version) => hasStoredSurface(db, name, version),
+      enqueueSymbolSurface: (name, version) => enqueueSurface(db, name, version),
+      queueDepth: () => surfaceQueueDepth(db),
+      headroom: QUEUE_HEADROOM,
+    });
+    logger.info(
+      `worker: extracted ${extracted}/${missing.length} API surfaces, ${followed} queued for the symbol store`,
+    );
     return extracted;
   } finally {
     await handle.close();
@@ -103,6 +164,19 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: compat-verify drain failed: ${String(err)}`));
+    // Popular packages' upgrade pages (src/mcp/publicUpgrades.ts): a few
+    // unextracted sides, queued only while the queue has headroom, so this can
+    // never delay the demand-driven misses drained just below.
+    await (async () => {
+      const handle = createDb({ max: 2 });
+      try {
+        const { enqueuePublicUpgrades } = await import('../mcp/publicUpgrades');
+        const queued = await enqueuePublicUpgrades(handle.db);
+        if (queued) logger.info(`worker: queued ${queued} surface(s) for public upgrade pages`);
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: upgrade page queue failed: ${String(err)}`));
     // Service surface-extraction misses (v1 §6.1). Query misses are revealed
     // demand and rank highest, so this runs every cycle; without it
     // resolve_surface answers UNKNOWN forever and the queue only grows.
@@ -136,6 +210,41 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
         await handle.close();
       }
     })().catch((err) => logger.warn(`worker: mcp drain failed: ${String(err)}`));
+    // The official MCP registry. Incremental against a watermark, so an hourly
+    // pass reads a page or two; it runs before the remote drain so a server
+    // published this hour is probed this hour.
+    if (opts.registrySync !== false) {
+      await (async () => {
+        const { syncRegistry } = await import('../registry/sync');
+        const handle = createDb({ max: 2 });
+        try {
+          const s = await syncRegistry(handle.db);
+          if (s.versions) {
+            logger.info(
+              `worker: registry sync, ${s.versions} version(s), ${s.endpointsLinked} endpoint link(s), ${s.linksRemoved} link(s) removed, ${s.endpointsRemoved} endpoint(s) removed`,
+            );
+          }
+        } finally {
+          await handle.close();
+        }
+      })().catch((err) => logger.warn(`worker: registry sync failed: ${String(err)}`));
+    }
+    // Remote MCP endpoints: a credential-free read of each one's contract and
+    // sign-in path. Plain HTTP, so the budget is two orders of magnitude above
+    // the sandboxed stdio drain, and it is still bounded per host.
+    await (async () => {
+      const { drainRemoteProbes, REMOTE_PROBES_PER_CYCLE } = await import('../remoteProbe/drain');
+      const handle = createDb({ max: 4 });
+      try {
+        const s = await drainRemoteProbes(handle.db, { limit: opts.remoteProbesPerCycle ?? REMOTE_PROBES_PER_CYCLE });
+        if (s.claimed) {
+          const statuses = Object.entries(s.byStatus).map(([k, v]) => `${v} ${k}`).join(', ');
+          logger.info(`worker: remote probes, ${s.probed} probed (${statuses || 'none'}), ${s.changes} change(s), ${s.failed} failed`);
+        }
+      } finally {
+        await handle.close();
+      }
+    })().catch((err) => logger.warn(`worker: remote probe drain failed: ${String(err)}`));
     // Account email. Last in the cycle so it sees this cycle's alerts; hourly is
     // the ceiling on how late an urgent email can be. A no-op without Resend and
     // Clerk configured.

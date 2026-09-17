@@ -178,7 +178,8 @@ describe('indexSource', () => {
   });
 
   it('points an unconfigured machine at setup rather than at a stack trace', () => {
-    expect(() => indexSource()).toThrow(/lurq setup/);
+    // Runnable as written without a global install, and an agent learns setup hands it a link.
+    expect(() => indexSource()).toThrow(/npx lurqrun setup.*sign-in link/);
   });
 });
 
@@ -267,10 +268,13 @@ describe('runSetup endpoint handling', () => {
     process.env.LURQ_HOME = mkdtempSync(join(tmpdir(), 'lurq-setup-cfg-'));
     delete process.env.LURQ_ENDPOINT;
     vi.spyOn(console, 'log').mockImplementation(() => {});
+    // setup --yes validates the key before writing; never against a real endpoint.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     if (savedHome) process.env.HOME = savedHome;
     if (savedEndpoint) process.env.LURQ_ENDPOINT = savedEndpoint;
   });

@@ -685,8 +685,11 @@ li:hover > .room-ide-label {
   }
 }
 
-.room-cap-grid [data-card],
-.room-price-grid [data-card] {
+/* Visible by default. Only a container script has armed (data-playing="false")
+   starts its cards hidden, so crawlers, no-JS captures and anything that never
+   scrolls see the finished grid. See lib/use-reveal-once.ts. */
+.room-cap-grid[data-playing] [data-card],
+.room-price-grid[data-playing] [data-card] {
   opacity: 0;
   animation: room-reveal var(--dur-reveal) var(--ease-reveal)
     calc(var(--reveal-at, 0ms) * var(--reveal-scale)) both;
@@ -1561,17 +1564,17 @@ li:hover > .room-ide-label {
    fires once and never replays: a leaderboard that re-animates every time it
    crosses the viewport is a toy. */
 .room-drift-row {
-  opacity: 0;
-  transform: translateY(6px);
   transition:
     opacity 420ms var(--ease) var(--row-at, 0ms),
     transform 420ms var(--ease) var(--row-at, 0ms),
     background-color var(--dur-hover) var(--ease-ui);
 }
 
-[data-shown="true"] .room-drift-row {
-  opacity: 1;
-  transform: none;
+/* Hidden only once script has armed the board (data-shown="false"): without
+   script, or before hydration, the rows are simply there. */
+[data-shown="false"] .room-drift-row {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 /* ── The lane ────────────────────────────────────────────────────────────────
@@ -1680,7 +1683,6 @@ li:hover > .room-ide-label {
 .room-drift-wrong {
   position: absolute;
   top: 50%;
-  transform: scaleX(0);
   transform-origin: left center;
   /* `transform` is the entrance: the lane drawing itself left to right, once.
      `width` and `left` are the model switch. Both are driven off --at, which is
@@ -1723,9 +1725,9 @@ li:hover > .room-ide-label {
     opacity var(--dur-hover) var(--ease-ui);
 }
 
-[data-shown="true"] .room-drift-held,
-[data-shown="true"] .room-drift-wrong {
-  transform: scaleX(1);
+[data-shown="false"] .room-drift-held,
+[data-shown="false"] .room-drift-wrong {
+  transform: scaleX(0);
 }
 
 /* Lands after its own lane has drawn, so the marker reads as the event the line
@@ -1739,8 +1741,6 @@ li:hover > .room-ide-label {
   margin: -2.5px 0 0 -2.5px;
   border-radius: 999px;
   background: var(--conflict);
-  opacity: 0;
-  transform: scale(0.4);
   /* The delay belongs to the entrance only — the marker lands after its lane has
      drawn. On a model switch there is no entrance to wait for, so `left` carries
      the row's stagger and nothing more; inheriting the +420ms would leave the
@@ -1762,9 +1762,9 @@ li:hover > .room-ide-label {
   border: 1.5px solid var(--conflict);
 }
 
-[data-shown="true"] .room-drift-dot {
-  opacity: 1;
-  transform: none;
+[data-shown="false"] .room-drift-dot {
+  opacity: 0;
+  transform: scale(0.4);
 }
 
 .room-drift-row:hover .room-drift-wrong {

@@ -1,0 +1,19 @@
+{
+  "name": "lurq",
+  "description": "lurq for Claude Code: verify npm packages, upgrades and version conflicts from live evidence before the agent installs them.",
+  "owner": {
+    "name": "lurq",
+    "url": "https://www.lurq.run"
+  },
+  "plugins": [
+    {
+      "name": "lurq",
+      "source": "./plugins/lurq",
+      "description": "Verify npm packages before Claude installs them: hallucinated names, advisories, API drift between versions and version conflicts.",
+      "category": "development",
+      "homepage": "https://www.lurq.run/docs",
+      "repository": "https://github.com/jadenryu/lurq",
+      "license": "MIT"
+    }
+  ]
+}

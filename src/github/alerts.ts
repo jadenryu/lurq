@@ -25,7 +25,7 @@
  */
 import semver from 'semver';
 import { logger } from '../core/logger';
-import { insertAlerts } from '../db/alerts';
+import { cliUpgradeWatchers, insertAlerts, type CliWatcher } from '../db/alerts';
 import type { Database } from '../db/client';
 import { reposDeclaring } from '../db/repos';
 import type { NewRepoAlertRow, RepoRow } from '../db/schema';
@@ -107,7 +107,38 @@ export function draftAlert(
 }
 
 /**
- * Fan a publish out to every connected repo that depends on the package.
+ * The alert an account with no connected repo gets, or null when its last
+ * upgrade already reached this major.
+ *
+ * All lurq knows about such a repo is the version `check-upgrade` last took it
+ * to, so that is both `range` and `fromVersion`, and `inRange` is false: we
+ * cannot tell whether its declared range would take the new major, and not
+ * knowing is never evidence. Those alerts reach the feed, channels and the
+ * weekly digest, never the urgent "installs on its own" email.
+ */
+export function draftCliAlert(
+  watcher: CliWatcher,
+  packageName: string,
+  toVersion: string,
+): NewRepoAlertRow | null {
+  const last = semver.valid(watcher.lastToVersion) ?? semver.coerce(watcher.lastToVersion)?.version ?? null;
+  if (last && semver.major(last) >= semver.major(toVersion)) return null;
+  return {
+    ownerId: watcher.ownerId,
+    repoId: null,
+    repoFullName: watcher.repoFullName,
+    packageName,
+    range: watcher.lastToVersion,
+    fromVersion: watcher.lastToVersion,
+    toVersion,
+    inRange: false,
+  };
+}
+
+/**
+ * Fan a publish out to every repo that depends on the package: connected repos
+ * from their stored manifests, and CLI-only repos from their recent upgrade
+ * runs. A repo that is both is alerted once, as the connected repo.
  *
  * Best-effort by contract: the caller is an ingestion path, and failing to write
  * a notification must never fail the package sync that produced it. Returns how
@@ -123,12 +154,19 @@ export async function emitPublishAlerts(
   if (!toVersion) return 0;
 
   try {
-    const affected = await reposDeclaring(db, name);
-    if (affected.length === 0) return 0;
+    const [affected, watchers] = await Promise.all([
+      reposDeclaring(db, name),
+      cliUpgradeWatchers(db, name),
+    ]);
+    const connected = new Set(affected.map((r) => `${r.ownerId}\u0000${r.fullName}`));
 
-    const rows = affected
-      .map((repo) => draftAlert(repo, name, toVersion))
-      .filter((row): row is NewRepoAlertRow => row !== null);
+    const rows = [
+      ...affected.map((repo) => draftAlert(repo, name, toVersion)),
+      ...watchers
+        .filter((w) => !connected.has(`${w.ownerId}\u0000${w.repoFullName}`))
+        .map((w) => draftCliAlert(w, name, toVersion)),
+    ].filter((row): row is NewRepoAlertRow => row !== null);
+    if (rows.length === 0) return 0;
 
     const written = await insertAlerts(db, rows);
     if (written > 0) {

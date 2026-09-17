@@ -302,6 +302,55 @@
       "when": 1789322771718,
       "tag": "0042_alert_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789416803276,
+      "tag": "0043_builder_scans",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1789508816729,
+      "tag": "0044_demand_ingest_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1789509036634,
+      "tag": "0045_surface_queue_backoff",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1789509183008,
+      "tag": "0046_surface_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789509435501,
+      "tag": "0047_cli_repo_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789509500000,
+      "tag": "0048_remote_mcp_contracts",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789511184685,
+      "tag": "0049_mcp_pins_and_public_alerts",
+      "breakpoints": true
     }
   ]
 }

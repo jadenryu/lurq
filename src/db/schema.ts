@@ -7,6 +7,7 @@
  * automatically by Drizzle).
  */
 import { sql } from 'drizzle-orm';
+import type { ArchetypeId, BuilderProfile } from '../github/builderProfile';
 import {
   bigint,
   boolean,
@@ -67,6 +68,8 @@ import type { PromptInfo, ResourceTemplateInfo } from '../mcpScan/snapshot';
 import type { ServerAnalysis, SnapshotDiff } from '../mcpScan/analyze';
 import type { Registry } from '../mcpScan/config';
 import type { ScanStatus } from '../mcpScan/errors';
+import type { AuthProfile, EndpointStatus, ProtocolMode, Violation } from '../remoteProbe/types';
+import type { RegistryHeader, RegistryPackageEntry, RegistryRemote } from '../registry/official';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -174,6 +177,16 @@ export const packages = pgTable(
      *  dashboard accounts existed. Stamped once via a standalone WHERE ... IS NULL
      *  update kept out of upsertPackage, so re-syncs can never clobber it. */
     firstRequestedByOwnerId: text('first_requested_by_owner_id'),
+    /**
+     * Failed API-surface extractions for `surface_attempted_version`. The worker
+     * stops asking once a version has failed SURFACE_MAX_ATTEMPTS times; a new
+     * latest version starts the count again, since it may ship types the last
+     * one did not. Without this, a package with no extractable surface was
+     * re-attempted at random every hour, forever. Not in upsertPackage's row,
+     * so re-syncs never reset it.
+     */
+    surfaceAttempts: integer('surface_attempts').notNull().default(0),
+    surfaceAttemptedVersion: text('surface_attempted_version'),
   },
   (table) => [
     uniqueIndex('packages_ecosystem_name_idx').on(table.ecosystem, table.name),
@@ -234,6 +247,13 @@ export const discoveryQueue = pgTable(
      *  and never reaching the write that would take it off the queue. Same
      *  treatment `compat_verify_queue.attempts` already gives a failing set. */
     attempts: integer('attempts').notNull().default(0),
+    /**
+     * The account whose query asked for this package (`reactive` rows only),
+     * credited as first requester when it is ingested. Stored here because the
+     * on-demand ingest used to live only in the API process's memory, and a
+     * deploy mid-backlog dropped both the work and the attribution.
+     */
+    requestedByOwnerId: text('requested_by_owner_id'),
     discoveredAt: ts('discovered_at').notNull().defaultNow(),
   },
   (table) => [index('discovery_queue_status_idx').on(table.status)],
@@ -615,7 +635,10 @@ export const repoAlerts = pgTable(
     id: serial('id').primaryKey(),
     /** Clerk user id, copied from the repo — alerts are read owner-scoped. */
     ownerId: text('owner_id').notNull(),
-    repoId: integer('repo_id').notNull(),
+    /** Null for an account that runs `check-upgrade` on a repo lurq has no
+     *  GitHub App installation for: the alert is keyed by `repo_full_name` from
+     *  its upgrade runs instead, and there is no repo page to link to. */
+    repoId: integer('repo_id'),
     /** Denormalized so the feed renders without a join, as in `upgrade_runs`. */
     repoFullName: text('repo_full_name').notNull(),
     packageName: text('package_name').notNull(),
@@ -643,6 +666,12 @@ export const repoAlerts = pgTable(
     // watcher re-syncs on every publish, including non-latest backports — must
     // not re-notify.
     uniqueIndex('repo_alerts_dedup_idx').on(table.repoId, table.packageName, table.toVersion),
+    // The same rule for alerts with no connected repo. Postgres treats NULLs as
+    // distinct, so the index above can never dedupe those rows; this one covers
+    // exactly them. Partial, so adding it cannot fail on existing rows.
+    uniqueIndex('repo_alerts_cli_dedup_idx')
+      .on(table.ownerId, table.repoFullName, table.packageName, table.toVersion)
+      .where(sql`repo_id is null`),
   ],
 );
 
@@ -705,6 +734,12 @@ export const surfaceQueue = pgTable(
     specKey: text('spec_key').notNull().unique(),
     /** Failed drains bump this; the worker drops a spec that keeps failing. */
     attempts: integer('attempts').notNull().default(0),
+    /**
+     * Not eligible before this. Set on every retry with an exponential delay, so
+     * a spec that just failed waits instead of being retried the next cycle and
+     * — oldest-first — blocking every newer spec behind it. Null = ready now.
+     */
+    nextAttemptAt: ts('next_attempt_at'),
     requestedAt: ts('requested_at').notNull().defaultNow(),
   },
   (table) => [index('surface_queue_requested_idx').on(table.kind, table.requestedAt)],
@@ -1354,3 +1389,266 @@ export const notificationChannels = pgTable(
 );
 
 export type NotificationChannelRow = typeof notificationChannels.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Builder reports, saved per account.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The last builder report an account ran for each target.
+ *
+ * One row per (owner, target), overwritten by a rescan: this is a snapshot to
+ * come back to, not a history. A scan's drift and advisories go stale in days,
+ * so keeping every past copy would be storing numbers nobody should act on.
+ * `target` is the normalized key (`login` or `login/repo`, lowercased), so a
+ * pasted URL and a typed name land on the same row.
+ *
+ * The listing columns are copied out of `profile` so the saved list never has
+ * to read the whole report.
+ */
+export const builderScans = pgTable(
+  'builder_scans',
+  {
+    ownerId: text('owner_id').notNull(),
+    target: text('target').notNull(),
+    login: text('login').notNull(),
+    archetype: text('archetype').$type<ArchetypeId>().notNull(),
+    avatarUrl: text('avatar_url').notNull(),
+    // What builderStanding.ts ranks on, copied out of `profile` at save, so
+    // ranking reads seven integers per builder instead of every whole report.
+    repos: integer('repos').notNull(),
+    active90: integer('active_90').notNull(),
+    stars: integer('stars').notNull(),
+    depsTracked: integer('deps_tracked').notNull(),
+    depsBehind: integer('deps_behind').notNull(),
+    depsMajor: integer('deps_major').notNull(),
+    advisories: integer('advisories').notNull(),
+    profile: jsonb('profile').$type<BuilderProfile>().notNull(),
+    scannedAt: ts('scanned_at').notNull().defaultNow(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.target] }),
+    index('builder_scans_owner_recent_idx').on(table.ownerId, table.scannedAt),
+  ],
+);
+
+export type BuilderScanRow = typeof builderScans.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Remote MCP contracts: a public, credential-free read of every remote endpoint
+// the official registry lists. Owner-independent by construction — nothing here
+// ever holds a credential or a value an account supplied — so it can back public
+// answers. Contract bodies are stored in `mcp_contracts`, content-addressed and
+// shared with account scans.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Every version of every server the official registry has published, as last
+ * synced. Kept per version because the registry's `updated_since` feed returns
+ * versions, and a deleted or superseded version is itself a fact worth knowing.
+ */
+export const mcpRegistryServers = pgTable(
+  'mcp_registry_servers',
+  {
+    name: text('name').notNull(),
+    version: text('version').notNull(),
+    title: text('title'),
+    description: text('description'),
+    websiteUrl: text('website_url'),
+    repositoryUrl: text('repository_url'),
+    /** `active`, `deprecated`, `deleted`, … as the registry reports it. */
+    status: text('status').notNull(),
+    isLatest: boolean('is_latest').notNull(),
+    remotes: jsonb('remotes').$type<RegistryRemote[]>().notNull(),
+    packages: jsonb('packages').$type<RegistryPackageEntry[]>().notNull(),
+    publishedAt: ts('published_at'),
+    registryUpdatedAt: ts('registry_updated_at'),
+    syncedAt: ts('synced_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.name, table.version] }),
+    index('mcp_registry_servers_latest_idx').on(table.name).where(sql`${table.isLatest}`),
+    index('mcp_registry_servers_updated_idx').on(table.registryUpdatedAt),
+  ],
+);
+
+/**
+ * One remote endpoint, identified by its URL: current state plus the schedule.
+ *
+ * The table is its own work queue. A drain claims due rows by setting
+ * `lease_until` inside `FOR UPDATE SKIP LOCKED`, so concurrent workers never
+ * probe the same endpoint and a crashed worker's lease simply expires. Backoff
+ * lives in `next_probe_at`, computed from the outcome.
+ */
+export const mcpRemoteEndpoints = pgTable(
+  'mcp_remote_endpoints',
+  {
+    id: serial('id').primaryKey(),
+    url: text('url').notNull().unique(),
+    host: text('host').notNull(),
+    /** Transport the registry declares: `streamable-http` or `sse`. */
+    transport: text('transport').notNull(),
+    /** URL carries `{placeholders}`: never probed, answered as setup-dependent. */
+    templated: boolean('templated').notNull().default(false),
+    /** A maintainer asked not to be probed. Never scheduled again. */
+    optedOut: boolean('opted_out').notNull().default(false),
+    lastStatus: text('last_status').$type<EndpointStatus>(),
+    lastHttpStatus: integer('last_http_status'),
+    /** Content hash of the last contract read (a key into `mcp_contracts`). */
+    lastContentHash: text('last_content_hash'),
+    /** Hash of the auth profile, so an auth change is detectable without a diff. */
+    lastAuthHash: text('last_auth_hash'),
+    auth: jsonb('auth').$type<AuthProfile>(),
+    violations: jsonb('violations').$type<Violation[]>().notNull().default([]),
+    protocolMode: text('protocol_mode').$type<ProtocolMode>(),
+    protocolVersion: text('protocol_version'),
+    serverName: text('server_name'),
+    serverVersion: text('server_version'),
+    finalUrl: text('final_url'),
+    latencyMs: integer('latency_ms'),
+    lastError: text('last_error'),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    probeCount: integer('probe_count').notNull().default(0),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastProbedAt: ts('last_probed_at'),
+    lastChangedAt: ts('last_changed_at'),
+    nextProbeAt: ts('next_probe_at').notNull().defaultNow(),
+    leaseUntil: ts('lease_until'),
+    /** No live registry entry names this URL any more. Kept for history. */
+    removedAt: ts('removed_at'),
+    /**
+     * The key an account's own `lurq mcp-scan` gives this server (`remote:<host><path>`,
+     * query dropped). Joining on it is how a change the public probe sees reaches
+     * every account already running the server, without anyone rescanning.
+     */
+    scanKey: text('scan_key'),
+  },
+  (table) => [
+    index('mcp_remote_endpoints_scan_key_idx').on(table.scanKey),
+    index('mcp_remote_endpoints_due_idx')
+      .on(table.nextProbeAt)
+      .where(sql`${table.optedOut} = false and ${table.templated} = false and ${table.removedAt} is null`),
+    index('mcp_remote_endpoints_host_idx').on(table.host),
+  ],
+);
+
+/** Which registry servers name which endpoint, with the headers each declares. */
+export const mcpEndpointServers = pgTable(
+  'mcp_endpoint_servers',
+  {
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    serverName: text('server_name').notNull(),
+    headers: jsonb('headers').$type<RegistryHeader[]>().notNull().default([]),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+    /**
+     * The server's latest registry version stopped naming this URL, or the
+     * server was deleted. Marked, never deleted: rows in this schema are history.
+     */
+    removedAt: ts('removed_at'),
+  },
+  (table) => [
+    primaryKey({ columns: [table.endpointId, table.serverName] }),
+    index('mcp_endpoint_servers_name_idx').on(table.serverName),
+  ],
+);
+
+/**
+ * An endpoint's history, run-length encoded exactly like `mcp_observations`: a
+ * new row only when status, contract, auth or violations move.
+ */
+export const mcpEndpointObservations = pgTable(
+  'mcp_endpoint_observations',
+  {
+    id: serial('id').primaryKey(),
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    status: text('status').$type<EndpointStatus>().notNull(),
+    httpStatus: integer('http_status'),
+    contentHash: text('content_hash'),
+    authHash: text('auth_hash'),
+    violations: jsonb('violations').$type<Violation[]>().notNull().default([]),
+    protocolVersion: text('protocol_version'),
+    error: text('error'),
+    probeCount: integer('probe_count').notNull().default(1),
+    firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+    lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+  },
+  (table) => [index('mcp_endpoint_observations_endpoint_idx').on(table.endpointId, table.firstSeenAt)],
+);
+
+/**
+ * A change on a public endpoint worth telling someone about: its contract
+ * (tools), its auth (a client that could sign in may no longer), or its status
+ * (it went dark). The pair index makes a flapping endpoint re-arm one row.
+ */
+export const mcpEndpointChanges = pgTable(
+  'mcp_endpoint_changes',
+  {
+    id: serial('id').primaryKey(),
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    kind: text('kind').$type<'contract' | 'auth' | 'status'>().notNull(),
+    fromKey: text('from_key').notNull(),
+    toKey: text('to_key').notNull(),
+    severity: text('severity').$type<Severity>().notNull(),
+    summary: text('summary').notNull(),
+    diff: jsonb('diff').$type<unknown>(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('mcp_endpoint_changes_pair_idx').on(table.endpointId, table.kind, table.fromKey, table.toKey),
+    index('mcp_endpoint_changes_endpoint_idx').on(table.endpointId, table.createdAt),
+    index('mcp_endpoint_changes_created_idx').on(table.createdAt),
+  ],
+);
+
+/**
+ * An account's approval of a remote endpoint as it was: its contract and its
+ * sign-in path at the moment of pinning. A later public change is measured
+ * against this, so "approved" keeps meaning what was approved. Unpinning is
+ * marked, not deleted.
+ */
+export const mcpPins = pgTable(
+  'mcp_pins',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    endpointId: integer('endpoint_id')
+      .notNull()
+      .references(() => mcpRemoteEndpoints.id),
+    /** Null when the contract was not readable without credentials at pin time. */
+    contentHash: text('content_hash'),
+    authHash: text('auth_hash'),
+    note: text('note'),
+    pinnedAt: ts('pinned_at').notNull().defaultNow(),
+    removedAt: ts('removed_at'),
+  },
+  (table) => [
+    uniqueIndex('mcp_pins_owner_endpoint_idx').on(table.ownerId, table.endpointId),
+    index('mcp_pins_endpoint_idx').on(table.endpointId),
+  ],
+);
+
+/** An account has seen a public endpoint change. Per account: one change, many readers. */
+export const mcpEndpointChangeAcks = pgTable(
+  'mcp_endpoint_change_acks',
+  {
+    ownerId: text('owner_id').notNull(),
+    changeId: integer('change_id')
+      .notNull()
+      .references(() => mcpEndpointChanges.id),
+    acknowledgedAt: ts('acknowledged_at').notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.changeId] })],
+);
+
+export type McpPinRow = typeof mcpPins.$inferSelect;
+export type McpRegistryServerRow = typeof mcpRegistryServers.$inferSelect;
+export type McpRemoteEndpointRow = typeof mcpRemoteEndpoints.$inferSelect;
+export type McpEndpointObservationRow = typeof mcpEndpointObservations.$inferSelect;
+export type McpEndpointChangeRow = typeof mcpEndpointChanges.$inferSelect;
