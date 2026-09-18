@@ -120,15 +120,16 @@ const READ_ON = new Date(stats.dataAsOf).toLocaleDateString("en-GB", {
  * and gains it back automatically when it does. Nothing here will ever print a
  * pairwise count under a stacks label.
  */
-const stacksResolved: number | null =
-  (provenance as { stacksResolved?: number | null }).stacksResolved ?? null;
 
 export const PROVENANCE_STATS = [
   { value: stats.packages.toLocaleString("en-US"), label: "packages indexed" },
   { value: String(SOURCES.length), label: "sources" },
   { value: provenance.versionsTracked.toLocaleString("en-US"), label: "versions tracked" },
-  ...(stacksResolved === null
-    ? []
-    : [{ value: stacksResolved.toLocaleString("en-US"), label: "stacks resolved" }]),
+  // ponytail: "stacks resolved" temporarily pulled (2026-09-18). Restore as:
+  //   const stacksResolved: number | null =
+  //     (provenance as { stacksResolved?: number | null }).stacksResolved ?? null;
+  //   ...(stacksResolved === null
+  //     ? []
+  //     : [{ value: stacksResolved.toLocaleString("en-US"), label: "stacks resolved" }]),
   { value: READ_ON, label: "last read" },
 ] as const;
