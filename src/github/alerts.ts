@@ -30,6 +30,7 @@ import type { Database } from '../db/client';
 import { reposDeclaring } from '../db/repos';
 import type { NewRepoAlertRow, RepoRow } from '../db/schema';
 import { declaredDeps } from './drift';
+import { dispatchForAlerts } from './dispatch';
 
 /** The subset of a package row that decides whether a publish is alertable. */
 export interface PackageLatest {
@@ -168,11 +169,29 @@ export async function emitPublishAlerts(
     ].filter((row): row is NewRepoAlertRow => row !== null);
     if (rows.length === 0) return 0;
 
-    const written = await insertAlerts(db, rows);
-    if (written > 0) {
-      logger.info(`alerts: ${name}@${toVersion} is a new major, notified ${written} repo(s)`);
+    const inserted = await insertAlerts(db, rows);
+    if (inserted.length > 0) {
+      logger.info(
+        `alerts: ${name}@${toVersion} is a new major, notified ${inserted.length} repo(s)`,
+      );
     }
-    return written;
+
+    // Turn the alerts that are actually new into runs, so an armed repo hears
+    // about a breaking release the day it ships rather than up to six days
+    // later. `insertAlerts` returns only genuinely inserted rows — the unique
+    // index on (repo, package, version) drops the rest — so a re-sync of an
+    // already-alerted publish dispatches nothing and this needs no bookkeeping
+    // of its own.
+    //
+    // Connected repos only: a CLI watcher's alert has no `repoId` and no
+    // installation to dispatch through, so it falls out of this lookup.
+    const byId = new Map(affected.map((repo) => [repo.id, repo]));
+    const freshlyAlerted = inserted
+      .map((row) => (row.repoId === null ? undefined : byId.get(row.repoId)))
+      .filter((repo): repo is RepoRow => repo !== undefined);
+    if (freshlyAlerted.length > 0) await dispatchForAlerts(freshlyAlerted);
+
+    return inserted.length;
   } catch (err) {
     logger.warn(`alerts: could not fan out ${name}@${toVersion}: ${(err as Error).message}`);
     return 0;
