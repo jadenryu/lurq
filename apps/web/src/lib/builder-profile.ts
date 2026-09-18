@@ -30,6 +30,20 @@ export interface ScanConflict {
   detail: string;
 }
 
+/** Mirrors `UpkeepAxis` in src/github/upkeepAxes.ts. */
+export interface UpkeepAxis {
+  id: "runtime" | "automation";
+  /** 0-100, or null when it could not be measured — never a disguised zero. */
+  score: number | null;
+  evidence: string[];
+}
+
+/** Axis labels, kept beside ARCHETYPES so the report never spells one itself. */
+export const UPKEEP_AXES: Record<UpkeepAxis["id"], string> = {
+  runtime: "runtime declared",
+  automation: "kept current by",
+};
+
 /** One repo's stack, read from its root package.json. */
 export interface RepoStack {
   repo: string;
@@ -46,6 +60,8 @@ export interface RepoStack {
   deps: ScanDep[];
   conflictDetail: ScanConflict[];
   partial: boolean;
+  /** Absent on scans saved before the upkeep axes existed. */
+  upkeep?: UpkeepAxis[];
 }
 
 export interface Trait {
@@ -193,8 +209,8 @@ export const ARCHETYPES: Record<ArchetypeId, { name: string; trait: string; line
   },
   steward: {
     name: "The Steward",
-    trait: "stack health",
-    line: "What you build stays current. Your dependencies sit where most people's don't: up to date.",
+    trait: "upkeep",
+    line: "What you build stays current. Your dependencies sit where most people's don't, and your projects still say what they need to run.",
   },
 };
 

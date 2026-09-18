@@ -20,6 +20,12 @@
  * GITHUB_TOKEN in production and the API budget stops being the constraint.
  */
 import { getConfig } from '../core/config';
+import {
+  AUTOMATION_PATHS,
+  automationAxis,
+  runtimeAxis,
+  type UpkeepAxis,
+} from './upkeepAxes';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { computeDrift } from './drift';
@@ -128,6 +134,41 @@ export async function rootManifest(owner: string, name: string): Promise<unknown
 }
 
 /** The same read, keeping the status, so a failed read is not mistaken for a repo with no package.json. */
+/**
+ * Does a known path exist in a public repo?
+ *
+ * Status only, and deliberately NOT `readGitHub`: that parses the body as JSON,
+ * so a `dependabot.yml` that IS present would throw on parse, be caught, and
+ * come back as `{ data: null, status: 0 }` — indistinguishable from a read that
+ * never happened. That would quietly turn "automation is configured" into "we
+ * could not look", which is the one mistake the upkeep axes exist to avoid.
+ *
+ * 200 -> true, 404 -> false (a PROVEN absence), anything else -> null (rate
+ * limit, timeout, 5xx: the read did not happen). raw.githubusercontent is a
+ * separate budget from the REST API, so probing a handful of paths costs
+ * nothing on the 60/hour anonymous limit a directory listing would spend.
+ */
+export async function rawPathExists(
+  owner: string,
+  name: string,
+  path: string,
+): Promise<boolean | null> {
+  try {
+    const res = await fetch(`https://raw.githubusercontent.com/${owner}/${name}/HEAD/${path}`, {
+      headers: headers(),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 404) return false;
+    if (!res.ok) return null;
+    // The body is irrelevant to presence; cancel it rather than leave the
+    // stream dangling for the GC to deal with.
+    void res.body?.cancel();
+    return true;
+  } catch {
+    return null;
+  }
+}
+
 export function rootManifestRead(owner: string, name: string): Promise<GitHubRead<unknown>> {
   return readGitHub<unknown>(`https://raw.githubusercontent.com/${owner}/${name}/HEAD/package.json`, {
     headers: { Accept: 'application/json' },
@@ -201,6 +242,16 @@ export interface PublicScan {
   conflictDetail: ScanConflict[];
   /** Always true today: the root manifest is not the whole repo. */
   partial: boolean;
+  /**
+   * Upkeep beyond dependency currency: does the repo say which runtime it
+   * needs, and is anything configured to keep it current.
+   *
+   * Optional, so scans saved before these axes existed stay valid — the same
+   * discipline as `advisoriesExact`. An axis with `score: null` was NOT
+   * measured; it did not score zero. The report has to render those differently
+   * or it states more than it read.
+   */
+  upkeep?: UpkeepAxis[];
 }
 
 /**
@@ -257,22 +308,51 @@ export async function publicScan(db: Database, target: ScanTarget): Promise<Publ
         );
 
   if (!resolved) return null;
-  return scanManifest(db, resolved.owner, resolved.name, resolved.manifest);
+  return scanManifest(db, resolved.owner, resolved.name, resolved.manifest, {
+    probe: (path) => rawPathExists(resolved.owner, resolved.name, path),
+  });
 }
 
 /**
  * One repo's drift, from a root manifest already in hand. Shared with the
  * builder profile (builderProfile.ts), which reads several of a person's repos.
  */
+/**
+ * The upkeep axes for one repo.
+ *
+ * `runtimeAxis` reads the RAW manifest, so it works even where
+ * `parseManifest` returns null — a repo with no registry dependencies still
+ * declares (or fails to declare) a runtime, and that repo is precisely the one
+ * the dependency report has nothing to say about.
+ *
+ * With no `probe` there is no automation axis at all, rather than an axis
+ * scoring zero. Reporting "nothing keeps this current" without having looked is
+ * the one claim these axes must never make.
+ */
+async function upkeepFor(
+  raw: unknown,
+  probe?: (path: string) => Promise<boolean | null>,
+): Promise<UpkeepAxis[]> {
+  const axes: UpkeepAxis[] = [runtimeAxis(raw)];
+  if (!probe) return axes;
+  const probes = await Promise.all(
+    AUTOMATION_PATHS.map(async (path) => ({ path, present: await probe(path) })),
+  );
+  axes.push(automationAxis(probes));
+  return axes;
+}
+
 export async function scanManifest(
   db: Database,
   owner: string,
   name: string,
   raw: unknown,
+  opts: { probe?: (path: string) => Promise<boolean | null> } = {},
 ): Promise<PublicScan> {
   const manifest = parseManifest('package.json', raw);
   const full = `${owner}/${name}`;
   const url = `https://github.com/${full}`;
+  const upkeep = await upkeepFor(raw, opts.probe);
 
   // A real repo with no registry dependencies. Not an error: it is a true and
   // slightly boring answer, and inventing a failure for it would send the
@@ -292,6 +372,9 @@ export async function scanManifest(
       deps: [],
       conflictDetail: [],
       partial: true,
+      // A repo with no registry dependencies is exactly where the dependency
+      // half of this report says nothing. The upkeep axes still do.
+      upkeep,
     };
   }
 
@@ -314,5 +397,6 @@ export async function scanManifest(
       .slice(0, SCAN_CONFLICTS)
       .map(({ source, packages, detail }) => ({ source, packages, detail })),
     partial: true,
+    upkeep,
   };
 }
