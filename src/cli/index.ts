@@ -285,6 +285,23 @@ export function buildProgram(): Command {
   // `check-upgrade` narrows that to what this codebase references, using nothing
   // but the two npm tarballs — no API key, no test suite, no network to us.
 
+  // Writes the workflow the other three commands run inside. Local rendering is
+  // what makes agent-driven setup possible at all: the file used to exist only
+  // on the dashboard, so it was the one step a shell could not do.
+  program
+    .command('autopilot-init')
+    .argument('[dir]', 'repository directory (defaults to the current one)')
+    .description("write the autopilot workflow into this repository's .github/workflows")
+    .option('--print', 'print the workflow instead of writing it')
+    .option('--force', 'replace an existing workflow file')
+    .option('--cron <expr>', 'schedule (default: weekly, or daily for a security-only policy)')
+    .option('--mode <mode>', 'comment | fix | pr (default: fix, which needs no Anthropic key)')
+    .option('--auto-merge', 'add the auto-merge step, which defers to your own required checks')
+    .action(async (dir: string | undefined, opts: import('./autopilotInit').AutopilotInitOpts) => {
+      const { runAutopilotInit } = await import('./autopilotInit');
+      await runAutopilotInit(dir, opts);
+    });
+
   program
     .command('upgrade-plan')
     .argument('[dir]', 'project directory (default: current)', '.')
