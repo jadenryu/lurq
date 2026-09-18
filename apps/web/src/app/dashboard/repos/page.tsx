@@ -2,6 +2,7 @@ import { currentOwner } from "@/lib/owner";
 import { EmptyState, InlineError, eyebrow } from "@/components/dashboard/panel";
 import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { ReposPanel } from "@/components/dashboard/repos-panel";
+import { AccountAutopilotPanel } from "@/components/dashboard/account-autopilot";
 import { DriftMeter } from "@/components/dashboard/drift-meter";
 import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import {
   loadConformance,
   loadImpact,
   loadRepos,
+  loadRepoPolicyDefault,
   loadSelectionPolicy,
 } from "@/lib/dashboard-data";
 import { workspaceBrief } from "@/lib/llm-export";
@@ -39,6 +41,7 @@ export default async function ReposPage({
     { data: alerts },
     { data: conformance },
     { data: policy },
+    { data: autopilotDefault },
   ] = await Promise.all([
     loadRepos(),
     loadImpact(IMPACT_DAYS),
@@ -48,6 +51,7 @@ export default async function ReposPage({
     // after — cheaper than a second endpoint that assembles the same brief.
     loadConformance(),
     loadSelectionPolicy(),
+    loadRepoPolicyDefault(),
   ]);
   const params = await searchParams;
   const connect = params.connect;
@@ -211,6 +215,11 @@ export default async function ReposPage({
             )}
             {/* scroll-mt so the drift meter's link lands the list below the
                 header rather than tucked under it. */}
+            <AccountAutopilotPanel
+              policy={autopilotDefault}
+              repoCount={data.repos.length}
+              demo={demo}
+            />
             <div id="repos" className="scroll-mt-24">
               <ReposPanel repos={data.repos} demo={demo} installUrl={url} />
             </div>

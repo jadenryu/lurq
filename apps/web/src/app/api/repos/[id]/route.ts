@@ -1,43 +1,12 @@
 import { NextResponse } from "next/server";
 import { currentOwner } from "@/lib/owner";
 import { isDemoUser } from "@/lib/demo-data";
+import { parsePolicy } from "@/lib/parse-policy";
 import {
   disconnectRepo,
   updateRepoPolicy,
   LurqIssuerError,
-  type RepoPolicy,
 } from "@/lib/lurq-issuer";
-
-/**
- * A policy is a permission grant, so it is validated here as well as in the
- * backend. Rejecting a partial object rather than merging it means a malformed
- * request can never arm a repo the user meant to leave off.
- */
-function parsePolicy(input: unknown): RepoPolicy | null {
-  if (!input || typeof input !== "object") return null;
-  const raw = input as Record<string, unknown>;
-  if (typeof raw.enabled !== "boolean" || typeof raw.autoMerge !== "boolean") return null;
-  if (raw.scope !== "security" && raw.scope !== "blocking" && raw.scope !== "all") return null;
-  // Checks are carried through, and this route is the reason that matters: it
-  // sits between the dashboard and the backend, so rebuilding a three-key
-  // policy here strips a granted check in transit — the save succeeds, the
-  // toggle looks like it worked, and nothing runs. Fixing the backend's parser
-  // alone does not close that, because this one gets the request first.
-  const checks = parseChecks(raw.checks);
-  return {
-    enabled: raw.enabled,
-    scope: raw.scope,
-    autoMerge: raw.autoMerge,
-    ...(checks ? { checks } : {}),
-  };
-}
-
-/** Absent or malformed reads as not granted. An explicit false and a missing
- *  key mean the same thing, so only a granted check is forwarded. */
-function parseChecks(input: unknown): RepoPolicy["checks"] | null {
-  if (!input || typeof input !== "object") return null;
-  return { env: (input as Record<string, unknown>).env === true };
-}
 
 async function guard(id: string): Promise<
   { ok: true; ownerId: string; repoId: number } | { ok: false; response: NextResponse }

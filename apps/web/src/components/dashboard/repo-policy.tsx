@@ -68,11 +68,25 @@ function Row({
 const envOn = (p: RepoPolicy) => p.checks?.env !== false;
 
 export function RepoPolicyPanel({
-  repoId,
+  endpoint,
+  method = "PATCH",
+  title = "autopilot policy",
+  intro,
+  extra,
+  body,
   policy: initial,
   demo,
 }: {
-  repoId: number;
+  /** Where a save goes. The same controls govern one repo and the account default. */
+  endpoint: string;
+  method?: "PATCH" | "PUT";
+  title?: string;
+  /** A line under the header, for scope the controls cannot state themselves. */
+  intro?: string;
+  /** Rendered in the footer, left of save — the account panel's "apply to all". */
+  extra?: React.ReactNode;
+  /** Extra fields merged into the request body alongside `policy`. */
+  body?: Record<string, unknown>;
   policy: RepoPolicy;
   demo: boolean;
 }) {
@@ -91,10 +105,10 @@ export function RepoPolicyPanel({
   async function save() {
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/repos/${repoId}`, {
-      method: "PATCH",
+    const res = await fetch(endpoint, {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ policy }),
+      body: JSON.stringify({ policy, ...body }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -110,13 +124,15 @@ export function RepoPolicyPanel({
     // states this setting without being able to change it.
     <Panel id="autopilot" className="scroll-mt-24">
       <PanelHeader
-        title="autopilot policy"
+        title={title}
         trailing={
           <Chip tone={policy.enabled ? "accent" : "neutral"} dot>
             {policy.enabled ? "armed" : "off"}
           </Chip>
         }
       />
+
+      {intro && <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{intro}</p>}
 
       <div className="mt-5 space-y-4">
         <Row
@@ -197,7 +213,8 @@ export function RepoPolicyPanel({
         </Row>
       </div>
 
-      <div className="mt-5 flex items-center justify-end gap-3 border-t border-border pt-4">
+      <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
+        {extra && <div className="mr-auto">{extra}</div>}
         {error && <span className="font-mono text-xs text-bad">{error}</span>}
         {dirty && !demo && (
           <Button variant="ghost" size="sm" onClick={() => setPolicy(initial)}>
