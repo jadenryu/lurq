@@ -66,6 +66,39 @@ needs an edit to the file.
 Setting both is safe: an unset secret arrives as an empty string, which the
 action treats as absent.
 
+## Let an agent do it
+
+The dashboard's **copy for agent** button on a repository page gives your coding
+agent the whole job with that repo's own workflow file already in it. If you would
+rather start from here, paste this and fill in the repo name:
+
+```text
+Set up lurq's dependency autopilot on <owner/repo>.
+
+1. Ask me for a lurq API key — I create it at https://www.lurq.run/dashboard/keys.
+   Never print it back to me, never write it to a file, never commit it.
+2. Set it as a repository secret, reading the value from stdin so it stays out of
+   my shell history:
+      gh secret set LURQ_API_KEY --repo <owner/repo>
+3. Get the workflow file: open the repository on https://www.lurq.run/dashboard/repos,
+   use "copy file", and write it to .github/workflows/lurq-upgrade.yml exactly as
+   given. Do not reformat it, do not change the cron, and do not touch the
+   permissions block — that block is the trust boundary and it is deliberately
+   minimal.
+4. Show me the diff and stop. Do not push: committing this file is what grants
+   write access to my repository, and I want to read it first.
+5. Only if I say I want pr mode, ask which Anthropic credential I want and set it
+   the same way as step 2 — CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`
+   (Pro/Max, expires after one year with no warning) or ANTHROPIC_API_KEY from the
+   Anthropic console (does not expire). comment and fix modes need neither.
+
+Then tell me in one line what you set and what is left for me to do.
+```
+
+The per-repo version from the dashboard is better where you have the choice: it
+carries the rendered file, so the agent does not have to fetch anything, and it
+already knows which mode the repo is set to.
+
 ## When it runs
 
 Weekly by default, at 06:00 UTC on Monday. A repo whose policy scope is

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useCopy } from "@/lib/use-copy";
 import { Chip, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/dashboard/copy-button";
 
 /**
  * The setup step, shown as the file itself rather than a button that does
@@ -25,6 +26,7 @@ export function RepoSetup({
   workflowPath,
   setupUrl,
   mode,
+  agentPrompt,
 }: {
   workflow: string;
   workflowPath: string;
@@ -36,6 +38,12 @@ export function RepoSetup({
    * exists to explain.
    */
   mode: "comment" | "fix" | "pr";
+  /**
+   * The setup brief for a coding agent, built on the server by
+   * `agentSetupPrompt`. Passed in rather than assembled here for the reason
+   * CopyButton states: the payload belongs where the data already is.
+   */
+  agentPrompt: string;
 }) {
   const [open, setOpen] = useState(false);
   const { copied, copy } = useCopy();
@@ -67,6 +75,13 @@ export function RepoSetup({
         </p>
       </div>
 
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Or hand it to your agent. <span className="text-foreground">Copy for agent</span> gives it
+        the whole job — the file, the secrets, and the order to do them in. It asks you for the API
+        key rather than carrying one, and it stops before pushing, because committing this file is
+        what grants write access.
+      </p>
+
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <a href={setupUrl} target="_blank" rel="noreferrer">
           <Button>Create on GitHub</Button>
@@ -77,6 +92,9 @@ export function RepoSetup({
         <Button variant="ghost" onClick={() => setOpen((v) => !v)}>
           {open ? "hide" : "read it first"}
         </Button>
+        {/* Sticky: this is pasted into another window and the user comes back,
+            so the button still reading "copied" is how they know they took it. */}
+        <CopyButton text={agentPrompt} label="copy for agent" variant="ghost" sticky />
       </div>
 
       {open && (
