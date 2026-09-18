@@ -26,6 +26,99 @@
  *     tells the agent to show the diff and stop.
  */
 
+/** What an agent needs to set lurq up across an account. */
+export interface AccountSetupInput {
+  /** `owner/name` for each connected repo, so the agent works a known list. */
+  repos: string[];
+  /** Where keys are created and revoked. Absolute: an agent cannot follow a path. */
+  keysUrl: string;
+  /** A freshly minted, scope-less key to carry inline. Absent means ask. */
+  apiKey?: string;
+  /** Repos GitHub has that lurq has not seen, so the brief can say so. */
+  unconnected?: number;
+}
+
+/**
+ * The whole setup, as one brief an agent can execute.
+ *
+ * The per-repo version below hands over a rendered workflow because the
+ * dashboard has one. This cannot: there is no file until a repo is connected,
+ * and a generic one would lose each repo's package manager. So it delegates to
+ * `lurq autopilot-init`, which renders locally from the lockfile on disk — that
+ * command exists precisely so this prompt can be written.
+ *
+ * What an agent genuinely cannot do is listed at the end rather than silently
+ * omitted. Installing the GitHub App is a consent step on GitHub's own domain,
+ * and committing the workflow is what grants write access to the repository.
+ * A brief that quietly did either would be doing the two things a person should
+ * decide, and the value here is removing clicks that carry no decision.
+ */
+export function accountSetupPrompt({
+  repos,
+  keysUrl,
+  apiKey,
+  unconnected = 0,
+}: AccountSetupInput): string {
+  const many = repos.length !== 1;
+  const list = repos.length
+    ? repos.map((r) => `   · ${r}`)
+    : ['   · (none connected yet — I install the GitHub App first)'];
+
+  const lines = [
+    `Set lurq's dependency autopilot up across my repositories. lurq says which upgrades break code a repo actually references; the workflow you are about to write acts on that in my own GitHub Actions.`,
+    "",
+    `Repositories to set up (${repos.length}):`,
+    ...list,
+    "",
+    "Work one repository at a time. Stop and ask me if a step needs something you do not have.",
+    "",
+    apiKey
+      ? `1. The lurq API key is at the end of this message under LURQ_API_KEY. It is a LIVE credential for my account — do not echo it, do not write it into a file, and do not commit it. I revoke it at ${keysUrl} if it leaks.`
+      : `1. Ask me for a lurq API key; I create it at ${keysUrl}. Do not guess one or reuse one from another project.`,
+    "",
+    `2. Wire this machine up once, so my agents can query the index directly:`,
+    `      npx lurqrun setup --yes --api-key <the key>`,
+    "",
+    `3. In each repository above, from inside its checkout:`,
+    `      npx lurqrun autopilot-init`,
+    `   It detects the package manager from the lockfile and writes`,
+    `   .github/workflows/lurq-upgrade.yml. It refuses to overwrite an existing`,
+    `   one — do not pass --force without telling me. Do not hand-edit the`,
+    `   permissions block: it is the trust boundary and it is deliberately minimal.`,
+    "",
+    `4. Set the key as a repository secret in each one. Run it from inside the`,
+    `   checkout so gh resolves the repository itself, and let it read the value`,
+    `   from stdin rather than passing it as an argument, so it stays out of my`,
+    `   shell history:`,
+    `      gh secret set LURQ_API_KEY`,
+    "",
+    `5. Show me the diff for each repository and STOP. Do not push and do not open`,
+    `   pull requests. Committing that file is what grants write access to the`,
+    `   repository, so I read it before it lands.`,
+    "",
+    `What you cannot do, and I will:`,
+    `   · install the lurq GitHub App (a consent step on github.com)`,
+    `   · commit the workflow files you wrote`,
+    unconnected > 0
+      ? `   · connect ${unconnected} repositor${unconnected === 1 ? 'y' : 'ies'} lurq has not seen yet`
+      : `   · connect any further repositories later`,
+    "",
+    `The file starts in fix mode: it opens pull requests containing only changes`,
+    `lurq can prove — renamed call sites, and the range bump in every manifest —`,
+    `with no model involved and no Anthropic credential needed. Each run reads the`,
+    `mode from my dashboard, so switching it later needs no change to the file.`,
+    "",
+    `When you are done, tell me in one line per repository what you wrote and what`,
+    `is left for me${many ? '' : ''}.`,
+  ];
+
+  if (apiKey) {
+    lines.push("", "--- LURQ_API_KEY (live credential, step 1) ---", apiKey);
+  }
+
+  return lines.join("\n");
+}
+
 /** What an agent needs to finish setup for one repository. */
 export interface AgentSetupInput {
   /** `owner/name`, so the `gh` commands are unambiguous in a multi-repo shell. */

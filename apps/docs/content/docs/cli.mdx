@@ -81,6 +81,9 @@ lurq check-upgrade . --upgrade commander@11.1.0..12.1.0 --upgrade zod@3.23.8..4.
 
 # and write the changes that need no judgement
 lurq fix .
+
+# write the workflow that runs all of the above on a schedule, in your CI
+lurq autopilot-init
 ```
 
 `check-upgrade` compares both versions' npm tarballs against the symbols your

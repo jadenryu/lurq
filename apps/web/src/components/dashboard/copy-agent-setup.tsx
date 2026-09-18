@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { agentSetupPrompt, type AgentSetupInput } from "@/lib/agent-setup";
+import {
+  accountSetupPrompt,
+  agentSetupPrompt,
+  type AccountSetupInput,
+  type AgentSetupInput,
+} from "@/lib/agent-setup";
 import { useCopy } from "@/lib/use-copy";
 
 /**
@@ -24,15 +29,33 @@ import { useCopy } from "@/lib/use-copy";
  * because its own doc says the text should be assembled on the server where the
  * data is. That is right for a prompt with no secret in it and wrong here,
  * where the payload does not exist until the click.
+ *
+ * Two briefs, one button: `setup` sets up one repository and hands over the
+ * workflow the dashboard rendered for it, `account` sets up every repository
+ * and delegates the file to `lurq autopilot-init`. They share this component
+ * rather than getting one each because none of the interesting parts differ —
+ * minting, the failures worth showing verbatim, and the demo-key warning are
+ * the same, and a second copy of them would drift on the first fix.
+ *
+ * The brief is built here rather than passed in because a server component
+ * cannot hand a client one a function: only the data crosses, and the key does
+ * not exist on the server at all.
  */
-export function CopyAgentSetup({
-  setup,
-  label = "copy setup for agent",
-}: {
-  /** Everything the brief needs except the key, assembled on the server. */
-  setup: Omit<AgentSetupInput, "apiKey">;
-  label?: string;
-}) {
+type CopySetupProps = { label?: string } & (
+  | {
+      /** Everything the per-repo brief needs except the key. */
+      setup: Omit<AgentSetupInput, "apiKey">;
+      account?: never;
+    }
+  | {
+      /** Everything the account-wide brief needs except the key. */
+      account: Omit<AccountSetupInput, "apiKey">;
+      setup?: never;
+    }
+);
+
+export function CopyAgentSetup(props: CopySetupProps) {
+  const { label = "copy setup for agent" } = props;
   const { copied, copy } = useCopy(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +70,13 @@ export function CopyAgentSetup({
       const res = await fetch("/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: `autopilot · ${setup.repoFullName}` }),
+        body: JSON.stringify({
+          // Named for what it is, so the keys panel says which button issued it
+          // and revoking the right one does not need guesswork.
+          label: props.account
+            ? "autopilot · all repositories"
+            : `autopilot · ${props.setup.repoFullName}`,
+        }),
       });
       const data = (await res.json()) as { key?: string; error?: string; demo?: boolean };
 
@@ -59,7 +88,10 @@ export function CopyAgentSetup({
         return;
       }
 
-      const ok = await copy(agentSetupPrompt({ ...setup, apiKey: data.key }));
+      const brief = props.account
+        ? accountSetupPrompt({ ...props.account, apiKey: data.key })
+        : agentSetupPrompt({ ...props.setup, apiKey: data.key });
+      const ok = await copy(brief);
       if (!ok) {
         setError("Could not reach the clipboard. Copy the workflow manually instead.");
         return;

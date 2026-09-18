@@ -8,9 +8,17 @@ you are behind on, and which of the symbols an upgrade removes your code actuall
 references — and your own runner does the work.
 
 ```bash
-# The file is rendered per repo, with your package manager and your policy baked in.
-# Get it from the dashboard: Repositories → your repo → workflow → Create on GitHub
+npx lurqrun autopilot-init
 ```
+
+That writes `.github/workflows/lurq-upgrade.yml` into the checkout you run it
+in, detecting your package manager from the lockfile on disk. It refuses to
+overwrite an existing file unless you pass `--force`, and it prints the
+repository secrets to add. Nothing runs until you commit it.
+
+The dashboard renders the same file per repository if you would rather copy it by
+hand — **Repositories → your repo → workflow** — and the **copy setup for agent**
+button there hands the whole job to a coding agent instead.
 
 lurq does not commit it for you. Its GitHub app cannot write a byte to your
 repository, so the thing granting write access is a commit you made and can
