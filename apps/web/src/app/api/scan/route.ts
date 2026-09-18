@@ -72,10 +72,17 @@ function clientIp(req: Request): string {
  */
 function forVisitor(profile: BuilderProfile): BuilderReport {
   const [first, ...rest] = profile.repos;
+  // The upkeep axes are STRIPPED, not trimmed. Their scores and evidence are
+  // gated, and the contract above is that a signed-out browser receives exactly
+  // what it renders — spreading `first` sent them in the JSON while the panel
+  // pretended they were locked, which is the CSS-blur mistake this gate was
+  // written to replace. The panel re-creates the axis NAMES from its label map,
+  // the same way the traits list re-creates trait names from ARCHETYPES.
+  const head = first ? (({ upkeep: _upkeep, ...keep }) => keep)(first) : undefined;
   return {
     ...profile,
     traits: null,
-    repos: first ? [{ ...first, deps: first.deps.slice(0, FREE_DEPS), conflictDetail: [] }] : [],
+    repos: head ? [{ ...head, deps: head.deps.slice(0, FREE_DEPS), conflictDetail: [] }] : [],
     // The first MCP config and the first server built, like the first repo: the rest are the ask.
     mcp: profile.mcp
       ? { ...profile.mcp, configs: profile.mcp.configs.slice(0, 1), builds: profile.mcp.builds.slice(0, 1) }

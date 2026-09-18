@@ -53,6 +53,7 @@ import {
   type ScanDep,
   type Trait,
   UPKEEP_AXES,
+  type UpkeepAxis,
 } from "@/lib/builder-profile";
 import { compact, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -398,9 +399,11 @@ function Report({
       <Summary report={report} />
 
       <Traits traits={report.traits} archetype={report.archetype} back={back} />
-      {/* Signed-in only, like every other piece of evidence here: the gate
-          sells the facts behind the scores, and this is one of them. */}
-      {report.traits && <UpkeepAxes stack={report.repos[0]} />}
+      {/* The axis NAMES are public, like the trait names: a visitor should see
+          that upkeep is measured on more than dependency currency. The scores
+          and the evidence are the ask, and they are removed server-side rather
+          than hidden here. */}
+      <UpkeepAxes stack={report.repos[0]} locked={report.locked !== null} back={back} />
 
       {report.locked && <Gate report={report} back={back} />}
 
@@ -553,14 +556,47 @@ function Traits({
  * look" distinct from "nothing is there", and collapsing it here would throw
  * that away at the last hop.
  */
-function UpkeepAxes({ stack }: { stack: RepoStack | undefined }) {
-  const axes = stack?.upkeep ?? [];
+function UpkeepAxes({
+  stack,
+  locked,
+  back,
+}: {
+  stack: RepoStack | undefined;
+  locked: boolean;
+  back: string;
+}) {
+  // Locked, the names come off the label map — exactly how Traits sources trait
+  // names from ARCHETYPES. What is gated is the score and the evidence, and a
+  // visitor still learns that upkeep is measured on more than dependency
+  // currency. `forVisitor` strips `upkeep` server-side, so there is nothing in
+  // the payload for this branch to leak.
+  const axes: UpkeepAxis[] = locked
+    ? (Object.keys(UPKEEP_AXES) as UpkeepAxis["id"][]).map((id) => ({
+        id,
+        score: null,
+        evidence: [],
+      }))
+    : (stack?.upkeep ?? []);
   if (!stack || axes.length === 0) return null;
   return (
     <Panel>
       <PanelHeader
         title="upkeep"
-        trailing={<span className="font-mono text-[11.5px] text-ink-3">{stack.repo}</span>}
+        trailing={
+          locked ? (
+            <SignUpButton mode="modal" fallbackRedirectUrl={back} signInFallbackRedirectUrl={back}>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 text-[12px] text-signal hover:underline"
+              >
+                <Lock aria-hidden className="size-3" />
+                Unlock
+              </button>
+            </SignUpButton>
+          ) : (
+            <span className="font-mono text-[11.5px] text-ink-3">{stack.repo}</span>
+          )
+        }
       />
       <ul className="space-y-3.5">
         {axes.map((axis) => (
@@ -576,7 +612,11 @@ function UpkeepAxes({ stack }: { stack: RepoStack | undefined }) {
                 )}
               </div>
               <span className="w-10 shrink-0 text-right font-mono text-[12px] tabular-nums text-ink-2">
-                {axis.score ?? "n/a"}
+                {locked ? (
+                  <Lock aria-label="locked" className="ml-auto size-3 text-ink-3" />
+                ) : (
+                  (axis.score ?? "n/a")
+                )}
               </span>
             </div>
             {axis.evidence.length > 0 && (
@@ -597,6 +637,7 @@ function Gate({ report, back }: { report: BuilderReport; back: string }) {
   const first = report.repos[0];
   const items = [
     "The score on all four traits, and the facts behind each",
+    "Upkeep on your leading repo: whether it declares a runtime, and what keeps it current",
     "Strengths, what to fix, and a stats card to share",
     "What changed in each outdated dependency, and the advisories behind every flag",
     locked.repos > 0 && `${plural(locked.repos, "more repo")} on this profile, read against the index`,
