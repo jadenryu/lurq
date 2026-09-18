@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { repoMode } from "@/lib/lurq-issuer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MigrationBrief } from "@/components/dashboard/migration-brief";
@@ -157,7 +158,7 @@ export default async function RepoDetailPage({
           workflow={repo.workflow}
           workflowPath={repo.workflowPath}
           setupUrl={repo.setupUrl}
-          armed={repo.policy.enabled}
+          mode={repoMode(repo.policy)}
         />
 
         {/* useSearchParams (RepoDeps reads ?show= and ?q=) client-renders the

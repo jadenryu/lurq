@@ -1,0 +1,110 @@
+---
+title: Keeping a repo current
+description: A scheduled job in your own GitHub Actions that names what an upgrade breaks in your code, applies what can be proven, and opens the pull request.
+---
+
+The autopilot is a workflow file **you** commit. lurq supplies the evidence — what
+you are behind on, and which of the symbols an upgrade removes your code actually
+references — and your own runner does the work.
+
+```bash
+# The file is rendered per repo, with your package manager and your policy baked in.
+# Get it from the dashboard: Repositories → your repo → workflow → Create on GitHub
+```
+
+lurq does not commit it for you. Its GitHub app cannot write a byte to your
+repository, so the thing granting write access is a commit you made and can
+revert.
+
+## Three modes
+
+| mode | what it does | needs |
+|---|---|---|
+| `comment` | Plans the upgrades, checks them against your code, writes the brief to the run summary. Changes nothing. | `LURQ_API_KEY` |
+| `fix` | Opens a pull request containing only what the package itself proves: renamed call sites, and the range bump in every manifest declaring the dependency. No model. | `LURQ_API_KEY` |
+| `pr` | Everything `fix` does, then an agent migrates what a rule cannot and runs your tests. | `LURQ_API_KEY` + an Anthropic credential |
+
+A newly armed repo gets `fix`. It is the mode that cannot fail for want of a
+credential, and it still opens pull requests — with the call sites already
+migrated, which is more than a version bump.
+
+Change the mode on the repository page. Each run reads the setting when it
+starts, so it governs repos that already installed the workflow; only a file
+committed before that behaviour existed keeps its own baked-in mode.
+
+## Repository secrets
+
+`LURQ_API_KEY` is required. It lets the workflow ask which upgrades are
+outstanding. Create one under **API keys** in the dashboard.
+
+For `pr` mode only, add **one** of these:
+
+```bash
+# Already on Claude Pro, Max, Team or Enterprise:
+claude setup-token
+```
+
+That prints a token to the terminal and stores it nowhere — copy it before you
+close the window, and paste it into a repository secret named
+`CLAUDE_CODE_OAUTH_TOKEN`. Anthropic documents this as the mechanism for CI,
+where an interactive browser login is not available.
+
+<Callout type="warn">
+  **That token expires one year after you create it**, with no renewal and no
+  warning. A weekly job runs fine until it lapses and then fails. An API key from
+  the Anthropic console does not expire, and is what Anthropic recommends for a
+  secret shared across repositories — an OAuth token belongs to whoever ran
+  `claude setup-token`, and dies with their subscription.
+</Callout>
+
+`ANTHROPIC_API_KEY` from [the Anthropic console](https://platform.claude.com)
+works instead, and bills per token. The action also supports Bedrock, Vertex and
+Microsoft Foundry through workload identity federation, which stores no secret in
+the repository at all; the generated workflow does not wire those up, so that
+needs an edit to the file.
+
+Setting both is safe: an unset secret arrives as an empty string, which the
+action treats as absent.
+
+## When it runs
+
+Weekly by default, at 06:00 UTC on Monday. A repo whose policy scope is
+`security` runs **daily** instead, because a weekly schedule can mean seven days
+sitting on a known advisory.
+
+You can also start a run by hand from the Actions tab, and lurq starts one for you
+when a dependency you declare ships a new major — so a breaking release reaches
+you the day it lands rather than up to six days later.
+
+## What it can and cannot touch
+
+Read the `permissions:` block at the top of the file first; it is the whole trust
+model.
+
+- lurq's GitHub app is read-only on your code. It can read your manifests and
+  **start** this workflow. It cannot write to your repository, change this file,
+  or set a repository variable.
+- Every commit, branch and pull request is made by the workflow's own
+  `GITHUB_TOKEN`, scoped to that one repo, limited to what the file declares.
+- The agent's tool allowlist has no `git` and no network tool. It edits files;
+  the workflow does version control. A prompt injection in a changelog cannot
+  push a branch.
+- Nothing lands on your default branch. Auto-merge is off unless you opt in, and
+  it defers to your own required checks.
+
+Turning the whole thing off is `git rm .github/workflows/lurq-upgrade.yml`.
+
+## If it runs but never opens anything
+
+The dashboard flags this on the repositories list as **analysing only**. Two
+causes, and the mode tells you which:
+
+- **Set to `pr`** — most likely the Anthropic credential is missing or the OAuth
+  token has expired. The run reports its analysis *before* the credential check,
+  so you see a completed analysis and a failed job. Check the secret first.
+- **Set to `fix`** — no credential is involved, so the workflow file is the
+  problem: it predates lurq reading the mode at run time, or pins its own. Re-copy
+  it from the repository page.
+
+A repo set to `comment` that only analyses is not flagged. That is what it was
+asked to do.
