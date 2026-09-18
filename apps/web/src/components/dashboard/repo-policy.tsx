@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Chip, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
-import type { RepoPolicy } from "@/lib/lurq-issuer";
+import { repoMode, type RepoPolicy } from "@/lib/lurq-issuer";
 import { cn } from "@/lib/utils";
 
 /**
@@ -89,13 +89,10 @@ function Row({
  */
 const envOn = (p: RepoPolicy) => p.checks?.env !== false;
 
-/**
- * Mirrors `repoMode()` on the server for an ARMED repo: absent means the agent,
- * because that is what armed meant before the field existed. The server checks
- * `enabled` first, and so does the caller here — this is only reached inside the
- * armed branch.
- */
-const modeOf = (p: RepoPolicy): "fix" | "pr" => (p.mode === "fix" ? "fix" : "pr");
+// The derivation lives in lib/lurq-issuer.ts, beside the type, so this panel
+// and the repos list cannot disagree about what a repo is set to. A policy
+// reading `comment` matches neither option below, which is right: the choice
+// does not apply until the repo is armed.
 
 export function RepoPolicyPanel({
   repoId,
@@ -182,7 +179,7 @@ export function RepoPolicyPanel({
             <p className="text-sm font-medium">How far it goes</p>
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               {MODES.map((option) => {
-                const active = modeOf(policy) === option.id;
+                const active = repoMode(policy) === option.id;
                 return (
                   <button
                     key={option.id}

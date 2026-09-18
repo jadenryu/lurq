@@ -224,6 +224,23 @@ export interface RepoPolicy {
   };
 }
 
+/**
+ * How far an armed repo goes. Mirrors `repoMode()` in src/github/scope.ts.
+ *
+ * `enabled` FIRST, for the reason the server states: reading `mode` first meant
+ * a repo that had once chosen `pr` kept resolving to `pr` after autopilot was
+ * switched off. Absent `mode` means the agent, because that is what armed meant
+ * before the field existed.
+ *
+ * One copy on the web side too. It was spelled twice — once in the policy
+ * panel, once implied in the repos list — which is how two views of one repo end
+ * up disagreeing about what it is allowed to do.
+ */
+export function repoMode(policy: RepoPolicy): "comment" | "fix" | "pr" {
+  if (!policy.enabled) return "comment";
+  return policy.mode ?? "pr";
+}
+
 export interface DashboardRepo {
   id: number;
   fullName: string;
