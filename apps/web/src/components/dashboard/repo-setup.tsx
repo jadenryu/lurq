@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useCopy } from "@/lib/use-copy";
 import { Chip, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/dashboard/copy-button";
+import { CopyAgentSetup } from "@/components/dashboard/copy-agent-setup";
+import type { AgentSetupInput } from "@/lib/agent-setup";
 
 /**
  * The setup step, shown as the file itself rather than a button that does
@@ -26,7 +27,7 @@ export function RepoSetup({
   workflowPath,
   setupUrl,
   mode,
-  agentPrompt,
+  setup,
 }: {
   workflow: string;
   workflowPath: string;
@@ -39,11 +40,11 @@ export function RepoSetup({
    */
   mode: "comment" | "fix" | "pr";
   /**
-   * The setup brief for a coding agent, built on the server by
-   * `agentSetupPrompt`. Passed in rather than assembled here for the reason
-   * CopyButton states: the payload belongs where the data already is.
+   * Everything the agent brief needs EXCEPT the key, which is minted when the
+   * button is pressed. The prompt cannot be built on the server any more: its
+   * payload does not exist until the click that creates the credential.
    */
-  agentPrompt: string;
+  setup: Omit<AgentSetupInput, "apiKey">;
 }) {
   const [open, setOpen] = useState(false);
   const { copied, copy } = useCopy();
@@ -76,11 +77,15 @@ export function RepoSetup({
       </div>
 
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Or hand it to your agent. <span className="text-foreground">Copy for agent</span> gives it
-        the whole job — the file, the secrets, and the order to do them in. It asks you for the API
-        key rather than carrying one, and it stops before pushing, because committing this file is
-        what grants write access.
+        <span className="text-foreground">Hand it to your agent instead.</span> One copy gives it
+        the whole job — a fresh API key, the workflow file, the secrets, and the order to do them
+        in. It stops before pushing, because committing this file is what grants write access to
+        your repository. The copied text contains a live key, so treat the paste like a credential.
       </p>
+
+      <div className="mt-4">
+        <CopyAgentSetup setup={setup} />
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <a href={setupUrl} target="_blank" rel="noreferrer">
@@ -94,7 +99,6 @@ export function RepoSetup({
         </Button>
         {/* Sticky: this is pasted into another window and the user comes back,
             so the button still reading "copied" is how they know they took it. */}
-        <CopyButton text={agentPrompt} label="copy for agent" variant="ghost" sticky />
       </div>
 
       {open && (
