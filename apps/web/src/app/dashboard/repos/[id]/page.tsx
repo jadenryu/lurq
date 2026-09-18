@@ -151,7 +151,7 @@ export default async function RepoDetailPage({
 
         <UpgradeRuns runs={repo.runs} />
 
-        <RepoPolicyPanel repoId={repo.id} policy={repo.policy} demo={demo} />
+        <RepoPolicyPanel endpoint={`/api/repos/${repo.id}`} policy={repo.policy} demo={demo} />
 
         <RepoSetup
           workflow={repo.workflow}

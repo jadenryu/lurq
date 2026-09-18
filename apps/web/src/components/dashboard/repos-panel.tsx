@@ -17,8 +17,21 @@ import {
 } from "@/components/ui/table";
 import { relativeTime } from "@/lib/format";
 import { isScanPending } from "@/lib/repo-scan";
-import type { DashboardRepo } from "@/lib/lurq-issuer";
+import type { DashboardRepo, RepoPolicy } from "@/lib/lurq-issuer";
+import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { cn } from "@/lib/utils";
+
+/**
+ * What a selection starts from when the first selected repo has no policy.
+ * Mirrors DEFAULT_REPO_POLICY on the backend; the web keeps its own RepoPolicy
+ * type by design, so this is the same deliberate duplication.
+ */
+const DEFAULT_POLICY: RepoPolicy = {
+  enabled: false,
+  scope: "blocking",
+  autoMerge: false,
+  checks: { env: true },
+};
 
 /**
  * The drift column is the product's one-line pitch, so it is rendered as a
@@ -216,6 +229,52 @@ function lastRunTitle(repo: DashboardRepo): string {
     : counts;
 }
 
+/**
+ * The policy editor for a selection, on the same controls as one repo.
+ *
+ * Seeded from the first selected repo rather than from a blank policy: the
+ * common case is "make these look like that one", and starting from the shipped
+ * default would quietly disarm a selection of armed repos if the user saved
+ * without reading every control.
+ *
+ * Saving REPLACES the policy on every selected repo — stated in the intro,
+ * because the panel is otherwise identical to the one that edits a single
+ * repository and nothing else on screen says the blast radius changed.
+ */
+function BulkPolicy({
+  ids,
+  seed,
+  demo,
+  onClear,
+}: {
+  ids: number[];
+  seed: RepoPolicy | undefined;
+  demo: boolean;
+  onClear: () => void;
+}) {
+  const noun = ids.length === 1 ? "repository" : "repositories";
+  return (
+    <RepoPolicyPanel
+      endpoint="/api/repos/bulk"
+      title={`${ids.length} selected`}
+      intro={`Saving replaces the autopilot policy on ${ids.length} selected ${noun}. Settings they have now are overwritten.`}
+      policy={seed ?? DEFAULT_POLICY}
+      demo={demo}
+      body={{ ids }}
+      saveLabel={`apply to ${ids.length} ${noun}`}
+      // Applying an unedited policy to a selection is still a change to every
+      // repo in it that did not already have that policy.
+      alwaysSavable
+      onSaved={onClear}
+      extra={
+        <Button variant="ghost" size="sm" onClick={onClear}>
+          clear selection
+        </Button>
+      }
+    />
+  );
+}
+
 export function ReposPanel({
   repos,
   demo,
@@ -230,6 +289,15 @@ export function ReposPanel({
   const analysing = repos.filter(isAnalysingOnly).length;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  /**
+   * Selection is by id and survives a filter change on purpose.
+   *
+   * Filtering to "behind", selecting six, then filtering to "armed" must not
+   * silently drop five of them — the bar keeps stating the true count, and
+   * "clear" is the only thing that empties it. The alternative loses a
+   * selection the user built across two filters with no message saying so.
+   */
+  const [selected, setSelected] = useState<ReadonlySet<number>>(() => new Set());
 
   /**
    * Filter by the two questions someone opening this page is actually asking:
@@ -247,6 +315,27 @@ export function ReposPanel({
     if (filter === "stalled") return isStalled(repo) || isAnalysingOnly(repo);
     return true;
   });
+
+  const shownIds = shown.map((r) => r.id);
+  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => selected.has(id));
+  const toggle = (id: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  const toggleAllShown = () =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      // Acts on what is on screen, never on the whole account: a header
+      // checkbox that silently reached filtered-out rows would arm repos the
+      // user cannot see from here.
+      for (const id of shownIds) {
+        if (allShownSelected) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
 
   if (repos.length === 0) {
     return (
@@ -291,6 +380,15 @@ export function ReposPanel({
         count={shown.length}
         noun="repository"
       />
+      {selected.size > 0 && (
+        <BulkPolicy
+          ids={[...selected]}
+          seed={repos.find((r) => selected.has(r.id))?.policy}
+          demo={demo}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
+
       <Panel padding="none" className="overflow-hidden">
         <PanelHeader
           title="connected repositories"
@@ -311,7 +409,17 @@ export function ReposPanel({
           <Table>
             <TableHeader>
               <TableRow className="border-edge">
-                <TableHead className="pl-5 md:pl-6">repository</TableHead>
+                <TableHead className="w-10 pl-5 md:pl-6">
+                  <input
+                    type="checkbox"
+                    checked={allShownSelected}
+                    onChange={toggleAllShown}
+                    disabled={demo || shownIds.length === 0}
+                    aria-label={`Select all ${shownIds.length} shown repositories`}
+                    className="size-4 accent-[var(--signal)]"
+                  />
+                </TableHead>
+                <TableHead>repository</TableHead>
                 <TableHead>drift</TableHead>
                 <TableHead>risk</TableHead>
                 <TableHead>coverage</TableHead>
@@ -325,6 +433,16 @@ export function ReposPanel({
               {shown.map((repo) => (
                 <TableRow key={repo.id} className="border-edge">
                   <TableCell className="pl-5 md:pl-6">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(repo.id)}
+                      onChange={() => toggle(repo.id)}
+                      disabled={demo}
+                      aria-label={`Select ${repo.fullName}`}
+                      className="size-4 accent-[var(--signal)]"
+                    />
+                  </TableCell>
+                  <TableCell>
                     <Link
                       href={`/dashboard/repos/${repo.id}`}
                       className="font-mono text-sm hover:text-signal"
