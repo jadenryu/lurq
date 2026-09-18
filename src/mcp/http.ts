@@ -18,6 +18,7 @@ import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
 import { capture, flush as flushAnalytics } from '../core/analytics';
 import { formatError } from '../core/errors';
+import { parseRepoPolicy } from '../core/repoPolicy';
 import { CAPABILITIES, searchCapabilities } from '../core/capabilities';
 import {
   createKey,
@@ -75,7 +76,7 @@ import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
-import { applyScope, permits } from '../github/scope';
+import { applyScope, permits, repoMode } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
 import {
   findRepoIdByFullName,
@@ -91,7 +92,7 @@ import { builderProfile, type BuilderProfile } from '../github/builderProfile';
 import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
 import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
-import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
+import { newFileUrl, renderWorkflow, WORKFLOW_PATH, cronForScope } from '../github/workflow';
 import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
@@ -1203,38 +1204,6 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       : null,
   });
 
-  /** Reject anything not matching RepoPolicy rather than merging partial input —
-   *  a policy is a permission grant, and a half-parsed one could arm a repo the
-   *  user meant to leave off. */
-  function parsePolicy(input: unknown): RepoPolicy | null {
-    if (!input || typeof input !== 'object') return null;
-    const raw = input as Record<string, unknown>;
-    if (typeof raw.enabled !== 'boolean') return null;
-    if (typeof raw.autoMerge !== 'boolean') return null;
-    if (raw.scope !== 'security' && raw.scope !== 'blocking' && raw.scope !== 'all') return null;
-    // Checks are carried through, and that is not a formality: setRepoPolicy
-    // REPLACES the stored policy wholesale and the dashboard PATCHes the whole
-    // object, so rebuilding a three-key policy here would erase a granted check
-    // the next time anyone toggled autopilot — a setting lost with no error and
-    // nothing in the response to show it happened.
-    const checks = parseChecks(raw.checks);
-    return {
-      enabled: raw.enabled,
-      scope: raw.scope,
-      autoMerge: raw.autoMerge,
-      ...(checks ? { checks } : {}),
-    };
-  }
-
-  /**
-   * Absent or malformed reads as not granted, never as a permissive default.
-   * An explicit `false` and a missing key mean the same thing, so only a
-   * granted check is stored.
-   */
-  function parseChecks(input: unknown): RepoPolicy['checks'] | null {
-    if (!input || typeof input !== 'object') return null;
-    return { env: (input as Record<string, unknown>).env === true };
-  }
 
   /**
    * Register everything an installation currently covers, then scan in the
@@ -1464,7 +1433,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     async (req: Request, res: Response) => {
       const ownerId = ownerFrom(req);
       const body = (req.body ?? {}) as { policy?: unknown; applyToAll?: unknown };
-      const policy = parsePolicy(body.policy);
+      const policy = parseRepoPolicy(body.policy);
       if (!ownerId || !policy) {
         res.status(400).json({ error: 'ownerId and a complete policy are required.' });
         return;
@@ -1507,7 +1476,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         // show exactly what will be committed before anything is.
         const workflow = renderWorkflow({
           installCommand: row.installCommand ?? undefined,
-          armed: row.policy.enabled,
+          // Through the accessor, not `policy.enabled`: an armed repo that chose
+          // `fix` must not render a workflow baked to `pr`.
+          mode: repoMode(row.policy),
+          cron: cronForScope(row.policy.scope),
           autoMerge: row.policy.autoMerge,
           // Through the one accessor, so the permission cannot be read here as
           // `row.policy.checks?.env` and somewhere else as something truthier.
@@ -1592,7 +1564,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     async (req: Request, res: Response) => {
       const ownerId = ownerFrom(req);
       const id = Number(req.params.id);
-      const policy = parsePolicy((req.body ?? {}).policy);
+      const policy = parseRepoPolicy((req.body ?? {}).policy);
       if (!ownerId || !Number.isInteger(id) || !policy) {
         res
           .status(400)

@@ -11,35 +11,46 @@
  *    three-key policy silently drops a granted check on the next save.
  */
 import { describe, expect, it } from "vitest";
-import { parsePolicy } from "../apps/web/src/lib/parse-policy";
+import { parseRepoPolicy } from "../src/core/repoPolicy";
 import { DEFAULT_REPO_POLICY } from "../src/github/types";
 
-describe("parsePolicy", () => {
+describe("parseRepoPolicy", () => {
   const good = { enabled: true, scope: "all", autoMerge: false, checks: { env: true } };
 
   it("accepts a complete policy unchanged", () => {
-    expect(parsePolicy(good)).toEqual(good);
+    expect(parseRepoPolicy(good)).toEqual(good);
   });
 
   it("rejects anything missing a field rather than filling it in", () => {
-    expect(parsePolicy({ enabled: true, scope: "all" })).toBeNull();
-    expect(parsePolicy({ ...good, scope: "everything" })).toBeNull();
-    expect(parsePolicy({ ...good, enabled: "yes" })).toBeNull();
-    expect(parsePolicy(null)).toBeNull();
-    expect(parsePolicy("enabled")).toBeNull();
+    expect(parseRepoPolicy({ enabled: true, scope: "all" })).toBeNull();
+    expect(parseRepoPolicy({ ...good, scope: "everything" })).toBeNull();
+    expect(parseRepoPolicy({ ...good, enabled: "yes" })).toBeNull();
+    expect(parseRepoPolicy(null)).toBeNull();
+    expect(parseRepoPolicy("enabled")).toBeNull();
   });
 
   it("carries a granted check through instead of rebuilding the policy", () => {
-    expect(parsePolicy(good)?.checks).toEqual({ env: true });
+    expect(parseRepoPolicy(good)?.checks).toEqual({ env: true });
   });
 
   it("reads an absent or falsy check as not granted, never as permissive", () => {
-    expect(parsePolicy({ ...good, checks: undefined })?.checks).toBeUndefined();
-    expect(parsePolicy({ ...good, checks: { env: false } })?.checks).toEqual({ env: false });
-    expect(parsePolicy({ ...good, checks: { env: "on" } })?.checks).toEqual({ env: false });
+    expect(parseRepoPolicy({ ...good, checks: undefined })?.checks).toBeUndefined();
+    expect(parseRepoPolicy({ ...good, checks: { env: false } })?.checks).toEqual({ env: false });
+    expect(parseRepoPolicy({ ...good, checks: { env: "on" } })?.checks).toEqual({ env: false });
+  });
+
+  it("carries mode through, and leaves an absent one absent", () => {
+    // The field `mode` arrived after `checks` and landed in only some of the
+    // copies of this parser — which is why there is now one. An absent mode must
+    // stay absent rather than serialise as null: repoMode() reads `?? 'pr'`, and
+    // a stored null is not the same as a missing key.
+    expect(parseRepoPolicy({ ...good, mode: "fix" })?.mode).toBe("fix");
+    expect(parseRepoPolicy({ ...good, mode: "comment" })?.mode).toBe("comment");
+    expect(parseRepoPolicy(good)).not.toHaveProperty("mode");
+    expect(parseRepoPolicy({ ...good, mode: "merge" })).not.toHaveProperty("mode");
   });
 
   it("accepts the shipped default, so the panel can round-trip it", () => {
-    expect(parsePolicy(DEFAULT_REPO_POLICY)).toEqual(DEFAULT_REPO_POLICY);
+    expect(parseRepoPolicy(DEFAULT_REPO_POLICY)).toEqual(DEFAULT_REPO_POLICY);
   });
 });

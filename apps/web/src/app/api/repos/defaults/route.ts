@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentOwner } from "@/lib/owner";
 import { isDemoUser } from "@/lib/demo-data";
-import { parsePolicy } from "@/lib/parse-policy";
+import { parseRepoPolicy } from "@lurq/core/repoPolicy";
 import { saveRepoPolicyDefault, LurqIssuerError } from "@/lib/lurq-issuer";
 
 /**
@@ -24,7 +24,7 @@ export async function PUT(req: Request) {
     policy?: unknown;
     applyToAll?: unknown;
   } | null;
-  const policy = parsePolicy(body?.policy);
+  const policy = parseRepoPolicy(body?.policy);
   if (!policy) {
     return NextResponse.json({ error: "A complete policy is required." }, { status: 400 });
   }

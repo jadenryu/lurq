@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentOwner } from "@/lib/owner";
 import { isDemoUser } from "@/lib/demo-data";
-import { parsePolicy } from "@/lib/parse-policy";
+import { parseRepoPolicy } from "@lurq/core/repoPolicy";
 import {
   disconnectRepo,
   updateRepoPolicy,
@@ -41,7 +41,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/repos/[id]">) 
   if (!checked.ok) return checked.response;
 
   const body = (await req.json().catch(() => null)) as { policy?: unknown } | null;
-  const policy = parsePolicy(body?.policy);
+  const policy = parseRepoPolicy(body?.policy);
   if (!policy) {
     return NextResponse.json({ error: "A complete policy is required." }, { status: 400 });
   }

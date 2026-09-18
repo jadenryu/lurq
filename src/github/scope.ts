@@ -104,6 +104,26 @@ export function scopeVerdict(
   return { inScope: false, reason: 'nothing referenced breaks — scope is security + blocking' };
 }
 
+/**
+ * How far this repo's workflow may go, from its policy.
+ *
+ * One implementation on purpose. `mode` is optional on RepoPolicy and an absent
+ * value has to read as the behaviour that shipped before the field existed —
+ * armed meant the agent. Spelling that fallback at each call site is how one of
+ * them eventually spells it differently and a repo silently changes what it is
+ * allowed to do.
+ */
+export function repoMode(policy: RepoPolicy): 'comment' | 'fix' | 'pr' {
+  // `enabled` first, and this order is the whole correctness of the function.
+  // Reading `mode` first meant a repo that had once chosen `pr` kept resolving
+  // to `pr` after autopilot was switched OFF — the master switch would stop
+  // disarming anything, which is the one thing it exists to do.
+  if (!policy.enabled) return 'comment';
+  // Armed with no mode is every policy stored before the field existed, and
+  // armed meant the agent then, so that is what it has to keep meaning.
+  return policy.mode ?? 'pr';
+}
+
 export interface ScopedPlan {
   upgrades: ScopedUpgrade[];
   /** The scope actually applied, so CI can print it rather than assume it. */
@@ -118,8 +138,9 @@ export interface ScopedPlan {
   /** How many upgrades the policy holds back. Printed, never silent. */
   outOfScope: number;
   /**
-   * What this repository's dashboard setting says the job should do: `pr` to
-   * open pull requests, `comment` to analyse only.
+   * What this repository's dashboard setting says the job should do:
+   * `comment` to analyse only, `fix` to open a pull request with only the
+   * changes lurq can prove, `pr` to also hand the rest to the agent.
    *
    * Here because the toggle on the dashboard was otherwise a no-op for any
    * workflow already committed. lurq's GitHub App is Contents:read-only — it
@@ -131,7 +152,7 @@ export interface ScopedPlan {
    * bearing: the workflow falls back to the mode baked in when it was
    * generated, so a server with no opinion never disarms a repo.
    */
-  mode?: 'pr' | 'comment';
+  mode?: 'comment' | 'fix' | 'pr';
 }
 
 /**
@@ -164,6 +185,6 @@ export function applyScope(upgrades: UpgradeBrief[], policy: RepoPolicy | null):
     // Only on this branch. The unconnected branch above deliberately omits it:
     // "no policy" is not "policy says comment", and conflating them would turn
     // an unconnected checkout into a silent disarm.
-    mode: policy.enabled ? 'pr' : 'comment',
+    mode: repoMode(policy),
   };
 }

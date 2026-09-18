@@ -199,6 +199,22 @@ export interface RepoPolicy {
    */
   autoMerge: boolean;
   /**
+   * How far the armed workflow goes.
+   *
+   *   `comment` — analyse and report, touch nothing
+   *   `fix`     — open a pull request containing ONLY what lurq can prove:
+   *               renamed call sites, and the range bump in every manifest
+   *               declaring the dependency. No model and no Anthropic
+   *               credential, which is what makes it viable as a default where
+   *               `pr` is not — `pr` fails outright on a repo with no key.
+   *   `pr`      — everything `fix` does, then hands the rest to the agent
+   *
+   * ABSENT DERIVES FROM `enabled`, which is exactly what every policy stored
+   * before this field existed did, so a repo that never set it keeps behaving
+   * identically. `repoMode()` is the one place that derivation lives.
+   */
+  mode?: 'comment' | 'fix' | 'pr';
+  /**
    * Read-only checks this repo's generated workflow should run, beyond the
    * upgrade gate it always runs.
    *

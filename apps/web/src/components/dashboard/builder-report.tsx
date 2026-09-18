@@ -52,6 +52,7 @@ import {
   type StandingMetricId,
   type ScanDep,
   type Trait,
+  UPKEEP_AXES,
 } from "@/lib/builder-profile";
 import { compact, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -397,6 +398,9 @@ function Report({
       <Summary report={report} />
 
       <Traits traits={report.traits} archetype={report.archetype} back={back} />
+      {/* Signed-in only, like every other piece of evidence here: the gate
+          sells the facts behind the scores, and this is one of them. */}
+      {report.traits && <UpkeepAxes stack={report.repos[0]} />}
 
       {report.locked && <Gate report={report} back={back} />}
 
@@ -527,6 +531,57 @@ function Traits({
             {t.evidence.length > 0 && (
               <p className="mt-1 pl-[7.75rem] text-[11.5px] leading-snug text-ink-3">
                 {t.evidence.join(" · ")}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/**
+ * Upkeep on the leading repo: what drifts that is not a dependency version.
+ *
+ * Deliberately a second panel rather than more trait rows. The traits answer
+ * "who are you as a builder" and are scored across every repo; these answer
+ * "is this project being kept" and are read from one repo's files, so merging
+ * them would put two different claims on one scale.
+ *
+ * A null score renders "n/a" with its reason in the evidence line, never a zero
+ * bar — `src/github/upkeepAxes.ts` goes to some trouble to keep "we could not
+ * look" distinct from "nothing is there", and collapsing it here would throw
+ * that away at the last hop.
+ */
+function UpkeepAxes({ stack }: { stack: RepoStack | undefined }) {
+  const axes = stack?.upkeep ?? [];
+  if (!stack || axes.length === 0) return null;
+  return (
+    <Panel>
+      <PanelHeader
+        title="upkeep"
+        trailing={<span className="font-mono text-[11.5px] text-ink-3">{stack.repo}</span>}
+      />
+      <ul className="space-y-3.5">
+        {axes.map((axis) => (
+          <li key={axis.id}>
+            <div className="flex items-center gap-3">
+              <span className="w-28 shrink-0 text-[13px] text-ink">{UPKEEP_AXES[axis.id]}</span>
+              <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted/40">
+                {axis.score !== null && (
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-ink-3"
+                    style={{ width: `${axis.score}%` }}
+                  />
+                )}
+              </div>
+              <span className="w-10 shrink-0 text-right font-mono text-[12px] tabular-nums text-ink-2">
+                {axis.score ?? "n/a"}
+              </span>
+            </div>
+            {axis.evidence.length > 0 && (
+              <p className="mt-1 pl-[7.75rem] text-[11.5px] leading-snug text-ink-3">
+                {axis.evidence.join(" · ")}
               </p>
             )}
           </li>
