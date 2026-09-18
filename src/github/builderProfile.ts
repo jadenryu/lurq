@@ -18,12 +18,12 @@
  * MANIFEST_TRIES raw.githubusercontent reads, and STACK_REPOS drift queries.
  */
 import type { Database } from '../db/client';
-import {
-  GitHubUnavailableError,
+import {GitHubUnavailableError,
   readGitHub,
   rootManifestRead,
   scanManifest,
   type PublicScan,
+  rawPathExists,
 } from './publicScan';
 import { profileMcp, type ProfileMcp } from './builderMcp';
 
@@ -284,7 +284,18 @@ export async function builderProfile(
     .flatMap((name, i) => (reads[i]!.data ? [{ name, manifest: reads[i]!.data }] : []))
     .slice(0, STACK_REPOS);
   const [stacks, mcp] = await Promise.all([
-    Promise.all(found.map((f) => scanManifest(db, canonical, f.name, f.manifest))),
+    Promise.all(
+      found.map((f, i) =>
+        scanManifest(db, canonical, f.name, f.manifest, {
+          // The leading repo only, and that is a budget decision rather than a
+          // design one: six known paths across every featured repo would be 36
+          // raw reads per profile. The report leads with this repo, so it is
+          // the one whose axes are worth the reads. Widen when the axis model
+          // has earned it.
+          probe: i === 0 ? (path) => rawPathExists(canonical, f.name, path) : undefined,
+        }),
+      ),
+    ),
     // The same repos, read for committed MCP configs and for being MCP servers.
     profileMcp(
       canonical,

@@ -18,6 +18,7 @@ import { getConfig } from '../core/config';
 import { logger } from '../core/logger';
 import { capture, flush as flushAnalytics } from '../core/analytics';
 import { formatError } from '../core/errors';
+import { parseRepoPolicy } from '../core/repoPolicy';
 import { CAPABILITIES, searchCapabilities } from '../core/capabilities';
 import {
   createKey,
@@ -41,6 +42,9 @@ import {
   ownerForInstallation,
   setRepoPolicy,
   upsertRepos,
+  getRepoPolicyDefault,
+  setRepoPolicyDefault,
+  applyPolicyToRepos,
 } from '../db/repos';
 import {
   getSelectionPolicy,
@@ -86,7 +90,6 @@ import {
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
 import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
-import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
 import { newFileUrl, renderWorkflow, WORKFLOW_PATH, cronForScope } from '../github/workflow';
 import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
@@ -1200,52 +1203,6 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       : null,
   });
 
-  /** Reject anything not matching RepoPolicy rather than merging partial input —
-   *  a policy is a permission grant, and a half-parsed one could arm a repo the
-   *  user meant to leave off. */
-  function parsePolicy(input: unknown): RepoPolicy | null {
-    if (!input || typeof input !== 'object') return null;
-    const raw = input as Record<string, unknown>;
-    if (typeof raw.enabled !== 'boolean') return null;
-    if (typeof raw.autoMerge !== 'boolean') return null;
-    if (raw.scope !== 'security' && raw.scope !== 'blocking' && raw.scope !== 'all') return null;
-    // Checks are carried through, and that is not a formality: setRepoPolicy
-    // REPLACES the stored policy wholesale and the dashboard PATCHes the whole
-    // object, so rebuilding a three-key policy here would erase a granted check
-    // the next time anyone toggled autopilot — a setting lost with no error and
-    // nothing in the response to show it happened.
-    const checks = parseChecks(raw.checks);
-    // Same reasoning as `checks`, and the same failure if it is dropped: the
-    // stored policy is replaced wholesale, so a mode absent here is a mode
-    // erased the next time anyone saves an unrelated setting.
-    const mode = parseMode(raw.mode);
-    return {
-      enabled: raw.enabled,
-      scope: raw.scope,
-      autoMerge: raw.autoMerge,
-      ...(checks ? { checks } : {}),
-      ...(mode ? { mode } : {}),
-    };
-  }
-
-  /**
-   * Absent stays absent — it is not a malformed value, it is the state every
-   * policy stored before this field was added is in, and `repoMode()` reads it
-   * as the behaviour those repos already have.
-   */
-  function parseMode(input: unknown): RepoPolicy['mode'] | null {
-    return input === 'comment' || input === 'fix' || input === 'pr' ? input : null;
-  }
-
-  /**
-   * Absent or malformed reads as not granted, never as a permissive default.
-   * An explicit `false` and a missing key mean the same thing, so only a
-   * granted check is stored.
-   */
-  function parseChecks(input: unknown): RepoPolicy['checks'] | null {
-    if (!input || typeof input !== 'object') return null;
-    return { env: (input as Record<string, unknown>).env === true };
-  }
 
   /**
    * Register everything an installation currently covers, then scan in the
@@ -1267,6 +1224,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     scanOnly?: string[],
   ): Promise<number> => {
     const found = await listInstallationRepos(installationId);
+    // The owner's default governs rows this call CREATES; `upsertRepos` never
+    // rewrites an existing row's policy, so a repo the user already configured
+    // survives a webhook replay or a second pass through the connect flow.
+    const fallback = (await getRepoPolicyDefault(db, ownerId)) ?? undefined;
     const connected = await upsertRepos(
       db,
       found.map((repo) => ({
@@ -1276,6 +1237,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         defaultBranch: repo.defaultBranch,
         isPrivate: repo.isPrivate,
       })),
+      fallback,
     );
     // Deliberately not awaited: a first scan of a large account is minutes of
     // GitHub calls, and holding the request open for it would time out at the
@@ -1429,6 +1391,96 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     },
   );
 
+  /**
+   * Apply one policy to a set of repos — what the table's selection saves.
+   *
+   * Ids rather than a filter expression: the server would otherwise have to
+   * re-derive "everything matching what was on screen", and a filter evaluated
+   * twice is a filter that can disagree with itself between the click and the
+   * write. The user selected rows; those rows are the contract.
+   */
+  app.patch('/repos', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const body = (req.body ?? {}) as { ids?: unknown; policy?: unknown };
+    const policy = parseRepoPolicy(body.policy);
+    const ids = Array.isArray(body.ids)
+      ? body.ids.filter((id): id is number => Number.isInteger(id))
+      : null;
+    if (!ownerId || !policy || !ids || ids.length === 0) {
+      res.status(400).json({ error: 'ownerId, a complete policy, and at least one id are required.' });
+      return;
+    }
+    // A cap, not pagination: the write is one statement, but an unbounded id
+    // list from a request body is an unbounded query parameter list.
+    if (ids.length > 500) {
+      res.status(400).json({ error: 'At most 500 repositories at a time.' });
+      return;
+    }
+    try {
+      res.status(200).json({ applied: await applyPolicyToRepos(db, ownerId, ids, policy) });
+    } catch (err) {
+      logger.error('bulk policy write failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not apply the policy.' });
+    }
+  });
+
+  // Declared BEFORE `/repos/:id`: Express matches in registration order, so the
+  // pattern route would otherwise capture 'defaults' as an id and 400 on it.
+  /**
+   * The owner's default policy: what a repo gets when it is connected.
+   *
+   * Served as a nullable field rather than pre-filled with DEFAULT_REPO_POLICY,
+   * so the dashboard can say "new repos arrive off" versus "you chose this".
+   */
+  app.get(
+    '/repos/defaults',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      if (!ownerId) {
+        res.status(400).json({ error: 'ownerId is required.' });
+        return;
+      }
+      try {
+        res.status(200).json({ policy: await getRepoPolicyDefault(db, ownerId) });
+      } catch (err) {
+        logger.error('repo defaults read failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not read the default policy.' });
+      }
+    },
+  );
+
+  /**
+   * Set the default for repos connected from here on.
+   *
+   * Deliberately touches nothing already connected: existing repos are changed
+   * from the table, where the user picks which ones and sees how many. A save
+   * here that silently rewrote every repo would be a permission change nobody
+   * asked for.
+   */
+  app.put(
+    '/repos/defaults',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const body = (req.body ?? {}) as { policy?: unknown };
+      const policy = parseRepoPolicy(body.policy);
+      if (!ownerId || !policy) {
+        res.status(400).json({ error: 'ownerId and a complete policy are required.' });
+        return;
+      }
+      try {
+        await setRepoPolicyDefault(db, ownerId, policy);
+        res.status(200).json({ policy });
+      } catch (err) {
+        logger.error('repo defaults write failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not save the default policy.' });
+      }
+    },
+  );
+
   app.get(
     '/repos/:id',
     requireIssuerSecret,
@@ -1540,7 +1592,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     async (req: Request, res: Response) => {
       const ownerId = ownerFrom(req);
       const id = Number(req.params.id);
-      const policy = parsePolicy((req.body ?? {}).policy);
+      const policy = parseRepoPolicy((req.body ?? {}).policy);
       if (!ownerId || !Number.isInteger(id) || !policy) {
         res
           .status(400)

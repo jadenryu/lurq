@@ -1,6 +1,6 @@
 {
-  "id": "71c713aa-df56-41de-9864-75e59559bada",
-  "prevId": "e3897e7b-a902-47b1-b039-5091b63b1467",
+  "id": "1a6a260b-5cdc-4028-b11d-73be8f4cd38c",
+  "prevId": "49c4655a-ca68-426e-9d19-87b542976edf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -695,6 +695,12 @@
           "notNull": true,
           "default": 0
         },
+        "requested_by_owner_id": {
+          "name": "requested_by_owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "discovered_at": {
           "name": "discovered_at",
           "type": "timestamp with time zone",
@@ -1351,6 +1357,60 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.mcp_endpoint_change_acks": {
+      "name": "mcp_endpoint_change_acks",
+      "schema": "",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "change_id": {
+          "name": "change_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "acknowledged_at": {
+          "name": "acknowledged_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mcp_endpoint_change_acks_change_id_mcp_endpoint_changes_id_fk": {
+          "name": "mcp_endpoint_change_acks_change_id_mcp_endpoint_changes_id_fk",
+          "tableFrom": "mcp_endpoint_change_acks",
+          "tableTo": "mcp_endpoint_changes",
+          "columnsFrom": [
+            "change_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mcp_endpoint_change_acks_owner_id_change_id_pk": {
+          "name": "mcp_endpoint_change_acks_owner_id_change_id_pk",
+          "columns": [
+            "owner_id",
+            "change_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.mcp_endpoint_changes": {
       "name": "mcp_endpoint_changes",
       "schema": "",
@@ -1829,6 +1889,119 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.mcp_pins": {
+      "name": "mcp_pins",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "endpoint_id": {
+          "name": "endpoint_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auth_hash": {
+          "name": "auth_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pinned_at": {
+          "name": "pinned_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "mcp_pins_owner_endpoint_idx": {
+          "name": "mcp_pins_owner_endpoint_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "endpoint_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mcp_pins_endpoint_idx": {
+          "name": "mcp_pins_endpoint_idx",
+          "columns": [
+            {
+              "expression": "endpoint_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "mcp_pins_endpoint_id_mcp_remote_endpoints_id_fk": {
+          "name": "mcp_pins_endpoint_id_mcp_remote_endpoints_id_fk",
+          "tableFrom": "mcp_pins",
+          "tableTo": "mcp_remote_endpoints",
+          "columnsFrom": [
+            "endpoint_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.mcp_public_reports": {
       "name": "mcp_public_reports",
       "schema": "",
@@ -2222,9 +2395,30 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "scan_key": {
+          "name": "scan_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
+        "mcp_remote_endpoints_scan_key_idx": {
+          "name": "mcp_remote_endpoints_scan_key_idx",
+          "columns": [
+            {
+              "expression": "scan_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "mcp_remote_endpoints_due_idx": {
           "name": "mcp_remote_endpoints_due_idx",
           "columns": [
@@ -3192,6 +3386,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "surface_attempts": {
+          "name": "surface_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "surface_attempted_version": {
+          "name": "surface_attempted_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3485,7 +3692,7 @@
           "name": "repo_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "repo_full_name": {
           "name": "repo_full_name",
@@ -3594,8 +3801,74 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "repo_alerts_cli_dedup_idx": {
+          "name": "repo_alerts_cli_dedup_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "repo_full_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "package_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "to_version",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "repo_id is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.repo_policy_defaults": {
+      "name": "repo_policy_defaults",
+      "schema": "",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "policy": {
+          "name": "policy",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -4218,6 +4491,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "requested_at": {
           "name": "requested_at",

@@ -6,10 +6,10 @@
  * signed-in user's id, so a missing `ownerId` filter here would hand one user
  * another user's repos. There is deliberately no "get by id" without an owner.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from './client';
 import { deleteAlertsForRepo } from './alerts';
-import { repos, type RepoRow } from './schema';
+import { repoPolicyDefaults, repos, type RepoRow } from './schema';
 import { DEFAULT_REPO_POLICY, type RepoDrift, type RepoManifest, type RepoPolicy } from '../github/types';
 
 export interface RepoUpsert {
@@ -27,7 +27,12 @@ export interface RepoUpsert {
  * bookkeeping: re-running the connect flow (or GitHub replaying an installation
  * webhook) must never silently disarm a repo the user already configured.
  */
-export async function upsertRepos(db: Database, rows: RepoUpsert[]): Promise<number> {
+export async function upsertRepos(
+  db: Database,
+  rows: RepoUpsert[],
+  /** The owner's default, for rows this call creates. Existing rows keep theirs. */
+  policy: RepoPolicy = DEFAULT_REPO_POLICY,
+): Promise<number> {
   if (rows.length === 0) return 0;
   await db
     .insert(repos)
@@ -38,7 +43,7 @@ export async function upsertRepos(db: Database, rows: RepoUpsert[]): Promise<num
         fullName: row.fullName,
         defaultBranch: row.defaultBranch,
         isPrivate: row.isPrivate,
-        policy: DEFAULT_REPO_POLICY,
+        policy,
       })),
     )
     .onConflictDoUpdate({
@@ -242,4 +247,63 @@ export async function deleteRepo(
     .where(and(eq(repos.ownerId, ownerId), eq(repos.id, id)))
     .returning({ id: repos.id });
   return deleted.length > 0;
+}
+
+/**
+ * The owner's default autopilot policy, or null when they have never set one.
+ *
+ * Null rather than DEFAULT_REPO_POLICY so a caller can tell "never configured"
+ * from "configured to look like the default" — the panel needs that distinction
+ * to say whether new repos arrive armed.
+ */
+export async function getRepoPolicyDefault(
+  db: Database,
+  ownerId: string,
+): Promise<RepoPolicy | null> {
+  const [row] = await db
+    .select({ policy: repoPolicyDefaults.policy })
+    .from(repoPolicyDefaults)
+    .where(eq(repoPolicyDefaults.ownerId, ownerId))
+    .limit(1);
+  return row?.policy ?? null;
+}
+
+export async function setRepoPolicyDefault(
+  db: Database,
+  ownerId: string,
+  policy: RepoPolicy,
+): Promise<void> {
+  await db
+    .insert(repoPolicyDefaults)
+    .values({ ownerId, policy })
+    .onConflictDoUpdate({
+      target: repoPolicyDefaults.ownerId,
+      set: { policy, updatedAt: new Date() },
+    });
+}
+
+/**
+ * Stamp one policy onto the named repos. Returns how many rows it reached.
+ *
+ * A stamp, not a subscription: a repo edited after this keeps its own settings
+ * until the owner stamps again. See the table comment for why inheritance is
+ * deliberately not modelled.
+ *
+ * `ownerId` is still in the WHERE even though ids are explicit — ids arrive from
+ * a request body, so filtering on them alone would let one account stamp a
+ * policy onto another account's repos by guessing integers.
+ */
+export async function applyPolicyToRepos(
+  db: Database,
+  ownerId: string,
+  ids: number[],
+  policy: RepoPolicy,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const updated = await db
+    .update(repos)
+    .set({ policy })
+    .where(and(eq(repos.ownerId, ownerId), inArray(repos.id, ids)))
+    .returning({ id: repos.id });
+  return updated.length;
 }

@@ -497,6 +497,41 @@ export async function updateRepoPolicy(
   assertRepoOk(res, "Could not update the policy.");
 }
 
+/**
+ * The owner's default autopilot policy, or null when they have never set one.
+ * Null is meaningful: it is what lets the panel say new repos arrive off.
+ */
+export async function fetchRepoPolicyDefault(ownerId: string): Promise<RepoPolicy | null> {
+  const res = await issuerFetch(`/repos/defaults?ownerId=${encodeURIComponent(ownerId)}`);
+  assertRepoOk(res, "Could not read the default policy.");
+  return ((await res.json()) as { policy: RepoPolicy | null }).policy;
+}
+
+/** Save the default applied to repos connected from here on. */
+export async function saveRepoPolicyDefault(ownerId: string, policy: RepoPolicy): Promise<void> {
+  const res = await issuerFetch("/repos/defaults", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, policy }),
+  });
+  assertRepoOk(res, "Could not save the default policy.");
+}
+
+/** Apply one policy to the repos the user selected. Returns how many it reached. */
+export async function applyPolicyToRepos(
+  ownerId: string,
+  ids: number[],
+  policy: RepoPolicy,
+): Promise<number> {
+  const res = await issuerFetch("/repos", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ids, policy }),
+  });
+  assertRepoOk(res, "Could not apply the policy.");
+  return ((await res.json()) as { applied: number }).applied;
+}
+
 export async function disconnectRepo(ownerId: string, id: number): Promise<void> {
   const res = await issuerFetch(`/repos/${id}`, {
     method: "DELETE",

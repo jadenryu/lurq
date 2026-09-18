@@ -172,6 +172,16 @@ function loadPackageTools(): Promise<AskTool[]> {
 /** One result may not eat a question's budget. ~6k tokens of JSON is plenty to cite from. */
 const TOOL_RESULT_CHARS = 24_000;
 
+/**
+ * What a payload will bill as, near enough to reserve against: ~4 chars per
+ * token for English and JSON, plus a quarter of headroom. Only the API knows the
+ * true count, and it only reports it after the call — too late to reserve on.
+ * Erring high is the safe direction: it reserves more, never less.
+ */
+function estimateTokens(payload: unknown): number {
+  return Math.ceil((JSON.stringify(payload).length / 4) * 1.25);
+}
+
 async function runTool(
   name: string,
   input: unknown,
@@ -394,7 +404,13 @@ export async function POST(req: Request) {
           // Reserve before the call, never after: a turn's price is only
           // known once it returns, so comparing the bare total against the cap
           // lets the very next call overshoot by its own size.
-          const reserve = reserveFor(MODEL, MAX_TOKENS);
+          //
+          // Reserve against THIS conversation, not the model's max context. The
+          // prefix is fixed, tool results are capped at TOOL_RESULT_CHARS and
+          // the loop at six turns, so the old 200k-token assumption reserved
+          // more for one turn ($0.42 on Sonnet) than a whole question is allowed
+          // to spend — which refused every question on turn 0.
+          const reserve = reserveFor(MODEL, estimateTokens([SYSTEM, tools, messages]), MAX_TOKENS);
           if (
             turnCost + reserve > QUESTION_USD ||
             turnCost + reserve > remainingUsd ||

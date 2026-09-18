@@ -521,6 +521,25 @@ export const ownerUsageDaily = pgTable(
  * the App's own installation credentials, so revoking the install revokes
  * everything instantly and there is no long-lived secret to leak.
  */
+/**
+ * One owner's default autopilot policy, applied to repos they connect from now on.
+ *
+ * A DEFAULT, not an inheritance root. `repos.policy` stays the single source of
+ * truth for what a repo does — this row is read at connect time and by the
+ * explicit "apply to all" action, and never consulted when a run resolves what
+ * it may upgrade. That is deliberate: live inheritance would have to answer
+ * "does changing the default overwrite the repo I edited last week?", and no
+ * answer to that is obviously right. Stamping has no such question.
+ *
+ * Absent means DEFAULT_REPO_POLICY, so an owner who never opens the panel keeps
+ * today's behaviour exactly: connecting a repo does not arm it.
+ */
+export const repoPolicyDefaults = pgTable('repo_policy_defaults', {
+  ownerId: text('owner_id').primaryKey(),
+  policy: jsonb('policy').$type<RepoPolicy>().notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
 export const repos = pgTable(
   'repos',
   {

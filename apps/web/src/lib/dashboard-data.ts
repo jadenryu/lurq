@@ -51,6 +51,8 @@ import {
   fetchRepo,
   fetchRepoBrief,
   fetchRepos,
+  fetchRepoPolicyDefault,
+  type RepoPolicy,
   fetchUsage,
   GithubNotConfiguredError,
   type DashboardContribution,
@@ -303,6 +305,18 @@ export async function loadRepos(): Promise<Loaded<ReposData>> {
     );
     return { data: { repos: [], configured: true }, demo: false, failed: true };
   }
+}
+
+/**
+ * The account's default autopilot policy, or null when it was never set.
+ *
+ * Degrades to null rather than to DEFAULT_REPO_POLICY on a failed read: null
+ * renders as "new repos arrive off", which is what actually happens when the
+ * backend cannot be reached, and inventing a stored default would show the
+ * user a setting they never chose.
+ */
+export function loadRepoPolicyDefault(): Promise<Loaded<RepoPolicy | null>> {
+  return load((ownerId) => fetchRepoPolicyDefault(ownerId), () => null, null);
 }
 
 /**
