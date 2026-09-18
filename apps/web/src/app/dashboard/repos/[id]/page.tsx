@@ -1,4 +1,7 @@
 import { Suspense } from "react";
+import { SITE_ORIGIN } from "@/lib/site";
+import { agentSetupPrompt } from "@/lib/agent-setup";
+import { repoMode } from "@/lib/lurq-issuer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MigrationBrief } from "@/components/dashboard/migration-brief";
@@ -157,7 +160,16 @@ export default async function RepoDetailPage({
           workflow={repo.workflow}
           workflowPath={repo.workflowPath}
           setupUrl={repo.setupUrl}
-          armed={repo.policy.enabled}
+          mode={repoMode(repo.policy)}
+          agentPrompt={agentSetupPrompt({
+            repoFullName: repo.fullName,
+            workflowPath: repo.workflowPath,
+            workflow: repo.workflow,
+            mode: repoMode(repo.policy),
+            // Absolute, via SITE_ORIGIN: an agent cannot follow a relative path,
+            // and the origin is normalised there rather than spelled here.
+            keysUrl: `${SITE_ORIGIN}/dashboard/keys`,
+          })}
         />
 
         {/* useSearchParams (RepoDeps reads ?show= and ?q=) client-renders the
