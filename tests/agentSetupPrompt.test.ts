@@ -21,16 +21,58 @@ const input = (over: Partial<AgentSetupInput> = {}): AgentSetupInput => ({
 });
 
 describe('agentSetupPrompt', () => {
-  it('never embeds a key, and says so out loud', () => {
-    // The prompt is pasted into chat logs and screenshots. There is no input
-    // that could carry a key, and the instruction is to ASK rather than assume
-    // one is lying around — which is also what stops an agent reusing another
-    // project's key here.
+  it('asks for a key when none was minted, and never invents one', () => {
+    // The original contract, still the default. Every caller that does not mint
+    // gets this, and the brief must not imply a key exists.
     const text = agentSetupPrompt(input());
     expect(text).toContain('Ask me for a lurq API key');
     expect(text).toMatch(/never print it back|Never print it back/);
     expect(text).not.toMatch(/lurq_[A-Za-z0-9]/);
-    expect(Object.keys(input())).not.toContain('apiKey');
+    expect(text).not.toContain('LURQ_API_KEY (live credential');
+  });
+
+  /**
+   * This reverses an earlier invariant deliberately, so it is pinned rather
+   * than dropped: a passing suite that no longer checks the property it was
+   * written for is worse than no suite.
+   *
+   * What makes carrying a key defensible is narrow: it is scope-less (so it
+   * cannot rewrite selection policy), it is labelled and revocable, and the
+   * brief SAYS it is live. If any of those stops being true, this fails.
+   */
+  it('carries a minted key, and says plainly that it is live', () => {
+    // Deliberately NOT key-shaped: the pre-commit gitleaks scan flags a
+    // realistic `lurq_live_*` literal as a generic-api-key on entropy, and it
+    // is right to. The function only interpolates this, so the shape is not
+    // part of what is being tested.
+    const key = 'EXAMPLE-NOT-A-REAL-KEY';
+    const text = agentSetupPrompt(input({ apiKey: key }));
+
+    expect(text).toContain(key);
+    expect(text).toContain('LURQ_API_KEY (live credential');
+    expect(text).toMatch(/LIVE credential/);
+    // The reader is told where to revoke it, in the same breath as being told
+    // it is live — a warning with no remedy is just alarm.
+    expect(text).toContain('https://www.lurq.run/dashboard/keys');
+    // And it no longer tells the agent to go and ask for one.
+    expect(text).not.toContain('Ask me for a lurq API key');
+  });
+
+  it('keeps the key out of shell history even when it carries it', () => {
+    // `gh secret set --body <value>` would put it in history. The instruction
+    // stays stdin-based; the key travels in the message, not the command.
+    const text = agentSetupPrompt(input({ apiKey: 'EXAMPLE-NOT-A-REAL-KEY' }));
+    expect(text).toContain('gh secret set LURQ_API_KEY --repo acme/web');
+    expect(text).not.toContain('--body');
+  });
+
+  it('puts the key last, under its own heading', () => {
+    // Leading with a secret buries the instructions and makes the block harder
+    // to strip before sharing the rest.
+    const text = agentSetupPrompt(input({ apiKey: 'EXAMPLE-NOT-A-REAL-KEY' }));
+    expect(text.indexOf('LURQ_API_KEY (live credential')).toBeGreaterThan(
+      text.indexOf('Set up lurq'),
+    );
   });
 
   it('sets the secret through stdin rather than an argument', () => {

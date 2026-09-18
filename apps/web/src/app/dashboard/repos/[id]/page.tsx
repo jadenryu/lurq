@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { SITE_ORIGIN } from "@/lib/site";
-import { agentSetupPrompt } from "@/lib/agent-setup";
 import { repoMode } from "@/lib/lurq-issuer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -71,10 +70,14 @@ export default async function RepoDetailPage({
         demo={demo}
         action={
           <div className="flex items-center gap-2">
-            {/* This repo's findings, addressed to the agent that will fix them:
+            {/* This repo's FINDINGS, addressed to the agent that will fix them:
                 package, both versions, the manifest path each range is declared
-                in, and the coverage caveat so nothing absent reads as verified. */}
-            <CopyButton label="Copy for agent" copiedLabel="Copied" text={repoBrief(repo)} />
+                in, and the coverage caveat so nothing absent reads as verified.
+                Named "findings", not "for agent": the workflow panel below now
+                has a "copy setup for agent" button, and two controls reading the
+                same words while doing unrelated jobs is the ambiguity this
+                page is meant to remove. */}
+            <CopyButton label="Copy findings" copiedLabel="Copied" text={repoBrief(repo)} />
             <Link href="/dashboard/repos" className={buttonVariants({ variant: "outline" })}>
               All repositories
             </Link>
@@ -161,7 +164,7 @@ export default async function RepoDetailPage({
           workflowPath={repo.workflowPath}
           setupUrl={repo.setupUrl}
           mode={repoMode(repo.policy)}
-          agentPrompt={agentSetupPrompt({
+          setup={{
             repoFullName: repo.fullName,
             workflowPath: repo.workflowPath,
             workflow: repo.workflow,
@@ -169,7 +172,7 @@ export default async function RepoDetailPage({
             // Absolute, via SITE_ORIGIN: an agent cannot follow a relative path,
             // and the origin is normalised there rather than spelled here.
             keysUrl: `${SITE_ORIGIN}/dashboard/keys`,
-          })}
+          }}
         />
 
         {/* useSearchParams (RepoDeps reads ?show= and ?q=) client-renders the
