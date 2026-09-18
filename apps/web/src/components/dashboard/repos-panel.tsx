@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { relativeTime } from "@/lib/format";
 import { isScanPending } from "@/lib/repo-scan";
-import type { DashboardRepo, RepoPolicy } from "@/lib/lurq-issuer";
+import { repoMode, type DashboardRepo, type RepoPolicy } from "@/lib/lurq-issuer";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { cn } from "@/lib/utils";
 
@@ -203,16 +203,39 @@ function isStalled(repo: DashboardRepo): boolean {
  * "analysed only (comment mode, or the agent step was not armed)", so an
  * all-`checked` history is evidence and `delivered === 0` is a guess.
  *
- * Kept apart from `isStalled` because the fix differs: that one needs the
- * workflow committed, this one needs the workflow file REPLACED. A workflow
- * generated before lurq read this setting at run time has the mode baked into
- * it, and nothing here can reach that file — the GitHub App is
- * Contents:read-only by design.
+ * Kept apart from `isStalled` because the remedy differs: that one needs the
+ * workflow committed, this one needs either a secret added or the file replaced
+ * — see `analysingCause`.
+ *
+ * A policy that genuinely says `comment` is NOT flagged. Analysing is what that
+ * repo asked for, and calling it a fault would have the column cry wolf at
+ * every user who deliberately chose to look before touching anything.
  */
 function isAnalysingOnly(repo: DashboardRepo): boolean {
   const upkeep = repo.upkeep;
-  if (!upkeep || !repo.policy.enabled) return false;
+  if (!upkeep || repoMode(repo.policy) === "comment") return false;
   return upkeep.runs > 0 && upkeep.analysedOnly === upkeep.runs;
+}
+
+/**
+ * WHY an armed repo only ever analysed — the part the old copy guessed at.
+ *
+ * Both causes leave an identical run history, so the policy's own mode is what
+ * separates them:
+ *
+ *   `fix` needs no Anthropic credential at all, so a repo set to `fix` that
+ *   opened nothing can only be running a workflow file that predates the
+ *   runtime mode lookup, or one that pins its own mode. The file is the fault.
+ *
+ *   `pr` needs a credential, and the credential gate runs AFTER the step that
+ *   reports the run — so a missing or expired secret posts `checked` rows and
+ *   then fails the job, which from here looks exactly like a stale file. The
+ *   secret is both likelier and recurring: a `claude setup-token` token lasts
+ *   one year and lapses with no warning, on a schedule nobody is watching.
+ */
+function analysingCause(repo: DashboardRepo): "credential" | "file" | null {
+  if (!isAnalysingOnly(repo)) return null;
+  return repoMode(repo.policy) === "pr" ? "credential" : "file";
 }
 
 /** The hover text for the last-run cell, which has four distinct cases. */
@@ -224,9 +247,11 @@ function lastRunTitle(repo: DashboardRepo): string {
       : "No runs reported yet";
   }
   const counts = `${upkeep.runs} run(s), ${upkeep.delivered} reached a pull request${upkeep.failed ? `, ${upkeep.failed} failed` : ""}`;
-  return isAnalysingOnly(repo)
-    ? `${counts}, and nothing opened. This repository's workflow file was committed before lurq read the autopilot setting at run time, or pins the mode itself — re-copy it from the repository page to let this setting govern runs.`
-    : counts;
+  const cause = analysingCause(repo);
+  if (!cause) return counts;
+  return cause === "credential"
+    ? `${counts}, and nothing opened. This repo is set to pr mode, which needs ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in its repository secrets — and an OAuth token expires a year after it was created. Check the secret before the workflow file.`
+    : `${counts}, and nothing opened. Set to fix mode, which needs no API key, so the workflow file is the problem: it predates lurq reading this setting at run time, or pins its own mode. Re-copy it from the repository page.`;
 }
 
 /**

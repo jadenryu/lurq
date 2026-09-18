@@ -277,7 +277,7 @@ export function ScoringSection() {
 const REPO_STEPS: { title: string; body: string }[] = [
   {
     title: "Connect the GitHub app",
-    body: "Read-only on contents and metadata. lurq reads your package.json files and your resolved dependency tree, never a source file, never a lockfile, never history.",
+    body: "Read-only on your code: lurq reads your package.json files and your resolved dependency tree, never a source file, never a lockfile, never history. It may also start the workflow below once you have committed it, and nothing else.",
   },
   {
     title: "It scans nightly",
@@ -288,8 +288,8 @@ const REPO_STEPS: { title: string; body: string }[] = [
     body: "A scheduled job in your own CI runs the half that needs your source: which of the removed symbols this repo actually references, at which file and line. That check needs no test suite, so an uncovered call site cannot slip past it.",
   },
   {
-    title: "Turn on pr mode when you trust it",
-    body: "The job starts in analyse-only and reports. Armed, it bumps every manifest declaring the dependency, rewrites the call sites the upgrade broke, runs your tests, drops anything that fails, and opens one pull request.",
+    title: "Choose how far it goes",
+    body: "The job starts in analyse-only and reports. fix mode opens a pull request with only what the package itself proves \u2014 renamed call sites, and the range bump in every manifest declaring the dependency \u2014 and needs no API key. pr mode adds an agent that migrates what a rule cannot, runs your tests and drops anything that fails; that one uses your own Anthropic credential.",
   },
 ];
 
@@ -312,8 +312,10 @@ export function ReposSection() {
       <Panel padding="tight">
         <p className={eyebrow}>what lurq can and cannot do</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          lurq&apos;s GitHub app is read-only and can never write to your repository. Every commit,
-          branch and pull request in this loop is made by your own workflow&apos;s{" "}
+          lurq&apos;s GitHub app is read-only on your code and can never write a byte to your
+          repository, change the workflow file, or set a repository variable. It may start the
+          workflow you committed, nothing more. Every commit, branch and pull request in this loop
+          is made by your own workflow&apos;s{" "}
           <code className="font-mono text-foreground">GITHUB_TOKEN</code>, scoped to that one repo.
           The agent that edits code runs on your runner with no network and no git access, it
           changes files, the workflow does version control. You own the workflow file, so turning

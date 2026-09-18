@@ -62,6 +62,18 @@ describe('the resolve step', () => {
     expect(step.run).toContain('GITHUB_ENV');
   });
 
+  it('gives the dispatch input no default, so a triggered run is not pinned', () => {
+    // GitHub applies a workflow_dispatch input default on EVERY dispatch. With
+    // one, LURQ_MODE would arrive pre-filled, "Resolve mode" would be skipped
+    // on its `== ''` guard, and every run lurq starts on a new release would
+    // silently use the mode baked in at generation time instead of the current
+    // dashboard setting.
+    const yaml = renderWorkflow({ armed: true });
+    const dispatch = yaml.slice(yaml.indexOf('workflow_dispatch:'), yaml.indexOf('permissions:'));
+    expect(dispatch).toContain('required: false');
+    expect(dispatch).not.toContain('default:');
+  });
+
   it('runs after the plan and before anything gated on the mode', () => {
     // A resolve step that landed after the first gated step would decide the
     // mode too late to govern it, and every `if:` would read the empty value.
@@ -121,12 +133,14 @@ describe('fix mode: a pull request with no model', () => {
     }
   });
 
-  it('bakes the chosen mode into both the dispatch default and the fallback', () => {
+  it('bakes the chosen mode into the fallback, and nowhere else', () => {
     const yaml = renderWorkflow({ mode: 'fix' });
-    expect(yaml).toContain('default: fix');
+    // The resolve-step fallback is now the ONLY place the generated mode
+    // appears. It used to be the dispatch input's default too, but GitHub
+    // applies that on every dispatch — including the ones lurq sends when a
+    // major lands — which would pin those runs to the baked mode.
     expect(yaml).toContain("*) MODE='fix' ;;");
-    // All three offered, or a dispatch cannot select the one it renders.
-    expect(yaml).toContain('options: [comment, fix, pr]');
+    expect(yaml).not.toContain('default: fix');
   });
 
   it('lets auto-merge apply to a deterministic pull request', () => {

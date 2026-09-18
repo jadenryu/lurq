@@ -328,8 +328,10 @@ Cadence follows scope — weekly for the scopes that track breakage, since major
 that a daily run mostly reports nothing new; daily for a repo set to advisories-only, because weekly
 can mean seven days sitting on a known CVE.
 
-**Trust model.** lurq's GitHub App is `Contents: read-only` and cannot write to any repository. Every
-write uses your own ephemeral `GITHUB_TOKEN`. The agent's allowlist is
+**Trust model.** lurq's GitHub App holds `Contents: read-only` and `Actions: write`. It can read your
+manifests and *start* the workflow you committed — it cannot write a byte to your repository, change
+this file, or set a repository variable. Every write is made by the workflow itself using your own
+ephemeral `GITHUB_TOKEN`, bounded by the `permissions:` block in the file you control. The agent's allowlist is
 `Read,Edit,Write,Bash(<pkg-manager>:*)`, so it edits files but never touches version control.
 Removing it is `git rm .github/workflows/lurq-upgrade.yml`.
 
