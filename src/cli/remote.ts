@@ -258,7 +258,7 @@ export interface RemotePlan {
    * an older server, and absent for an unconnected checkout — in both cases the
    * workflow keeps the mode baked into it.
    */
-  mode?: 'pr' | 'comment';
+  mode?: 'comment' | 'fix' | 'pr';
 }
 
 export function fetchUpgradePlan(

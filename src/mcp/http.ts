@@ -72,7 +72,7 @@ import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
-import { applyScope, permits } from '../github/scope';
+import { applyScope, permits, repoMode } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
 import {
   findRepoIdByFullName,
@@ -88,7 +88,7 @@ import { builderProfile, type BuilderProfile } from '../github/builderProfile';
 import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
 import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
-import { newFileUrl, renderWorkflow, WORKFLOW_PATH } from '../github/workflow';
+import { newFileUrl, renderWorkflow, WORKFLOW_PATH, cronForScope } from '../github/workflow';
 import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
 import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
@@ -1215,12 +1215,26 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     // the next time anyone toggled autopilot — a setting lost with no error and
     // nothing in the response to show it happened.
     const checks = parseChecks(raw.checks);
+    // Same reasoning as `checks`, and the same failure if it is dropped: the
+    // stored policy is replaced wholesale, so a mode absent here is a mode
+    // erased the next time anyone saves an unrelated setting.
+    const mode = parseMode(raw.mode);
     return {
       enabled: raw.enabled,
       scope: raw.scope,
       autoMerge: raw.autoMerge,
       ...(checks ? { checks } : {}),
+      ...(mode ? { mode } : {}),
     };
+  }
+
+  /**
+   * Absent stays absent — it is not a malformed value, it is the state every
+   * policy stored before this field was added is in, and `repoMode()` reads it
+   * as the behaviour those repos already have.
+   */
+  function parseMode(input: unknown): RepoPolicy['mode'] | null {
+    return input === 'comment' || input === 'fix' || input === 'pr' ? input : null;
   }
 
   /**
@@ -1438,7 +1452,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         // show exactly what will be committed before anything is.
         const workflow = renderWorkflow({
           installCommand: row.installCommand ?? undefined,
-          armed: row.policy.enabled,
+          // Through the accessor, not `policy.enabled`: an armed repo that chose
+          // `fix` must not render a workflow baked to `pr`.
+          mode: repoMode(row.policy),
+          cron: cronForScope(row.policy.scope),
           autoMerge: row.policy.autoMerge,
           // Through the one accessor, so the permission cannot be read here as
           // `row.policy.checks?.env` and somewhere else as something truthier.

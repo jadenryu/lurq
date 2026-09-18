@@ -7,6 +7,28 @@ import { Button } from "@/components/ui/button";
 import type { RepoPolicy } from "@/lib/lurq-issuer";
 import { cn } from "@/lib/utils";
 
+/**
+ * How far an armed repo goes. `comment` is not here: that is `enabled: false`,
+ * and offering it twice would let the two controls disagree.
+ *
+ * `fix` is listed first because it is the one that cannot fail for want of a
+ * credential, and it is what a newly armed repo gets.
+ */
+const MODES: { id: "fix" | "pr"; label: string; blurb: string }[] = [
+  {
+    id: "fix",
+    label: "provable changes only",
+    blurb:
+      "Opens a pull request containing only what the package itself proves: renamed call sites, and the range bump in every manifest. No model, and no API key to add.",
+  },
+  {
+    id: "pr",
+    label: "provable changes, then the agent",
+    blurb:
+      "Everything above, then an agent migrates what a rule cannot. Needs ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in the repository's secrets, or the run fails.",
+  },
+];
+
 const SCOPES: { id: RepoPolicy["scope"]; label: string; blurb: string }[] = [
   {
     id: "security",
@@ -67,6 +89,14 @@ function Row({
  */
 const envOn = (p: RepoPolicy) => p.checks?.env !== false;
 
+/**
+ * Mirrors `repoMode()` on the server for an ARMED repo: absent means the agent,
+ * because that is what armed meant before the field existed. The server checks
+ * `enabled` first, and so does the caller here — this is only reached inside the
+ * armed branch.
+ */
+const modeOf = (p: RepoPolicy): "fix" | "pr" => (p.mode === "fix" ? "fix" : "pr");
+
 export function RepoPolicyPanel({
   repoId,
   policy: initial,
@@ -86,6 +116,7 @@ export function RepoPolicyPanel({
     policy.enabled !== initial.enabled ||
     policy.scope !== initial.scope ||
     policy.autoMerge !== initial.autoMerge ||
+    policy.mode !== initial.mode ||
     envOn(policy) !== envOn(initial);
 
   async function save() {
@@ -127,11 +158,57 @@ export function RepoPolicyPanel({
             variant={policy.enabled ? "default" : "outline"}
             size="sm"
             disabled={demo}
-            onClick={() => setPolicy((p) => ({ ...p, enabled: !p.enabled }))}
+            // Arming writes `mode` explicitly rather than leaving it absent. An
+            // absent mode still resolves to the agent for repos that predate
+            // the field, but a repo armed from here should default to the half
+            // that cannot fail for want of a credential.
+            onClick={() =>
+              setPolicy((p) =>
+                p.enabled
+                  ? { ...p, enabled: false }
+                  : { ...p, enabled: true, mode: p.mode ?? "fix" },
+              )
+            }
           >
             {policy.enabled ? "enabled" : "disabled"}
           </Button>
         </Row>
+
+        {/* Only while armed: off, the question does not apply, and a control
+            that reads as live while it governs nothing is the thing this panel
+            is written to avoid. */}
+        {policy.enabled && (
+          <div className="border-t border-border pt-4">
+            <p className="text-sm font-medium">How far it goes</p>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {MODES.map((option) => {
+                const active = modeOf(policy) === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={demo}
+                    aria-pressed={active}
+                    onClick={() => setPolicy((p) => ({ ...p, mode: option.id }))}
+                    className={cn(
+                      "rounded-[var(--radius-control)] border p-3 text-left transition-colors disabled:opacity-60",
+                      active
+                        ? "border-signal/50 bg-secondary"
+                        : "border-border hover:bg-muted/40",
+                    )}
+                  >
+                    <span className="font-mono text-xs lowercase tracking-wide">
+                      {option.label}
+                    </span>
+                    <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground">
+                      {option.blurb}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="border-t border-border pt-4">
           <p className="text-sm font-medium">Which upgrades it may attempt</p>

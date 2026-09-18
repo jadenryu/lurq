@@ -35,9 +35,14 @@ describe('the deterministic step', () => {
   });
 
   it('never runs in analyse-only mode', () => {
-    // Connecting a repo must not edit it. Every writing step in this workflow
-    // carries the same guard, and this one writes to the working tree.
-    expect(fixStep(steps())!.if).toBe("env.LURQ_MODE == 'pr'");
+    // Connecting a repo must not edit it. The guard widened when `fix` mode
+    // arrived — this step IS the whole of that mode — so the invariant is no
+    // longer one exact string. What has to stay true is that it runs in both
+    // writing modes and in neither analyse-only one.
+    const gate = fixStep(steps())!.if!;
+    expect(gate).toContain("env.LURQ_MODE == 'pr'");
+    expect(gate).toContain("env.LURQ_MODE == 'fix'");
+    expect(gate).not.toContain('comment');
   });
 
   it('inherits the same blast-radius cap the agent is given', () => {
