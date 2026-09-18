@@ -125,6 +125,21 @@ export async function fetchOutcomes(ownerId: string, limit?: number): Promise<Da
   return data.outcomes;
 }
 
+/**
+ * Every autopilot run for this account, newest first.
+ *
+ * Mirrors `fetchOutcomes`: issuer secret plus an explicit ownerId, because the
+ * dashboard is the only caller and it has no API key. `/repos/:id` already
+ * returns the same shape for one repo; this is the same rows unfiltered, so the
+ * log can answer "what has lurq done at all" rather than only per repository.
+ */
+export async function fetchRuns(ownerId: string): Promise<UpgradeRun[]> {
+  const res = await issuerFetch(`/upgrade-runs?ownerId=${encodeURIComponent(ownerId)}`);
+  if (!res.ok) throw new LurqIssuerError("Could not fetch autopilot runs.", 502);
+  const data = (await res.json()) as { runs: UpgradeRun[] };
+  return data.runs;
+}
+
 export interface DashboardUsage {
   today: number;
   series: { date: string; count: number }[];
@@ -364,6 +379,12 @@ export interface UpgradeRun {
   testsPassed: boolean | null;
   prUrl: string | null;
   runUrl: string;
+  /**
+   * What started the run. Null on every row written before the column existed,
+   * and on runs posted outside Actions — rendered as "not recorded" rather than
+   * guessed, the same rule `unverified` and `analysedOnly` follow.
+   */
+  trigger: "schedule" | "dispatch" | "push" | "pull_request" | "other" | null;
   createdAt: string;
 }
 

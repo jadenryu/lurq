@@ -22,6 +22,7 @@
  * would have to diff the opened PR's manifests and report per package.
  */
 import type { UpgradeReport, UpgradeTarget } from '../surface/upgrade';
+import { RUN_TRIGGERS, type RunTrigger } from '../github/types';
 import type { ReportedRun } from './remote';
 
 /** Server cap (db/upgradeRuns.MAX_RUNS_PER_POST); trim here so a large repo's
@@ -34,6 +35,23 @@ export interface RunContext {
   /** Permalink to the Actions run these rows came from. Part of the dedup key,
    *  so re-running a job updates its rows instead of doubling every figure. */
   runUrl: string;
+  /** What started this run, so the dashboard can say why it happened. Null
+   *  outside Actions, where there is no event to read. */
+  trigger: RunTrigger | null;
+}
+
+/**
+ * GITHUB_EVENT_NAME, narrowed to the triggers this loop can actually have.
+ *
+ * `workflow_dispatch` becomes `dispatch` rather than being split into "lurq
+ * started it" and "a human clicked it": the event is identical for both, and
+ * the workflow has no way to tell them apart. Naming a cause we cannot
+ * establish would be exactly the guess the run log exists to remove.
+ */
+function triggerFromEvent(event: string | undefined): RunTrigger | null {
+  if (!event) return null;
+  if (event === 'workflow_dispatch' || event === 'repository_dispatch') return 'dispatch';
+  return RUN_TRIGGERS.find((t) => t === event) ?? 'other';
 }
 
 /** Every site behind a finding: removed symbols, arity changes, and type errors. */
@@ -71,6 +89,7 @@ export function buildRunReports(
       toVersion: target?.toVersion ?? '',
       status: 'checked' as const,
       runUrl: ctx.runUrl,
+      trigger: ctx.trigger,
     };
   };
 
@@ -116,5 +135,9 @@ export function runContextFromEnv(env: NodeJS.ProcessEnv = process.env): RunCont
   // The run URL is part of the dedup key. Without a run id there is nothing
   // stable to key on, so leave it empty rather than fabricate a URL that would
   // make every job look like a different run and multiply the totals.
-  return { repoFullName, runUrl: runId ? `${server}/${repoFullName}/actions/runs/${runId}` : '' };
+  return {
+    repoFullName,
+    runUrl: runId ? `${server}/${repoFullName}/actions/runs/${runId}` : '',
+    trigger: triggerFromEvent(env.GITHUB_EVENT_NAME?.trim()),
+  };
 }

@@ -53,13 +53,7 @@ import type {
   UsageGuide,
 } from '../core/types';
 import type { EntityKind, EvidenceClass, Verdict } from '../graph/types';
-import type {
-  RepoDrift,
-  RepoManifest,
-  RepoPolicy,
-  UpgradeRunStatus,
-  UpgradeSeverity,
-} from '../github/types';
+import type { RepoDrift, RepoManifest, RepoPolicy, UpgradeRunStatus, UpgradeSeverity, RunTrigger } from '../github/types';
 import type { ExtractionTier, SymbolKind } from '../surface/types';
 import type { Tier } from '../core/plans';
 import type { Severity } from '../audit/types';
@@ -618,6 +612,21 @@ export const upgradeRuns = pgTable(
      * row per package+target and updates in place.
      */
     runUrl: text('run_url').notNull().default(''),
+    /**
+     * What started the run, from GITHUB_EVENT_NAME. See `RunTrigger`.
+     *
+     * NULLABLE, and deliberately NOT in the dedup index below. Every row
+     * written before this column existed has no trigger, and back-filling them
+     * with 'schedule' would invent evidence the log then presents as fact — the
+     * same rule `unverified` and `analysedOnly` follow. The dashboard renders
+     * null as "not recorded".
+     *
+     * Keeping it out of the dedup key is not a style choice: `runUrl` is in
+     * that key and is NOT NULL precisely because Postgres treats NULLs as
+     * distinct, so a nullable column there would let every re-post insert a
+     * duplicate instead of updating in place.
+     */
+    trigger: text('trigger').$type<RunTrigger>(),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (table) => [

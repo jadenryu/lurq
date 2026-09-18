@@ -285,6 +285,12 @@ export interface ReportedRun {
   testsPassed?: boolean | null;
   prUrl?: string | null;
   runUrl?: string;
+  /**
+   * What started the run, from GITHUB_EVENT_NAME. Optional like everything else
+   * here: an older CLI sends none, and the server records that as absent rather
+   * than guessing a cause.
+   */
+  trigger?: 'schedule' | 'dispatch' | 'push' | 'pull_request' | 'other' | null;
 }
 
 /**

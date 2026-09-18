@@ -272,6 +272,29 @@ export type UpgradeRunStatus =
   | 'merged'
   | 'failed';
 
+/**
+ * What started an autopilot run.
+ *
+ * The question a user actually asks of the log is "why did this happen", and
+ * until now nothing recorded it: a scheduled sweep, a run lurq started because
+ * a dependency shipped a major, and someone pressing the button by hand all
+ * looked identical after the fact.
+ *
+ * Taken from `GITHUB_EVENT_NAME`, so these are GitHub's own names rather than
+ * ours. `dispatch` covers both lurq's API call and a human clicking Run
+ * workflow, because the event is the same and the workflow cannot tell them
+ * apart — claiming otherwise in the UI would be a guess.
+ */
+export type RunTrigger = 'schedule' | 'dispatch' | 'push' | 'pull_request' | 'other';
+
+export const RUN_TRIGGERS: RunTrigger[] = [
+  'schedule',
+  'dispatch',
+  'push',
+  'pull_request',
+  'other',
+];
+
 export const UPGRADE_SEVERITIES: UpgradeSeverity[] = ['blocking', 'warning', 'ok', 'unverified'];
 export const UPGRADE_RUN_STATUSES: UpgradeRunStatus[] = [
   'checked',

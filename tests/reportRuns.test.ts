@@ -10,7 +10,14 @@ import type { UpgradeReport, UpgradeTarget } from '../src/surface/upgrade';
  * mapping that closes that loop, including the round-trip through the server's
  * own validator so the two halves cannot drift apart.
  */
-const ctx = { repoFullName: 'acme/app', runUrl: 'https://github.com/acme/app/actions/runs/42' };
+const ctx = {
+  repoFullName: 'acme/app',
+  runUrl: 'https://github.com/acme/app/actions/runs/42',
+  // Null, not a plausible-looking 'schedule': this fixture is not simulating an
+  // Actions event, and the column exists precisely so the log never asserts a
+  // cause it did not observe.
+  trigger: null,
+};
 
 const targets: UpgradeTarget[] = [
   { package: 'react-router', fromVersion: '6.0.0', toVersion: '8.0.0' },
@@ -114,7 +121,34 @@ describe('runContextFromEnv', () => {
   it('leaves runUrl empty rather than inventing one without a run id', () => {
     const got = runContextFromEnv({ GITHUB_REPOSITORY: 'acme/app' } as NodeJS.ProcessEnv);
     // A fabricated URL would differ per job and multiply every dashboard total.
-    expect(got).toEqual({ repoFullName: 'acme/app', runUrl: '' });
+    expect(got).toEqual({ repoFullName: 'acme/app', runUrl: '', trigger: null });
+  });
+
+  it('records what started the run, from the GitHub event', () => {
+    const trigger = (event?: string) =>
+      runContextFromEnv({
+        GITHUB_REPOSITORY: 'acme/app',
+        ...(event ? { GITHUB_EVENT_NAME: event } : {}),
+      } as NodeJS.ProcessEnv)!.trigger;
+
+    expect(trigger('schedule')).toBe('schedule');
+    expect(trigger('push')).toBe('push');
+    // Both dispatch events collapse to one value: the workflow cannot tell a
+    // run lurq started from one a human clicked, and naming a cause we cannot
+    // establish is the guess this column removes.
+    expect(trigger('workflow_dispatch')).toBe('dispatch');
+    expect(trigger('repository_dispatch')).toBe('dispatch');
+  });
+
+  it('keeps an unfamiliar event distinct from no event at all', () => {
+    const at = (env: Record<string, string>) =>
+      runContextFromEnv(env as NodeJS.ProcessEnv)!.trigger;
+
+    // A real event we do not model is 'other' — it DID start a run.
+    expect(at({ GITHUB_REPOSITORY: 'acme/app', GITHUB_EVENT_NAME: 'release' })).toBe('other');
+    // No event means we were not on a runner: null, never a default.
+    expect(at({ GITHUB_REPOSITORY: 'acme/app' })).toBeNull();
+    expect(at({ GITHUB_REPOSITORY: 'acme/app', GITHUB_EVENT_NAME: '  ' })).toBeNull();
   });
 
   it('honours a GitHub Enterprise server url', () => {
