@@ -490,18 +490,28 @@ export async function fetchRepoPolicyDefault(ownerId: string): Promise<RepoPolic
   return ((await res.json()) as { policy: RepoPolicy | null }).policy;
 }
 
-/** Save the default and, when asked, stamp it onto every connected repo. */
-export async function saveRepoPolicyDefault(
-  ownerId: string,
-  policy: RepoPolicy,
-  applyToAll: boolean,
-): Promise<number> {
+/** Save the default applied to repos connected from here on. */
+export async function saveRepoPolicyDefault(ownerId: string, policy: RepoPolicy): Promise<void> {
   const res = await issuerFetch("/repos/defaults", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ownerId, policy, applyToAll }),
+    body: JSON.stringify({ ownerId, policy }),
   });
   assertRepoOk(res, "Could not save the default policy.");
+}
+
+/** Apply one policy to the repos the user selected. Returns how many it reached. */
+export async function applyPolicyToRepos(
+  ownerId: string,
+  ids: number[],
+  policy: RepoPolicy,
+): Promise<number> {
+  const res = await issuerFetch("/repos", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId, ids, policy }),
+  });
+  assertRepoOk(res, "Could not apply the policy.");
   return ((await res.json()) as { applied: number }).applied;
 }
 

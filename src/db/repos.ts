@@ -6,7 +6,7 @@
  * signed-in user's id, so a missing `ownerId` filter here would hand one user
  * another user's repos. There is deliberately no "get by id" without an owner.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from './client';
 import { deleteAlertsForRepo } from './alerts';
 import { repoPolicyDefaults, repos, type RepoRow } from './schema';
@@ -283,21 +283,27 @@ export async function setRepoPolicyDefault(
 }
 
 /**
- * Stamp one policy onto every repo this owner has connected. Returns the count.
+ * Stamp one policy onto the named repos. Returns how many rows it reached.
  *
  * A stamp, not a subscription: a repo edited after this keeps its own settings
  * until the owner stamps again. See the table comment for why inheritance is
  * deliberately not modelled.
+ *
+ * `ownerId` is still in the WHERE even though ids are explicit — ids arrive from
+ * a request body, so filtering on them alone would let one account stamp a
+ * policy onto another account's repos by guessing integers.
  */
-export async function applyPolicyToAllRepos(
+export async function applyPolicyToRepos(
   db: Database,
   ownerId: string,
+  ids: number[],
   policy: RepoPolicy,
 ): Promise<number> {
+  if (ids.length === 0) return 0;
   const updated = await db
     .update(repos)
     .set({ policy })
-    .where(eq(repos.ownerId, ownerId))
+    .where(and(eq(repos.ownerId, ownerId), inArray(repos.id, ids)))
     .returning({ id: repos.id });
   return updated.length;
 }

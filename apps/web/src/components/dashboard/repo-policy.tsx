@@ -104,6 +104,9 @@ export function RepoPolicyPanel({
   intro,
   extra,
   body,
+  saveLabel,
+  alwaysSavable = false,
+  onSaved,
   policy: initial,
   demo,
 }: {
@@ -117,6 +120,18 @@ export function RepoPolicyPanel({
   extra?: React.ReactNode;
   /** Extra fields merged into the request body alongside `policy`. */
   body?: Record<string, unknown>;
+  /** Label on the save button, when "save policy" understates what it does. */
+  saveLabel?: string;
+  /**
+   * Allow a save that changed nothing on screen.
+   *
+   * The dirty check is right for one repo — re-saving its own policy is a
+   * no-op. It is wrong for a selection: applying an unedited policy to twelve
+   * repositories still changes eleven of them.
+   */
+  alwaysSavable?: boolean;
+  /** Called after a save succeeds, for a caller that owns surrounding state. */
+  onSaved?: () => void;
   policy: RepoPolicy;
   demo: boolean;
 }) {
@@ -147,6 +162,7 @@ export function RepoPolicyPanel({
       setError(body?.error ?? "Could not save.");
       return;
     }
+    onSaved?.();
     startTransition(() => router.refresh());
   }
 
@@ -298,8 +314,12 @@ export function RepoPolicyPanel({
             reset
           </Button>
         )}
-        <Button size="sm" disabled={demo || !dirty || saving} onClick={() => void save()}>
-          {saving ? "saving…" : "save policy"}
+        <Button
+          size="sm"
+          disabled={demo || saving || (!dirty && !alwaysSavable)}
+          onClick={() => void save()}
+        >
+          {saving ? "saving…" : (saveLabel ?? "save policy")}
         </Button>
       </div>
     </Panel>

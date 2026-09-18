@@ -44,7 +44,7 @@ import {
   upsertRepos,
   getRepoPolicyDefault,
   setRepoPolicyDefault,
-  applyPolicyToAllRepos,
+  applyPolicyToRepos,
 } from '../db/repos';
 import {
   getSelectionPolicy,
@@ -90,7 +90,6 @@ import {
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
 import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
-import type { RepoPolicy } from '../github/types';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
 import { newFileUrl, renderWorkflow, WORKFLOW_PATH, cronForScope } from '../github/workflow';
 import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
@@ -1392,6 +1391,39 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     },
   );
 
+  /**
+   * Apply one policy to a set of repos — what the table's selection saves.
+   *
+   * Ids rather than a filter expression: the server would otherwise have to
+   * re-derive "everything matching what was on screen", and a filter evaluated
+   * twice is a filter that can disagree with itself between the click and the
+   * write. The user selected rows; those rows are the contract.
+   */
+  app.patch('/repos', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    const body = (req.body ?? {}) as { ids?: unknown; policy?: unknown };
+    const policy = parseRepoPolicy(body.policy);
+    const ids = Array.isArray(body.ids)
+      ? body.ids.filter((id): id is number => Number.isInteger(id))
+      : null;
+    if (!ownerId || !policy || !ids || ids.length === 0) {
+      res.status(400).json({ error: 'ownerId, a complete policy, and at least one id are required.' });
+      return;
+    }
+    // A cap, not pagination: the write is one statement, but an unbounded id
+    // list from a request body is an unbounded query parameter list.
+    if (ids.length > 500) {
+      res.status(400).json({ error: 'At most 500 repositories at a time.' });
+      return;
+    }
+    try {
+      res.status(200).json({ applied: await applyPolicyToRepos(db, ownerId, ids, policy) });
+    } catch (err) {
+      logger.error('bulk policy write failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not apply the policy.' });
+    }
+  });
+
   // Declared BEFORE `/repos/:id`: Express matches in registration order, so the
   // pattern route would otherwise capture 'defaults' as an id and 400 on it.
   /**
@@ -1420,11 +1452,12 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   );
 
   /**
-   * Set the default, and optionally stamp it onto every connected repo.
+   * Set the default for repos connected from here on.
    *
-   * One call rather than two, because "save" and "apply to all" as separate
-   * buttons raises which policy the second one applies — the saved default or
-   * the edited-but-unsaved one on screen. A flag on the save has no such gap.
+   * Deliberately touches nothing already connected: existing repos are changed
+   * from the table, where the user picks which ones and sees how many. A save
+   * here that silently rewrote every repo would be a permission change nobody
+   * asked for.
    */
   app.put(
     '/repos/defaults',
@@ -1432,7 +1465,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     requireGithubApp,
     async (req: Request, res: Response) => {
       const ownerId = ownerFrom(req);
-      const body = (req.body ?? {}) as { policy?: unknown; applyToAll?: unknown };
+      const body = (req.body ?? {}) as { policy?: unknown };
       const policy = parseRepoPolicy(body.policy);
       if (!ownerId || !policy) {
         res.status(400).json({ error: 'ownerId and a complete policy are required.' });
@@ -1440,12 +1473,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       }
       try {
         await setRepoPolicyDefault(db, ownerId, policy);
-        // Stamped only on an explicit flag: a default is about repos that do
-        // not exist yet, and silently rewriting every connected repo would be a
-        // permission change the user did not ask for.
-        const applied =
-          body.applyToAll === true ? await applyPolicyToAllRepos(db, ownerId, policy) : 0;
-        res.status(200).json({ policy, applied });
+        res.status(200).json({ policy });
       } catch (err) {
         logger.error('repo defaults write failed:', err instanceof Error ? err.message : String(err));
         res.status(500).json({ error: 'Could not save the default policy.' });

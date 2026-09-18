@@ -215,11 +215,7 @@ export default async function ReposPage({
             )}
             {/* scroll-mt so the drift meter's link lands the list below the
                 header rather than tucked under it. */}
-            <AccountAutopilotPanel
-              policy={autopilotDefault}
-              repoCount={data.repos.length}
-              demo={demo}
-            />
+            <AccountAutopilotPanel policy={autopilotDefault} demo={demo} />
             <div id="repos" className="scroll-mt-24">
               <ReposPanel repos={data.repos} demo={demo} installUrl={url} />
             </div>
