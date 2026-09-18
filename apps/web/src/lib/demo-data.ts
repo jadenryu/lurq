@@ -666,17 +666,26 @@ export function demoRepoBrief(): RepoBrief {
   };
 }
 
-/** A believable run history: mostly analysis, a few PRs, one honest failure. */
-function demoRuns(): UpgradeRun[] {
-  const rows: [string, string, string, UpgradeRun["severity"], UpgradeRun["status"], string[], number, boolean | null, number][] = [
-    ["react-router", "6.9.2", "8.1.0", "blocking", "pr_open", ["useHistory", "Switch", "Redirect"], 14, true, 6],
-    ["node-fetch", "2.7.0", "4.0.1", "blocking", "merged", ["FetchError"], 3, true, 30],
-    ["express", "4.21.2", "5.2.1", "warning", "failed", ["Router"], 2, false, 30],
-    ["zod", "3.25.76", "4.1.5", "ok", "merged", [], 0, true, 54],
-    ["date-fns", "2.30.0", "4.1.0", "unverified", "checked", [], 0, null, 54],
-    ["chalk", "5.6.2", "6.0.0", "ok", "merged", [], 0, true, 78],
+/**
+ * A believable run history: mostly analysis, a few PRs, one honest failure.
+ *
+ * Triggers vary on purpose, including one `null`. A fixture where every run has
+ * a recorded trigger would hide the case the column was added for: every row
+ * written before it existed has none, and the log has to render that as "not
+ * recorded" rather than as a plausible-looking `schedule`.
+ */
+export function demoRuns(): UpgradeRun[] {
+  const rows: [string, string, string, UpgradeRun["severity"], UpgradeRun["status"], string[], number, boolean | null, UpgradeRun["trigger"], number][] = [
+    // Started by lurq the day react-router shipped its major, not by the cron.
+    ["react-router", "6.9.2", "8.1.0", "blocking", "pr_open", ["useHistory", "Switch", "Redirect"], 14, true, "dispatch", 6],
+    ["node-fetch", "2.7.0", "4.0.1", "blocking", "merged", ["FetchError"], 3, true, "schedule", 30],
+    ["express", "4.21.2", "5.2.1", "warning", "failed", ["Router"], 2, false, "schedule", 30],
+    ["zod", "3.25.76", "4.1.5", "ok", "merged", [], 0, true, "schedule", 54],
+    ["date-fns", "2.30.0", "4.1.0", "unverified", "checked", [], 0, null, "dispatch", 54],
+    // Predates the trigger column: rendered as "not recorded", never guessed.
+    ["chalk", "5.6.2", "6.0.0", "ok", "merged", [], 0, true, null, 78],
   ];
-  return rows.map(([packageName, fromVersion, toVersion, severity, status, symbolsAffected, callSites, testsPassed, h], i) => ({
+  return rows.map(([packageName, fromVersion, toVersion, severity, status, symbolsAffected, callSites, testsPassed, trigger, h], i) => ({
     id: i + 1,
     packageName,
     fromVersion,
@@ -690,6 +699,7 @@ function demoRuns(): UpgradeRun[] {
     testsPassed,
     prUrl: status === "pr_open" || status === "merged" ? "https://github.com/acme/checkout-web/pull/412" : null,
     runUrl: "https://github.com/acme/checkout-web/actions/runs/1",
+    trigger,
     createdAt: hoursAgo(h),
   }));
 }

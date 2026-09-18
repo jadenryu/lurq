@@ -50,6 +50,11 @@ const WORKSPACE: NavItem[] = [
   // already anchored `#autopilot` — and it names the outcome instead of the
   // noun.
   { href: "/dashboard/repos", label: "autopilot" },
+  // What the autopilot has actually DONE, as opposed to what it is permitted to
+  // do. Beside the page that arms it, because "is it on" and "what has it done"
+  // are the same question asked twice — and the second had no page at all, so a
+  // user who armed a repo and saw no pull requests had nowhere to look.
+  { href: "/dashboard/runs", label: "autopilot log" },
   // Every MCP server the account has scanned, with what changed. Beside
   // autopilot because both are "what my agents depend on, kept honest".
   { href: "/dashboard/mcp", label: "mcp servers" },

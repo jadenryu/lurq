@@ -10,12 +10,7 @@
  * authenticated key. A payload that could name its own owner would let any key
  * write rows against any account.
  */
-import {
-  UPGRADE_RUN_STATUSES,
-  UPGRADE_SEVERITIES,
-  type UpgradeRunStatus,
-  type UpgradeSeverity,
-} from './types';
+import { UPGRADE_RUN_STATUSES, UPGRADE_SEVERITIES, type UpgradeRunStatus, type UpgradeSeverity, RUN_TRIGGERS, RunTrigger } from './types';
 
 /** Package names, versions, and repo slugs are all short; paths can be longer. */
 const MAX_NAME = 214; // npm's own package-name limit
@@ -39,6 +34,8 @@ export interface ParsedUpgradeRun {
   testsPassed: boolean | null;
   prUrl: string | null;
   runUrl: string;
+  /** What started the run. Null when the reporter did not say. */
+  trigger: RunTrigger | null;
 }
 
 function str(value: unknown, max: number): string | null {
@@ -98,6 +95,10 @@ export function parseUpgradeRun(input: unknown): ParsedUpgradeRun | null {
     prUrl: str(raw.prUrl, MAX_URL),
     // Empty string, not null: it is part of the dedup key (see schema).
     runUrl: str(raw.runUrl, MAX_URL) ?? '',
+    // Closed set, same as severity and status: this arrives from a user's CI,
+    // and an unrecognised value is recorded as absent rather than stored raw.
+    // Null is a real answer here — an older CLI reports no trigger at all.
+    trigger: RUN_TRIGGERS.find((t) => t === raw.trigger) ?? null,
   };
 }
 

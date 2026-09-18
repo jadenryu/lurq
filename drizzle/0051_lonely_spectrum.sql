@@ -1,0 +1,1 @@
+ALTER TABLE "upgrade_runs" ADD COLUMN "trigger" text;

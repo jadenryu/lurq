@@ -78,15 +78,7 @@ import { computeDrift } from '../github/drift';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
 import { applyScope, permits, repoMode } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
-import {
-  findRepoIdByFullName,
-  getUpgradeImpact,
-  listRunsForRepo,
-  recordUpgradeRuns,
-  upkeepByRepo,
-  MAX_RUNS_PER_POST,
-  type RepoUpkeep,
-} from '../db/upgradeRuns';
+import { MAX_RUNS_PER_POST, findRepoIdByFullName, getUpgradeImpact, listRunsForOwner, listRunsForRepo, recordUpgradeRuns, type RepoUpkeep, upkeepByRepo } from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
 import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
@@ -1980,6 +1972,34 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       } catch (err) {
         logger.error('upgrade plan failed:', err instanceof Error ? err.message : String(err));
         res.status(500).json({ error: 'Could not build the upgrade plan.' });
+      }
+    },
+  );
+
+  /**
+   * Every run this account has reported, for the autopilot log.
+   *
+   * Issuer-secret authenticated, NOT API-key like the POST beside it. The two
+   * halves have different callers: CI posts with a per-user API key, and the
+   * dashboard reads through `issuerFetch` with the web-to-backend secret and an
+   * explicit ownerId, exactly as `/repos/:id` does. Mirroring the POST's auth
+   * here would have made this route unreachable from the only thing that wants
+   * it.
+   */
+  app.get(
+    '/upgrade-runs',
+    requireIssuerSecret,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      if (!ownerId) {
+        res.status(400).json({ error: 'ownerId is required.' });
+        return;
+      }
+      try {
+        res.status(200).json({ runs: await listRunsForOwner(db, ownerId) });
+      } catch (err) {
+        logger.error('upgrade run list failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not read the upgrade runs.' });
       }
     },
   );

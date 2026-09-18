@@ -100,6 +100,29 @@ export async function listRunsForRepo(
  * ran" is ambiguous with "nothing to do". The useful inference — armed, still
  * behind, and never reported — needs drift, which belongs to the caller.
  */
+/**
+ * Every run this owner has reported, newest first, across all repositories.
+ *
+ * `listRunsForRepo` answers "what happened to this repo"; the dashboard had no
+ * way to ask "what has lurq been doing at all", which is the question someone
+ * asks after turning the autopilot on and seeing nothing. Owner-scoped like
+ * every other read here, and keyed on nothing else: a run from a repo with no
+ * GitHub App installation has a null `repoId` and must still appear, or the log
+ * would quietly omit exactly the installs that are hardest to debug.
+ */
+export async function listRunsForOwner(
+  db: Database,
+  ownerId: string,
+  limit = 200,
+): Promise<UpgradeRunRow[]> {
+  return db
+    .select()
+    .from(upgradeRuns)
+    .where(eq(upgradeRuns.ownerId, ownerId))
+    .orderBy(desc(upgradeRuns.createdAt))
+    .limit(limit);
+}
+
 export interface RepoUpkeep {
   /** `owner/name`, as the workflow reports it from GITHUB_REPOSITORY. */
   repoFullName: string;

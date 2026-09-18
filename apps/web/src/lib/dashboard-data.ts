@@ -39,6 +39,7 @@ import {
   demoMcpServerDetail,
   demoMcpServers,
   isDemoUser,
+  demoRuns,
 } from "@/lib/demo-data";
 import {
   fetchAlerts,
@@ -87,6 +88,8 @@ import {
   type NotificationPreferences,
   fetchChannels,
   type ChannelsPayload,
+  fetchRuns,
+  type UpgradeRun,
 } from "@/lib/lurq-issuer";
 
 export interface Loaded<T> {
@@ -211,6 +214,18 @@ export function loadConformance(): Promise<Loaded<ConformanceReport>> {
 
 export function loadOutcomes(): Promise<Loaded<DashboardOutcome[]>> {
   return load((ownerId) => fetchOutcomes(ownerId), demoOutcomes, []);
+}
+
+/**
+ * Every autopilot run across every repository, newest first.
+ *
+ * The dashboard could already answer "what happened to this repo" on the repo
+ * page, and could not answer "what has lurq actually been doing" anywhere —
+ * which is the question someone asks after arming the autopilot and seeing no
+ * pull requests. Empty on a failed read like every loader here.
+ */
+export function loadRuns(): Promise<Loaded<UpgradeRun[]>> {
+  return load((ownerId) => fetchRuns(ownerId), demoRuns, []);
 }
 
 export function loadContributions(): Promise<
