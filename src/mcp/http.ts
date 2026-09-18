@@ -41,6 +41,9 @@ import {
   ownerForInstallation,
   setRepoPolicy,
   upsertRepos,
+  getRepoPolicyDefault,
+  setRepoPolicyDefault,
+  applyPolicyToAllRepos,
 } from '../db/repos';
 import {
   getSelectionPolicy,
@@ -1253,6 +1256,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     scanOnly?: string[],
   ): Promise<number> => {
     const found = await listInstallationRepos(installationId);
+    // The owner's default governs rows this call CREATES; `upsertRepos` never
+    // rewrites an existing row's policy, so a repo the user already configured
+    // survives a webhook replay or a second pass through the connect flow.
+    const fallback = (await getRepoPolicyDefault(db, ownerId)) ?? undefined;
     const connected = await upsertRepos(
       db,
       found.map((repo) => ({
@@ -1262,6 +1269,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         defaultBranch: repo.defaultBranch,
         isPrivate: repo.isPrivate,
       })),
+      fallback,
     );
     // Deliberately not awaited: a first scan of a large account is minutes of
     // GitHub calls, and holding the request open for it would time out at the
@@ -1411,6 +1419,67 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       } catch (err) {
         logger.error('alert list failed:', err instanceof Error ? err.message : String(err));
         res.status(500).json({ error: 'Could not list alerts.' });
+      }
+    },
+  );
+
+  // Declared BEFORE `/repos/:id`: Express matches in registration order, so the
+  // pattern route would otherwise capture 'defaults' as an id and 400 on it.
+  /**
+   * The owner's default policy: what a repo gets when it is connected.
+   *
+   * Served as a nullable field rather than pre-filled with DEFAULT_REPO_POLICY,
+   * so the dashboard can say "new repos arrive off" versus "you chose this".
+   */
+  app.get(
+    '/repos/defaults',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      if (!ownerId) {
+        res.status(400).json({ error: 'ownerId is required.' });
+        return;
+      }
+      try {
+        res.status(200).json({ policy: await getRepoPolicyDefault(db, ownerId) });
+      } catch (err) {
+        logger.error('repo defaults read failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not read the default policy.' });
+      }
+    },
+  );
+
+  /**
+   * Set the default, and optionally stamp it onto every connected repo.
+   *
+   * One call rather than two, because "save" and "apply to all" as separate
+   * buttons raises which policy the second one applies — the saved default or
+   * the edited-but-unsaved one on screen. A flag on the save has no such gap.
+   */
+  app.put(
+    '/repos/defaults',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const body = (req.body ?? {}) as { policy?: unknown; applyToAll?: unknown };
+      const policy = parsePolicy(body.policy);
+      if (!ownerId || !policy) {
+        res.status(400).json({ error: 'ownerId and a complete policy are required.' });
+        return;
+      }
+      try {
+        await setRepoPolicyDefault(db, ownerId, policy);
+        // Stamped only on an explicit flag: a default is about repos that do
+        // not exist yet, and silently rewriting every connected repo would be a
+        // permission change the user did not ask for.
+        const applied =
+          body.applyToAll === true ? await applyPolicyToAllRepos(db, ownerId, policy) : 0;
+        res.status(200).json({ policy, applied });
+      } catch (err) {
+        logger.error('repo defaults write failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not save the default policy.' });
       }
     },
   );
