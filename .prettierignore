@@ -1,0 +1,16 @@
+# Build output and generated trees.
+dist/
+dist-operator/
+.next/
+.source/
+out/
+coverage/
+drizzle/meta/
+artifacts/
+vault/
+*.min.js
+
+# apps/web is not prettier-formatted: it is written double-quoted and wider
+# than printWidth 100, so `prettier --write` on any file there rewrites the
+# whole file. Ignored until someone formats the tree in one deliberate commit.
+apps/web/
