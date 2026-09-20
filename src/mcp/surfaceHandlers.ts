@@ -72,7 +72,9 @@ export function rowsToSurface(
           },
         }
       : {}),
-    ...(r.maxArity !== null ? { maxArity: r.maxArity === UNBOUNDED_ARITY ? null : r.maxArity } : {}),
+    ...(r.maxArity !== null
+      ? { maxArity: r.maxArity === UNBOUNDED_ARITY ? null : r.maxArity }
+      : {}),
   }));
   return {
     package: pkg,
@@ -328,7 +330,8 @@ async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput, onFill
     [a!, input.fromVersion],
     [b!, input.toVersion],
   ] as const) {
-    if (needsFill(stored.rows) && scheduleFill(db, input.package, version, stored.entityId)) onFill();
+    if (needsFill(stored.rows) && scheduleFill(db, input.package, version, stored.entityId))
+      onFill();
   }
 
   const diff = diffSurfaces(

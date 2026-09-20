@@ -61,7 +61,6 @@ const LAYER_OF: Partial<Record<Category, string>> = {
 
 const FLOW_LAYERS = ['Presentation', 'Client Logic', 'Backend', 'Data'];
 
-
 export interface Item {
   label: string;
   /** null = could not be classified (not in index, no category match). */
@@ -156,9 +155,7 @@ export async function handleDiagram(
       runtimeTarget: packages.runtimeTarget,
     })
     .from(packages)
-    .where(
-      and(inArray(packages.name, input.stack), eq(packages.ecosystem, DEFAULT_ECOSYSTEM)),
-    );
+    .where(and(inArray(packages.name, input.stack), eq(packages.ecosystem, DEFAULT_ECOSYSTEM)));
   const known = new Map(rows.map((r) => [r.name, r]));
   // inferCategory is best-effort on a bare package name (it was built for NL
   // needs); a miss yields null, not a faked category. No silent 'other'.

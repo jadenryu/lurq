@@ -57,7 +57,10 @@ describe('the drizzle migration journal', () => {
       .filter(({ prev, entry }) => entry.when <= prev.when)
       .map(({ prev, entry }) => `${prev.tag} (${prev.when}) -> ${entry.tag} (${entry.when})`);
 
-    expect(regressions, 'a migration whose `when` is not newer than the entry before it will be skipped on an existing database').toEqual([]);
+    expect(
+      regressions,
+      'a migration whose `when` is not newer than the entry before it will be skipped on an existing database',
+    ).toEqual([]);
   });
 
   it('keeps `idx` in step with position, so the order on disk is the order here', () => {
@@ -75,7 +78,9 @@ describe('the drizzle migration journal', () => {
   it('points every entry at a migration file that exists', () => {
     const onDisk = new Set(readdirSync(migrationsUrl).filter((f) => f.endsWith('.sql')));
     const missing = entries.map((e) => `${e.tag}.sql`).filter((f) => !onDisk.has(f));
-    expect(missing, 'journal names a migration with no file; drizzle throws at startup').toEqual([]);
+    expect(missing, 'journal names a migration with no file; drizzle throws at startup').toEqual(
+      [],
+    );
   });
 
   it('lists every migration file in the journal', () => {

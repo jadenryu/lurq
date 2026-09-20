@@ -37,7 +37,9 @@ describe('checkRateLimit', () => {
     // A window of 1ms is already gone by the time the next call lands, but
     // don't race it: burn real time rather than trusting the scheduler.
     const until = Date.now() + 5;
-    while (Date.now() < until) { /* spin */ }
+    while (Date.now() < until) {
+      /* spin */
+    }
 
     expect(checkRateLimit(k, 1, 1).ok).toBe(true);
   });

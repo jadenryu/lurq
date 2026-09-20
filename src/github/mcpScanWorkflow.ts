@@ -62,12 +62,15 @@ export function secretNameFor(envName: string): string {
 
 export function renderMcpScanWorkflow(opts: McpScanWorkflowOptions = {}): string {
   const cron = opts.cron ?? DEFAULT_CRON;
-  if (cron.trim().split(/\s+/).length !== 5) throw new Error(`cron must have five fields; got "${cron}"`);
+  if (cron.trim().split(/\s+/).length !== 5)
+    throw new Error(`cron must have five fields; got "${cron}"`);
   const failOn = opts.failOn ?? 'high';
   const issue = opts.githubIssue !== false;
   // Opt-in: `githubIssue` defaults on, this does not. See the option's doc.
   const sarif = opts.sarif === true;
-  const secrets = [...new Set(opts.secrets ?? [])].filter((s) => VALID_NAME.test(s) && s !== 'LURQ_API_KEY').sort();
+  const secrets = [...new Set(opts.secrets ?? [])]
+    .filter((s) => VALID_NAME.test(s) && s !== 'LURQ_API_KEY')
+    .sort();
 
   // The runner's token for the dashboard issue is named LURQ_GITHUB_ISSUE_TOKEN
   // in spirit but must be GITHUB_TOKEN for the CLI to find it. A server that
@@ -96,9 +99,13 @@ export function renderMcpScanWorkflow(opts: McpScanWorkflowOptions = {}): string
   const why = [
     '# Contents are read-only. The scan reads tool contracts; nothing it reads can write here.',
     ...(issue
-      ? ['# `issues: write` keeps the pinned "lurq dashboard" issue current, with server text escaped.']
+      ? [
+          '# `issues: write` keeps the pinned "lurq dashboard" issue current, with server text escaped.',
+        ]
       : []),
-    ...(sarif ? ['# `security-events: write` is what lets a finding become a code scanning alert.'] : []),
+    ...(sarif
+      ? ['# `security-events: write` is what lets a finding become a code scanning alert.']
+      : []),
   ];
   const permissions = [...why, 'permissions:', '  contents: read', ...writes].join('\n');
 

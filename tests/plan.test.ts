@@ -34,7 +34,10 @@ const cand = (name: string): Candidate => ({
   latestVersion: '1',
   weeklyDownloads: 1,
   lastReleaseAt: null,
-  repoUrl: null, deprecated: false, archived: false, advisories: 0
+  repoUrl: null,
+  deprecated: false,
+  archived: false,
+  advisories: 0,
 });
 
 describe('decomposeHeuristic', () => {
@@ -72,7 +75,9 @@ describe('decomposeHeuristic', () => {
   });
 
   it('returns nothing for prose with no recognizable component', () => {
-    expect(decomposeHeuristic('This document is about our company mission and values.')).toEqual([]);
+    expect(decomposeHeuristic('This document is about our company mission and values.')).toEqual(
+      [],
+    );
   });
 });
 
@@ -93,7 +98,12 @@ describe('orderCandidates (cross-slot coherence)', () => {
   const m = new Map<string, number>();
 
   it('demotes a competing framework and promotes the anchor ecosystem', () => {
-    const out = orderCandidates([cand('vue-router'), cand('react-router'), cand('axios')], 'react', 'balanced', m);
+    const out = orderCandidates(
+      [cand('vue-router'), cand('react-router'), cand('axios')],
+      'react',
+      'balanced',
+      m,
+    );
     expect(out.map((c) => c.name)).toEqual(['react-router', 'axios', 'vue-router']);
   });
 
@@ -103,7 +113,10 @@ describe('orderCandidates (cross-slot coherence)', () => {
   });
 
   it('breaks ties by lightest bundle under optimize=speed', () => {
-    const bundles = new Map([['react-router', 20], ['@tanstack/react-router', 5]]);
+    const bundles = new Map([
+      ['react-router', 20],
+      ['@tanstack/react-router', 5],
+    ]);
     const out = orderCandidates(
       [cand('react-router'), cand('@tanstack/react-router')],
       'react',

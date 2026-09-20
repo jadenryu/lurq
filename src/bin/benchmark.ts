@@ -59,17 +59,17 @@ program
         console.log(`  - Failure-detection cases: ${suite.failureCases.length}`);
       }
       console.log(`  - Runtime: Node ${suite.runtime.node}, ${suite.runtime.packageManager}`);
-      
+
       let totalRequiredNeeds = 0;
       const categories = new Set<string>();
-      
+
       for (const c of suite.cases) {
         for (const n of c.needs) {
           if (n.required) totalRequiredNeeds++;
           if (n.category) categories.add(n.category);
         }
       }
-      
+
       console.log(`  - Total required needs: ${totalRequiredNeeds}`);
       console.log(`  - Categories covered: ${categories.size}`);
       process.exit(0);
@@ -85,9 +85,16 @@ program
   .command('run')
   .description('Run a participant against a suite')
   .requiredOption('--suite <name>', 'Suite name (e.g. stack-selection-v1)')
-  .requiredOption('--participants <ids>', 'Comma-separated participant IDs (e.g. openai:gpt-5.6-sol,lurq-plan)')
+  .requiredOption(
+    '--participants <ids>',
+    'Comma-separated participant IDs (e.g. openai:gpt-5.6-sol,lurq-plan)',
+  )
   .option('--trials <number>', 'Number of trials per case', '1')
-  .option('--plan-retries <number>', 'Extra planning attempts after a participant error (default 2)', '2')
+  .option(
+    '--plan-retries <number>',
+    'Extra planning attempts after a participant error (default 2)',
+    '2',
+  )
   .option('--cases <ids>', 'Comma-separated case IDs to run (runs all if omitted)')
   .option('--dry-run', 'Skip E2B and registry writes (plan + normalize only)')
   .action(async (options) => {
@@ -118,7 +125,7 @@ program
         console.error(`ERROR: ${(err as Error).message}`);
         process.exit(1);
       }
-      
+
       sandbox = await getSandbox();
       if (sandbox.name !== 'e2b') {
         console.error('ERROR: Benchmark requires the e2b driver. E2B_API_KEY must be set.');
@@ -138,7 +145,7 @@ program
     // Resolve participants
     const activeParticipants: Participant[] = [];
     const ids = options.participants.split(',').map((s: string) => s.trim());
-    
+
     for (const id of ids) {
       if (id === 'lurq-plan') {
         activeParticipants.push(new LurqPlanParticipant());
@@ -172,7 +179,7 @@ program
     if (isDryRun) console.log(`[DRY RUN] Bypassing E2B and registry writes.`);
 
     // Manifest
-    const manifest = isDryRun 
+    const manifest = isDryRun
       ? dryRunManifest(suite)
       : await collectManifest(db, suite, config, sandbox);
     writeManifest(runDir, manifest);
@@ -194,7 +201,14 @@ program
           proposal: null,
           normalization: null,
           resolvedSelections: null,
-          packageValidity: { existing: 0, nonexistent: [], deprecated: [], archived: [], highRisk: [], unresolvedVersions: [] },
+          packageValidity: {
+            existing: 0,
+            nonexistent: [],
+            deprecated: [],
+            archived: [],
+            highRisk: [],
+            unresolvedVersions: [],
+          },
           coverage: { kind: 'slot-fill', required: 0, covered: 0, threshold: 0, missing: [] },
           resolution: null,
           compatPrediction: 'unknown',
@@ -206,17 +220,17 @@ program
 
         try {
           const fakeProposal: any = {
-            selections: failureCase.stack.map(pkgStr => {
+            selections: failureCase.stack.map((pkgStr) => {
               let pkgName = pkgStr;
               let version: string | null = null;
-              
+
               // Handle scoped packages correctly (e.g. @mui/material@5)
               const atIndex = pkgStr.indexOf('@', 1);
               if (atIndex !== -1) {
                 pkgName = pkgStr.substring(0, atIndex);
                 version = pkgStr.substring(atIndex + 1);
               }
-              
+
               return {
                 needId: 'n/a',
                 package: pkgName,
@@ -234,7 +248,7 @@ program
           result.proposal = fakeProposal;
           const normalized = normalizeProposal(fakeProposal);
           result.normalization = normalized;
-          
+
           const resolutionResult = await resolveProposal(
             db,
             sandbox,
@@ -243,11 +257,10 @@ program
             {
               dryRun: isDryRun,
               node:
-                manifest.nodeVersionInE2B !== 'unknown' &&
-                manifest.nodeVersionInE2B !== 'dry-run'
+                manifest.nodeVersionInE2B !== 'unknown' && manifest.nodeVersionInE2B !== 'dry-run'
                   ? manifest.nodeVersionInE2B.replace(/^v/i, '')
                   : suite.runtime.node,
-            }
+            },
           );
           result.packageValidity = resolutionResult.packageValidity;
           result.compatPrediction = resolutionResult.compatPrediction;
@@ -262,11 +275,11 @@ program
         result.timestamps.finishedAt = new Date().toISOString();
         writeLine(runDir, result);
         allResults.push(result);
-        
+
         if (!result.participantError) {
           const valid = result.packageValidity.existing;
           const total = valid + result.packageValidity.nonexistent.length;
-          const resolved = result.resolution?.installed ? 'yes' : (isDryRun ? 'dry' : 'no');
+          const resolved = result.resolution?.installed ? 'yes' : isDryRun ? 'dry' : 'no';
           const predicted =
             result.packageValidity.nonexistent.length > 0 ||
             result.packageValidity.deprecated.length > 0 ||
@@ -283,7 +296,7 @@ program
           );
         }
       }
-      
+
       writeSummary(runDir, allResults);
       await dbHandle.close();
       console.log(`\\nRun complete. Results written to: artifacts/benchmarks/${runId}/`);
@@ -292,15 +305,20 @@ program
 
     // Phase 1: Planning
     console.log('\\n--- Phase 1: Planning ---');
-    const plans: { participant: Participant, benchCase: typeof suite.cases[number]; trial: number; result: BenchmarkResult }[] = [];
-    
+    const plans: {
+      participant: Participant;
+      benchCase: (typeof suite.cases)[number];
+      trial: number;
+      result: BenchmarkResult;
+    }[] = [];
+
     for (const participant of activeParticipants) {
       console.log(`\\n>> Planning for participant: ${participant.id} <<`);
       for (const benchCase of suite.cases) {
         for (let trial = 1; trial <= trials; trial++) {
           console.log(`Case "${benchCase.id}" (Trial ${trial}/${trials}) ...`);
           const startedAt = new Date().toISOString();
-          
+
           const result: BenchmarkResult = {
             runId,
             participant: {
@@ -314,7 +332,14 @@ program
             proposal: null,
             normalization: null,
             resolvedSelections: null,
-            packageValidity: { existing: 0, nonexistent: [], deprecated: [], archived: [], highRisk: [], unresolvedVersions: [] },
+            packageValidity: {
+              existing: 0,
+              nonexistent: [],
+              deprecated: [],
+              archived: [],
+              highRisk: [],
+              unresolvedVersions: [],
+            },
             coverage: { kind: 'slot-fill', required: 0, covered: 0, threshold: 0, missing: [] },
             resolution: null,
             compatPrediction: 'unknown',
@@ -330,7 +355,12 @@ program
               const proposal = await participant.run(db, benchCase);
               result.proposal = proposal;
               result.participantError = null;
-              writeRaw(runDir, `${participant.id.replace(/:/g, '-')}-${benchCase.id}`, trial, proposal);
+              writeRaw(
+                runDir,
+                `${participant.id.replace(/:/g, '-')}-${benchCase.id}`,
+                trial,
+                proposal,
+              );
               if (attempt > 1) {
                 console.log(`  ✓ recovered on attempt ${attempt}/${maxAttempts}`);
               }
@@ -359,19 +389,21 @@ program
     console.log('\\n--- Phase 2: Evaluation ---');
     for (const { participant, benchCase, trial, result } of plans) {
       if (result.participantError || !result.proposal) {
-         result.timestamps.finishedAt = new Date().toISOString();
-         writeLine(runDir, result);
-         allResults.push(result);
-         continue;
+        result.timestamps.finishedAt = new Date().toISOString();
+        writeLine(runDir, result);
+        allResults.push(result);
+        continue;
       }
-      
-      console.log(`Evaluating [${participant.id}] "${benchCase.id}" (Trial ${trial}/${trials}) ...`);
-      
+
+      console.log(
+        `Evaluating [${participant.id}] "${benchCase.id}" (Trial ${trial}/${trials}) ...`,
+      );
+
       try {
         const normalized = normalizeProposal(result.proposal);
         result.normalization = normalized;
         result.coverage = evaluateCoverage(benchCase, result.proposal);
-        
+
         const resolutionResult = await resolveProposal(
           db,
           sandbox,
@@ -380,11 +412,10 @@ program
           {
             dryRun: isDryRun,
             node:
-              manifest.nodeVersionInE2B !== 'unknown' &&
-              manifest.nodeVersionInE2B !== 'dry-run'
+              manifest.nodeVersionInE2B !== 'unknown' && manifest.nodeVersionInE2B !== 'dry-run'
                 ? manifest.nodeVersionInE2B.replace(/^v/i, '')
                 : suite.runtime.node,
-          }
+          },
         );
         result.packageValidity = resolutionResult.packageValidity;
         result.compatPrediction = resolutionResult.compatPrediction;
@@ -392,7 +423,7 @@ program
         result.resolvedSelections = resolutionResult.resolvedSelections;
 
         if (!result.proposal.selections.length) {
-           result.lurqDiagnosis = 'planning'; 
+          result.lurqDiagnosis = 'planning';
         }
       } catch (err) {
         if (!result.participantError) {
@@ -405,14 +436,16 @@ program
       result.timestamps.finishedAt = new Date().toISOString();
       writeLine(runDir, result);
       allResults.push(result);
-      
+
       if (!result.participantError) {
         const covered = result.coverage.covered;
         const req = result.coverage.required;
         const valid = result.packageValidity.existing;
         const total = valid + result.packageValidity.nonexistent.length;
-        const resolved = result.resolution?.installed ? 'yes' : (isDryRun ? 'dry' : 'no');
-        console.log(`  → Slots: ${covered}/${req} | Pkg: ${valid}/${total} exist | Resolves: ${resolved}`);
+        const resolved = result.resolution?.installed ? 'yes' : isDryRun ? 'dry' : 'no';
+        console.log(
+          `  → Slots: ${covered}/${req} | Pkg: ${valid}/${total} exist | Resolves: ${resolved}`,
+        );
       }
     }
 

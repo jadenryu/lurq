@@ -33,7 +33,12 @@ import { contentHash, type Snapshot } from '../mcpScan/snapshot';
 import { VERSION } from '../core/constants';
 import { resolveApiKey } from '../core/userConfig';
 import { bold, dim, green, red, table, yellow } from './format';
-import { RemoteError, uploadMcpScan, type McpScanUploadResult, type UploadedServer } from './remote';
+import {
+  RemoteError,
+  uploadMcpScan,
+  type McpScanUploadResult,
+  type UploadedServer,
+} from './remote';
 
 export interface McpScanCliOpts {
   json?: boolean;
@@ -79,7 +84,8 @@ function parseThreshold(v: string | undefined): Severity | null {
 function parsePositive(v: string | undefined, name: string, fallback: number, max: number): number {
   if (v === undefined) return fallback;
   const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) throw new Error(`${name} must be a positive number; got "${v}"`);
+  if (!Number.isFinite(n) || n <= 0)
+    throw new Error(`${name} must be a positive number; got "${v}"`);
   return Math.min(n, max);
 }
 
@@ -87,7 +93,15 @@ export interface ServerReport extends Omit<ServerScan, 'snapshot'> {
   snapshot: Snapshot | null;
   analysis: ServerAnalysis | null;
   /** Null on a first scan, with --no-history, or when nothing comparable was read. */
-  sinceLastScan: (Omit<SnapshotDiff, 'contract'> & { at: string; contract: Pick<SnapshotDiff['contract'], 'breaking' | 'removedTools' | 'addedTools' | 'silentDrift' | 'annotationFlips'> }) | null;
+  sinceLastScan:
+    | (Omit<SnapshotDiff, 'contract'> & {
+        at: string;
+        contract: Pick<
+          SnapshotDiff['contract'],
+          'breaking' | 'removedTools' | 'addedTools' | 'silentDrift' | 'annotationFlips'
+        >;
+      })
+    | null;
 }
 
 export interface ScanReport {
@@ -135,9 +149,15 @@ const commandLine = (s: ServerSpec) =>
  * never offered: the user already said no.
  */
 async function confirmProjectServers(specs: ServerSpec[], opts: McpScanCliOpts): Promise<void> {
-  const pending = specs.filter((s) => !s.trusted && s.scope === 'project' && !/declined/.test(s.trustReason));
+  const pending = specs.filter(
+    (s) => !s.trusted && s.scope === 'project' && !/declined/.test(s.trustReason),
+  );
   if (!pending.length || !canPrompt(opts)) return;
-  console.error(yellow(`\n${pending.length} server(s) are committed to this repository and have not been approved:`));
+  console.error(
+    yellow(
+      `\n${pending.length} server(s) are committed to this repository and have not been approved:`,
+    ),
+  );
   for (const s of pending) console.error(`  ${bold(s.alias)}  ${dim(commandLine(s))}`);
   const { confirm } = await import('@inquirer/prompts');
   const yes = await confirm({ message: 'Launch them for this scan?', default: false });
@@ -161,12 +181,18 @@ function comparable(prev: Snapshot, next: Snapshot): DiffInput | null {
   return {
     tools: next.tools,
     prompts: failed.has('prompts') ? prev.prompts : next.prompts,
-    resourceTemplates: failed.has('resourceTemplates') ? prev.resourceTemplates : next.resourceTemplates,
+    resourceTemplates: failed.has('resourceTemplates')
+      ? prev.resourceTemplates
+      : next.resourceTemplates,
     instructions: next.instructions,
   };
 }
 
-function withHistory(scan: ServerScan, analysis: ServerAnalysis | null, useHistory: boolean): ServerReport {
+function withHistory(
+  scan: ServerScan,
+  analysis: ServerAnalysis | null,
+  useHistory: boolean,
+): ServerReport {
   const report: ServerReport = { ...scan, analysis, sinceLastScan: null };
   if (!useHistory || !scan.snapshot) return report;
 
@@ -205,14 +231,25 @@ function withHistory(scan: ServerScan, analysis: ServerAnalysis | null, useHisto
 }
 
 /** Read configs, scan, analyse. Shared by both commands. */
-export async function collectScan(dir: string | undefined, opts: McpScanCliOpts): Promise<ScanReport> {
+export async function collectScan(
+  dir: string | undefined,
+  opts: McpScanCliOpts,
+): Promise<ScanReport> {
   const root = resolve(dir ?? process.cwd());
-  const cfg = readServerConfigs(root, { projectOnly: opts.projectOnly, trustProject: opts.trustProject });
+  const cfg = readServerConfigs(root, {
+    projectOnly: opts.projectOnly,
+    trustProject: opts.trustProject,
+  });
   const notes = [...cfg.notes];
 
   let specs = cfg.servers;
   if (opts.only) {
-    const wanted = new Set(opts.only.split(',').map((s) => s.trim()).filter(Boolean));
+    const wanted = new Set(
+      opts.only
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
     specs = specs.filter((s) => wanted.has(s.alias));
     const missing = [...wanted].filter((w) => !specs.some((s) => s.alias === w));
     if (missing.length) notes.push(`no configured server named ${missing.join(', ')}`);
@@ -220,14 +257,19 @@ export async function collectScan(dir: string | undefined, opts: McpScanCliOpts)
 
   await confirmProjectServers(specs, opts);
 
-  const timeoutMs = parsePositive(opts.timeout, '--timeout', DEFAULTS.connectTimeoutMs / 1000, 600) * 1000;
-  const concurrency = Math.floor(parsePositive(opts.concurrency, '--concurrency', DEFAULTS.concurrency, 16));
+  const timeoutMs =
+    parsePositive(opts.timeout, '--timeout', DEFAULTS.connectTimeoutMs / 1000, 600) * 1000;
+  const concurrency = Math.floor(
+    parsePositive(opts.concurrency, '--concurrency', DEFAULTS.concurrency, 16),
+  );
 
   const ctl = new AbortController();
   const onSignal = () => {
     if (ctl.signal.aborted) process.exit(130);
     ctl.abort();
-    console.error(yellow('\nstopping: closing the servers already running (Ctrl-C again to force)'));
+    console.error(
+      yellow('\nstopping: closing the servers already running (Ctrl-C again to force)'),
+    );
   };
   process.on('SIGINT', onSignal);
 
@@ -241,16 +283,21 @@ export async function collectScan(dir: string | undefined, opts: McpScanCliOpts)
       signal: ctl.signal,
       onResult: (s) => {
         if (!progress) return;
-        const mark = s.status === 'ok' ? green('✓') : s.status === 'partial' ? yellow('~') : dim('·');
+        const mark =
+          s.status === 'ok' ? green('✓') : s.status === 'partial' ? yellow('~') : dim('·');
         const what = s.snapshot ? `${s.snapshot.tools.length} tools` : s.status;
-        console.error(`${mark} ${s.alias} ${dim(`${what} (${(s.durationMs / 1000).toFixed(1)}s)`)}`);
+        console.error(
+          `${mark} ${s.alias} ${dim(`${what} (${(s.durationMs / 1000).toFixed(1)}s)`)}`,
+        );
       },
     });
   } finally {
     process.off('SIGINT', onSignal);
   }
 
-  const servers = scans.map((s) => withHistory(s, s.snapshot ? analyzeServer(s.snapshot) : null, opts.history !== false));
+  const servers = scans.map((s) =>
+    withHistory(s, s.snapshot ? analyzeServer(s.snapshot) : null, opts.history !== false),
+  );
   const stackScan = analyzeStackScan(
     // Servers the user chose not to run are not part of the namespace being
     // assembled; servers that failed are, and make the stack unknown.
@@ -262,7 +309,9 @@ export async function collectScan(dir: string | undefined, opts: McpScanCliOpts)
   const severities: { severity: Severity }[] = [
     ...servers.flatMap((s) => s.analysis?.findings ?? []),
     ...stackScan.findings,
-    ...servers.flatMap((s) => (s.sinceLastScan && !s.sinceLastScan.unchanged ? [s.sinceLastScan] : [])),
+    ...servers.flatMap((s) =>
+      s.sinceLastScan && !s.sinceLastScan.unchanged ? [s.sinceLastScan] : [],
+    ),
   ];
 
   return {
@@ -283,7 +332,8 @@ export async function collectScan(dir: string | undefined, opts: McpScanCliOpts)
   };
 }
 
-const sevColour = (s: Severity) => (s === 'critical' || s === 'high' ? red : s === 'moderate' ? yellow : dim);
+const sevColour = (s: Severity) =>
+  s === 'critical' || s === 'high' ? red : s === 'moderate' ? yellow : dim;
 
 function ago(iso: string): string {
   const mins = Math.round((Date.now() - Date.parse(iso)) / 60_000);
@@ -294,7 +344,9 @@ function ago(iso: string): string {
 }
 
 function does(a: ServerAnalysis | null): string {
-  const caps = Object.entries(a?.stats.capabilities ?? {}).sort((x, y) => (y[1] ?? 0) - (x[1] ?? 0)).map(([c]) => c);
+  const caps = Object.entries(a?.stats.capabilities ?? {})
+    .sort((x, y) => (y[1] ?? 0) - (x[1] ?? 0))
+    .map(([c]) => c);
   if (!caps.length) return dim('—');
   return caps.length > 2 ? `${caps.slice(0, 2).join(', ')} +${caps.length - 2}` : caps.join(', ');
 }
@@ -308,7 +360,9 @@ function statusCell(s: ServerReport): string {
 
 function render(report: ScanReport): void {
   console.log(bold(report.root));
-  console.log(dim(`read ${report.filesRead.length} config file(s): ${report.filesRead.join(', ') || '—'}`));
+  console.log(
+    dim(`read ${report.filesRead.length} config file(s): ${report.filesRead.join(', ') || '—'}`),
+  );
   console.log('');
 
   console.log(
@@ -320,7 +374,11 @@ function render(report: ScanReport): void {
         statusCell(s),
         s.analysis ? String(s.analysis.stats.tools) : '—',
         s.analysis ? String(s.analysis.stats.writes) : '—',
-        s.analysis ? (s.analysis.stats.destroys ? red(String(s.analysis.stats.destroys)) : '0') : '—',
+        s.analysis
+          ? s.analysis.stats.destroys
+            ? red(String(s.analysis.stats.destroys))
+            : '0'
+          : '—',
         does(s.analysis),
       ]),
     ),
@@ -333,26 +391,37 @@ function render(report: ScanReport): void {
   );
   const changes = report.servers.flatMap((s) => {
     const acc = accountSince.get(s.alias);
-    if (acc) return [{ alias: s.alias, severity: acc.severity as Severity, at: acc.at, summary: acc.summary }];
+    if (acc)
+      return [
+        { alias: s.alias, severity: acc.severity as Severity, at: acc.at, summary: acc.summary },
+      ];
     const d = s.sinceLastScan;
-    return d && !d.unchanged ? [{ alias: s.alias, severity: d.severity, at: d.at, summary: d.summary }] : [];
+    return d && !d.unchanged
+      ? [{ alias: s.alias, severity: d.severity, at: d.at, summary: d.summary }]
+      : [];
   });
   if (changes.length) {
     console.log(`\n${bold('Since the last scan')}`);
     for (const c of changes) {
-      console.log(`  ${sevColour(c.severity)(c.severity.toUpperCase().padEnd(8))} ${bold(c.alias)} ${dim(ago(c.at))}  ${c.summary}`);
+      console.log(
+        `  ${sevColour(c.severity)(c.severity.toUpperCase().padEnd(8))} ${bold(c.alias)} ${dim(ago(c.at))}  ${c.summary}`,
+      );
     }
   }
 
   const findings = sortFindings([
-    ...report.servers.flatMap((s) => (s.analysis?.findings ?? []).map((f) => ({ ...f, server: s.alias }))),
+    ...report.servers.flatMap((s) =>
+      (s.analysis?.findings ?? []).map((f) => ({ ...f, server: s.alias })),
+    ),
     ...report.findings,
   ]).filter((f) => f.severity !== 'info');
   if (findings.length) {
     console.log(`\n${bold('Findings')}`);
     for (const f of findings.slice(0, 40)) {
       const where = [f.server, f.tool].filter(Boolean).join(' › ');
-      console.log(`  ${sevColour(f.severity)(f.severity.toUpperCase().padEnd(8))} ${bold(where || f.where)}  ${f.detail}`);
+      console.log(
+        `  ${sevColour(f.severity)(f.severity.toUpperCase().padEnd(8))} ${bold(where || f.where)}  ${f.detail}`,
+      );
       if (f.evidence) console.log(`           ${dim(f.evidence)}`);
     }
     if (findings.length > 40) console.log(dim(`  … ${findings.length - 40} more (use --json)`));
@@ -370,19 +439,30 @@ function render(report: ScanReport): void {
   console.log('');
   console.log(dim(report.stack.note));
   if (isCrowded(report.stack)) {
-    console.log(yellow(`~${report.stack.estimatedContextTokens!.toLocaleString()} tokens of tool schema ride in every request — worth trimming`));
+    console.log(
+      yellow(
+        `~${report.stack.estimatedContextTokens!.toLocaleString()} tokens of tool schema ride in every request — worth trimming`,
+      ),
+    );
   }
   for (const n of report.notes) console.log(dim(`· ${n}`));
 
   const acc = report.account;
   if (acc) {
     if (acc.recorded) {
-      console.log(dim(`recorded ${acc.recorded} server(s) to your account${acc.changed ? `, ${acc.changed} changed since the last upload` : ''}`));
+      console.log(
+        dim(
+          `recorded ${acc.recorded} server(s) to your account${acc.changed ? `, ${acc.changed} changed since the last upload` : ''}`,
+        ),
+      );
     }
-    for (const r of acc.rejected) console.log(yellow(`not recorded: ${r.alias ?? 'a server'}: ${r.reason}`));
+    for (const r of acc.rejected)
+      console.log(yellow(`not recorded: ${r.alias ?? 'a server'}: ${r.reason}`));
     if (acc.error) console.log(yellow(`could not record this scan to your account: ${acc.error}`));
   } else if (!resolveApiKey()) {
-    console.log(dim('run `lurq setup` to keep this history across machines and see it in the dashboard'));
+    console.log(
+      dim('run `lurq setup` to keep this history across machines and see it in the dashboard'),
+    );
   }
 }
 
@@ -457,7 +537,10 @@ export function chunkUploads<T>(items: T[], maxBytes = 3_000_000, maxCount = 50)
  * exhausted quota or an unreachable service should read as "not recorded",
  * not as a broken scanner.
  */
-export async function syncToAccount(report: ScanReport, opts: McpScanCliOpts): Promise<AccountSync | null> {
+export async function syncToAccount(
+  report: ScanReport,
+  opts: McpScanCliOpts,
+): Promise<AccountSync | null> {
   if (opts.upload === false || !resolveApiKey()) return null;
   const servers = report.servers.filter((s) => !NOT_UPLOADED.has(s.status)).map(toUpload);
   if (!servers.length) return null;
@@ -474,7 +557,8 @@ export async function syncToAccount(report: ScanReport, opts: McpScanCliOpts): P
       out.results.push(...r.servers);
       out.rejected.push(...r.rejected.map((x) => ({ alias: x.alias, reason: x.reason })));
     } catch (err) {
-      out.error = err instanceof RemoteError ? err.message : err instanceof Error ? err.message : String(err);
+      out.error =
+        err instanceof RemoteError ? err.message : err instanceof Error ? err.message : String(err);
       break;
     }
   }
@@ -490,7 +574,10 @@ export async function syncToAccount(report: ScanReport, opts: McpScanCliOpts): P
  * failure: there was nothing to record. A missing key is, because in CI it
  * means every scan has been going nowhere.
  */
-export function uploadProblem(report: Pick<ScanReport, 'account'>, opts: McpScanCliOpts): string | null {
+export function uploadProblem(
+  report: Pick<ScanReport, 'account'>,
+  opts: McpScanCliOpts,
+): string | null {
   if (!opts.requireUpload) return null;
   if (!resolveApiKey()) return 'no API key is configured; set LURQ_API_KEY';
   const acc = report.account;
@@ -514,7 +601,9 @@ export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts):
   if (report.account) {
     report.worst = worst([
       ...(report.worst ? [{ severity: report.worst }] : []),
-      ...report.account.results.flatMap((r) => (r.since ? [{ severity: r.since.severity as Severity }] : [])),
+      ...report.account.results.flatMap((r) =>
+        r.since ? [{ severity: r.since.severity as Severity }] : [],
+      ),
     ]);
   }
   report.uploadProblem = uploadProblem(report, opts);
@@ -540,7 +629,9 @@ export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts):
     process.exitCode = 1;
   }
   if (report.uploadProblem) {
-    console.error(red(`upload required, and the scan was not fully recorded: ${report.uploadProblem}`));
+    console.error(
+      red(`upload required, and the scan was not fully recorded: ${report.uploadProblem}`),
+    );
     process.exitCode = 1;
   }
   if (opts.githubIssue) await syncDashboardIssue(report);
@@ -550,11 +641,17 @@ export async function runMcpScan(dir: string | undefined, opts: McpScanCliOpts):
  * Refresh the repository's dashboard issue. Never fails the job: the scan and
  * its exit code are the gate; the issue is a view of them.
  */
-export async function syncDashboardIssue(report: ScanReport, env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  const { githubEnvFrom, renderDashboardIssue, upsertDashboardIssue } = await import('../github/dashboardIssue');
+export async function syncDashboardIssue(
+  report: ScanReport,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  const { githubEnvFrom, renderDashboardIssue, upsertDashboardIssue } =
+    await import('../github/dashboardIssue');
   const gh = githubEnvFrom(env);
   if (!gh) {
-    console.error(yellow('--github-issue needs GITHUB_TOKEN and GITHUB_REPOSITORY; set by GitHub Actions'));
+    console.error(
+      yellow('--github-issue needs GITHUB_TOKEN and GITHUB_REPOSITORY; set by GitHub Actions'),
+    );
     return;
   }
   let plan: import('./remote').RemotePlan | null = null;
@@ -569,7 +666,9 @@ export async function syncDashboardIssue(report: ScanReport, env: NodeJS.Process
   } else {
     planNote = 'Add a LURQ_API_KEY secret to include dependency upgrades here.';
   }
-  const runUrl = env.GITHUB_RUN_ID ? `${env.GITHUB_SERVER_URL ?? 'https://github.com'}/${gh.repo}/actions/runs/${env.GITHUB_RUN_ID}` : null;
+  const runUrl = env.GITHUB_RUN_ID
+    ? `${env.GITHUB_SERVER_URL ?? 'https://github.com'}/${gh.repo}/actions/runs/${env.GITHUB_RUN_ID}`
+    : null;
   const rendered = renderDashboardIssue({
     repo: gh.repo,
     generatedAt: new Date(),
@@ -582,9 +681,17 @@ export async function syncDashboardIssue(report: ScanReport, env: NodeJS.Process
   try {
     const r = await upsertDashboardIssue(gh, rendered);
     const what = r.action === 'closed' ? 'is closed, so it was left alone' : r.action;
-    console.error(dim(`dashboard issue ${what}${r.url ? `: ${r.url}` : ''}${r.commented ? ' (commented on new urgent findings)' : ''}`));
+    console.error(
+      dim(
+        `dashboard issue ${what}${r.url ? `: ${r.url}` : ''}${r.commented ? ' (commented on new urgent findings)' : ''}`,
+      ),
+    );
   } catch (err) {
-    console.error(yellow(`::warning::could not update the lurq dashboard issue: ${err instanceof Error ? err.message : String(err)}`));
+    console.error(
+      yellow(
+        `::warning::could not update the lurq dashboard issue: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
   }
 }
 
@@ -594,7 +701,10 @@ export async function syncDashboardIssue(report: ScanReport, env: NodeJS.Process
  * It used to read probed surfaces from a database, which a user with only an
  * API key does not have, and could only ever see npm servers.
  */
-export async function runMcpStackLive(dir: string | undefined, opts: McpScanCliOpts): Promise<void> {
+export async function runMcpStackLive(
+  dir: string | undefined,
+  opts: McpScanCliOpts,
+): Promise<void> {
   const report = await collectScan(dir, { ...opts, history: false });
   if (opts.json) {
     console.log(JSON.stringify({ ...report.stack, findings: report.findings }, null, 2));
@@ -604,7 +714,8 @@ export async function runMcpStackLive(dir: string | undefined, opts: McpScanCliO
     console.log(dim(`no MCP servers configured for ${report.root}`));
     return;
   }
-  const colour = report.stack.overall === 'conflict' ? red : report.stack.overall === 'unknown' ? yellow : green;
+  const colour =
+    report.stack.overall === 'conflict' ? red : report.stack.overall === 'unknown' ? yellow : green;
   console.log(`${bold(report.root)}  ${colour(report.stack.overall)}`);
   for (const c of report.stack.collisions) {
     const tag = c.writes ? red('writes') : yellow('read-only');
@@ -621,13 +732,21 @@ export async function runMcpStackLive(dir: string | undefined, opts: McpScanCliO
         statusCell(s),
         s.analysis ? String(s.analysis.stats.tools) : '—',
         s.analysis ? String(s.analysis.stats.writes) : '—',
-        s.analysis ? (s.analysis.stats.destroys ? red(String(s.analysis.stats.destroys)) : '0') : '—',
+        s.analysis
+          ? s.analysis.stats.destroys
+            ? red(String(s.analysis.stats.destroys))
+            : '0'
+          : '—',
       ]),
     ),
   );
   console.log(dim(report.stack.note));
   if (isCrowded(report.stack)) {
-    console.log(yellow(`~${report.stack.estimatedContextTokens!.toLocaleString()} tokens of tool schema ride in every request — worth trimming`));
+    console.log(
+      yellow(
+        `~${report.stack.estimatedContextTokens!.toLocaleString()} tokens of tool schema ride in every request — worth trimming`,
+      ),
+    );
   }
 }
 
@@ -658,10 +777,23 @@ export async function runMcpCi(dir: string | undefined, opts: McpCiOpts): Promis
   const root = resolve(dir ?? process.cwd());
   const cfg = readServerConfigs(root, { projectOnly: true, trustProject: true, env: {} });
 
-  const { MCP_SCAN_WORKFLOW_PATH, renderMcpScanWorkflow, secretNameFor } = await import('../github/mcpScanWorkflow');
-  const secrets = [...new Set(cfg.servers.flatMap((s) => s.unresolved.filter((v) => !v.startsWith('input:'))))];
-  const needsUv = cfg.servers.some((s) => s.registry === 'pypi' || /^(uvx|uv|pipx)$/.test((s.command ?? '').split(/[\\/]/).pop() ?? ''));
-  const yaml = renderMcpScanWorkflow({ cron: opts.cron, failOn: threshold ?? 'none', secrets, needsUv, githubIssue: opts.issue !== false, sarif: opts.sarif === true });
+  const { MCP_SCAN_WORKFLOW_PATH, renderMcpScanWorkflow, secretNameFor } =
+    await import('../github/mcpScanWorkflow');
+  const secrets = [
+    ...new Set(cfg.servers.flatMap((s) => s.unresolved.filter((v) => !v.startsWith('input:')))),
+  ];
+  const needsUv = cfg.servers.some(
+    (s) =>
+      s.registry === 'pypi' || /^(uvx|uv|pipx)$/.test((s.command ?? '').split(/[\\/]/).pop() ?? ''),
+  );
+  const yaml = renderMcpScanWorkflow({
+    cron: opts.cron,
+    failOn: threshold ?? 'none',
+    secrets,
+    needsUv,
+    githubIssue: opts.issue !== false,
+    sarif: opts.sarif === true,
+  });
 
   if (opts.print) {
     process.stdout.write(yaml);
@@ -679,18 +811,33 @@ export async function runMcpCi(dir: string | undefined, opts: McpCiOpts): Promis
 
   console.log(`wrote ${MCP_SCAN_WORKFLOW_PATH}`);
   if (cfg.servers.length === 0) {
-    console.log(yellow('no MCP servers are committed to this repository yet; the workflow scans only committed configs (.mcp.json)'));
+    console.log(
+      yellow(
+        'no MCP servers are committed to this repository yet; the workflow scans only committed configs (.mcp.json)',
+      ),
+    );
   } else {
-    console.log(dim(`scans ${cfg.servers.length} committed server(s): ${cfg.servers.map((s) => s.alias).join(', ')}`));
+    console.log(
+      dim(
+        `scans ${cfg.servers.length} committed server(s): ${cfg.servers.map((s) => s.alias).join(', ')}`,
+      ),
+    );
   }
   if (opts.sarif) {
     // Worth saying before the first red run: the upload step fails the job when
     // code scanning is off, and on a private repo that needs Advanced Security.
     console.log(
-      dim('findings upload to code scanning; enable it under Settings → Code security, or drop --sarif'),
+      dim(
+        'findings upload to code scanning; enable it under Settings → Code security, or drop --sarif',
+      ),
     );
   }
   console.log('add these repository secrets:');
-  console.log(`  ${bold('LURQ_API_KEY')}  ${dim('your lurq key, so scans are recorded to your account')}`);
-  for (const s of secrets.sort()) console.log(`  ${bold(secretNameFor(s))}${secretNameFor(s) !== s ? dim(`  (read by the server as ${s})`) : ''}`);
+  console.log(
+    `  ${bold('LURQ_API_KEY')}  ${dim('your lurq key, so scans are recorded to your account')}`,
+  );
+  for (const s of secrets.sort())
+    console.log(
+      `  ${bold(secretNameFor(s))}${secretNameFor(s) !== s ? dim(`  (read by the server as ${s})`) : ''}`,
+    );
 }

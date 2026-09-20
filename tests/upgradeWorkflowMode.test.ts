@@ -25,9 +25,11 @@ interface Step {
 }
 
 const job = (opts: WorkflowOptions = {}) =>
-  (parse(renderWorkflow(opts)) as {
-    jobs: { upgrade: { steps: Step[]; env: Record<string, string> } };
-  }).jobs.upgrade;
+  (
+    parse(renderWorkflow(opts)) as {
+      jobs: { upgrade: { steps: Step[]; env: Record<string, string> } };
+    }
+  ).jobs.upgrade;
 
 const steps = (opts: WorkflowOptions = {}) => job(opts).steps;
 const resolveStep = (opts: WorkflowOptions = {}) =>
@@ -119,7 +121,11 @@ describe('fix mode: a pull request with no model', () => {
   it('runs the install, the deterministic edit and the pull request', () => {
     // These three are the whole of `fix`: install so the bump cannot desync the
     // lockfile, apply what the package proves, open the PR.
-    for (const name of ['Install dependencies', 'Apply what needs no judgement', 'Open pull request']) {
+    for (const name of [
+      'Install dependencies',
+      'Apply what needs no judgement',
+      'Open pull request',
+    ]) {
       expect(gateOf(name), name).toContain("env.LURQ_MODE == 'fix'");
     }
   });

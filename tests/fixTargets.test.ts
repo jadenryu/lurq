@@ -34,11 +34,7 @@ describe('targetsFromUpgrades', () => {
 
   it('drops entries missing a version, which cannot be diffed', () => {
     expect(
-      targetsFromUpgrades([
-        up({ fromVersion: '' }),
-        up({ toVersion: '' }),
-        up({ package: '' }),
-      ]),
+      targetsFromUpgrades([up({ fromVersion: '' }), up({ toVersion: '' }), up({ package: '' })]),
     ).toEqual([]);
   });
 

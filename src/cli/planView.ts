@@ -7,7 +7,10 @@
 import type { PlanOutput } from '../mcp/plan';
 
 function esc(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+  return s.replace(
+    /[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
+  );
 }
 
 function slotRows(plan: PlanOutput): string {
@@ -19,7 +22,8 @@ function slotRows(plan: PlanOutput): string {
           ? `<a href="${esc(rec.repoUrl)}" target="_blank" rel="noreferrer">${esc(rec.name)}</a>`
           : esc(rec.name)
         : '<span class="muted">no match</span>';
-      const alts = s.alternatives.map((a) => esc(a.name)).join(', ') || '<span class="muted">-</span>';
+      const alts =
+        s.alternatives.map((a) => esc(a.name)).join(', ') || '<span class="muted">-</span>';
       return `<tr>
         <td>${esc(s.need)}</td>
         <td><span class="layer">${esc(s.layer)}</span></td>

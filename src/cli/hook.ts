@@ -37,7 +37,20 @@ const MANAGERS = new Map([
 ]);
 
 /** Flags whose next token is a value, never a package. Guessing wrong here only skips a check. */
-const VALUE_FLAGS = new Set(['--prefix', '--registry', '--filter', '-F', '-C', '--dir', '--cwd', '--workspace', '-w', '--tag', '--cache', '--userconfig']);
+const VALUE_FLAGS = new Set([
+  '--prefix',
+  '--registry',
+  '--filter',
+  '-F',
+  '-C',
+  '--dir',
+  '--cwd',
+  '--workspace',
+  '-w',
+  '--tag',
+  '--cache',
+  '--userconfig',
+]);
 
 /** Most names verified per command, so a pasted list cannot stall the agent. */
 const MAX_NAMES = 10;
@@ -45,7 +58,8 @@ const VERIFY_TIMEOUT_MS = 8_000;
 
 /** `zod@^3` → `zod`, `@scope/pkg@1` → `@scope/pkg`. Null for paths, URLs, git, tarballs and aliases. */
 export function specName(spec: string): string | null {
-  if (/[:/\\]/.test(spec.replace(/^@[^/]+\//, '')) || /\.(tgz|tar|tar\.gz)$/.test(spec)) return null;
+  if (/[:/\\]/.test(spec.replace(/^@[^/]+\//, '')) || /\.(tgz|tar|tar\.gz)$/.test(spec))
+    return null;
   const at = spec.indexOf('@', 1);
   const name = at === -1 ? spec : spec.slice(0, at);
   return isValidNpmName(name) ? name : null;
@@ -98,13 +112,18 @@ const RUNNERS: [string, string | null][] = [
  * (`npx tsc`, `npx vitest` in a repo that has them) are skipped: those never
  * touch the registry, and `tsc` the package is not the TypeScript compiler.
  */
-export function runTargets(command: string, hasLocalBin: (name: string) => boolean = () => false): string[] {
+export function runTargets(
+  command: string,
+  hasLocalBin: (name: string) => boolean = () => false,
+): string[] {
   const names = new Set<string>();
   for (const segment of command.split(/&&|\|\||[;|\n]/)) {
     const tokens = segment.trim().split(/\s+/);
     const i = commandStart(tokens);
     if (i === -1) continue;
-    const runner = RUNNERS.find(([bin, verb]) => tokens[i] === bin && (verb === null || tokens[i + 1] === verb));
+    const runner = RUNNERS.find(
+      ([bin, verb]) => tokens[i] === bin && (verb === null || tokens[i + 1] === verb),
+    );
     if (!runner) continue;
     for (let j = i + (runner[1] ? 2 : 1); j < tokens.length; j++) {
       const t = tokens[j]!;
@@ -125,7 +144,12 @@ export function runTargets(command: string, hasLocalBin: (name: string) => boole
   return [...names];
 }
 
-const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
+const DEP_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+] as const;
 
 /** Registry dependencies `after` declares that `before` did not. Null when either side is not a package.json object. */
 export function addedDependencies(before: string, after: string): string[] | null {
@@ -167,7 +191,8 @@ export function decide(
   opts: { deny?: boolean } = {},
 ): HookDecision | null {
   const list = (xs: typeof checked) => xs.map((x) => x.name).join(', ');
-  const why = (xs: typeof checked) => xs.map((x) => `${x.name}: ${clip(x.verdict.reasons[0] ?? x.verdict.scope)}`).join('; ');
+  const why = (xs: typeof checked) =>
+    xs.map((x) => `${x.name}: ${clip(x.verdict.reasons[0] ?? x.verdict.scope)}`).join('; ');
 
   // A runner fetching a name that does not exist just fails; only an install or a declared dependency is stopped.
   const invalid = opts.deny === false ? [] : checked.filter((c) => c.verdict.level === 'invalid');
@@ -192,7 +217,11 @@ export function decide(
 // ── Measured: once per thing per session ─────────────────────────────────────
 
 /** Keys from `keys` this session has not been nudged about yet, recorded as seen. Empty without a session id. */
-export function unseen(sessionId: unknown, keys: string[], dir = join(tmpdir(), 'lurq-hooks')): string[] {
+export function unseen(
+  sessionId: unknown,
+  keys: string[],
+  dir = join(tmpdir(), 'lurq-hooks'),
+): string[] {
   if (typeof sessionId !== 'string' || !sessionId || keys.length === 0) return [];
   const path = join(dir, `${sessionId.replace(/[^\w-]/g, '').slice(0, 80)}.json`);
   let seen: string[] = [];
@@ -252,8 +281,15 @@ type Edit = { old_string?: unknown; new_string?: unknown; replace_all?: unknown 
 export function applyEdits(text: string, edits: Edit[]): string | null {
   let out = text;
   for (const e of edits) {
-    if (typeof e.old_string !== 'string' || typeof e.new_string !== 'string' || !out.includes(e.old_string)) return null;
-    out = e.replace_all ? out.split(e.old_string).join(e.new_string) : out.replace(e.old_string, () => e.new_string as string);
+    if (
+      typeof e.old_string !== 'string' ||
+      typeof e.new_string !== 'string' ||
+      !out.includes(e.old_string)
+    )
+      return null;
+    out = e.replace_all
+      ? out.split(e.old_string).join(e.new_string)
+      : out.replace(e.old_string, () => e.new_string as string);
   }
   return out;
 }
@@ -266,7 +302,11 @@ const readIfExists = (path: string): string => (existsSync(path) ? readFileSync(
  * way Edit is; a hunk that does not apply drops that file, so it goes unchecked
  * rather than wrongly checked.
  */
-export function patchedPackageJsons(patch: string, cwd: string, read = readIfExists): { before: string; after: string }[] {
+export function patchedPackageJsons(
+  patch: string,
+  cwd: string,
+  read = readIfExists,
+): { before: string; after: string }[] {
   const files: { before: string; after: string }[] = [];
   for (const section of patch.split(/^\*\*\* (?=(?:Add|Update|Delete) File: )/m).slice(1)) {
     const [header = '', ...rest] = section.split('\n');
@@ -274,7 +314,13 @@ export function patchedPackageJsons(patch: string, cwd: string, read = readIfExi
     if (!m || basename(m[2]!) !== 'package.json') continue;
     const body = rest.filter((l) => !l.startsWith('*** '));
     if (m[1] === 'Add') {
-      files.push({ before: '', after: body.filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n') });
+      files.push({
+        before: '',
+        after: body
+          .filter((l) => l.startsWith('+'))
+          .map((l) => l.slice(1))
+          .join('\n'),
+      });
       continue;
     }
     const before = read(isAbsolute(m[2]!) ? m[2]! : join(cwd, m[2]!));
@@ -285,8 +331,14 @@ export function patchedPackageJsons(patch: string, cwd: string, read = readIfExi
       .map((h) => h.split('\n').filter((l) => /^[ +-]/.test(l)))
       .filter((h) => h.length > 0)
       .map((h) => ({
-        old_string: h.filter((l) => !l.startsWith('+')).map((l) => l.slice(1)).join('\n'),
-        new_string: h.filter((l) => !l.startsWith('-')).map((l) => l.slice(1)).join('\n'),
+        old_string: h
+          .filter((l) => !l.startsWith('+'))
+          .map((l) => l.slice(1))
+          .join('\n'),
+        new_string: h
+          .filter((l) => !l.startsWith('-'))
+          .map((l) => l.slice(1))
+          .join('\n'),
       }));
     const after = applyEdits(before, edits);
     if (after !== null) files.push({ before, after });
@@ -305,7 +357,11 @@ interface ToolInput {
 }
 
 /** What a tool call would install (deny-able) and run (ask-only). */
-function targets(tool: unknown, input: ToolInput, cwd: string): { installs: string[]; runs: string[] } {
+function targets(
+  tool: unknown,
+  input: ToolInput,
+  cwd: string,
+): { installs: string[]; runs: string[] } {
   const none = { installs: [], runs: [] };
   if (typeof input.command === 'string' && tool === 'Bash') {
     return {
@@ -314,14 +370,19 @@ function targets(tool: unknown, input: ToolInput, cwd: string): { installs: stri
     };
   }
   if (typeof input.command === 'string' && tool === 'apply_patch') {
-    const installs = patchedPackageJsons(input.command, cwd).flatMap((f) => addedDependencies(f.before, f.after) ?? []);
+    const installs = patchedPackageJsons(input.command, cwd).flatMap(
+      (f) => addedDependencies(f.before, f.after) ?? [],
+    );
     return { installs: [...new Set(installs)], runs: [] };
   }
-  if (typeof input.file_path !== 'string' || basename(input.file_path) !== 'package.json') return none;
+  if (typeof input.file_path !== 'string' || basename(input.file_path) !== 'package.json')
+    return none;
   const before = readIfExists(input.file_path);
   const after =
     tool === 'Write'
-      ? typeof input.content === 'string' ? input.content : null
+      ? typeof input.content === 'string'
+        ? input.content
+        : null
       : tool === 'Edit'
         ? applyEdits(before, [input])
         : tool === 'MultiEdit' && Array.isArray(input.edits)
@@ -341,7 +402,10 @@ const usageNudge = (names: string[]) =>
 
 /** The usage nudge for names this session has not been nudged about. */
 function freshUsage(sessionId: unknown, names: string[]): string[] {
-  return unseen(sessionId, names.map((n) => `usage:${n}`)).map((k) => k.slice('usage:'.length));
+  return unseen(
+    sessionId,
+    names.map((n) => `usage:${n}`),
+  ).map((k) => k.slice('usage:'.length));
 }
 
 async function preToolUse(input: Record<string, any>, nudge: boolean): Promise<Outcome | null> {
@@ -353,22 +417,35 @@ async function preToolUse(input: Record<string, any>, nudge: boolean): Promise<O
   const { callTool } = await import('./remote');
   const settled = await Promise.allSettled(
     names.map((name) =>
-      callTool<{ verdict?: SecurityVerdict }>('verify', { package: name }, { timeoutMs: VERIFY_TIMEOUT_MS }).then(
-        (r) => ({ name, verdict: r.verdict }),
-      ),
+      callTool<{ verdict?: SecurityVerdict }>(
+        'verify',
+        { package: name },
+        { timeoutMs: VERIFY_TIMEOUT_MS },
+      ).then((r) => ({ name, verdict: r.verdict })),
     ),
   );
   const checked = settled.flatMap((s) =>
-    s.status === 'fulfilled' && s.value.verdict ? [{ name: s.value.name, verdict: s.value.verdict }] : [],
+    s.status === 'fulfilled' && s.value.verdict
+      ? [{ name: s.value.name, verdict: s.value.verdict }]
+      : [],
   );
   const installed = checked.filter((c) => installs.includes(c.name));
-  const decision = decide(installed) ?? decide(checked.filter((c) => !installs.includes(c.name)), { deny: false });
+  const decision =
+    decide(installed) ??
+    decide(
+      checked.filter((c) => !installs.includes(c.name)),
+      { deny: false },
+    );
   if (decision) return { decision };
   if (!nudge) return null;
 
-  const clean = installed.filter((c) => c.verdict.level !== 'invalid' && c.verdict.level !== 'high').map((c) => c.name);
+  const clean = installed
+    .filter((c) => c.verdict.level !== 'invalid' && c.verdict.level !== 'high')
+    .map((c) => c.name);
   const fresh = freshUsage(input.session_id, clean);
-  return fresh.length ? { context: `lurq verified ${fresh.join(', ')} before this ran. ${usageNudge(fresh)}` } : null;
+  return fresh.length
+    ? { context: `lurq verified ${fresh.join(', ')} before this ran. ${usageNudge(fresh)}` }
+    : null;
 }
 
 /** Cursor's nudge, once the install has run (its pre-shell hook cannot add context). */
@@ -376,7 +453,9 @@ function postToolUse(input: Record<string, any>): Outcome | null {
   const command = input.tool_input?.command;
   if (typeof command !== 'string') return null;
   const fresh = freshUsage(input.session_id, installTargets(command));
-  return fresh.length ? { context: `lurq checked ${fresh.join(', ')} before install. ${usageNudge(fresh)}` } : null;
+  return fresh.length
+    ? { context: `lurq checked ${fresh.join(', ')} before install. ${usageNudge(fresh)}` }
+    : null;
 }
 
 // ── session-start ────────────────────────────────────────────────────────────
@@ -389,9 +468,10 @@ async function sessionStart(input: Record<string, any>, agent: HookAgent): Promi
   const { apiKey, getAlerts } = await import('./remote');
   apiKey(); // No key, no lurq tools: say nothing rather than advertise ones that will fail.
   // The agent rides along so session starts can be told apart by agent, named the way setup names it.
-  const alerts = await getAlerts({ timeoutMs: 3_000, agent: agent === 'claude' ? 'claude-code' : agent }).catch(
-    () => null,
-  );
+  const alerts = await getAlerts({
+    timeoutMs: 3_000,
+    agent: agent === 'claude' ? 'claude-code' : agent,
+  }).catch(() => null);
   const text = [isJsProject(input.cwd) ? brief(agent) : null, alerts].filter(Boolean).join('\n\n');
   return text ? { context: text } : null;
 }
@@ -399,8 +479,16 @@ async function sessionStart(input: Record<string, any>, agent: HookAgent): Promi
 function prompt(input: Record<string, any>): Outcome | null {
   if (typeof input.prompt !== 'string' || !isJsProject(input.cwd)) return null;
   const tips = promptTips(input.prompt);
-  const fresh = new Set(unseen(input.session_id, tips.map((t) => t.kind)));
-  const text = tips.filter((t) => fresh.has(t.kind)).map((t) => t.tip).join('\n');
+  const fresh = new Set(
+    unseen(
+      input.session_id,
+      tips.map((t) => t.kind),
+    ),
+  );
+  const text = tips
+    .filter((t) => fresh.has(t.kind))
+    .map((t) => t.tip)
+    .join('\n');
   return text ? { context: text } : null;
 }
 
@@ -427,13 +515,21 @@ const CLAUDE_EVENT: Record<string, string> = {
 };
 
 /** An outcome in the agent's wire format, or null for no output. */
-export function render(agent: HookAgent, event: string, outcome: Outcome | null): Record<string, unknown> | null {
+export function render(
+  agent: HookAgent,
+  event: string,
+  outcome: Outcome | null,
+): Record<string, unknown> | null {
   if (!outcome) return null;
   const { decision, context } = outcome;
   if (agent === 'cursor') {
     if (decision) {
       const message = decision.permissionDecisionReason;
-      return { permission: decision.permissionDecision, user_message: message, agent_message: message };
+      return {
+        permission: decision.permissionDecision,
+        user_message: message,
+        agent_message: message,
+      };
     }
     return context ? { additional_context: context } : null;
   }

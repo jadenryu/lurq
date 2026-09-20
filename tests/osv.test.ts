@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { installKey, queryVulnerableInstalls } from '../src/ingestion/sources/osv';
 
 /** A fetch stub returning one OSV `querybatch` response per call. */
-function stubFetch(handler: (body: { queries: { version: string; package: { name: string } }[] }) => unknown) {
+function stubFetch(
+  handler: (body: { queries: { version: string; package: { name: string } }[] }) => unknown,
+) {
   return (async (_url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? '{}'));
     return new Response(JSON.stringify(handler(body)), {

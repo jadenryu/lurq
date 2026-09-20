@@ -161,7 +161,10 @@ async function settle(
   db: Database,
   members: { name: string; version: string | null }[],
   opts: { skip: boolean; cachedOnly: boolean; hasUnverified: boolean },
-): Promise<{ resolution: CompatResolution | null; verdict: 'resolved' | 'conflict' | 'inconclusive' }> {
+): Promise<{
+  resolution: CompatResolution | null;
+  verdict: 'resolved' | 'conflict' | 'inconclusive';
+}> {
   if (opts.skip) return { resolution: null, verdict: 'inconclusive' };
 
   // A member with no resolved version cannot be part of a cache key — the key is

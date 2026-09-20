@@ -12,7 +12,11 @@ const noSubscribe = () => () => {};
  * path would be the wrong one. The server snapshot says "this address" instead.
  */
 export function NotFoundVerdict() {
-  const path = useSyncExternalStore(noSubscribe, () => location.pathname, () => null);
+  const path = useSyncExternalStore(
+    noSubscribe,
+    () => location.pathname,
+    () => null,
+  );
   const name = path ? `lurq.run${path}` : 'this address';
 
   return (

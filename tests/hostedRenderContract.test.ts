@@ -24,7 +24,10 @@ vi.mock('../src/ingestion/sources', () => ({
   fetchNpmCompatAtVersion: vi.fn(),
   npmVersionExists: vi.fn(),
 }));
-vi.mock('../src/pipeline/single', () => ({ getOrFetchPackage: vi.fn(), FIRST_TOUCH_BUDGET_MS: 4000 }));
+vi.mock('../src/pipeline/single', () => ({
+  getOrFetchPackage: vi.fn(),
+  FIRST_TOUCH_BUDGET_MS: 4000,
+}));
 vi.mock('../src/db/packages', () => ({
   getTopPackageNames: vi.fn(),
   getPackageByName: vi.fn(),
@@ -143,7 +146,10 @@ describe.each(servers)('lurq mcp-drift / mcp-surface against a %s', (_label, pac
   };
 
   it('renders an upgrade that changed nothing (every list empty)', async () => {
-    const drift = diffMcpSurfaces(mcpSurface('srv', '1.0.0', [tool]), mcpSurface('srv', '1.1.0', [tool]));
+    const drift = diffMcpSurfaces(
+      mcpSurface('srv', '1.0.0', [tool]),
+      mcpSurface('srv', '1.1.0', [tool]),
+    );
     serverResult = pack({
       ...drift,
       verdict: 'verified_true',

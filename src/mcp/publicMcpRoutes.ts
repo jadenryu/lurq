@@ -31,7 +31,12 @@ import {
   unpinEndpoint,
   type PinStatus,
 } from '../db/publicMcpAlerts';
-import { getEndpointById, listEndpointChanges, listEndpointObservations, listServerNamesForEndpoint } from '../db/remoteEndpoints';
+import {
+  getEndpointById,
+  listEndpointChanges,
+  listEndpointObservations,
+  listServerNamesForEndpoint,
+} from '../db/remoteEndpoints';
 import { recordUsage } from '../db/usage';
 
 export interface PublicMcpRouteDeps {
@@ -83,7 +88,8 @@ function positiveId(raw: unknown, res: Response): number | null {
 }
 
 export function registerPublicMcpRoutes(app: Express, d: PublicMcpRouteDeps): void {
-  const resolve = async (query: string) => (await import('../connect/check')).resolveServerEndpoint(d.db, query);
+  const resolve = async (query: string) =>
+    (await import('../connect/check')).resolveServerEndpoint(d.db, query);
 
   // ── API key: the CLI and agents ────────────────────────────────────────────
 
@@ -102,7 +108,9 @@ export function registerPublicMcpRoutes(app: Express, d: PublicMcpRouteDeps): vo
     if (!ownerId) return;
     const body = ServerBody.safeParse(req.body ?? {});
     if (!body.success) {
-      res.status(400).json({ error: 'Pass `server`: an endpoint URL or an official registry name.' });
+      res
+        .status(400)
+        .json({ error: 'Pass `server`: an endpoint URL or an official registry name.' });
       return;
     }
     try {
@@ -121,42 +129,56 @@ export function registerPublicMcpRoutes(app: Express, d: PublicMcpRouteDeps): vo
     }
   });
 
-  app.post('/mcp-pins/unpin', d.ipLimiter, d.auth, d.keyLimiter, async (req: Request, res: Response) => {
-    const ownerId = d.keyOwner(req, res);
-    if (!ownerId) return;
-    const body = ServerBody.safeParse(req.body ?? {});
-    if (!body.success) {
-      res.status(400).json({ error: 'Pass `server`: an endpoint URL or an official registry name.' });
-      return;
-    }
-    try {
-      const endpoint = await resolve(body.data.server);
-      if (!endpoint) {
-        res.status(404).json({ error: NOT_PROBED });
+  app.post(
+    '/mcp-pins/unpin',
+    d.ipLimiter,
+    d.auth,
+    d.keyLimiter,
+    async (req: Request, res: Response) => {
+      const ownerId = d.keyOwner(req, res);
+      if (!ownerId) return;
+      const body = ServerBody.safeParse(req.body ?? {});
+      if (!body.success) {
+        res
+          .status(400)
+          .json({ error: 'Pass `server`: an endpoint URL or an official registry name.' });
         return;
       }
-      res.status(200).json({ unpinned: await unpinEndpoint(d.db, ownerId, endpoint.id) });
-    } catch (err) {
-      fail(res, 'unpin the server', err);
-    }
-  });
+      try {
+        const endpoint = await resolve(body.data.server);
+        if (!endpoint) {
+          res.status(404).json({ error: NOT_PROBED });
+          return;
+        }
+        res.status(200).json({ unpinned: await unpinEndpoint(d.db, ownerId, endpoint.id) });
+      } catch (err) {
+        fail(res, 'unpin the server', err);
+      }
+    },
+  );
 
-  app.post('/mcp-public-changes/:id/acknowledge', d.ipLimiter, d.auth, d.keyLimiter, async (req: Request, res: Response) => {
-    const ownerId = d.keyOwner(req, res);
-    if (!ownerId) return;
-    const id = positiveId(req.params.id, res);
-    if (!id) return;
-    try {
-      if (!(await publicChangeExists(d.db, id))) {
-        res.status(404).json({ error: 'No such change.' });
-        return;
+  app.post(
+    '/mcp-public-changes/:id/acknowledge',
+    d.ipLimiter,
+    d.auth,
+    d.keyLimiter,
+    async (req: Request, res: Response) => {
+      const ownerId = d.keyOwner(req, res);
+      if (!ownerId) return;
+      const id = positiveId(req.params.id, res);
+      if (!id) return;
+      try {
+        if (!(await publicChangeExists(d.db, id))) {
+          res.status(404).json({ error: 'No such change.' });
+          return;
+        }
+        await acknowledgePublicChange(d.db, ownerId, id);
+        res.status(200).json({ acknowledged: true });
+      } catch (err) {
+        fail(res, 'acknowledge the change', err);
       }
-      await acknowledgePublicChange(d.db, ownerId, id);
-      res.status(200).json({ acknowledged: true });
-    } catch (err) {
-      fail(res, 'acknowledge the change', err);
-    }
-  });
+    },
+  );
 
   // ── Issuer secret: the dashboard ───────────────────────────────────────────
 
@@ -190,14 +212,20 @@ export function registerPublicMcpRoutes(app: Express, d: PublicMcpRouteDeps): vo
       const { handleConnectCheck } = await import('../connect/check');
       const [servers, contract, observations, changes, pin, compat] = await Promise.all([
         listServerNamesForEndpoint(d.db, endpointId),
-        endpoint.lastContentHash ? getContract(d.db, endpoint.lastContentHash) : Promise.resolve(null),
+        endpoint.lastContentHash
+          ? getContract(d.db, endpoint.lastContentHash)
+          : Promise.resolve(null),
         listEndpointObservations(d.db, endpointId, 30),
         listEndpointChanges(d.db, endpointId, 30),
         getPin(d.db, ownerId, endpointId),
         // Stored facts only: a dashboard read never triggers a probe.
         handleConnectCheck(d.db, { server: endpoint.url }),
       ]);
-      const acked = await acknowledgedChangeIds(d.db, ownerId, changes.map((c) => c.id));
+      const acked = await acknowledgedChangeIds(
+        d.db,
+        ownerId,
+        changes.map((c) => c.id),
+      );
       res.status(200).json({
         endpoint: {
           id: endpoint.id,
@@ -224,7 +252,13 @@ export function registerPublicMcpRoutes(app: Express, d: PublicMcpRouteDeps): vo
         observations,
         changes: changes.map((c) => ({ ...c, acknowledged: acked.has(c.id) })),
         pin: pin ? pinView(pin) : null,
-        clients: compat.clients.map((c) => ({ client: c.client, clientName: c.clientName, verdict: c.verdict, reason: (c.blockers[0] ?? c.setup[0] ?? c.unknowns.find((u) => u.decisive))?.detail ?? null })),
+        clients: compat.clients.map((c) => ({
+          client: c.client,
+          clientName: c.clientName,
+          verdict: c.verdict,
+          reason:
+            (c.blockers[0] ?? c.setup[0] ?? c.unknowns.find((u) => u.decisive))?.detail ?? null,
+        })),
         summary: compat.summary,
       });
     } catch (err) {
@@ -232,51 +266,63 @@ export function registerPublicMcpRoutes(app: Express, d: PublicMcpRouteDeps): vo
     }
   });
 
-  app.post('/mcp-public/changes/:id/acknowledge', d.requireIssuerSecret, async (req: Request, res: Response) => {
-    const ownerId = owner(req, res);
-    if (!ownerId) return;
-    const id = positiveId(req.params.id, res);
-    if (!id) return;
-    try {
-      if (!(await publicChangeExists(d.db, id))) {
-        res.status(404).json({ error: 'No such change.' });
-        return;
+  app.post(
+    '/mcp-public/changes/:id/acknowledge',
+    d.requireIssuerSecret,
+    async (req: Request, res: Response) => {
+      const ownerId = owner(req, res);
+      if (!ownerId) return;
+      const id = positiveId(req.params.id, res);
+      if (!id) return;
+      try {
+        if (!(await publicChangeExists(d.db, id))) {
+          res.status(404).json({ error: 'No such change.' });
+          return;
+        }
+        await acknowledgePublicChange(d.db, ownerId, id);
+        res.status(200).json({ acknowledged: true });
+      } catch (err) {
+        fail(res, 'acknowledge the change', err);
       }
-      await acknowledgePublicChange(d.db, ownerId, id);
-      res.status(200).json({ acknowledged: true });
-    } catch (err) {
-      fail(res, 'acknowledge the change', err);
-    }
-  });
+    },
+  );
 
-  app.post('/mcp-public/:endpointId/pin', d.requireIssuerSecret, async (req: Request, res: Response) => {
-    const ownerId = owner(req, res);
-    if (!ownerId) return;
-    const endpointId = positiveId(req.params.endpointId, res);
-    if (!endpointId) return;
-    try {
-      const row = await pinEndpoint(d.db, ownerId, endpointId);
-      if (!row) {
-        res.status(404).json({ error: 'No such endpoint.' });
-        return;
+  app.post(
+    '/mcp-public/:endpointId/pin',
+    d.requireIssuerSecret,
+    async (req: Request, res: Response) => {
+      const ownerId = owner(req, res);
+      if (!ownerId) return;
+      const endpointId = positiveId(req.params.endpointId, res);
+      if (!endpointId) return;
+      try {
+        const row = await pinEndpoint(d.db, ownerId, endpointId);
+        if (!row) {
+          res.status(404).json({ error: 'No such endpoint.' });
+          return;
+        }
+        capture(ownerId, 'mcp_pinned', { via: 'dashboard' });
+        const pin = await getPin(d.db, ownerId, endpointId);
+        res.status(200).json({ pin: pin ? pinView(pin) : null });
+      } catch (err) {
+        fail(res, 'pin the server', err);
       }
-      capture(ownerId, 'mcp_pinned', { via: 'dashboard' });
-      const pin = await getPin(d.db, ownerId, endpointId);
-      res.status(200).json({ pin: pin ? pinView(pin) : null });
-    } catch (err) {
-      fail(res, 'pin the server', err);
-    }
-  });
+    },
+  );
 
-  app.post('/mcp-public/:endpointId/unpin', d.requireIssuerSecret, async (req: Request, res: Response) => {
-    const ownerId = owner(req, res);
-    if (!ownerId) return;
-    const endpointId = positiveId(req.params.endpointId, res);
-    if (!endpointId) return;
-    try {
-      res.status(200).json({ unpinned: await unpinEndpoint(d.db, ownerId, endpointId) });
-    } catch (err) {
-      fail(res, 'unpin the server', err);
-    }
-  });
+  app.post(
+    '/mcp-public/:endpointId/unpin',
+    d.requireIssuerSecret,
+    async (req: Request, res: Response) => {
+      const ownerId = owner(req, res);
+      if (!ownerId) return;
+      const endpointId = positiveId(req.params.endpointId, res);
+      if (!endpointId) return;
+      try {
+        res.status(200).json({ unpinned: await unpinEndpoint(d.db, ownerId, endpointId) });
+      } catch (err) {
+        fail(res, 'unpin the server', err);
+      }
+    },
+  );
 }

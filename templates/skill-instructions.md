@@ -20,7 +20,7 @@ reads like a guess.
   `verify` the one you choose. lurq checks candidates against evidence; it does not
   search for them, so the list is yours to bring. The same applies before hand-rolling
   something a well-maintained package may already do.
-- **Install a specific package** → `verify` with the exact name *before* adding it.
+- **Install a specific package** → `verify` with the exact name _before_ adding it.
   This catches hallucinated, deprecated, and typosquatted names (e.g. `lodahs` vs
   `lodash`) and packages with known advisories. Cheap, and the highest-value call here.
 - **Choose between options** → `compare` with 2–5 package names for a ranked,
@@ -46,8 +46,8 @@ reads like a guess.
   shape, e.g. lodash); read its type declarations or use `resolve_surface`.
 - **Check whether a symbol actually exists at runtime** → `resolve_surface` with the
   package (and version, if you have one). `usage` reads the shipped `.d.ts`; this reads
-  the shipped JavaScript, and the difference matters: a removed *type* breaks `tsc`, a
-  removed *runtime* export breaks the running program. `UNKNOWN` means the surface has
+  the shipped JavaScript, and the difference matters: a removed _type_ breaks `tsc`, a
+  removed _runtime_ export breaks the running program. `UNKNOWN` means the surface has
   not been extracted yet and queues extraction — it never means the symbol is absent, so
   do not treat it as a negative answer.
 - **Explain a break, or plan an upgrade** → `diff_surface` with the package and the two

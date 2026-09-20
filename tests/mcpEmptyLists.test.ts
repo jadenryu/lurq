@@ -35,6 +35,8 @@ describe('list methods on a tools-only server', () => {
 
   it('still lists every tool', async () => {
     const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(['verify', 'evaluate', 'diff_surface', 'report_outcome']));
+    expect(names).toEqual(
+      expect.arrayContaining(['verify', 'evaluate', 'diff_surface', 'report_outcome']),
+    );
   });
 });

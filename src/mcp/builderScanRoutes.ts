@@ -21,7 +21,12 @@ import {
 } from '../db/builderScans';
 import type { Database } from '../db/client';
 import type { BuilderProfile } from '../github/builderProfile';
-import { builderMetrics, standing, type BuilderMetrics, type BuilderStanding } from '../github/builderStanding';
+import {
+  builderMetrics,
+  standing,
+  type BuilderMetrics,
+  type BuilderStanding,
+} from '../github/builderStanding';
 import { parseTarget } from '../github/publicScan';
 
 export interface BuilderScanRouteDeps {
@@ -85,7 +90,10 @@ export function registerBuilderScanRoutes(app: Express, deps: BuilderScanRouteDe
   };
 
   /** Never fails the route: a report without percentiles is still the report. */
-  const standingFor = async (login: string, metrics: BuilderMetrics): Promise<BuilderStanding | null> => {
+  const standingFor = async (
+    login: string,
+    metrics: BuilderMetrics,
+  ): Promise<BuilderStanding | null> => {
     try {
       const self = login.toLowerCase();
       const others = (await loadPopulation()).filter((r) => r.login !== self);
@@ -124,7 +132,9 @@ export function registerBuilderScanRoutes(app: Express, deps: BuilderScanRouteDe
         return;
       }
       const { profile, scannedAt, metrics } = scan;
-      res.json({ scan: { target, profile, scannedAt, standing: await standingFor(profile.login, metrics) } });
+      res.json({
+        scan: { target, profile, scannedAt, standing: await standingFor(profile.login, metrics) },
+      });
     } catch (err) {
       logger.error('builder scan read failed:', formatError(err));
       res.status(500).json({ error: 'Could not read that saved scan.' });
@@ -137,7 +147,9 @@ export function registerBuilderScanRoutes(app: Express, deps: BuilderScanRouteDe
     const target = scanKey(typeof body.target === 'string' ? body.target : '');
     const profile = asProfile(body.profile);
     if (!ownerId || !target || !profile) {
-      res.status(400).json({ error: 'ownerId, a valid target and a builder profile are required.' });
+      res
+        .status(400)
+        .json({ error: 'ownerId, a valid target and a builder profile are required.' });
       return;
     }
     if (JSON.stringify(profile).length > MAX_PROFILE_BYTES) {
@@ -146,7 +158,11 @@ export function registerBuilderScanRoutes(app: Express, deps: BuilderScanRouteDe
     }
     try {
       const scannedAt = await saveBuilderScan(db, ownerId, target, profile);
-      res.json({ target, scannedAt, standing: await standingFor(profile.login, builderMetrics(profile)) });
+      res.json({
+        target,
+        scannedAt,
+        standing: await standingFor(profile.login, builderMetrics(profile)),
+      });
     } catch (err) {
       logger.error('builder scan save failed:', formatError(err));
       res.status(500).json({ error: 'Could not save that scan.' });

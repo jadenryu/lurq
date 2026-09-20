@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  CATEGORIES,
-  isCategory,
-  isFrontendCategory,
-  FRONTEND_CATEGORIES,
-} from '../src/core/types';
+import { CATEGORIES, isCategory, isFrontendCategory, FRONTEND_CATEGORIES } from '../src/core/types';
 import { buildProgram } from '../src/cli/index';
 import { registerOperatorCommands } from '../src/cli/operator';
 import {
@@ -56,7 +51,16 @@ describe('cli program', () => {
 
   it('public program excludes operator commands (§4E plane split)', () => {
     const names = buildProgram().commands.map((c) => c.name());
-    for (const operatorOnly of ['sync', 'discover', 'worker', 'rescore', 'watch', 'sandbox', 'keys', 'db']) {
+    for (const operatorOnly of [
+      'sync',
+      'discover',
+      'worker',
+      'rescore',
+      'watch',
+      'sandbox',
+      'keys',
+      'db',
+    ]) {
       expect(names).not.toContain(operatorOnly);
     }
   });

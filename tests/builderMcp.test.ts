@@ -5,7 +5,13 @@
  * called an MCP server only on real evidence.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { profileMcp, serverPackage, statusFrom, TOOLS_SHOWN, type McpReadDeps } from '../src/github/builderMcp';
+import {
+  profileMcp,
+  serverPackage,
+  statusFrom,
+  TOOLS_SHOWN,
+  type McpReadDeps,
+} from '../src/github/builderMcp';
 import type { McpSurfaceResponse } from '../src/mcp/mcpHandlers';
 
 const ann = (readOnly: boolean, destructive = false) => ({
@@ -48,7 +54,11 @@ describe('statusFrom', () => {
     expect(statusFrom(surface({ verdict: 'unknown' } as never))).toBe('queued');
     expect(statusFrom(surface({ verdict: 'verified_false' } as never))).toBe('handshake-failed');
     expect(statusFrom(surface({ verdict: 'undeclared' } as never))).toBe('undeclared');
-    expect(statusFrom(surface({ verdict: 'unverifiable', configRequest: 'needs GITHUB_TOKEN' } as never))).toBe('needs-config');
+    expect(
+      statusFrom(
+        surface({ verdict: 'unverifiable', configRequest: 'needs GITHUB_TOKEN' } as never),
+      ),
+    ).toBe('needs-config');
     expect(statusFrom(surface({ verdict: 'unverifiable' } as never))).toBe('remote-only');
     expect(statusFrom(surface({ tools: [tool('a', true)] }))).toBe('probed');
   });
@@ -56,18 +66,35 @@ describe('statusFrom', () => {
 
 describe('serverPackage', () => {
   it('needs the SDK at runtime, something runnable, and a public package', () => {
-    const base = { name: '@ada/weather-mcp', dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' } };
-    expect(serverPackage({ ...base, bin: { weather: 'dist/index.js' } }, null)).toBe('@ada/weather-mcp');
-    expect(serverPackage({ ...base, mcpName: 'io.github.ada/weather' }, null)).toBe('@ada/weather-mcp');
+    const base = {
+      name: '@ada/weather-mcp',
+      dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' },
+    };
+    expect(serverPackage({ ...base, bin: { weather: 'dist/index.js' } }, null)).toBe(
+      '@ada/weather-mcp',
+    );
+    expect(serverPackage({ ...base, mcpName: 'io.github.ada/weather' }, null)).toBe(
+      '@ada/weather-mcp',
+    );
     expect(serverPackage(base, null)).toBeNull();
     expect(serverPackage({ ...base, bin: 'x', private: true }, null)).toBeNull();
     expect(
-      serverPackage({ name: 'client', devDependencies: { '@modelcontextprotocol/sdk': '^1' }, bin: 'x' }, null),
+      serverPackage(
+        { name: 'client', devDependencies: { '@modelcontextprotocol/sdk': '^1' }, bin: 'x' },
+        null,
+      ),
     ).toBeNull();
   });
 
   it('falls back to an npm package named in server.json', () => {
-    expect(serverPackage(null, { packages: [{ registryType: 'pypi', identifier: 'x' }, { registryType: 'npm', identifier: 'ada-mcp' }] })).toBe('ada-mcp');
+    expect(
+      serverPackage(null, {
+        packages: [
+          { registryType: 'pypi', identifier: 'x' },
+          { registryType: 'npm', identifier: 'ada-mcp' },
+        ],
+      }),
+    ).toBe('ada-mcp');
     expect(serverPackage(null, { remotes: [{ url: 'https://x' }] })).toBeNull();
   });
 });
@@ -81,7 +108,9 @@ describe('profileMcp', () => {
       py: { command: 'uvx', args: ['mcp-server-fetch'] },
     },
   };
-  const cursorJson = { mcpServers: { github: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] } } };
+  const cursorJson = {
+    mcpServers: { github: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] } },
+  };
 
   const deps = (): McpReadDeps => ({
     read: vi.fn(async (repo: string, path: string) => {
@@ -92,7 +121,13 @@ describe('profileMcp', () => {
     }),
     surface: vi.fn(async (server: string) => {
       if (server === '@modelcontextprotocol/server-github') {
-        return surface({ tools: [tool('search', true), tool('create_issue', false), tool('delete_repo', false, true)] });
+        return surface({
+          tools: [
+            tool('search', true),
+            tool('create_issue', false),
+            tool('delete_repo', false, true),
+          ],
+        });
       }
       if (server === 'search-mcp') return surface({ tools: [tool('search', true)] });
       if (server === '@ada/weather-mcp') return surface({ verdict: 'unknown' } as never);
@@ -108,22 +143,58 @@ describe('profileMcp', () => {
     expect(config.files).toEqual(['.mcp.json', '.cursor/mcp.json']);
     expect(config.servers.map((s) => s.alias)).toEqual(['github', 'linear', 'search', 'py']);
     // The same server in two files is looked up once.
-    expect(vi.mocked(d.surface).mock.calls.filter(([s]) => s === '@modelcontextprotocol/server-github')).toHaveLength(1);
+    expect(
+      vi.mocked(d.surface).mock.calls.filter(([s]) => s === '@modelcontextprotocol/server-github'),
+    ).toHaveLength(1);
 
     const byAlias = Object.fromEntries(config.servers.map((s) => [s.alias, s]));
     expect(byAlias.github).toMatchObject({ status: 'probed', tools: 3, writes: 2, destroys: 1 });
     // The schema of each tool, for the drawer: what it takes and what it may do.
     expect(byAlias.github!.toolDetail).toEqual([
-      { name: 'search', required: [], params: [], readOnly: true, destructive: false, output: false, deprecated: false },
-      { name: 'create_issue', required: [], params: [], readOnly: false, destructive: false, output: false, deprecated: false },
-      { name: 'delete_repo', required: [], params: [], readOnly: false, destructive: true, output: false, deprecated: false },
+      {
+        name: 'search',
+        required: [],
+        params: [],
+        readOnly: true,
+        destructive: false,
+        output: false,
+        deprecated: false,
+      },
+      {
+        name: 'create_issue',
+        required: [],
+        params: [],
+        readOnly: false,
+        destructive: false,
+        output: false,
+        deprecated: false,
+      },
+      {
+        name: 'delete_repo',
+        required: [],
+        params: [],
+        readOnly: false,
+        destructive: true,
+        output: false,
+        deprecated: false,
+      },
     ]);
     expect(byAlias.linear!.toolDetail).toEqual([]);
-    expect(byAlias.linear).toMatchObject({ kind: 'remote', status: 'not-probed', endpoint: 'mcp.linear.app' });
+    expect(byAlias.linear).toMatchObject({
+      kind: 'remote',
+      status: 'not-probed',
+      endpoint: 'mcp.linear.app',
+    });
     expect(byAlias.py).toMatchObject({ kind: 'other-registry', status: 'not-probed' });
 
     // `search` is exposed by two probed servers; totals are unknown because two servers are unread.
-    expect(config.collisions).toEqual([{ tool: 'search', servers: ['@modelcontextprotocol/server-github', 'search-mcp'], writes: false }]);
+    expect(config.collisions).toEqual([
+      {
+        tool: 'search',
+        servers: ['@modelcontextprotocol/server-github', 'search-mcp'],
+        writes: false,
+      },
+    ]);
     expect(config.totalTools).toBeNull();
     // The .vscode/mcp.json read failed, and is counted rather than looking like no config.
     expect(mcp.unreadFiles).toBe(1);
@@ -135,9 +206,20 @@ describe('profileMcp', () => {
       bin: { weather: 'dist/index.js' },
       dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' },
     };
-    const mcp = await profileMcp('ada', [{ name: 'weather', manifest }, { name: 'site', manifest: { name: 'site' } }], deps());
+    const mcp = await profileMcp(
+      'ada',
+      [
+        { name: 'weather', manifest },
+        { name: 'site', manifest: { name: 'site' } },
+      ],
+      deps(),
+    );
     expect(mcp.builds).toEqual([
-      expect.objectContaining({ repo: 'ada/weather', packageName: '@ada/weather-mcp', status: 'queued' }),
+      expect.objectContaining({
+        repo: 'ada/weather',
+        packageName: '@ada/weather-mcp',
+        status: 'queued',
+      }),
     ]);
     expect(mcp.configs).toEqual([]);
   });
@@ -145,9 +227,14 @@ describe('profileMcp', () => {
 
 describe('tool detail', () => {
   it('carries at most TOOLS_SHOWN tools, leaving the counts exact', async () => {
-    const many = Array.from({ length: TOOLS_SHOWN + 5 }, (_, i) => tool(`t${String(i).padStart(2, '0')}`, true));
+    const many = Array.from({ length: TOOLS_SHOWN + 5 }, (_, i) =>
+      tool(`t${String(i).padStart(2, '0')}`, true),
+    );
     const mcp = await profileMcp('ada', [{ name: 'app', manifest: null }], {
-      read: async (_repo: string, path: string) => (path === '.mcp.json' ? ok({ mcpServers: { big: { command: 'npx', args: ['-y', 'big-mcp'] } } }) : missing),
+      read: async (_repo: string, path: string) =>
+        path === '.mcp.json'
+          ? ok({ mcpServers: { big: { command: 'npx', args: ['-y', 'big-mcp'] } } })
+          : missing,
       surface: async () => surface({ tools: many }),
     });
     const server = mcp.configs[0]!.servers[0]!;

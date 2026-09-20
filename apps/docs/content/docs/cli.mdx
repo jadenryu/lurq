@@ -8,11 +8,10 @@ retrieval the MCP tools expose. Add `--json` to the query and check commands for
 machine-readable output.
 
 <Callout type="info">
-  Run `lurq setup` first. The query commands read whichever index is configured:
-  the hosted service via your stored API key, or your own Postgres if
-  `DATABASE_URL` is set and no key is. A key wins over `DATABASE_URL`: otherwise,
-  running `lurq` inside your own Postgres-backed app would point package lookups
-  at that app's database. Operators holding both can force the local index with
+  Run `lurq setup` first. The query commands read whichever index is configured: the hosted service
+  via your stored API key, or your own Postgres if `DATABASE_URL` is set and no key is. A key wins
+  over `DATABASE_URL`: otherwise, running `lurq` inside your own Postgres-backed app would point
+  package lookups at that app's database. Operators holding both can force the local index with
   `LURQ_LOCAL=1`. See [Self-hosting](/self-hosting).
 </Callout>
 
@@ -109,15 +108,15 @@ runtime-only check.
 
 What it reports:
 
-| Severity | What changed | Real example |
-| --- | --- | --- |
-| **blocking** | a symbol your code uses is gone | `cookie.parse`, removed in cookie 2 |
-| **blocking** | a deep import is no longer offered | `require('uuid/v4')` on uuid 8 |
-| **blocking** | the package went ESM-only, and your code calls what `require()` returned or reads a property it no longer exports | `fetch(url)` on node-fetch 3, `chalk.red` on chalk 5 |
-| **warning** | a call passes an argument count the new version no longer accepts. Calls that still fit are not reported | `src/log.ts:31 passes 1` |
-| **warning** | the type check finds a new compiler error | `TS2554 Expected 2-3 arguments` on zod 4 |
-| **warning** | `require()` of a now-ESM package, which throws on Node before 20.19 / 22.12. Skipped when your `engines.node` rules those out | execa 9 |
-| **warning** | a new `engines.node` or peer range this project does not meet | react-dom 19 with react 18 installed |
+| Severity     | What changed                                                                                                                  | Real example                                         |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **blocking** | a symbol your code uses is gone                                                                                               | `cookie.parse`, removed in cookie 2                  |
+| **blocking** | a deep import is no longer offered                                                                                            | `require('uuid/v4')` on uuid 8                       |
+| **blocking** | the package went ESM-only, and your code calls what `require()` returned or reads a property it no longer exports             | `fetch(url)` on node-fetch 3, `chalk.red` on chalk 5 |
+| **warning**  | a call passes an argument count the new version no longer accepts. Calls that still fit are not reported                      | `src/log.ts:31 passes 1`                             |
+| **warning**  | the type check finds a new compiler error                                                                                     | `TS2554 Expected 2-3 arguments` on zod 4             |
+| **warning**  | `require()` of a now-ESM package, which throws on Node before 20.19 / 22.12. Skipped when your `engines.node` rules those out | execa 9                                              |
+| **warning**  | a new `engines.node` or peer range this project does not meet                                                                 | react-dom 19 with react 18 installed                 |
 
 Downloads are retried on registry errors and checked against the integrity hash
 the registry publishes. A version range (`^2.0.0`) is refused rather than
@@ -209,14 +208,14 @@ rather than a rename landing in the wrong place.
 Three kinds of upgrade it will not attempt at all — and it names each one rather
 than passing over it in silence:
 
-| Not attempted | Why |
-| --- | --- |
-| A multi-major upgrade (`hops` in the plan) | It has to be walked one major at a time. Jumping straight to the target skips whatever each intermediate release removed. |
-| One the plan could not sequence (`sequenceNote`) | That is a migration, not an upgrade, and nothing mechanical should attempt it. |
-| Anything past `--max <n>` | The blast radius. A deterministic edit is safer than a model's, but a diff touching forty packages is still a review nobody finishes, and the number is your call. |
+| Not attempted                                    | Why                                                                                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A multi-major upgrade (`hops` in the plan)       | It has to be walked one major at a time. Jumping straight to the target skips whatever each intermediate release removed.                                          |
+| One the plan could not sequence (`sequenceNote`) | That is a migration, not an upgrade, and nothing mechanical should attempt it.                                                                                     |
+| Anything past `--max <n>`                        | The blast radius. A deterministic edit is safer than a model's, but a diff touching forty packages is still a review nobody finishes, and the number is your call. |
 
 `check-upgrade` still reports on all three: checking an upgrade is free and tells
-you something, so only *performing* one is capped. If every upgrade in a plan
+you something, so only _performing_ one is capped. If every upgrade in a plan
 falls into these, `fix` says so and names them — it never reports "nothing to
 fix" for work it declined to do.
 
@@ -269,11 +268,11 @@ variable exists.
 Three things are deliberately never reported, because a noisy check gets
 switched off and a check nobody runs is worth less than no check:
 
-| Not reported | Why |
-| --- | --- |
+| Not reported                                                                                                       | Why                                                                     |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
 | Platform variables — `NODE_ENV`, `CI`, `PORT`, the `GITHUB_*`, `npm_*`, `VERCEL_*` families, XDG and Windows paths | Supplied by the runtime or the runner; they belong in no `.env.example` |
-| Reads inside tests, specs and fixtures | The harness that runs that code sets them itself |
-| A read with its fallback beside it — `process.env.CACHE_TTL ?? '60'` | The code already states what happens without it |
+| Reads inside tests, specs and fixtures                                                                             | The harness that runs that code sets them itself                        |
+| A read with its fallback beside it — `process.env.CACHE_TTL ?? '60'`                                               | The code already states what happens without it                         |
 
 A variable defaulted at every site is optional; one unguarded read anywhere
 makes it required, and only those sites are cited. Reads are found through the

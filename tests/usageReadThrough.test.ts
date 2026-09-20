@@ -65,7 +65,9 @@ describe('getOrExtractSurface — read-through', () => {
     extractSurface.mockReturnValue(slow.promise);
 
     // The budget elapses while the extraction is still in flight.
-    await expect(getOrExtractSurface(db, 'puppeteer', '24.14.0', { budgetMs: 5 })).resolves.toBeNull();
+    await expect(
+      getOrExtractSurface(db, 'puppeteer', '24.14.0', { budgetMs: 5 }),
+    ).resolves.toBeNull();
 
     // Not cancelled: when it lands, the store still happens, so the *next*
     // request for this version is a cache hit.
@@ -94,7 +96,9 @@ describe('getOrExtractSurface — read-through', () => {
   it('skips extraction entirely at budgetMs 0 (cache-only)', async () => {
     getStoredSurface.mockResolvedValue(null);
 
-    await expect(getOrExtractSurface(db, 'puppeteer', '24.14.0', { budgetMs: 0 })).resolves.toBeNull();
+    await expect(
+      getOrExtractSurface(db, 'puppeteer', '24.14.0', { budgetMs: 0 }),
+    ).resolves.toBeNull();
     expect(extractSurface).not.toHaveBeenCalled();
   });
 
@@ -112,7 +116,9 @@ describe('getOrExtractSurface — read-through', () => {
     getStoredSurface.mockResolvedValue(null);
     extractSurface.mockResolvedValue(null); // untyped package, or no compiler installed
 
-    await expect(getOrExtractSurface(db, 'left-pad', '1.3.0', { budgetMs: 1000 })).resolves.toBeNull();
+    await expect(
+      getOrExtractSurface(db, 'left-pad', '1.3.0', { budgetMs: 1000 }),
+    ).resolves.toBeNull();
     expect(upsertSurface).not.toHaveBeenCalled();
   });
 
@@ -120,7 +126,9 @@ describe('getOrExtractSurface — read-through', () => {
     getStoredSurface.mockResolvedValue(null);
     extractSurface.mockRejectedValue(new Error('jsDelivr 502'));
 
-    await expect(getOrExtractSurface(db, 'puppeteer', '24.14.0', { budgetMs: 1000 })).resolves.toBeNull();
+    await expect(
+      getOrExtractSurface(db, 'puppeteer', '24.14.0', { budgetMs: 1000 }),
+    ).resolves.toBeNull();
   });
 });
 

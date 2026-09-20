@@ -14,7 +14,9 @@ function item(over: Record<string, unknown> = {}, meta: Record<string, unknown> 
         {
           type: 'streamable-http',
           url: 'https://mcp.acme.dev/mcp',
-          headers: [{ name: 'Authorization', isRequired: true, isSecret: true, description: 'Bearer key' }],
+          headers: [
+            { name: 'Authorization', isRequired: true, isSecret: true, description: 'Bearer key' },
+          ],
         },
       ],
       packages: [
@@ -27,22 +29,45 @@ function item(over: Record<string, unknown> = {}, meta: Record<string, unknown> 
       ],
       ...over,
     },
-    _meta: { [META]: { status: 'active', isLatest: true, publishedAt: '2026-05-01T00:00:00Z', updatedAt: '2026-06-01T12:00:00Z', ...meta } },
+    _meta: {
+      [META]: {
+        status: 'active',
+        isLatest: true,
+        publishedAt: '2026-05-01T00:00:00Z',
+        updatedAt: '2026-06-01T12:00:00Z',
+        ...meta,
+      },
+    },
   };
 }
 
 describe('parseRegistryItem', () => {
   it('keeps what the pipeline needs: remotes with headers, packages with env, lifecycle', () => {
     const e = parseRegistryItem(item())!;
-    expect(e).toMatchObject({ name: 'io.github.acme/weather', version: '1.2.0', status: 'active', isLatest: true });
-    expect(e.remotes[0]).toMatchObject({ type: 'streamable-http', url: 'https://mcp.acme.dev/mcp' });
-    expect(e.remotes[0]!.headers![0]).toMatchObject({ name: 'Authorization', isRequired: true, isSecret: true });
+    expect(e).toMatchObject({
+      name: 'io.github.acme/weather',
+      version: '1.2.0',
+      status: 'active',
+      isLatest: true,
+    });
+    expect(e.remotes[0]).toMatchObject({
+      type: 'streamable-http',
+      url: 'https://mcp.acme.dev/mcp',
+    });
+    expect(e.remotes[0]!.headers![0]).toMatchObject({
+      name: 'Authorization',
+      isRequired: true,
+      isSecret: true,
+    });
     expect(e.packages[0]!.environmentVariables![0]!.name).toBe('ACME_KEY');
     expect(e.updatedAt?.toISOString()).toBe('2026-06-01T12:00:00.000Z');
   });
 
   it('reports deleted entries rather than dropping them', () => {
-    expect(parseRegistryItem(item({}, { status: 'deleted', isLatest: false }))).toMatchObject({ status: 'deleted', isLatest: false });
+    expect(parseRegistryItem(item({}, { status: 'deleted', isLatest: false }))).toMatchObject({
+      status: 'deleted',
+      isLatest: false,
+    });
   });
 
   it('rejects entries with no name or version, or absurd sizes', () => {
@@ -53,8 +78,17 @@ describe('parseRegistryItem', () => {
   });
 
   it('tolerates missing or malformed metadata', () => {
-    const e = parseRegistryItem({ server: { name: 'a/b', version: '1' }, _meta: { [META]: { updatedAt: 'not a date' } } })!;
-    expect(e).toMatchObject({ status: 'active', isLatest: false, updatedAt: null, remotes: [], packages: [] });
+    const e = parseRegistryItem({
+      server: { name: 'a/b', version: '1' },
+      _meta: { [META]: { updatedAt: 'not a date' } },
+    })!;
+    expect(e).toMatchObject({
+      status: 'active',
+      isLatest: false,
+      updatedAt: null,
+      remotes: [],
+      packages: [],
+    });
   });
 });
 
@@ -79,7 +113,13 @@ describe('listRegistry', () => {
     });
     const since = new Date('2026-09-01T00:00:00Z');
     const pages = [];
-    for await (const p of listRegistry({ updatedSince: since, version: 'latest', fetchImpl: fn, retries: 0 })) pages.push(p);
+    for await (const p of listRegistry({
+      updatedSince: since,
+      version: 'latest',
+      fetchImpl: fn,
+      retries: 0,
+    }))
+      pages.push(p);
 
     expect(pages.map((p) => [p.entries.length, p.rejected, p.nextCursor])).toEqual([
       [1, 1, 'c1'],

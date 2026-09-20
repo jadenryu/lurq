@@ -30,7 +30,14 @@ import {
 import type { McpRemoteEndpointRow } from '../db/schema';
 import type { McpTool } from '../surface/mcp';
 import { fetchServerManifest, type RequiredConfig } from '../surface/mcpRegistry';
-import { evaluateClient, type ClientCompat, type CompatVerdict, type PackageFacts, type RemoteFacts, type ServerFacts } from '../clients/evaluate';
+import {
+  evaluateClient,
+  type ClientCompat,
+  type CompatVerdict,
+  type PackageFacts,
+  type RemoteFacts,
+  type ServerFacts,
+} from '../clients/evaluate';
 import { CLIENT_PROFILES } from '../clients/profiles';
 import { renderClientConfig, type RenderedConfig } from '../clients/render';
 import type { ClientId } from '../clients/types';
@@ -62,7 +69,13 @@ export interface ConnectCheckResponse {
     source: 'probe' | 'live_probe' | 'registry' | 'none';
     status: EndpointStatus | null;
     observedAt: string | null;
-    auth: { mode: AuthProfile['mode']; issuer: string | null; cimd: boolean | null; dcr: boolean | null; pkceS256: boolean | null } | null;
+    auth: {
+      mode: AuthProfile['mode'];
+      issuer: string | null;
+      cimd: boolean | null;
+      dcr: boolean | null;
+      pkceS256: boolean | null;
+    } | null;
     violations: Violation[];
     toolCount: number | null;
     recentChanges: { kind: string; severity: string; summary: string; at: string }[];
@@ -80,7 +93,11 @@ export function aliasFor(name: string): string {
   if (/^https?:\/\//i.test(name)) {
     // An endpoint's path is usually just `/mcp`; the host names the service.
     try {
-      const labels = new URL(name).hostname.toLowerCase().split('.').slice(0, -1).filter((l) => !['mcp', 'api', 'www', 'server'].includes(l));
+      const labels = new URL(name).hostname
+        .toLowerCase()
+        .split('.')
+        .slice(0, -1)
+        .filter((l) => !['mcp', 'api', 'www', 'server'].includes(l));
       source = labels[0] ?? source;
     } catch {
       /* keep the raw text */
@@ -88,10 +105,18 @@ export function aliasFor(name: string): string {
   }
   const last = source.replace(/\/+$/, '').split('/').pop() ?? source;
   const base = last.replace(/^@[^/]+\//, '').replace(/[-_.]?mcp[-_.]?(server)?$/i, '') || last;
-  return (base.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'server').slice(0, 30);
+  return (
+    base
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'server'
+  ).slice(0, 30);
 }
 
-function remoteFactsFromRow(row: McpRemoteEndpointRow, declared: RemoteFacts['declaredHeaders']): RemoteFacts {
+function remoteFactsFromRow(
+  row: McpRemoteEndpointRow,
+  declared: RemoteFacts['declaredHeaders'],
+): RemoteFacts {
   return {
     url: row.url,
     transport: row.transport,
@@ -112,12 +137,33 @@ async function toolsFor(db: Database, contentHash: string | null): Promise<McpTo
 
 /** Among a server's endpoints, the one a client should use: answering first, then by recency. */
 function pickEndpoint(rows: McpRemoteEndpointRow[]): McpRemoteEndpointRow | null {
-  const rank = (s: EndpointStatus | null) => (s === 'open' ? 0 : s === 'auth_required' ? 1 : s === null ? 2 : 3);
-  return [...rows].sort((a, b) => rank(a.lastStatus) - rank(b.lastStatus) || (b.lastProbedAt?.getTime() ?? 0) - (a.lastProbedAt?.getTime() ?? 0))[0] ?? null;
+  const rank = (s: EndpointStatus | null) =>
+    s === 'open' ? 0 : s === 'auth_required' ? 1 : s === null ? 2 : 3;
+  return (
+    [...rows].sort(
+      (a, b) =>
+        rank(a.lastStatus) - rank(b.lastStatus) ||
+        (b.lastProbedAt?.getTime() ?? 0) - (a.lastProbedAt?.getTime() ?? 0),
+    )[0] ?? null
+  );
 }
 
-function packageFacts(packages: { registryType?: string; identifier?: string; environmentVariables?: { name: string; description?: string; isRequired?: boolean; isSecret?: boolean; format?: string }[] }[]): PackageFacts | null {
-  const pkg = packages.find((p) => p.registryType === 'npm' && p.identifier) ?? packages.find((p) => p.identifier);
+function packageFacts(
+  packages: {
+    registryType?: string;
+    identifier?: string;
+    environmentVariables?: {
+      name: string;
+      description?: string;
+      isRequired?: boolean;
+      isSecret?: boolean;
+      format?: string;
+    }[];
+  }[],
+): PackageFacts | null {
+  const pkg =
+    packages.find((p) => p.registryType === 'npm' && p.identifier) ??
+    packages.find((p) => p.identifier);
   if (!pkg?.identifier) return null;
   const env: RequiredConfig[] = (pkg.environmentVariables ?? []).map((e) => ({
     name: e.name,
@@ -142,7 +188,10 @@ function headersToRender(remote: RemoteFacts | null): string[] {
  * of a registry server. Null when lurq has neither, which is never evidence the
  * server does not exist.
  */
-export async function resolveServerEndpoint(db: Database, query: string): Promise<McpRemoteEndpointRow | null> {
+export async function resolveServerEndpoint(
+  db: Database,
+  query: string,
+): Promise<McpRemoteEndpointRow | null> {
   const q = query.trim();
   if (!q) return null;
   if (/^https?:\/\//i.test(q)) {
@@ -154,11 +203,21 @@ export async function resolveServerEndpoint(db: Database, query: string): Promis
   return pickEndpoint((await getEndpointsForServer(db, server.name)).map((l) => l.endpoint));
 }
 
-export async function handleConnectCheck(db: Database, input: ConnectCheckInput, deps: ConnectCheckDeps = {}): Promise<ConnectCheckResponse> {
+export async function handleConnectCheck(
+  db: Database,
+  input: ConnectCheckInput,
+  deps: ConnectCheckDeps = {},
+): Promise<ConnectCheckResponse> {
   const query = input.server.trim();
   let resolvedAs: ConnectCheckResponse['resolvedAs'] = null;
   let source: ConnectCheckResponse['evidence']['source'] = 'none';
-  let facts: ServerFacts = { name: query, alias: aliasFor(query), remote: null, package: null, tools: null };
+  let facts: ServerFacts = {
+    name: query,
+    alias: aliasFor(query),
+    remote: null,
+    package: null,
+    tools: null,
+  };
   let registryName: string | null = null;
   let endpointId: number | null = null;
 
@@ -169,20 +228,50 @@ export async function handleConnectCheck(db: Database, input: ConnectCheckInput,
       resolvedAs = 'endpoint';
       endpointId = row.id;
       const declared = (await getDeclaredHeaders(db, [row.id])).get(row.id) ?? [];
-      facts = { ...facts, remote: remoteFactsFromRow(row, declared), tools: await toolsFor(db, row.lastContentHash) };
+      facts = {
+        ...facts,
+        remote: remoteFactsFromRow(row, declared),
+        tools: await toolsFor(db, row.lastContentHash),
+      };
       if (row.lastStatus) source = 'probe';
     } else if (deps.liveProbe) {
       const { probeEndpoint } = await import('../remoteProbe/probe');
-      const r = await probeEndpoint(query, { fetch: deps.liveProbe.fetch, budgetMs: deps.liveProbe.budgetMs ?? LIVE_BUDGET_MS });
+      const r = await probeEndpoint(query, {
+        fetch: deps.liveProbe.fetch,
+        budgetMs: deps.liveProbe.budgetMs ?? LIVE_BUDGET_MS,
+      });
       facts = {
         ...facts,
-        remote: { url: r.url, transport: r.transport ?? 'streamable-http', templated: r.status === 'templated', status: r.status, observedAt: new Date(), auth: r.auth, violations: r.violations, declaredHeaders: [] },
+        remote: {
+          url: r.url,
+          transport: r.transport ?? 'streamable-http',
+          templated: r.status === 'templated',
+          status: r.status,
+          observedAt: new Date(),
+          auth: r.auth,
+          violations: r.violations,
+          declaredHeaders: [],
+        },
         tools: r.snapshot?.tools ?? null,
       };
       source = 'live_probe';
     } else {
       const id = endpointIdentity(query);
-      facts = { ...facts, remote: id ? { url: id.url, transport: 'streamable-http', templated: id.templated, status: null, observedAt: null, auth: null, violations: [], declaredHeaders: [] } : null };
+      facts = {
+        ...facts,
+        remote: id
+          ? {
+              url: id.url,
+              transport: 'streamable-http',
+              templated: id.templated,
+              status: null,
+              observedAt: null,
+              auth: null,
+              violations: [],
+              declaredHeaders: [],
+            }
+          : null,
+      };
     }
   } else {
     const [server] = await findRegistryServers(db, query, 1);
@@ -190,7 +279,12 @@ export async function handleConnectCheck(db: Database, input: ConnectCheckInput,
       resolvedAs = 'registry';
       registryName = server.name;
       source = 'registry';
-      facts = { ...facts, name: server.name, alias: aliasFor(server.name), package: packageFacts(server.packages) };
+      facts = {
+        ...facts,
+        name: server.name,
+        alias: aliasFor(server.name),
+        package: packageFacts(server.packages),
+      };
       const linked = await getEndpointsForServer(db, server.name);
       const best = pickEndpoint(linked.map((l) => l.endpoint));
       if (best) {
@@ -206,22 +300,39 @@ export async function handleConnectCheck(db: Database, input: ConnectCheckInput,
         resolvedAs = 'npm';
         registryName = manifest.registryName;
         source = 'registry';
-        facts = { ...facts, alias: aliasFor(query), package: manifest.remoteOnly ? null : { registryType: 'npm', identifier: manifest.npmPackage, env: manifest.env } };
+        facts = {
+          ...facts,
+          alias: aliasFor(query),
+          package: manifest.remoteOnly
+            ? null
+            : { registryType: 'npm', identifier: manifest.npmPackage, env: manifest.env },
+        };
       }
     }
   }
 
-  const profiles = input.client ? CLIENT_PROFILES.filter((c) => c.id === input.client) : CLIENT_PROFILES;
+  const profiles = input.client
+    ? CLIENT_PROFILES.filter((c) => c.id === input.client)
+    : CLIENT_PROFILES;
   const clients: ClientAnswer[] = profiles.map((profile) => {
     const compat = evaluateClient(facts, profile);
     const config =
       compat.via === 'remote' && facts.remote && compat.verdict !== 'blocked'
-        ? renderClientConfig(profile, { name: facts.alias, url: facts.remote.url, headers: headersToRender(facts.remote) })
+        ? renderClientConfig(profile, {
+            name: facts.alias,
+            url: facts.remote.url,
+            headers: headersToRender(facts.remote),
+          })
         : [];
     return { ...compat, config };
   });
 
-  const summary: Record<CompatVerdict, number> = { works: 0, needs_setup: 0, blocked: 0, unknown: 0 };
+  const summary: Record<CompatVerdict, number> = {
+    works: 0,
+    needs_setup: 0,
+    blocked: 0,
+    unknown: 0,
+  };
   for (const c of clients) summary[c.verdict]++;
 
   const changes = endpointId ? await listEndpointChanges(db, endpointId, 5) : [];
@@ -230,17 +341,33 @@ export async function handleConnectCheck(db: Database, input: ConnectCheckInput,
   return {
     query,
     resolvedAs,
-    server: { name: facts.name, registryName, url: r?.url ?? null, package: facts.package?.identifier ?? null },
+    server: {
+      name: facts.name,
+      registryName,
+      url: r?.url ?? null,
+      package: facts.package?.identifier ?? null,
+    },
     evidence: {
       source,
       status: r?.status ?? null,
       observedAt,
       auth: r?.auth
-        ? { mode: r.auth.mode, issuer: r.auth.oauth?.issuer ?? null, cimd: r.auth.oauth?.cimd ?? null, dcr: r.auth.oauth?.dcr ?? null, pkceS256: r.auth.oauth?.pkceS256 ?? null }
+        ? {
+            mode: r.auth.mode,
+            issuer: r.auth.oauth?.issuer ?? null,
+            cimd: r.auth.oauth?.cimd ?? null,
+            dcr: r.auth.oauth?.dcr ?? null,
+            pkceS256: r.auth.oauth?.pkceS256 ?? null,
+          }
         : null,
       violations: r?.violations ?? [],
       toolCount: facts.tools?.length ?? null,
-      recentChanges: changes.map((c) => ({ kind: c.kind, severity: c.severity, summary: c.summary, at: c.createdAt.toISOString() })),
+      recentChanges: changes.map((c) => ({
+        kind: c.kind,
+        severity: c.severity,
+        summary: c.summary,
+        at: c.createdAt.toISOString(),
+      })),
     },
     clients,
     summary,

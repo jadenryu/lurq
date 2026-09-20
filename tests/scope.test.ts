@@ -38,7 +38,10 @@ describe('scope: security', () => {
 
   it('holds back a breaking upgrade with no advisory', () => {
     // The point of `security`: breakage is not a security event.
-    const v = scopeVerdict(upgrade({ verdict: 'removes-exports', removed: ['useHistory'] }), 'security');
+    const v = scopeVerdict(
+      upgrade({ verdict: 'removes-exports', removed: ['useHistory'] }),
+      'security',
+    );
     expect(v.inScope).toBe(false);
   });
 });

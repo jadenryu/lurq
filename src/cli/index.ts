@@ -137,12 +137,10 @@ export function buildProgram(): Command {
     .option('--check', 'validate the file only; send nothing (for PR checks)')
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
-    .action(
-      async (file: string, opts: { check?: boolean; url?: string; apiKey?: string }) => {
-        const { runPolicyPush } = await import('./policy');
-        await runPolicyPush(file, opts);
-      },
-    );
+    .action(async (file: string, opts: { check?: boolean; url?: string; apiKey?: string }) => {
+      const { runPolicyPush } = await import('./policy');
+      await runPolicyPush(file, opts);
+    });
 
   policy
     .command('history')
@@ -348,17 +346,25 @@ export function buildProgram(): Command {
   program
     .command('fix')
     .argument('[dir]', 'project directory to scan (default: current)', '.')
-    .description('write the upgrade changes that need no judgement, and brief the agent on the rest')
+    .description(
+      'write the upgrade changes that need no judgement, and brief the agent on the rest',
+    )
     // With neither --plan nor --upgrade it works out what moved by itself, which
     // is the only part that asks our API anything. Naming the versions keeps the
     // whole run offline.
     .option('--plan <file>', 'targets from `upgrade-plan --json`')
-    .option('--upgrade <spec...>', 'pkg@from..to (repeatable), e.g. cookie@1.1.1..2.0.1 — needs no API key')
+    .option(
+      '--upgrade <spec...>',
+      'pkg@from..to (repeatable), e.g. cookie@1.1.1..2.0.1 — needs no API key',
+    )
     .option('--apply', 'write the files (default: print the diff and change nothing)')
     .option('--json', 'output the result as JSON')
     .option('--exit-code', 'exit 1 when something is left for a human or an agent to do')
     .option('--max <n>', 'most packages to fix in one run (blast radius)', (v) => parseInt(v, 10))
-    .option('--sarif <file>', 'write SARIF for GitHub code scanning (upload with codeql-action/upload-sarif)')
+    .option(
+      '--sarif <file>',
+      'write SARIF for GitHub code scanning (upload with codeql-action/upload-sarif)',
+    )
     .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
     .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
     .option('--repo <owner/name>', "apply this repo's policy (defaults to $GITHUB_REPOSITORY)")
@@ -410,7 +416,10 @@ export function buildProgram(): Command {
     .option('--sarif <file>', 'write SARIF for GitHub code scanning')
     .option('--limit <n>', 'source files to read before stopping (default 5000)')
     .action(
-      async (dir: string, opts: { json?: boolean; exitCode?: boolean; sarif?: string; limit?: string }) => {
+      async (
+        dir: string,
+        opts: { json?: boolean; exitCode?: boolean; sarif?: string; limit?: string },
+      ) => {
         const { runEnvCheck } = await import('./envCheck');
         await runEnvCheck(dir, opts);
       },
@@ -485,13 +494,19 @@ export function buildProgram(): Command {
     .option('--no-history', 'do not compare with, or record, the previous scan')
     .option('--no-upload', 'keep this scan on this machine; do not record it to your account')
     .option('--require-upload', 'exit 1 if the scan could not be recorded to your account (for CI)')
-    .option('--github-issue', "keep a pinned 'lurq dashboard' issue current in this repository (in GitHub Actions)")
+    .option(
+      '--github-issue',
+      "keep a pinned 'lurq dashboard' issue current in this repository (in GitHub Actions)",
+    )
     .option(
       '--no-contribute',
       "do not offer published servers' contracts as corroboration for the public index",
     )
     .option('--json', 'output JSON instead of a report')
-    .option('--sarif <file>', 'write SARIF for GitHub code scanning (upload with codeql-action/upload-sarif)')
+    .option(
+      '--sarif <file>',
+      'write SARIF for GitHub code scanning (upload with codeql-action/upload-sarif)',
+    )
     .action(async (dir: string | undefined, opts: import('./mcpScan').McpScanCliOpts) => {
       const { runMcpScan } = await import('./mcpScan');
       await runMcpScan(dir, opts);
@@ -500,11 +515,17 @@ export function buildProgram(): Command {
   program
     .command('mcp-ci')
     .argument('[dir]', 'repository directory (defaults to the current one)')
-    .description("write a GitHub Actions workflow that rescans this repository's MCP servers daily and when their config changes")
+    .description(
+      "write a GitHub Actions workflow that rescans this repository's MCP servers daily and when their config changes",
+    )
     .option('--print', 'print the workflow instead of writing it')
     .option('--force', 'replace an existing workflow file')
     .option('--cron <expr>', 'schedule (default: daily 06:23 UTC)')
-    .option('--fail-on <severity>', 'fail the job at this severity: critical | high | moderate | low | none', 'high')
+    .option(
+      '--fail-on <severity>',
+      'fail the job at this severity: critical | high | moderate | low | none',
+      'high',
+    )
     .option(
       '--sarif',
       'also file findings as GitHub code scanning alerts (needs code scanning enabled; adds security-events: write)',
@@ -518,7 +539,9 @@ export function buildProgram(): Command {
   program
     .command('mcp-stack')
     .argument('[dir]', 'project directory (defaults to the current one)')
-    .description('do your configured MCP servers coexist? checks tool-name collisions and shadowing, live')
+    .description(
+      'do your configured MCP servers coexist? checks tool-name collisions and shadowing, live',
+    )
     .option('--project-only', 'read only config files in the project')
     .option('--trust-project', 'launch servers committed to the repository without asking')
     .option('--timeout <seconds>', 'per-server connect deadline (default 60)')
@@ -559,8 +582,13 @@ export function buildProgram(): Command {
   program
     .command('connect-check')
     .argument('<server>', 'endpoint URL, official registry name, or npm package name')
-    .description('will this MCP server work in your client, and what does it take? (per-client verdicts + config)')
-    .option('--client <id>', 'one client: claude-code, claude-ai, chatgpt, cursor, vscode, codex, gemini-cli, …')
+    .description(
+      'will this MCP server work in your client, and what does it take? (per-client verdicts + config)',
+    )
+    .option(
+      '--client <id>',
+      'one client: claude-code, claude-ai, chatgpt, cursor, vscode, codex, gemini-cli, …',
+    )
     .option('--json', 'output JSON instead of a table')
     .action(async (server: string, opts: { client?: string; json?: boolean }) => {
       const { runConnectCheck } = await import('./commands');
@@ -570,7 +598,9 @@ export function buildProgram(): Command {
   program
     .command('mcp-pin')
     .argument('<server>', 'endpoint URL or official registry name of a remote MCP server')
-    .description('approve a remote MCP server as it is now; you are alerted when its tools or sign-in path change')
+    .description(
+      'approve a remote MCP server as it is now; you are alerted when its tools or sign-in path change',
+    )
     .option('--note <text>', 'why it was approved, shown with the pin')
     .option('--json', 'output JSON')
     .action(async (server: string, opts: { note?: string; json?: boolean }) => {
@@ -641,9 +671,18 @@ export function buildProgram(): Command {
 
   program
     .command('hook')
-    .argument('<event>', 'the agent event being handled: session-start, prompt, pre-tool-use, post-tool-use')
-    .option('--agent <agent>', 'whose hook format to read and write: claude, codex or cursor', 'claude')
-    .description('run as an agent hook: verify installs and suggest lurq where it helps (set up by `lurq setup`)')
+    .argument(
+      '<event>',
+      'the agent event being handled: session-start, prompt, pre-tool-use, post-tool-use',
+    )
+    .option(
+      '--agent <agent>',
+      'whose hook format to read and write: claude, codex or cursor',
+      'claude',
+    )
+    .description(
+      'run as an agent hook: verify installs and suggest lurq where it helps (set up by `lurq setup`)',
+    )
     .action(async (event: string, opts: { agent: string }) => {
       const { runHook } = await import('./hook');
       await runHook(event, opts.agent);

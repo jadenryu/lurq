@@ -296,7 +296,9 @@ export async function handleEvaluate(
   return {
     ...evaluated,
     policy:
-      policy.mode === 'warn' ? { allowed: true, warning: exclusion } : { allowed: false, ...exclusion },
+      policy.mode === 'warn'
+        ? { allowed: true, warning: exclusion }
+        : { allowed: false, ...exclusion },
   };
 }
 
@@ -699,7 +701,9 @@ export async function handleUsage(db: Database, input: UsageInput): Promise<Usag
         ? `Shallow surface: ${input.package} exports one value typed by ${surface
             .filter((s) => s.name !== 'default')
             .map((s) => s.name)
-            .join(', ')}, so its methods are that interface's members and are NOT listed here. Read them in its type declarations (${types} if the package bundles none), or call resolve_surface for the names it exports at runtime.`
+            .join(
+              ', ',
+            )}, so its methods are that interface's members and are NOT listed here. Read them in its type declarations (${types} if the package bundles none), or call resolve_surface for the names it exports at runtime.`
         : page?.note,
   };
 

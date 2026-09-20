@@ -49,7 +49,9 @@ describe('alert', () => {
 
 describe('errorKind', () => {
   it('reports the class and code, never the message', () => {
-    const err = Object.assign(new Error('duplicate key value (secret@example.com)'), { code: '23505' });
+    const err = Object.assign(new Error('duplicate key value (secret@example.com)'), {
+      code: '23505',
+    });
     expect(errorKind(err)).toBe('Error (23505)');
     expect(errorKind(new TypeError('x'))).toBe('TypeError');
   });

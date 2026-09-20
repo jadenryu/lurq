@@ -24,9 +24,21 @@ describe.skipIf(!TEST_DB)('public MCP changes through notify', () => {
   let changeId: number;
 
   const result = (over: Partial<ProbeResult> = {}): ProbeResult => ({
-    url, status: 'auth_required', httpStatus: 401, transport: 'streamable-http', protocolMode: null, protocolVersion: null,
-    serverName: null, serverVersion: null, auth: { mode: 'oauth', challengeStatus: 401, oauth: null, declaredHeaders: [] },
-    violations: [], snapshot: null, error: null, latencyMs: 40, finalUrl: null, ...over,
+    url,
+    status: 'auth_required',
+    httpStatus: 401,
+    transport: 'streamable-http',
+    protocolMode: null,
+    protocolVersion: null,
+    serverName: null,
+    serverVersion: null,
+    auth: { mode: 'oauth', challengeStatus: 401, oauth: null, declaredHeaders: [] },
+    violations: [],
+    snapshot: null,
+    error: null,
+    latencyMs: 40,
+    finalUrl: null,
+    ...over,
   });
 
   beforeAll(async () => {
@@ -40,31 +52,76 @@ describe.skipIf(!TEST_DB)('public MCP changes through notify', () => {
     db = handle.db;
     close = handle.close;
 
-    await store.storeRegistryEntries(db, [{
-      name: serverName, version: '1.0.0', title: null, description: null, websiteUrl: null, repositoryUrl: null,
-      remotes: [{ type: 'streamable-http', url }], packages: [], status: 'active', isLatest: true, publishedAt: null, updatedAt: new Date(),
-    }]);
+    await store.storeRegistryEntries(db, [
+      {
+        name: serverName,
+        version: '1.0.0',
+        title: null,
+        description: null,
+        websiteUrl: null,
+        repositoryUrl: null,
+        remotes: [{ type: 'streamable-http', url }],
+        packages: [],
+        status: 'active',
+        isLatest: true,
+        publishedAt: null,
+        updatedAt: new Date(),
+      },
+    ]);
     endpointId = (await store.getEndpointByUrl(db, url))!.id;
     await db.insert(mcpDeployments).values({
-      ownerId: owner, serverKey: serverKeyFor('remote', null, url, 'x'), configFingerprint: 'fp', alias: 'billing',
-      registry: 'remote', packageName: null, transport: 'http', lastStatus: 'ok',
+      ownerId: owner,
+      serverKey: serverKeyFor('remote', null, url, 'x'),
+      configFingerprint: 'fp',
+      alias: 'billing',
+      registry: 'remote',
+      packageName: null,
+      transport: 'http',
+      lastStatus: 'ok',
     });
 
     await store.recordEndpointProbe(db, {
-      endpointId, result: result(), contentHash: null, authHash: 'auth-v2', contract: null, consecutiveFailures: 0, nextProbeAt: new Date(),
+      endpointId,
+      result: result(),
+      contentHash: null,
+      authHash: 'auth-v2',
+      contract: null,
+      consecutiveFailures: 0,
+      nextProbeAt: new Date(),
       changes: [
-        { kind: 'auth', fromKey: 'auth-v1', toKey: 'auth-v2', severity: 'high', summary: 'Dynamic Client Registration no longer offered; clients that register that way will fail' },
-        { kind: 'contract', fromKey: 'c1', toKey: 'c2', severity: 'low', summary: '1 tool(s) added' },
+        {
+          kind: 'auth',
+          fromKey: 'auth-v1',
+          toKey: 'auth-v2',
+          severity: 'high',
+          summary:
+            'Dynamic Client Registration no longer offered; clients that register that way will fail',
+        },
+        {
+          kind: 'contract',
+          fromKey: 'c1',
+          toKey: 'c2',
+          severity: 'low',
+          summary: '1 tool(s) added',
+        },
       ],
     });
-    const rows = await db.execute(sql`select id, kind from mcp_endpoint_changes where endpoint_id = ${endpointId} order by id`);
-    changeId = Number(([...rows] as { id: number; kind: string }[]).find((r) => r.kind === 'auth')!.id);
+    const rows = await db.execute(
+      sql`select id, kind from mcp_endpoint_changes where endpoint_id = ${endpointId} order by id`,
+    );
+    changeId = Number(
+      ([...rows] as { id: number; kind: string }[]).find((r) => r.kind === 'auth')!.id,
+    );
   });
 
   afterAll(async () => {
     // Local test database only: remove exactly the rows this run created.
-    await db.execute(sql`delete from mcp_endpoint_change_acks where owner_id like ${`test_notifypub_${run}_%`}`);
-    await db.execute(sql`delete from mcp_deployments where owner_id like ${`test_notifypub_${run}_%`}`);
+    await db.execute(
+      sql`delete from mcp_endpoint_change_acks where owner_id like ${`test_notifypub_${run}_%`}`,
+    );
+    await db.execute(
+      sql`delete from mcp_deployments where owner_id like ${`test_notifypub_${run}_%`}`,
+    );
     await db.execute(sql`delete from mcp_endpoint_changes where endpoint_id = ${endpointId}`);
     await db.execute(sql`delete from mcp_endpoint_observations where endpoint_id = ${endpointId}`);
     await db.execute(sql`delete from mcp_endpoint_servers where endpoint_id = ${endpointId}`);
@@ -92,7 +149,9 @@ describe.skipIf(!TEST_DB)('public MCP changes through notify', () => {
     const notice = await agentAlertNotice(db, owner, new Date(), WEB);
     expect(notice).toMatch(/billing changed how clients sign in/);
     const { channelCandidates } = await import('../src/notify/channelSources');
-    const items = ((await channelCandidates(db, new Date(), WEB)).get(owner) ?? []).filter((i) => i.key.startsWith('pub:'));
+    const items = ((await channelCandidates(db, new Date(), WEB)).get(owner) ?? []).filter((i) =>
+      i.key.startsWith('pub:'),
+    );
     expect(items.map((i) => i.severity).sort()).toEqual(['high', 'low']);
   });
 

@@ -19,16 +19,21 @@ describe('gradeOverall (set-level verdict, no `likely`)', () => {
   const base = { hasConflict: false, hasUnverifiedMember: false } as const;
   it('proven conflict wins over everything', () => {
     expect(
-      gradeOverall({ ...base, hasConflict: true, hasUnverifiedMember: true, resolution: 'resolved' }),
+      gradeOverall({
+        ...base,
+        hasConflict: true,
+        hasUnverifiedMember: true,
+        resolution: 'resolved',
+      }),
     ).toBe('conflict');
   });
   it("npm's ERESOLVE is a conflict even with nothing declared", () => {
     expect(gradeOverall({ ...base, resolution: 'conflict' })).toBe('conflict');
   });
   it('an un-ingested member is unknown', () => {
-    expect(
-      gradeOverall({ ...base, hasUnverifiedMember: true, resolution: 'resolved' }),
-    ).toBe('unknown');
+    expect(gradeOverall({ ...base, hasUnverifiedMember: true, resolution: 'resolved' })).toBe(
+      'unknown',
+    );
   });
   it('an inconclusive resolve is unknown, never a hedge', () => {
     expect(gradeOverall({ ...base, resolution: 'inconclusive' })).toBe('unknown');
@@ -60,7 +65,7 @@ describe('stackKey (the cache key is the set AND its versions)', () => {
 });
 
 describe('summarizeEresolve', () => {
-  it('keeps the lines naming the clash and drops npm\'s --force advice', () => {
+  it("keeps the lines naming the clash and drops npm's --force advice", () => {
     const out = summarizeEresolve(
       [
         'npm error code ERESOLVE',
@@ -80,7 +85,9 @@ describe('summarizeEresolve', () => {
     expect(summarizeEresolve('ERESOLVE something unfamiliar')).toBeTruthy();
   });
   it('caps length, because this is stored and returned over the wire', () => {
-    const long = Array.from({ length: 200 }, (_, i) => `npm error Found: pkg-${i}@1.0.0`).join('\n');
+    const long = Array.from({ length: 200 }, (_, i) => `npm error Found: pkg-${i}@1.0.0`).join(
+      '\n',
+    );
     expect(summarizeEresolve(long).length).toBeLessThanOrEqual(600);
   });
 });
@@ -128,10 +135,7 @@ describe('deriveCompatEdges', () => {
 
   it('marks a failed PAIR as a conflict (precise attribution)', () => {
     const pair = resolved.slice(0, 2);
-    const edges = deriveCompatEdges(
-      pair,
-      result({ installed: false, loaded: noneLoaded(pair) }),
-    );
+    const edges = deriveCompatEdges(pair, result({ installed: false, loaded: noneLoaded(pair) }));
     expect(edges).toEqual([
       expect.objectContaining({ a: 'react', b: 'react-dom', status: 'conflict' }),
     ]);
@@ -184,20 +188,21 @@ describe('enumeratePairs (a verdict belongs to a pair, not a package)', () => {
     expect(conflicted[0]!.requirement?.resolved).toBe('0.41.3');
     // @auth/core is in a conflicting pair, but its pair with `next` still holds —
     // which is the whole reason verdicts can't live on packages.
-    const withNext = pairs.find(
-      (p) => pairKey(p.a, p.b) === pairKey('next', '@auth/core'),
-    );
+    const withNext = pairs.find((p) => pairKey(p.a, p.b) === pairKey('next', '@auth/core'));
     expect(withNext!.status).toBe('held');
   });
 
   it('orients a conflicting pair the way the conflict states it', () => {
-    const pairs = enumeratePairs(['@auth/core', 'next-auth'], [
-      {
-        source: 'peer-deps',
-        packages: ['next-auth', '@auth/core'],
-        detail: 'x',
-      },
-    ]);
+    const pairs = enumeratePairs(
+      ['@auth/core', 'next-auth'],
+      [
+        {
+          source: 'peer-deps',
+          packages: ['next-auth', '@auth/core'],
+          detail: 'x',
+        },
+      ],
+    );
     // Argument order puts @auth/core first; the requirer still leads.
     expect(pairs[0]!.a).toBe('next-auth');
     expect(pairs[0]!.b).toBe('@auth/core');
@@ -215,24 +220,36 @@ describe('edgeMatchesVersions (evidence is about exact versions)', () => {
   const edge = { packageA: 'react', packageB: 'next', versionA: '18.3.1', versionB: '14.2.0' };
 
   it('accepts an edge recorded at the versions under check', () => {
-    const at = new Map([['react', '18.3.1'], ['next', '14.2.0']]);
+    const at = new Map([
+      ['react', '18.3.1'],
+      ['next', '14.2.0'],
+    ]);
     expect(edgeMatchesVersions(edge, at)).toBe(true);
   });
 
   it('rejects proof from a different major', () => {
     // The regression this exists for: react@18 + next@14 co-installing is not
     // evidence about react@19 + next@16, and a name-level match said it was.
-    const at = new Map([['react', '19.2.4'], ['next', '16.2.9']]);
+    const at = new Map([
+      ['react', '19.2.4'],
+      ['next', '16.2.9'],
+    ]);
     expect(edgeMatchesVersions(edge, at)).toBe(false);
   });
 
   it('rejects a partial match', () => {
-    const at = new Map([['react', '18.3.1'], ['next', '16.2.9']]);
+    const at = new Map([
+      ['react', '18.3.1'],
+      ['next', '16.2.9'],
+    ]);
     expect(edgeMatchesVersions(edge, at)).toBe(false);
   });
 
   it('rejects a member whose version we could not resolve', () => {
-    const at = new Map<string, string | null>([['react', '18.3.1'], ['next', null]]);
+    const at = new Map<string, string | null>([
+      ['react', '18.3.1'],
+      ['next', null],
+    ]);
     expect(edgeMatchesVersions(edge, at)).toBe(false);
   });
 

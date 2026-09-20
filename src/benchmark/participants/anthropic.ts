@@ -8,7 +8,7 @@ export class AnthropicParticipant implements Participant {
 
   constructor(
     public readonly id: string,
-    public readonly model: string
+    public readonly model: string,
   ) {}
 
   async run(_db: Database, benchCase: BenchmarkCase): Promise<StackProposal> {
@@ -38,7 +38,7 @@ export class AnthropicParticipant implements Participant {
       throw new Error(`Anthropic API error ${res.status}: ${text}`);
     }
 
-    const data = await res.json() as any;
+    const data = (await res.json()) as any;
     const textBlock = data.content?.find((c: any) => c.type === 'text');
     const content = textBlock?.text;
     if (!content) {
@@ -48,7 +48,9 @@ export class AnthropicParticipant implements Participant {
     try {
       return parseStackProposalJson(content, 'unaided-model');
     } catch (err) {
-      throw new Error(`Failed to parse Anthropic JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${content}`);
+      throw new Error(
+        `Failed to parse Anthropic JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${content}`,
+      );
     }
   }
 }

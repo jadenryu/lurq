@@ -16,8 +16,13 @@ describe('install links', () => {
     const url = new URL(cursorInstallLink());
     expect(url.protocol).toBe('cursor:');
     expect(url.searchParams.get('name')).toBe('lurq');
-    const config = JSON.parse(Buffer.from(url.searchParams.get('config')!, 'base64').toString('utf8'));
-    expect(config).toEqual({ url: DEFAULT_ENDPOINT, headers: { Authorization: bearer, 'X-Lurq-Client': 'cursor' } });
+    const config = JSON.parse(
+      Buffer.from(url.searchParams.get('config')!, 'base64').toString('utf8'),
+    );
+    expect(config).toEqual({
+      url: DEFAULT_ENDPOINT,
+      headers: { Authorization: bearer, 'X-Lurq-Client': 'cursor' },
+    });
   });
 
   it('VS Code gets the named http entry, URL-encoded', () => {
@@ -47,7 +52,9 @@ describe('Claude Code plugin', () => {
     const template = readFileSync('templates/skill-instructions.md', 'utf8');
     // Regenerate after editing the template:
     // npx tsx -e "import {readFileSync,writeFileSync} from 'node:fs'; import {buildSkillFile} from './src/cli/installSkill'; writeFileSync('plugins/lurq/skills/lurq/SKILL.md', buildSkillFile(readFileSync('templates/skill-instructions.md','utf8')))"
-    expect(readFileSync('plugins/lurq/skills/lurq/SKILL.md', 'utf8')).toBe(buildSkillFile(template));
+    expect(readFileSync('plugins/lurq/skills/lurq/SKILL.md', 'utf8')).toBe(
+      buildSkillFile(template),
+    );
   });
 
   it('connects the hosted endpoint with the key the user gave at install', () => {

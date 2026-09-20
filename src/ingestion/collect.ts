@@ -69,7 +69,9 @@ export async function collectSignals(
       return { weeklyDownloads, downloadGrowth90d };
     }),
     repo && githubToken
-      ? attempt('github', errors, () => fetchGithubRepo(repo.owner, repo.repo, githubToken, fetchImpl))
+      ? attempt('github', errors, () =>
+          fetchGithubRepo(repo.owner, repo.repo, githubToken, fetchImpl),
+        )
       : Promise.resolve(null),
     attempt('deps-dev', errors, () => fetchDepsDev(name, version, repo, fetchImpl)),
     attempt('bundlephobia', errors, () => fetchBundlephobia(name, category, fetchImpl)),

@@ -55,7 +55,10 @@ if (existsSync(BACKUP)) {
 const raw = readFileSync(MANIFEST, 'utf8');
 const pkg = JSON.parse(raw);
 // Self-host server stack, and what tsup compiles into dist (tsup.config.ts).
-const omitted = [...(pkg.lurq?.selfHostDependencies ?? []), ...(pkg.lurq?.inlinedDependencies ?? [])];
+const omitted = [
+  ...(pkg.lurq?.selfHostDependencies ?? []),
+  ...(pkg.lurq?.inlinedDependencies ?? []),
+];
 
 for (const name of omitted) {
   // A stale name means the list and the dependencies have drifted apart, and a

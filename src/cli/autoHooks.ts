@@ -48,7 +48,8 @@ export interface HookAction {
 export function planHookMaintenance(states: AgentHookState[]): HookAction[] {
   return states.flatMap((s): HookAction[] => {
     if (!s.hasEntry) return [];
-    if (s.recorded === undefined) return [{ agent: s.agent, kind: s.hooksPresent ? 'refresh' : 'install' }];
+    if (s.recorded === undefined)
+      return [{ agent: s.agent, kind: s.hooksPresent ? 'refresh' : 'install' }];
     if (!s.hooksPresent) return []; // Removed by the user.
     return s.recorded === s.current ? [] : [{ agent: s.agent, kind: 'refresh' }];
   });
@@ -98,7 +99,8 @@ export async function maintainHooks(argv: string[], now = Date.now()): Promise<v
     const added: HookAgent[] = [];
     for (const action of planHookMaintenance(states)) {
       try {
-        if (skill.installHooks(action.agent, undefined, invocation) && action.kind === 'install') added.push(action.agent);
+        if (skill.installHooks(action.agent, undefined, invocation) && action.kind === 'install')
+          added.push(action.agent);
       } catch {
         // One unwritable file must not stop the others.
       }

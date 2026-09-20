@@ -146,11 +146,7 @@ export async function getPendingCompatVerify(
   db: Database,
   limit: number,
 ): Promise<CompatVerifyQueueRow[]> {
-  return db
-    .select()
-    .from(compatVerifyQueue)
-    .orderBy(compatVerifyQueue.requestedAt)
-    .limit(limit);
+  return db.select().from(compatVerifyQueue).orderBy(compatVerifyQueue.requestedAt).limit(limit);
 }
 
 export async function deleteCompatVerify(db: Database, id: number): Promise<void> {

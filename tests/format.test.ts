@@ -1,5 +1,12 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { bold, colorEnabled, table, formatNumber, formatPercent, formatDate } from '../src/cli/format';
+import {
+  bold,
+  colorEnabled,
+  table,
+  formatNumber,
+  formatPercent,
+  formatDate,
+} from '../src/cli/format';
 
 // Strip ANSI without a control-character regex: split on ESC, drop the leading
 // `[<code>m` from each following segment.
@@ -35,7 +42,15 @@ describe('formatDate', () => {
 
 describe('table', () => {
   it('aligns columns and includes a header separator', () => {
-    const out = plain(table(['Name', 'Health'], [['react', '90'], ['vue', '89']]));
+    const out = plain(
+      table(
+        ['Name', 'Health'],
+        [
+          ['react', '90'],
+          ['vue', '89'],
+        ],
+      ),
+    );
     const lines = out.split('\n');
     expect(lines[0]).toContain('Name');
     expect(lines[0]).toContain('Health');
@@ -45,7 +60,11 @@ describe('table', () => {
 });
 
 describe('colour', () => {
-  const saved = { NO_COLOR: process.env.NO_COLOR, FORCE_COLOR: process.env.FORCE_COLOR, tty: process.stdout.isTTY };
+  const saved = {
+    NO_COLOR: process.env.NO_COLOR,
+    FORCE_COLOR: process.env.FORCE_COLOR,
+    tty: process.stdout.isTTY,
+  };
   const set = (env: { NO_COLOR?: string; FORCE_COLOR?: string }, tty: boolean) => {
     for (const k of ['NO_COLOR', 'FORCE_COLOR'] as const) {
       if (env[k] === undefined) delete process.env[k];

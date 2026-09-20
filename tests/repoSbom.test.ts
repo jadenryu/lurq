@@ -107,7 +107,14 @@ describe('parseSbom', () => {
 });
 
 /** Minimal drizzle stub: one `select…from…where` returning fixed package rows. */
-function stubDb(rows: { name: string; latestVersion: string | null; deprecated: boolean; advisories: unknown[] | null }[]) {
+function stubDb(
+  rows: {
+    name: string;
+    latestVersion: string | null;
+    deprecated: boolean;
+    advisories: unknown[] | null;
+  }[],
+) {
   return {
     select: vi.fn(() => ({
       from: vi.fn(() => ({ where: vi.fn(async () => rows) })),

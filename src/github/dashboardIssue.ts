@@ -67,9 +67,13 @@ const RANK: Record<Severity, number> = { critical: 0, high: 1, moderate: 2, low:
 
 function mcpSection(scan: ScanReport, urgent: UrgentNote[]): string[] {
   const lines = ['### MCP servers', ''];
-  if (!scan.servers.length) return [...lines, 'No MCP servers are committed to this repository.', ''];
+  if (!scan.servers.length)
+    return [...lines, 'No MCP servers are committed to this repository.', ''];
 
-  lines.push('| Server | Status | Tools | Can modify | Findings |', '| --- | --- | --- | --- | --- |');
+  lines.push(
+    '| Server | Status | Tools | Can modify | Findings |',
+    '| --- | --- | --- | --- | --- |',
+  );
   for (const s of scan.servers.slice(0, MAX_ROWS)) {
     const f = s.analysis?.findings.filter((x) => RANK[x.severity] <= RANK.moderate) ?? [];
     const worst = f.sort((a, b) => RANK[a.severity] - RANK[b.severity])[0]?.severity;
@@ -79,13 +83,32 @@ function mcpSection(scan: ScanReport, urgent: UrgentNote[]): string[] {
   }
   lines.push('');
 
-  const account = new Map((scan.account?.results ?? []).filter((r) => r.since).map((r) => [r.alias, r.since!]));
+  const account = new Map(
+    (scan.account?.results ?? []).filter((r) => r.since).map((r) => [r.alias, r.since!]),
+  );
   const changes = scan.servers.flatMap((s) => {
     const acc = account.get(s.alias);
-    if (acc) return [{ alias: s.alias, key: s.serverKey, severity: acc.severity as Severity, summary: acc.summary, rug: acc.rugPull.length > 0 }];
+    if (acc)
+      return [
+        {
+          alias: s.alias,
+          key: s.serverKey,
+          severity: acc.severity as Severity,
+          summary: acc.summary,
+          rug: acc.rugPull.length > 0,
+        },
+      ];
     const d = s.sinceLastScan;
     return d && !d.unchanged
-      ? [{ alias: s.alias, key: s.serverKey, severity: d.severity, summary: d.summary, rug: d.rugPull.length > 0 || d.contract.annotationFlips.some((x) => x.widensPrivilege) }]
+      ? [
+          {
+            alias: s.alias,
+            key: s.serverKey,
+            severity: d.severity,
+            summary: d.summary,
+            rug: d.rugPull.length > 0 || d.contract.annotationFlips.some((x) => x.widensPrivilege),
+          },
+        ]
       : [];
   });
   if (changes.length) {
@@ -93,14 +116,23 @@ function mcpSection(scan: ScanReport, urgent: UrgentNote[]): string[] {
     for (const c of changes.sort((a, b) => RANK[a.severity] - RANK[b.severity])) {
       const line = `- **${c.severity}** ${code(c.alias)}: ${md(c.summary, 300)}`;
       lines.push(line);
-      if (c.rug || c.severity === 'critical') urgent.push({ key: sha(`change|${c.key}|${c.summary}`).slice(0, 16), line });
+      if (c.rug || c.severity === 'critical')
+        urgent.push({ key: sha(`change|${c.key}|${c.summary}`).slice(0, 16), line });
     }
     lines.push('');
   }
 
   const findings = scan.servers
-    .flatMap((s) => (s.analysis?.findings ?? []).map((f) => ({ ...f, alias: s.alias, serverKey: s.serverKey })))
-    .concat(scan.findings.map((f) => ({ ...f, alias: f.server ?? 'stack', serverKey: `stack:${f.server ?? ''}` })))
+    .flatMap((s) =>
+      (s.analysis?.findings ?? []).map((f) => ({ ...f, alias: s.alias, serverKey: s.serverKey })),
+    )
+    .concat(
+      scan.findings.map((f) => ({
+        ...f,
+        alias: f.server ?? 'stack',
+        serverKey: `stack:${f.server ?? ''}`,
+      })),
+    )
     .filter((f) => RANK[f.severity] <= RANK.high)
     .sort((a, b) => RANK[a.severity] - RANK[b.severity]);
   if (findings.length) {
@@ -108,7 +140,14 @@ function mcpSection(scan: ScanReport, urgent: UrgentNote[]): string[] {
     for (const f of findings.slice(0, MAX_ROWS)) {
       const line = `- **${f.severity}** ${code(f.alias)}${f.tool ? ` › ${code(f.tool)}` : ''}: ${md(f.detail, 240)}`;
       lines.push(line);
-      if (f.severity === 'critical') urgent.push({ key: sha(`finding|${f.serverKey}|${f.kind}|${f.tool}|${f.where}|${f.evidence}`).slice(0, 16), line });
+      if (f.severity === 'critical')
+        urgent.push({
+          key: sha(`finding|${f.serverKey}|${f.kind}|${f.tool}|${f.where}|${f.evidence}`).slice(
+            0,
+            16,
+          ),
+          line,
+        });
     }
     lines.push('');
   }
@@ -116,7 +155,10 @@ function mcpSection(scan: ScanReport, urgent: UrgentNote[]): string[] {
   const unread = scan.servers.filter((s) => !s.snapshot);
   if (unread.length) {
     lines.push(`<details><summary>${unread.length} server(s) could not be read</summary>`, '');
-    for (const s of unread.slice(0, MAX_ROWS)) lines.push(`- ${code(s.alias)}: ${s.status.replace(/_/g, ' ')}${s.error ? `, ${md(s.error, 160)}` : ''}`);
+    for (const s of unread.slice(0, MAX_ROWS))
+      lines.push(
+        `- ${code(s.alias)}: ${s.status.replace(/_/g, ' ')}${s.error ? `, ${md(s.error, 160)}` : ''}`,
+      );
     lines.push('', '</details>', '');
   }
   return lines;
@@ -126,11 +168,17 @@ function dependencySection(plan: RemotePlan | null, note: string | null): string
   const lines = ['### Dependencies', ''];
   if (!plan) return [...lines, note ?? 'Not checked on this run.', ''];
   if (!plan.upgrades.length) {
-    return [...lines, `Everything lurq tracks is on its latest release${plan.untracked ? ` (${plan.untracked} not yet indexed)` : ''}.`, ''];
+    return [
+      ...lines,
+      `Everything lurq tracks is on its latest release${plan.untracked ? ` (${plan.untracked} not yet indexed)` : ''}.`,
+      '',
+    ];
   }
   lines.push('| Package | Upgrade | What it removes | Advisories |', '| --- | --- | --- | --- |');
   const order = { 'removes-exports': 0, 'arity-changed': 1, unknown: 2, clean: 3 } as const;
-  for (const u of [...plan.upgrades].sort((a, b) => order[a.verdict] - order[b.verdict] || b.advisories - a.advisories).slice(0, MAX_ROWS)) {
+  for (const u of [...plan.upgrades]
+    .sort((a, b) => order[a.verdict] - order[b.verdict] || b.advisories - a.advisories)
+    .slice(0, MAX_ROWS)) {
     const removes =
       u.verdict === 'removes-exports'
         ? `${u.removed.length} export(s)`
@@ -139,10 +187,17 @@ function dependencySection(plan: RemotePlan | null, note: string | null): string
           : u.verdict === 'clean'
             ? 'nothing'
             : 'unknown';
-    lines.push(`| ${code(u.package)} | ${md(u.fromVersion, 40)} → ${md(u.toVersion, 40)}${u.majorsBehind ? ` (${u.majorsBehind} major)` : ''} | ${removes} | ${u.advisories || '—'} |`);
+    lines.push(
+      `| ${code(u.package)} | ${md(u.fromVersion, 40)} → ${md(u.toVersion, 40)}${u.majorsBehind ? ` (${u.majorsBehind} major)` : ''} | ${removes} | ${u.advisories || '—'} |`,
+    );
   }
-  if (plan.upgrades.length > MAX_ROWS) lines.push('', `and ${plan.upgrades.length - MAX_ROWS} more.`);
-  if (plan.untracked) lines.push('', `${plan.untracked} dependencies are not indexed yet, so they are not covered here.`);
+  if (plan.upgrades.length > MAX_ROWS)
+    lines.push('', `and ${plan.upgrades.length - MAX_ROWS} more.`);
+  if (plan.untracked)
+    lines.push(
+      '',
+      `${plan.untracked} dependencies are not indexed yet, so they are not covered here.`,
+    );
   lines.push('');
   return lines;
 }
@@ -150,7 +205,9 @@ function dependencySection(plan: RemotePlan | null, note: string | null): string
 export function renderDashboardIssue(input: IssueInput): RenderedIssue {
   const urgent: UrgentNote[] = [];
   const content = [
-    ...(input.scan ? mcpSection(input.scan, urgent) : ['### MCP servers', '', 'Not scanned on this run.', '']),
+    ...(input.scan
+      ? mcpSection(input.scan, urgent)
+      : ['### MCP servers', '', 'Not scanned on this run.', '']),
     ...dependencySection(input.plan, input.planNote),
   ].join('\n');
 
@@ -181,7 +238,10 @@ export function readMarkers(body: string): { hash: string | null; alerted: strin
 
 export function withMarkers(body: string, hash: string, alerted: string[]): string {
   const keys = alerted.slice(-MAX_ALERTED_KEYS).join(',');
-  return body.replace(DASHBOARD_MARKER, `${DASHBOARD_MARKER}\n<!-- lurq:hash:${hash} -->\n<!-- lurq:alerted:${keys} -->`);
+  return body.replace(
+    DASHBOARD_MARKER,
+    `${DASHBOARD_MARKER}\n<!-- lurq:hash:${hash} -->\n<!-- lurq:alerted:${keys} -->`,
+  );
 }
 
 export interface GithubEnv {
@@ -205,10 +265,19 @@ export function githubEnvFrom(env: NodeJS.ProcessEnv): GithubEnv | null {
   const token = env.GITHUB_TOKEN;
   const repo = env.GITHUB_REPOSITORY;
   if (!token || !repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return null;
-  return { token, repo, apiUrl: (env.GITHUB_API_URL ?? 'https://api.github.com').replace(/\/$/, '') };
+  return {
+    token,
+    repo,
+    apiUrl: (env.GITHUB_API_URL ?? 'https://api.github.com').replace(/\/$/, ''),
+  };
 }
 
-async function gh<T>(env: GithubEnv, method: string, path: string, body?: unknown): Promise<{ status: number; data: T }> {
+async function gh<T>(
+  env: GithubEnv,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; data: T }> {
   const res = await (env.fetchImpl ?? fetch)(`${env.apiUrl}${path}`, {
     method,
     headers: {
@@ -253,16 +322,30 @@ export async function upsertDashboardIssue(
   env: GithubEnv,
   rendered: RenderedIssue,
 ): Promise<{ action: IssueAction; url: string | null; commented: number }> {
-  const { data: issues } = await gh<IssueRow[]>(env, 'GET', `/repos/${env.repo}/issues?labels=${DASHBOARD_LABEL}&state=all&per_page=100`);
-  const mine = (issues ?? []).filter((i) => !i.pull_request && (i.body ?? '').includes(DASHBOARD_MARKER));
+  const { data: issues } = await gh<IssueRow[]>(
+    env,
+    'GET',
+    `/repos/${env.repo}/issues?labels=${DASHBOARD_LABEL}&state=all&per_page=100`,
+  );
+  const mine = (issues ?? []).filter(
+    (i) => !i.pull_request && (i.body ?? '').includes(DASHBOARD_MARKER),
+  );
   const open = mine.find((i) => i.state === 'open');
 
   if (!open) {
     if (mine.length) return { action: 'closed', url: mine[0]!.html_url, commented: 0 };
-    await gh(env, 'POST', `/repos/${env.repo}/labels`, { name: DASHBOARD_LABEL, color: '6e40c9', description: 'lurq dependency and MCP dashboard' });
+    await gh(env, 'POST', `/repos/${env.repo}/labels`, {
+      name: DASHBOARD_LABEL,
+      color: '6e40c9',
+      description: 'lurq dependency and MCP dashboard',
+    });
     const { data } = await gh<IssueRow>(env, 'POST', `/repos/${env.repo}/issues`, {
       title: rendered.title,
-      body: withMarkers(rendered.body, rendered.hash, rendered.urgent.map((u) => u.key)),
+      body: withMarkers(
+        rendered.body,
+        rendered.hash,
+        rendered.urgent.map((u) => u.key),
+      ),
       labels: [DASHBOARD_LABEL],
     });
     // Opening the issue already notifies watchers; a comment would say it twice.
@@ -271,14 +354,22 @@ export async function upsertDashboardIssue(
 
   const markers = readMarkers(open.body ?? '');
   const fresh = rendered.urgent.filter((u) => !markers.alerted.includes(u.key));
-  if (markers.hash === rendered.hash && !fresh.length) return { action: 'unchanged', url: open.html_url, commented: 0 };
+  if (markers.hash === rendered.hash && !fresh.length)
+    return { action: 'unchanged', url: open.html_url, commented: 0 };
 
   await gh(env, 'PATCH', `/repos/${env.repo}/issues/${open.number}`, {
-    body: withMarkers(rendered.body, rendered.hash, [...markers.alerted, ...fresh.map((u) => u.key)]),
+    body: withMarkers(rendered.body, rendered.hash, [
+      ...markers.alerted,
+      ...fresh.map((u) => u.key),
+    ]),
   });
   if (fresh.length) {
     await gh(env, 'POST', `/repos/${env.repo}/issues/${open.number}/comments`, {
-      body: [`lurq found ${fresh.length === 1 ? 'something' : `${fresh.length} things`} that need a look today:`, '', ...fresh.map((u) => u.line)].join('\n'),
+      body: [
+        `lurq found ${fresh.length === 1 ? 'something' : `${fresh.length} things`} that need a look today:`,
+        '',
+        ...fresh.map((u) => u.line),
+      ].join('\n'),
     });
   }
   return { action: 'updated', url: open.html_url, commented: fresh.length ? 1 : 0 };

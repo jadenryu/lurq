@@ -89,7 +89,9 @@ export async function setSelectionPolicy(
         target: selectionPolicies.ownerId,
         set: { policy, updatedAt: new Date() },
       });
-    await tx.insert(selectionPolicyChanges).values({ ownerId, actor, before: previous, after: policy });
+    await tx
+      .insert(selectionPolicyChanges)
+      .values({ ownerId, actor, before: previous, after: policy });
   });
   return previous;
 }
@@ -139,9 +141,11 @@ export async function recordDecisions(
 ): Promise<void> {
   if (!ownerId || exclusions.length === 0) return;
   try {
-    await db.insert(policyDecisions).values(
-      exclusions.map((e) => ({ ownerId, packageName: e.name, rule: e.rule, action, tool })),
-    );
+    await db
+      .insert(policyDecisions)
+      .values(
+        exclusions.map((e) => ({ ownerId, packageName: e.name, rule: e.rule, action, tool })),
+      );
   } catch {
     // Display-only log: never let it break the request.
   }

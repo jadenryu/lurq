@@ -24,7 +24,12 @@ import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { packages, surfaceQueue } from '../db/schema';
 import { enqueueSurface } from '../db/surface';
-import { PUBLIC_TOP_LIMIT, publicDownloadFloor, publicPackageRow, validPackageName } from './publicSet';
+import {
+  PUBLIC_TOP_LIMIT,
+  publicDownloadFloor,
+  publicPackageRow,
+  validPackageName,
+} from './publicSet';
 import { handleDiffSurface } from './surfaceHandlers';
 
 export interface LatestOfMajor {
@@ -89,7 +94,12 @@ export function unextractedSides(latest: LatestOfMajor[], keep = PAIRS_PER_PACKA
     .map((l) => l.version);
 }
 
-export type UpgradeVerdict = 'removes-exports' | 'arity-changed' | 'types-only' | 'clean' | 'unknown';
+export type UpgradeVerdict =
+  | 'removes-exports'
+  | 'arity-changed'
+  | 'types-only'
+  | 'clean'
+  | 'unknown';
 
 /**
  * The headline, worst first. Same order as the upgrade brief's (github/brief.ts),
@@ -144,12 +154,22 @@ export interface SurfaceDiffResult {
   observedAt: Date | string | null;
 }
 
-export function toPublicUpgrade(pkg: string, pair: PublicUpgradePair, diff: SurfaceDiffResult): PublicUpgrade {
+export function toPublicUpgrade(
+  pkg: string,
+  pair: PublicUpgradePair,
+  diff: SurfaceDiffResult,
+): PublicUpgrade {
   const renamedPaths = new Set(diff.renamed.map((r) => r.path));
   // A renamed export is also missing under its old name; listing it in both
   // would tell the reader to find a replacement that the next section names.
   const removed = diff.removed.filter((r) => !renamedPaths.has(r.path));
-  const lists: unknown[][] = [removed, diff.renamed, diff.arityChanged, diff.typeOnlyRemoved, diff.deprecated];
+  const lists: unknown[][] = [
+    removed,
+    diff.renamed,
+    diff.arityChanged,
+    diff.typeOnlyRemoved,
+    diff.deprecated,
+  ];
   const cap = <T>(xs: T[]): T[] => xs.slice(0, LIST_CAP);
   return {
     package: pkg,
@@ -196,7 +216,10 @@ function rowsOf<T>(result: unknown): T[] {
  * The latest stable release of every major, per package, with whether each is
  * extracted. One query for any number of names.
  */
-export async function latestOfMajors(db: Database, names: string[]): Promise<Map<string, LatestOfMajor[]>> {
+export async function latestOfMajors(
+  db: Database,
+  names: string[],
+): Promise<Map<string, LatestOfMajor[]>> {
   const out = new Map<string, LatestOfMajor[]>();
   if (names.length === 0) return out;
   const result = await db.execute(sql`
@@ -234,11 +257,20 @@ export async function latestOfMajors(db: Database, names: string[]): Promise<Map
       ) as attempted
     from latest l
   `);
-  for (const r of rowsOf<{ package_name: string; major: number | string; version: string; stored: boolean; attempted: boolean }>(
-    result,
-  )) {
+  for (const r of rowsOf<{
+    package_name: string;
+    major: number | string;
+    version: string;
+    stored: boolean;
+    attempted: boolean;
+  }>(result)) {
     const list = out.get(r.package_name) ?? [];
-    list.push({ major: Number(r.major), version: r.version, stored: Boolean(r.stored), attempted: Boolean(r.attempted) });
+    list.push({
+      major: Number(r.major),
+      version: r.version,
+      stored: Boolean(r.stored),
+      attempted: Boolean(r.attempted),
+    });
     out.set(r.package_name, list);
   }
   return out;
@@ -271,10 +303,16 @@ export async function upgradeGuideFor(
   const to = semver.coerce(toVersion)?.major;
   if (from === undefined || to === undefined || to <= from) return null;
   if (!(await publicPackageRow(db, pkg))) return null;
-  const pair = (await upgradePairsFor(db, pkg)).find((p) => p.fromMajor === from && p.toMajor === to && p.ready);
+  const pair = (await upgradePairsFor(db, pkg)).find(
+    (p) => p.fromMajor === from && p.toMajor === to && p.ready,
+  );
   if (!pair) return null;
   const path = `/npm/${pkg.split('/').map(encodeURIComponent).join('/')}/${from}-to-${to}`;
-  return { url: `${webUrl.replace(/\/$/, '')}${path}`, fromVersion: pair.fromVersion, toVersion: pair.toVersion };
+  return {
+    url: `${webUrl.replace(/\/$/, '')}${path}`,
+    fromVersion: pair.fromVersion,
+    toVersion: pair.toVersion,
+  };
 }
 
 /** The public set, most downloaded first. */
@@ -298,7 +336,10 @@ export const QUEUE_HEADROOM = 20;
  * this pass had filled would make every agent's real miss wait behind pages
  * nobody has asked for yet. Returns how many specs were queued.
  */
-export async function enqueuePublicUpgrades(db: Database, opts: { packages?: number } = {}): Promise<number> {
+export async function enqueuePublicUpgrades(
+  db: Database,
+  opts: { packages?: number } = {},
+): Promise<number> {
   const [{ pending } = { pending: 0 }] = await db.select({ pending: count() }).from(surfaceQueue);
   let budget = QUEUE_HEADROOM - Number(pending);
   if (budget <= 0) return 0;
@@ -321,14 +362,25 @@ export async function enqueuePublicUpgrades(db: Database, opts: { packages?: num
   return queued;
 }
 
-export function registerPublicUpgradeRoutes(app: Express, db: Database, limiter: RequestHandler): void {
-  const cacheable = (res: Response) => res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+export function registerPublicUpgradeRoutes(
+  app: Express,
+  db: Database,
+  limiter: RequestHandler,
+): void {
+  const cacheable = (res: Response) =>
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
 
   app.get('/public/upgrade', limiter, async (req: Request, res: Response) => {
     const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
     const from = Number(req.query.from);
     const to = Number(req.query.to);
-    if (!validPackageName(name) || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to <= from) {
+    if (
+      !validPackageName(name) ||
+      !Number.isInteger(from) ||
+      !Number.isInteger(to) ||
+      from < 0 ||
+      to <= from
+    ) {
       res.status(400).json({ error: 'Give an npm package name and two majors, from < to.' });
       return;
     }
@@ -360,7 +412,8 @@ export function registerPublicUpgradeRoutes(app: Express, db: Database, limiter:
       })) as SurfaceDiffResult;
       const body = toPublicUpgrade(name, pair, diff);
       // A diff that came back unknown may be a fill in progress; do not let a CDN hold it for a day.
-      if (body.verdict === 'unknown') res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=900');
+      if (body.verdict === 'unknown')
+        res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=900');
       else cacheable(res);
       res.json(body);
     } catch (err) {
@@ -395,7 +448,10 @@ export function registerPublicUpgradeRoutes(app: Express, db: Database, limiter:
       cacheable(res);
       res.json({ upgrades: index.value });
     } catch (err) {
-      logger.error('public upgrade index failed:', err instanceof Error ? err.message : String(err));
+      logger.error(
+        'public upgrade index failed:',
+        err instanceof Error ? err.message : String(err),
+      );
       res.status(500).json({ error: 'Could not list upgrade pages.' });
     }
   });

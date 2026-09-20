@@ -14,8 +14,19 @@ describe('notify-preview', () => {
   it('writes both emails and all four channel payloads', async () => {
     const out = mkdtempSync(join(tmpdir(), 'lurq-preview-'));
     await runNotifyPreview({ out, open: false });
-    expect(readdirSync(out).sort()).toEqual(['digest.html', 'digest.txt', 'discord.json', 'slack.json', 'teams.json', 'urgent.html', 'urgent.txt', 'webhook.json']);
-    expect(readFileSync(join(out, 'urgent.txt'), 'utf8')).toMatch(/^Subject: lurq: 3 urgent changes/);
+    expect(readdirSync(out).sort()).toEqual([
+      'digest.html',
+      'digest.txt',
+      'discord.json',
+      'slack.json',
+      'teams.json',
+      'urgent.html',
+      'urgent.txt',
+      'webhook.json',
+    ]);
+    expect(readFileSync(join(out, 'urgent.txt'), 'utf8')).toMatch(
+      /^Subject: lurq: 3 urgent changes/,
+    );
     const webhook = JSON.parse(readFileSync(join(out, 'webhook.json'), 'utf8'));
     expect(webhook.headers['X-Lurq-Signature']).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
   });
@@ -25,7 +36,13 @@ describe('notify-preview', () => {
     delete process.env.RESEND_API_KEY;
     const { resetConfigCache } = await import('../src/core/config');
     resetConfigCache();
-    await expect(runNotifyPreview({ out: mkdtempSync(join(tmpdir(), 'lurq-preview-')), open: false, sendTo: 'me@example.com' })).rejects.toThrow(/RESEND_API_KEY/);
+    await expect(
+      runNotifyPreview({
+        out: mkdtempSync(join(tmpdir(), 'lurq-preview-')),
+        open: false,
+        sendTo: 'me@example.com',
+      }),
+    ).rejects.toThrow(/RESEND_API_KEY/);
     if (prev !== undefined) process.env.RESEND_API_KEY = prev;
     resetConfigCache();
   });

@@ -13,47 +13,48 @@ self-hosters, **not** for end users, who only run `lurq setup`
 <Callout type="warn">
   The commands that **build** an index are not in the published npm package.
 
-  `lurqrun` ships as a read-only oracle: it can query an index, extract API
-  surfaces, scan a codebase, and serve MCP. Everything that ingests, crawls,
-  mines, runs a sandbox, issues keys, or migrates the schema lives on a separate
-  **operator** binary that is deliberately excluded from the published files, so
-  ingestion code and its heavy dependencies never land on a user's machine.
+`lurqrun` ships as a read-only oracle: it can query an index, extract API
+surfaces, scan a codebase, and serve MCP. Everything that ingests, crawls,
+mines, runs a sandbox, issues keys, or migrates the schema lives on a separate
+**operator** binary that is deliberately excluded from the published files, so
+ingestion code and its heavy dependencies never land on a user's machine.
 
-  To run the operator plane, clone the repo:
+To run the operator plane, clone the repo:
 
-  ```bash
-  git clone https://github.com/jadenryu/lurq && cd lurq
-  npm install
-  npm run operator -- <command>          # or: npx tsx src/bin/operator.ts <command>
-  ```
+```bash
+git clone https://github.com/jadenryu/lurq && cd lurq
+npm install
+npm run operator -- <command>          # or: npx tsx src/bin/operator.ts <command>
+```
 
-  A built checkout can also run `node dist-operator/bin/operator.js <command>`,
-  which is what the production cron jobs use.
+A built checkout can also run `node dist-operator/bin/operator.js <command>`,
+which is what the production cron jobs use.
+
 </Callout>
 
 ## Configuration
 
 Only `DATABASE_URL` is required; everything else degrades gracefully.
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | yes | Postgres connection (pgvector-enabled) |
-| `GITHUB_TOKEN` | recommended | GitHub signals (stars, cadence, issues, archived) |
-| `EMBEDDING_PROVIDER` / `EMBEDDING_API_KEY` / `EMBEDDING_BASE_URL` | no | Any OpenAI-compatible `/v1/embeddings`; falls back to a local embedder |
-| `SUMMARY_PROVIDER` / `SUMMARY_API_KEY` / `SUMMARY_BASE_URL` | no | Any OpenAI-compatible chat endpoint for usage guides; falls back to the npm description |
-| `LURQ_SYNC_CONCURRENCY` | no | Parallel ingest workers (default 5) |
-| `LURQ_SYNC_REFRESH_CAP` | no | Stalest non-seed packages refreshed per sync (default 400) |
-| `PORT` | no | Port for `serve-http` (defaults to 8080) |
-| `LURQ_RATE_LIMIT_MAX` / `LURQ_IP_RATE_LIMIT_MAX` / `LURQ_RATE_LIMIT_WINDOW_MS` | no | Per-key / per-IP rate limits for `serve-http` |
-| `REDIS_URL` | recommended for real traffic | Response cache **and** the shared rate-limit store |
-| `LURQ_METRICS_TOKEN` | no | Bearer token guarding `/metrics`; unset disables the endpoint |
-| `LURQ_ISSUER_SECRET` | no | Shared secret for the dashboard-authenticated routes |
-| `E2B_API_KEY` / `E2B_TEMPLATE` | no | VM-isolated sandbox for verifying untrusted packages |
+| Variable                                                                       | Required                     | Purpose                                                                                 |
+| ------------------------------------------------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                                 | yes                          | Postgres connection (pgvector-enabled)                                                  |
+| `GITHUB_TOKEN`                                                                 | recommended                  | GitHub signals (stars, cadence, issues, archived)                                       |
+| `EMBEDDING_PROVIDER` / `EMBEDDING_API_KEY` / `EMBEDDING_BASE_URL`              | no                           | Any OpenAI-compatible `/v1/embeddings`; falls back to a local embedder                  |
+| `SUMMARY_PROVIDER` / `SUMMARY_API_KEY` / `SUMMARY_BASE_URL`                    | no                           | Any OpenAI-compatible chat endpoint for usage guides; falls back to the npm description |
+| `LURQ_SYNC_CONCURRENCY`                                                        | no                           | Parallel ingest workers (default 5)                                                     |
+| `LURQ_SYNC_REFRESH_CAP`                                                        | no                           | Stalest non-seed packages refreshed per sync (default 400)                              |
+| `PORT`                                                                         | no                           | Port for `serve-http` (defaults to 8080)                                                |
+| `LURQ_RATE_LIMIT_MAX` / `LURQ_IP_RATE_LIMIT_MAX` / `LURQ_RATE_LIMIT_WINDOW_MS` | no                           | Per-key / per-IP rate limits for `serve-http`                                           |
+| `REDIS_URL`                                                                    | recommended for real traffic | Response cache **and** the shared rate-limit store                                      |
+| `LURQ_METRICS_TOKEN`                                                           | no                           | Bearer token guarding `/metrics`; unset disables the endpoint                           |
+| `LURQ_ISSUER_SECRET`                                                           | no                           | Shared secret for the dashboard-authenticated routes                                    |
+| `E2B_API_KEY` / `E2B_TEMPLATE`                                                 | no                           | VM-isolated sandbox for verifying untrusted packages                                    |
 
 <Callout type="info">
-  Without `REDIS_URL` the response cache is a transparent pass-through and every
-  request recomputes its search on the database. Fine for one box; set it before
-  serving real traffic, since it also backs the rate limiter across instances.
+  Without `REDIS_URL` the response cache is a transparent pass-through and every request recomputes
+  its search on the database. Fine for one box; set it before serving real traffic, since it also
+  backs the rate limiter across instances.
 </Callout>
 
 ## Set up the index
@@ -103,10 +104,9 @@ npm run operator -- keys revoke lurq_live_ab12cd    # revoke by prefix or id
 ```
 
 <Callout type="warn">
-  Keys are shown **once** at creation and stored only as hashes. Interactively,
-  the key is wiped from your terminal (screen and scroll-back) after you confirm
-  you've copied it. Capture it when it's printed — it can't be recovered, only
-  rotated or revoked and reissued.
+  Keys are shown **once** at creation and stored only as hashes. Interactively, the key is wiped
+  from your terminal (screen and scroll-back) after you confirm you've copied it. Capture it when
+  it's printed — it can't be recovered, only rotated or revoked and reissued.
 </Callout>
 
 `rotate` creates the replacement **before** revoking the original, so a failure

@@ -47,7 +47,9 @@ const mcpItem = (over: Partial<AuditItem>): AuditItem => ({
   latest: null,
   status: 'skipped',
   skipReason: 'not-npm',
-  findings: [{ kind: 'contract-drift', severity: 'info', detail: 'lurq cannot read this kind of server' }],
+  findings: [
+    { kind: 'contract-drift', severity: 'info', detail: 'lurq cannot read this kind of server' },
+  ],
   ...over,
 });
 
@@ -77,11 +79,17 @@ describe('matchDeployment', () => {
       deployment({ serverKey: 'remote:mcp.linear.app/sse', alias: 'linear' }),
       deployment({ serverKey: 'local:mine', alias: 'mine' }),
     ];
-    expect(matchDeployment(server({ kind: 'npm-stdio', packageName: '@acme/mcp' }), ds)?.alias).toBe('acme');
-    expect(matchDeployment(server({ kind: 'remote', endpoint: 'MCP.linear.app' }), ds)?.alias).toBe('linear');
+    expect(
+      matchDeployment(server({ kind: 'npm-stdio', packageName: '@acme/mcp' }), ds)?.alias,
+    ).toBe('acme');
+    expect(matchDeployment(server({ kind: 'remote', endpoint: 'MCP.linear.app' }), ds)?.alias).toBe(
+      'linear',
+    );
     expect(matchDeployment(server({ alias: 'mine' }), ds)?.alias).toBe('mine');
     // A host that merely shares a prefix is a different server.
-    expect(matchDeployment(server({ kind: 'remote', endpoint: 'mcp.linear.application' }), ds)).toBeNull();
+    expect(
+      matchDeployment(server({ kind: 'remote', endpoint: 'mcp.linear.application' }), ds),
+    ).toBeNull();
   });
 
   it('prefers the most recent scan when a server has two deployments', () => {
@@ -89,16 +97,26 @@ describe('matchDeployment', () => {
       deployment({ alias: 'old', lastScannedAt: daysAgo(9) }),
       deployment({ alias: 'x', lastStatus: 'timeout', lastScannedAt: daysAgo(1) }),
     ];
-    expect(matchDeployment(server({ alias: 'x' }), [...ds, deployment({ alias: 'x', lastScannedAt: daysAgo(3) })])?.lastStatus).toBe(
-      'timeout',
-    );
+    expect(
+      matchDeployment(server({ alias: 'x' }), [
+        ...ds,
+        deployment({ alias: 'x', lastScannedAt: daysAgo(3) }),
+      ])?.lastStatus,
+    ).toBe('timeout');
   });
 });
 
 describe('applyAccountScans', () => {
   it('answers a server the index skipped, with its findings, and recounts coverage', () => {
     const r = report([
-      { name: 'zod', unit: 'npm', installed: '3.0.0', latest: '4.0.0', status: 'answered', findings: [] },
+      {
+        name: 'zod',
+        unit: 'npm',
+        installed: '3.0.0',
+        latest: '4.0.0',
+        status: 'answered',
+        findings: [],
+      },
       mcpItem({ name: 'linear' }),
     ]);
     const { report: out, answered } = applyAccountScans(
@@ -111,8 +129,22 @@ describe('applyAccountScans', () => {
           openWorst: 'high',
           analysis: analysis({
             findings: [
-              { kind: 'concealment', severity: 'high', tool: 'create_issue', where: 'description', detail: 'tells the model to keep something from the user', evidence: 'do not tell the user' },
-              { kind: 'oversized_text', severity: 'info', tool: 'x', where: 'description', detail: 'long', evidence: null },
+              {
+                kind: 'concealment',
+                severity: 'high',
+                tool: 'create_issue',
+                where: 'description',
+                detail: 'tells the model to keep something from the user',
+                evidence: 'do not tell the user',
+              },
+              {
+                kind: 'oversized_text',
+                severity: 'info',
+                tool: 'x',
+                where: 'description',
+                detail: 'long',
+                evidence: null,
+              },
             ],
           }),
         }),
@@ -146,12 +178,21 @@ describe('applyAccountScans', () => {
     const { report: out, answered } = applyAccountScans(
       report([mcpItem({})]),
       [server({ alias: 'x' })],
-      [deployment({ lastStatus: 'auth_required', lastError: 'HTTP 401', lastContentHash: null, analysis: null })],
+      [
+        deployment({
+          lastStatus: 'auth_required',
+          lastError: 'HTTP 401',
+          lastContentHash: null,
+          analysis: null,
+        }),
+      ],
       NOW,
     );
     expect(answered).toBe(0);
     expect(out.items[0]!.status).toBe('skipped');
-    expect(out.items[0]!.findings).toContainEqual(expect.objectContaining({ kind: 'needs-config', detail: expect.stringMatching(/HTTP 401/) }));
+    expect(out.items[0]!.findings).toContainEqual(
+      expect.objectContaining({ kind: 'needs-config', detail: expect.stringMatching(/HTTP 401/) }),
+    );
   });
 
   it('caps tool findings and summarises the rest', () => {
@@ -163,7 +204,12 @@ describe('applyAccountScans', () => {
       detail: 'instructs the model',
       evidence: null,
     }));
-    const { report: out } = applyAccountScans(report([mcpItem({})]), [server({ alias: 'x' })], [deployment({ analysis: analysis({ findings: many }) })], NOW);
+    const { report: out } = applyAccountScans(
+      report([mcpItem({})]),
+      [server({ alias: 'x' })],
+      [deployment({ analysis: analysis({ findings: many }) })],
+      NOW,
+    );
     const tool = out.items[0]!.findings.filter((f) => f.kind === 'tool-safety');
     expect(tool).toHaveLength(6);
     expect(tool[5]!.detail).toMatch(/3 more/);
@@ -171,7 +217,9 @@ describe('applyAccountScans', () => {
 
   it('leaves the report alone when nothing matches or the items do not line up', () => {
     const r = report([mcpItem({})]);
-    expect(applyAccountScans(r, [server({ alias: 'other' })], [deployment({})], NOW).answered).toBe(0);
+    expect(applyAccountScans(r, [server({ alias: 'other' })], [deployment({})], NOW).answered).toBe(
+      0,
+    );
     expect(applyAccountScans(r, [server({}), server({})], [deployment({})], NOW).answered).toBe(0);
   });
 });

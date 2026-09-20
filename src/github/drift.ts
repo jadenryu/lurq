@@ -152,10 +152,7 @@ async function loadIndexed(
  * Deliberately one query per chunk of names rather than per name: a repo with
  * 300 dependencies would otherwise open 300 round trips per scan.
  */
-export async function loadVersions(
-  db: Database,
-  names: string[],
-): Promise<Map<string, string[]>> {
+export async function loadVersions(db: Database, names: string[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   for (let i = 0; i < names.length; i += NAME_CHUNK) {
     const rows = await db
@@ -219,7 +216,9 @@ export function driftStatus(resolved: string | null, latest: string | null): Dep
   if (!semver.lt(resolved, latest)) return 'current';
   const breaking =
     semver.major(latest) > semver.major(resolved) ||
-    (semver.major(resolved) === 0 && semver.major(latest) === 0 && semver.minor(latest) > semver.minor(resolved));
+    (semver.major(resolved) === 0 &&
+      semver.major(latest) === 0 &&
+      semver.minor(latest) > semver.minor(resolved));
   return breaking ? 'major' : 'behind';
 }
 
@@ -321,7 +320,9 @@ export async function computeTransitiveDrift(
     // The number that can actually be acted on: installs OSV matched to a
     // vulnerability at their exact version. Undefined when the lookup did not
     // complete, so "not checked" never renders as zero.
-    vulnerableInstalls: complete ? risks.filter((r) => r.vulnerabilities?.length).length : undefined,
+    vulnerableInstalls: complete
+      ? risks.filter((r) => r.vulnerabilities?.length).length
+      : undefined,
     deprecated: risks.filter((r) => r.deprecated).length,
     risks: risks.slice(0, TRANSITIVE_DETAIL_CAP),
     truncated,
@@ -355,10 +356,7 @@ export async function computeTransitiveDrift(
  * upgrades we are recommending land somewhere coherent", the other is "is this
  * repo broken right now".
  */
-async function conflictsAtLatest(
-  db: Database,
-  names: string[],
-): Promise<CompatConflict[]> {
+async function conflictsAtLatest(db: Database, names: string[]): Promise<CompatConflict[]> {
   if (names.length === 0) return [];
   const { members } = await assembleMembers(db, names);
   return resolveArchitectureCompat(members).slice(0, REPO_DRIFT_DETAIL_CAP);
@@ -383,10 +381,7 @@ async function conflictsAtLatest(
  * rather than falling back to its latest — silently substituting a version the
  * repo does not run would produce conflicts about a stack nobody has.
  */
-async function conflictsAtCurrent(
-  db: Database,
-  deps: DepDrift[],
-): Promise<CompatConflict[]> {
+async function conflictsAtCurrent(db: Database, deps: DepDrift[]): Promise<CompatConflict[]> {
   const pinned = deps.filter((d): d is DepDrift & { resolved: string } => Boolean(d.resolved));
   if (pinned.length === 0) return [];
 
@@ -488,10 +483,7 @@ export async function computeDrift(
     };
   }
 
-  const [indexed, versions] = await Promise.all([
-    loadIndexed(db, names),
-    loadVersions(db, names),
-  ]);
+  const [indexed, versions] = await Promise.all([loadIndexed(db, names), loadVersions(db, names)]);
 
   // Everything the index has never seen. Queue it now so the NEXT scan of this
   // repo can report on it instead of counting it as unknown.
@@ -515,7 +507,9 @@ export async function computeDrift(
   // than half the list meaning one thing and half another. Before the sort,
   // because severity ranks on advisories.
   const checkable = deps.filter((d) => d.resolved && semver.valid(d.resolved));
-  const exact = await queryVulnerableInstalls(checkable.map((d) => ({ name: d.name, version: d.resolved! })));
+  const exact = await queryVulnerableInstalls(
+    checkable.map((d) => ({ name: d.name, version: d.resolved! })),
+  );
   if (exact.complete) {
     for (const d of checkable) {
       d.advisories = exact.affected.get(installKey(d.name, d.resolved!))?.length ?? 0;
@@ -529,7 +523,10 @@ export async function computeDrift(
   // registry for its manifest, turning a one-query check into one request per
   // unindexed dependency on every scan.
   const [conflicts, currentConflicts] = await Promise.all([
-    conflictsAtLatest(db, deps.map((d) => d.name)),
+    conflictsAtLatest(
+      db,
+      deps.map((d) => d.name),
+    ),
     conflictsAtCurrent(db, deps),
   ]);
 

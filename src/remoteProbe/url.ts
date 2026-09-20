@@ -41,6 +41,12 @@ export function endpointIdentity(raw: string): EndpointIdentity | null {
   parsed.hash = '';
   const path = parsed.pathname === '/' ? '' : parsed.pathname;
   const port = parsed.port ? `:${parsed.port}` : '';
-  const auth = parsed.username ? `${parsed.username}${parsed.password ? `:${parsed.password}` : ''}@` : '';
-  return { url: `${parsed.protocol}//${auth}${host}${port}${path}${parsed.search}`, host, templated: false };
+  const auth = parsed.username
+    ? `${parsed.username}${parsed.password ? `:${parsed.password}` : ''}@`
+    : '';
+  return {
+    url: `${parsed.protocol}//${auth}${host}${port}${path}${parsed.search}`,
+    host,
+    templated: false,
+  };
 }

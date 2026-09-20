@@ -47,11 +47,7 @@ export function findSpec(dir: string): string | null {
  * distinguishable from "git blew up", which is why this returns null rather than
  * an empty string.
  */
-async function showAtRevision(
-  dir: string,
-  rev: string,
-  repoPath: string,
-): Promise<string | null> {
+async function showAtRevision(dir: string, rev: string, repoPath: string): Promise<string | null> {
   try {
     const { stdout } = await execFileP('git', ['show', `${rev}:${repoPath}`], {
       cwd: dir,

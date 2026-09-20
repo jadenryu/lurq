@@ -37,7 +37,9 @@ describe('setup guards', () => {
     const savedCi = process.env.CI;
     process.env.CI = '1';
     try {
-      await expect(runSetup({})).rejects.toThrow(/setup --yes --api-key <key>[\s\S]*dashboard\/keys/);
+      await expect(runSetup({})).rejects.toThrow(
+        /setup --yes --api-key <key>[\s\S]*dashboard\/keys/,
+      );
     } finally {
       if (savedCi === undefined) delete process.env.CI;
       else process.env.CI = savedCi;
@@ -60,7 +62,10 @@ describe('setup guards', () => {
   });
 
   it('--yes fails clearly when the endpoint cannot be reached', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('fetch failed'))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Promise.reject(new TypeError('fetch failed'))),
+    );
     await expect(
       runSetup({ yes: true, apiKey: 'lurq_live_x', url: 'http://127.0.0.1:9/mcp' }),
     ).rejects.toThrow(/Could not reach/);

@@ -122,7 +122,8 @@ export function draftCliAlert(
   packageName: string,
   toVersion: string,
 ): NewRepoAlertRow | null {
-  const last = semver.valid(watcher.lastToVersion) ?? semver.coerce(watcher.lastToVersion)?.version ?? null;
+  const last =
+    semver.valid(watcher.lastToVersion) ?? semver.coerce(watcher.lastToVersion)?.version ?? null;
   if (last && semver.major(last) >= semver.major(toVersion)) return null;
   return {
     ownerId: watcher.ownerId,

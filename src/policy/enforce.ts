@@ -114,7 +114,8 @@ export function describeRules(policy: SelectionPolicy): string[] {
   if (policy.maxStaleMonths !== null) {
     out.push(`A release within the last ${policy.maxStaleMonths} months.`);
   }
-  if (policy.maxBundleKb !== null) out.push(`Bundle size at most ${policy.maxBundleKb} KB min+gzip.`);
+  if (policy.maxBundleKb !== null)
+    out.push(`Bundle size at most ${policy.maxBundleKb} KB min+gzip.`);
   return out;
 }
 
@@ -293,7 +294,11 @@ export function check(
     };
   }
 
-  if (policy.maxBundleKb !== null && facts?.bundleKb != null && facts.bundleKb > policy.maxBundleKb) {
+  if (
+    policy.maxBundleKb !== null &&
+    facts?.bundleKb != null &&
+    facts.bundleKb > policy.maxBundleKb
+  ) {
     return {
       name,
       rule: 'size',

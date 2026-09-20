@@ -77,7 +77,13 @@ async function testOpenAI(model: string): Promise<TestResult> {
       latencyMs,
     };
   } catch (err) {
-    return { provider: 'openai', model, status: 'error', error: String(err), latencyMs: Date.now() - start };
+    return {
+      provider: 'openai',
+      model,
+      status: 'error',
+      error: String(err),
+      latencyMs: Date.now() - start,
+    };
   }
 }
 
@@ -86,7 +92,13 @@ async function testOpenAI(model: string): Promise<TestResult> {
 async function testAnthropic(model: string): Promise<TestResult> {
   const key = process.env.CLAUDE_API_KEY;
   if (!key) {
-    return { provider: 'anthropic', model, status: 'error', error: 'No CLAUDE_API_KEY in .env', latencyMs: 0 };
+    return {
+      provider: 'anthropic',
+      model,
+      status: 'error',
+      error: 'No CLAUDE_API_KEY in .env',
+      latencyMs: 0,
+    };
   }
 
   const start = Date.now();
@@ -120,7 +132,10 @@ async function testAnthropic(model: string): Promise<TestResult> {
 
     const text =
       data.content?.find((c: any) => c.type === 'text')?.text ??
-      data.content?.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('') ??
+      data.content
+        ?.filter((c: any) => c.type === 'text')
+        .map((c: any) => c.text)
+        .join('') ??
       '';
     const actualModel = data.model ?? model;
     return {
@@ -146,7 +161,13 @@ async function testAnthropic(model: string): Promise<TestResult> {
 async function testGemini(model: string): Promise<TestResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
-    return { provider: 'gemini', model, status: 'error', error: 'No GEMINI_API_KEY in .env', latencyMs: 0 };
+    return {
+      provider: 'gemini',
+      model,
+      status: 'error',
+      error: 'No GEMINI_API_KEY in .env',
+      latencyMs: 0,
+    };
   }
 
   const start = Date.now();
@@ -217,7 +238,13 @@ async function testGemini(model: string): Promise<TestResult> {
       latencyMs,
     };
   } catch (err) {
-    return { provider: 'gemini', model, status: 'error', error: String(err), latencyMs: Date.now() - start };
+    return {
+      provider: 'gemini',
+      model,
+      status: 'error',
+      error: String(err),
+      latencyMs: Date.now() - start,
+    };
   }
 }
 
@@ -278,8 +305,7 @@ async function main() {
   line('gpt-5.6-sol (extra)', openaiSol);
   line('gemini-3.1-pro (extra)', gemPro);
 
-  const coreOk =
-    openaiTerra.status === 'ok' && claude.status === 'ok' && gemFlash.status === 'ok';
+  const coreOk = openaiTerra.status === 'ok' && claude.status === 'ok' && gemFlash.status === 'ok';
   console.log(
     `\n${coreOk ? 'All core models reachable. Safe to start the bakeoff.' : 'Fix failing keys/models before the full run.'}`,
   );

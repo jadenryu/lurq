@@ -53,7 +53,11 @@ export async function saveBuilderScan(
  * past it has scanned more than two dozen different people; page when the list
  * ever shows that.
  */
-export async function listBuilderScans(db: Database, ownerId: string, limit = 24): Promise<BuilderScanSummary[]> {
+export async function listBuilderScans(
+  db: Database,
+  ownerId: string,
+  limit = 24,
+): Promise<BuilderScanSummary[]> {
   return db
     .select({
       target: builderScans.target,

@@ -70,7 +70,9 @@ describe('with the permission', () => {
 
   it('asks for no extra permission to do it', () => {
     // A read-only check must not widen the workflow's trust model.
-    const granted = parse(renderWorkflow({ checkEnv: true })) as { permissions: Record<string, string> };
-    expect(granted.permissions).toEqual({ 'contents': 'write', 'pull-requests': 'write' });
+    const granted = parse(renderWorkflow({ checkEnv: true })) as {
+      permissions: Record<string, string>;
+    };
+    expect(granted.permissions).toEqual({ contents: 'write', 'pull-requests': 'write' });
   });
 });

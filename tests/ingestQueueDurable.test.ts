@@ -14,7 +14,12 @@ vi.mock('../src/db/discovery', () => ({
 }));
 
 import * as discoveryDb from '../src/db/discovery';
-import { enqueueIngest, ingestQueueDepth, resetIngestQueue, runIngest } from '../src/pipeline/ingestQueue';
+import {
+  enqueueIngest,
+  ingestQueueDepth,
+  resetIngestQueue,
+  runIngest,
+} from '../src/pipeline/ingestQueue';
 import { pickIngestOrder } from '../src/pipeline/discovery';
 import * as single from '../src/pipeline/single';
 import { DISCOVERY } from '../src/scoring/weights';
@@ -82,7 +87,11 @@ describe('pickIngestOrder', () => {
   });
 
   it('applies one cap across both, deferring the lowest-ranked tail', () => {
-    const { ingest, deferred } = pickIngestOrder([{ name: 'asked-for', requestedByOwnerId: null }], gated, 2);
+    const { ingest, deferred } = pickIngestOrder(
+      [{ name: 'asked-for', requestedByOwnerId: null }],
+      gated,
+      2,
+    );
     expect(ingest.map((p) => p.name)).toEqual(['asked-for', 'best']);
     expect(deferred.map((p) => p.name)).toEqual(['mid', 'low']);
   });

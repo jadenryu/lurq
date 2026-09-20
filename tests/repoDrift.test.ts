@@ -4,7 +4,10 @@ import { manifestPaths, parseManifest } from '../src/github/manifests';
 import { appJwt } from '../src/github/app';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
 
-const indexed = (latest: string | null, extra: Partial<{ deprecated: boolean; advisories: number }> = {}) => ({
+const indexed = (
+  latest: string | null,
+  extra: Partial<{ deprecated: boolean; advisories: number }> = {},
+) => ({
   latestVersion: latest,
   deprecated: extra.deprecated ?? false,
   advisories: extra.advisories ?? 0,
@@ -26,7 +29,12 @@ describe('depDrift', () => {
   });
 
   it('counts majors between the resolved version and latest', () => {
-    const dep = depDrift('react-router', declared('^6.4.0'), indexed('8.1.0'), ['6.4.0', '6.9.2', '7.0.0', '8.1.0']);
+    const dep = depDrift('react-router', declared('^6.4.0'), indexed('8.1.0'), [
+      '6.4.0',
+      '6.9.2',
+      '7.0.0',
+      '8.1.0',
+    ]);
     expect(dep.resolved).toBe('6.9.2');
     expect(dep.majorsBehind).toBe(2);
   });
@@ -43,7 +51,12 @@ describe('depDrift', () => {
   });
 
   it('carries deprecation and advisory counts through', () => {
-    const dep = depDrift('request', declared('^2.88.0'), indexed('2.88.2', { deprecated: true, advisories: 3 }), ['2.88.0', '2.88.2']);
+    const dep = depDrift(
+      'request',
+      declared('^2.88.0'),
+      indexed('2.88.2', { deprecated: true, advisories: 3 }),
+      ['2.88.0', '2.88.2'],
+    );
     expect(dep.deprecated).toBe(true);
     expect(dep.advisories).toBe(3);
   });
@@ -140,11 +153,17 @@ describe('appJwt', () => {
   it('produces an RS256 JWT the public key verifies', () => {
     const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const token = appJwt(
-      { appId: '12345', privateKey: privateKey.export({ type: 'pkcs1', format: 'pem' }).toString() },
+      {
+        appId: '12345',
+        privateKey: privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(),
+      },
       new Date('2026-08-07T00:00:00Z'),
     );
     const [header, payload, signature] = token.split('.');
-    expect(JSON.parse(Buffer.from(header!, 'base64url').toString())).toEqual({ alg: 'RS256', typ: 'JWT' });
+    expect(JSON.parse(Buffer.from(header!, 'base64url').toString())).toEqual({
+      alg: 'RS256',
+      typ: 'JWT',
+    });
 
     const claims = JSON.parse(Buffer.from(payload!, 'base64url').toString());
     expect(claims.iss).toBe('12345');

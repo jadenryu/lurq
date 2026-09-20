@@ -25,14 +25,23 @@ describe('compact', () => {
   });
 
   it('recurses into nested objects, keeping ones left empty', () => {
-    expect(compact({ breakdown: { m: 90, efficiency: null, quality: null }, kept: { x: null } })).toEqual({
+    expect(
+      compact({ breakdown: { m: 90, efficiency: null, quality: null }, kept: { x: null } }),
+    ).toEqual({
       breakdown: { m: 90 },
       kept: {},
     });
   });
 
   it('cleans objects inside arrays', () => {
-    expect(compact({ rows: [{ name: 'a', q: null }, { name: 'b', q: 5 }] })).toEqual({
+    expect(
+      compact({
+        rows: [
+          { name: 'a', q: null },
+          { name: 'b', q: 5 },
+        ],
+      }),
+    ).toEqual({
       rows: [{ name: 'a' }, { name: 'b', q: 5 }],
     });
   });

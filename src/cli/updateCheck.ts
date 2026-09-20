@@ -36,9 +36,12 @@ export function planUpdateCheck(
   current: string = VERSION,
 ): { message: string | null; refresh: boolean } {
   const latest = state?.latest;
-  const newer = latest && semver.valid(latest) && semver.valid(current) && semver.gt(latest, current);
+  const newer =
+    latest && semver.valid(latest) && semver.valid(current) && semver.gt(latest, current);
   return {
-    message: newer ? `Update available: ${current} → ${latest}. Run: npm install -g ${PACKAGE_NAME}` : null,
+    message: newer
+      ? `Update available: ${current} → ${latest}. Run: npm install -g ${PACKAGE_NAME}`
+      : null,
     refresh: !state || !(now - state.checkedAt < DAY_MS),
   };
 }

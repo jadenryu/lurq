@@ -35,7 +35,6 @@ export function readManifest(pkgDir: string): PackageManifest | null {
   }
 }
 
-
 /** The conditions tier A will read an entry from, best first. */
 const CONDITIONS = ['require', 'node', 'default', 'import', 'module'] as const;
 
@@ -211,11 +210,7 @@ export function resolvesInsidePackage(spec: string): boolean {
 }
 
 /** Resolve a relative specifier from `fromFile`, refusing to escape `pkgDir`. */
-export function resolveInternal(
-  fromFile: string,
-  spec: string,
-  pkgDir: string,
-): string | null {
+export function resolveInternal(fromFile: string, spec: string, pkgDir: string): string | null {
   const target = resolvePath(dirname(fromFile), spec);
   const root = resolvePath(pkgDir);
   // Escaping the package root means it isn't this package's surface.
@@ -244,7 +239,10 @@ const REQUIRE_CONDITIONS = new Set(['require', 'module-sync', 'node', 'node-addo
  * only the conditions `require` matches, then reads the file's format from its
  * extension or the nearest package.json. Null when nothing resolves.
  */
-export function requireFormat(pkgDir: string, manifest?: PackageManifest | null): RequireFormat | null {
+export function requireFormat(
+  pkgDir: string,
+  manifest?: PackageManifest | null,
+): RequireFormat | null {
   return requireTarget(pkgDir, manifest)?.format ?? null;
 }
 
@@ -277,7 +275,12 @@ export function requireTarget(
 
 /** The root entry of an `exports` value: `"."` of a subpath map, or the value itself. */
 function rootExport(exp: unknown): unknown {
-  if (exp && typeof exp === 'object' && !Array.isArray(exp) && isSubpathMap(exp as Record<string, unknown>)) {
+  if (
+    exp &&
+    typeof exp === 'object' &&
+    !Array.isArray(exp) &&
+    isSubpathMap(exp as Record<string, unknown>)
+  ) {
     return (exp as Record<string, unknown>)['.'];
   }
   return exp;
@@ -331,7 +334,11 @@ function nearestPackageType(file: string, pkgDir: string): string | undefined {
  * `browser`) is not withdrawn, and calling it withdrawn would block a PR on
  * working code.
  */
-export function subpathWithdrawn(pkgDir: string, manifest: PackageManifest | null, sub: string): boolean {
+export function subpathWithdrawn(
+  pkgDir: string,
+  manifest: PackageManifest | null,
+  sub: string,
+): boolean {
   const m = manifest ?? readManifest(pkgDir);
   if (!m) return false;
   if (resolveEntryCandidates(pkgDir, m, sub).length) return false;

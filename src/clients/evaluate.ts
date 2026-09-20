@@ -21,7 +21,13 @@
  */
 import type { RequiredConfig } from '../surface/mcpRegistry';
 import type { McpTool } from '../surface/mcp';
-import { DEAD_STATUSES, type AuthProfile, type DeclaredHeader, type EndpointStatus, type Violation } from '../remoteProbe/types';
+import {
+  DEAD_STATUSES,
+  type AuthProfile,
+  type DeclaredHeader,
+  type EndpointStatus,
+  type Violation,
+} from '../remoteProbe/types';
 import type { ClientId, ClientProfile, Support } from './types';
 
 export interface RemoteFacts {
@@ -98,7 +104,9 @@ class Acc {
 
 /** Which way can this client reach the server at all? */
 function route(server: ServerFacts, client: ClientProfile): 'remote' | 'package' | null {
-  const remoteSupport = server.remote ? client.transports[server.remote.transport === 'sse' ? 'sse' : 'streamableHttp'] : 'no';
+  const remoteSupport = server.remote
+    ? client.transports[server.remote.transport === 'sse' ? 'sse' : 'streamableHttp']
+    : 'no';
   if (server.remote && remoteSupport !== 'no') return 'remote';
   if (server.package && client.transports.stdio !== 'no') return 'package';
   return server.remote ? 'remote' : server.package ? 'package' : null;
@@ -107,7 +115,9 @@ function route(server: ServerFacts, client: ClientProfile): 'remote' | 'package'
 function headerStep(headers: DeclaredHeader[]): string {
   const names = headers.filter((h) => h.required || h.secret).map((h) => h.name);
   const list = names.length ? names : headers.map((h) => h.name);
-  return list.length ? `send ${list.join(', ')} with every request` : 'send the server’s API key, usually as `Authorization: Bearer <token>`';
+  return list.length
+    ? `send ${list.join(', ')} with every request`
+    : 'send the server’s API key, usually as `Authorization: Bearer <token>`';
 }
 
 function evaluateAuth(remote: RemoteFacts, client: ClientProfile, acc: Acc) {
@@ -117,12 +127,16 @@ function evaluateAuth(remote: RemoteFacts, client: ClientProfile, acc: Acc) {
 
   if (mode === 'none') {
     if (remote.declaredHeaders.some((h) => h.required)) {
-      acc.warn('declared_header_not_enforced', `the registry lists a required header (${headerStep(remote.declaredHeaders)}), but the endpoint answered without one`);
+      acc.warn(
+        'declared_header_not_enforced',
+        `the registry lists a required header (${headerStep(remote.declaredHeaders)}), but the endpoint answered without one`,
+      );
     }
     return;
   }
   if (mode === 'unknown') {
-    if (remote.status && !DEAD_STATUSES.has(remote.status)) acc.unknown('auth_unknown', 'how this endpoint authenticates was not established', false);
+    if (remote.status && !DEAD_STATUSES.has(remote.status))
+      acc.unknown('auth_unknown', 'how this endpoint authenticates was not established', false);
     return;
   }
   // A note restating a rule already encoded in `strict` would read as a contradiction
@@ -131,11 +145,24 @@ function evaluateAuth(remote: RemoteFacts, client: ClientProfile, acc: Acc) {
 
   if (mode === 'static') {
     const step = headerStep(remote.declaredHeaders);
-    if (c.staticHeaders === 'no') acc.block('no_static_headers', `the server wants a key or token configured by hand (${step}), and ${client.name} cannot send custom headers to a remote server`);
-    else if (c.staticHeaders === 'unknown') acc.unknown('static_headers_unknown', `the server wants a key configured by hand; no source confirms ${client.name} can send custom headers`, true);
+    if (c.staticHeaders === 'no')
+      acc.block(
+        'no_static_headers',
+        `the server wants a key or token configured by hand (${step}), and ${client.name} cannot send custom headers to a remote server`,
+      );
+    else if (c.staticHeaders === 'unknown')
+      acc.unknown(
+        'static_headers_unknown',
+        `the server wants a key configured by hand; no source confirms ${client.name} can send custom headers`,
+        true,
+      );
     else {
       acc.step('configure_key', step);
-      if (c.staticHeaders === 'partial') acc.warn('static_headers_partial', `${client.name} supports custom headers only with limitations`);
+      if (c.staticHeaders === 'partial')
+        acc.warn(
+          'static_headers_partial',
+          `${client.name} supports custom headers only with limitations`,
+        );
     }
     return;
   }
@@ -144,10 +171,16 @@ function evaluateAuth(remote: RemoteFacts, client: ClientProfile, acc: Acc) {
   const o = auth!.oauth!;
   if (c.oauth === 'no') {
     if (usable(c.staticHeaders)) {
-      acc.step('token_instead_of_oauth', `${client.name} cannot run the OAuth sign-in; supply an access token as a header instead, if the server accepts one`);
+      acc.step(
+        'token_instead_of_oauth',
+        `${client.name} cannot run the OAuth sign-in; supply an access token as a header instead, if the server accepts one`,
+      );
       acc.warn('oauth_unsupported', `${client.name} has no OAuth flow`);
     } else {
-      acc.block('oauth_unsupported', `the server requires OAuth sign-in and ${client.name} has no OAuth flow`);
+      acc.block(
+        'oauth_unsupported',
+        `the server requires OAuth sign-in and ${client.name} has no OAuth flow`,
+      );
     }
     return;
   }
@@ -155,31 +188,61 @@ function evaluateAuth(remote: RemoteFacts, client: ClientProfile, acc: Acc) {
     acc.unknown('oauth_unknown', `no source confirms ${client.name} runs the MCP OAuth flow`, true);
     return;
   }
-  if (c.oauth === 'partial') acc.warn('oauth_partial', `${client.name}'s OAuth support has known limitations`);
+  if (c.oauth === 'partial')
+    acc.warn('oauth_partial', `${client.name}'s OAuth support has known limitations`);
 
   const viaCimd = o.cimd && usable(c.cimd);
   const viaDcr = o.dcr && usable(c.dcr);
-  const offered = [o.cimd && 'Client ID Metadata Documents', o.dcr && 'Dynamic Client Registration'].filter(Boolean).join(' and ') || 'no automatic registration';
-  const redirects = c.redirectUris.length ? ` Allow redirect URI(s): ${c.redirectUris.join(', ')}.` : '';
+  const offered =
+    [o.cimd && 'Client ID Metadata Documents', o.dcr && 'Dynamic Client Registration']
+      .filter(Boolean)
+      .join(' and ') || 'no automatic registration';
+  const redirects = c.redirectUris.length
+    ? ` Allow redirect URI(s): ${c.redirectUris.join(', ')}.`
+    : '';
   if (!viaCimd && !viaDcr) {
     const couldMatch = (o.cimd && c.cimd === 'unknown') || (o.dcr && c.dcr === 'unknown');
     if (couldMatch) {
-      acc.unknown('registration_unknown', `the server offers ${offered}; no source confirms whether ${client.name} supports it`, true);
+      acc.unknown(
+        'registration_unknown',
+        `the server offers ${offered}; no source confirms whether ${client.name} supports it`,
+        true,
+      );
     } else if (usable(c.preRegistered)) {
-      acc.step('pre_register_client', `the server offers ${offered}, which ${client.name} cannot use: register an OAuth client with ${o.issuer ?? 'its authorization server'} and enter its client id in ${client.name}.${redirects}`);
+      acc.step(
+        'pre_register_client',
+        `the server offers ${offered}, which ${client.name} cannot use: register an OAuth client with ${o.issuer ?? 'its authorization server'} and enter its client id in ${client.name}.${redirects}`,
+      );
     } else if (c.preRegistered === 'unknown') {
-      acc.unknown('registration_unknown', `the server offers ${offered}, which ${client.name} cannot use, and no source confirms it accepts a pre-registered client`, true);
+      acc.unknown(
+        'registration_unknown',
+        `the server offers ${offered}, which ${client.name} cannot use, and no source confirms it accepts a pre-registered client`,
+        true,
+      );
     } else {
-      acc.block('no_shared_registration', `the server offers ${offered}; ${client.name} can use neither, and has no way to enter a pre-registered client`);
+      acc.block(
+        'no_shared_registration',
+        `the server offers ${offered}; ${client.name} can use neither, and has no way to enter a pre-registered client`,
+      );
     }
-  } else if ((viaCimd && c.cimd === 'partial' && !viaDcr) || (viaDcr && c.dcr === 'partial' && !viaCimd)) {
-    acc.warn('registration_partial', `${client.name} supports the registration method this server offers only with limitations`);
+  } else if (
+    (viaCimd && c.cimd === 'partial' && !viaDcr) ||
+    (viaDcr && c.dcr === 'partial' && !viaCimd)
+  ) {
+    acc.warn(
+      'registration_partial',
+      `${client.name} supports the registration method this server offers only with limitations`,
+    );
   }
 
   for (const v of remote.violations) {
     switch (v.code) {
       case 'pkce_s256_not_advertised':
-        if (c.strict?.pkceS256Required) acc.block('pkce_required', `${client.name} refuses authorization servers that do not advertise PKCE S256, and this one does not`);
+        if (c.strict?.pkceS256Required)
+          acc.block(
+            'pkce_required',
+            `${client.name} refuses authorization servers that do not advertise PKCE S256, and this one does not`,
+          );
         else acc.warn('pkce_not_advertised', v.detail);
         break;
       case 'as_metadata_unreachable':
@@ -195,14 +258,19 @@ function evaluateAuth(remote: RemoteFacts, client: ClientProfile, acc: Acc) {
 export function modelToolName(client: ClientProfile, alias: string, tool: string): string | null {
   if (!client.toolNaming.format) return null;
   let name = client.toolNaming.format.replace('{server}', alias).replace('{tool}', tool);
-  if (client.toolNaming.replacedChars) name = name.replace(new RegExp(client.toolNaming.replacedChars, 'g'), '_');
+  if (client.toolNaming.replacedChars)
+    name = name.replace(new RegExp(client.toolNaming.replacedChars, 'g'), '_');
   return name;
 }
 
 function evaluateTools(server: ServerFacts, client: ClientProfile, acc: Acc) {
   const tools = server.tools;
   if (!tools) {
-    acc.unknown('tools_unread', 'the tool list was not readable without credentials, so name and schema limits were not checked', false);
+    acc.unknown(
+      'tools_unread',
+      'the tool list was not readable without credentials, so name and schema limits were not checked',
+      false,
+    );
     return;
   }
 
@@ -213,7 +281,10 @@ function evaluateTools(server: ServerFacts, client: ClientProfile, acc: Acc) {
       .map((t) => ({ tool: t.name, name: modelToolName(client, server.alias, t.name)! }))
       .filter((t) => t.name.length > max);
     if (long.length) {
-      const ex = long.slice(0, MAX_EXAMPLES).map((t) => `${t.name} (${t.name.length})`).join(', ');
+      const ex = long
+        .slice(0, MAX_EXAMPLES)
+        .map((t) => `${t.name} (${t.name.length})`)
+        .join(', ');
       const what = `${long.length} tool name(s) exceed ${client.name}'s ${max}-character limit once prefixed as "${client.toolNaming.format}", e.g. ${ex}`;
       switch (client.toolNaming.onOverflow) {
         case 'error':
@@ -229,7 +300,14 @@ function evaluateTools(server: ServerFacts, client: ClientProfile, acc: Acc) {
             cut.set(n, [...(cut.get(n) ?? []), t.name]);
           }
           const clashes = [...cut.values()].filter((v) => v.length > 1);
-          if (clashes.length) acc.block('tool_name_collision', `${what}; truncation makes ${clashes.slice(0, MAX_EXAMPLES).map((c) => c.join(' and ')).join('; ')} indistinguishable`);
+          if (clashes.length)
+            acc.block(
+              'tool_name_collision',
+              `${what}; truncation makes ${clashes
+                .slice(0, MAX_EXAMPLES)
+                .map((c) => c.join(' and '))
+                .join('; ')} indistinguishable`,
+            );
           else acc.warn('tool_name_truncated', `${what}; they are truncated`);
           break;
         }
@@ -237,7 +315,10 @@ function evaluateTools(server: ServerFacts, client: ClientProfile, acc: Acc) {
           acc.warn('tool_name_truncated', `${what}; they are truncated with a hash suffix`);
           break;
         default:
-          acc.warn('tool_name_too_long', `${what}; what ${client.name} does with them is not documented`);
+          acc.warn(
+            'tool_name_too_long',
+            `${what}; what ${client.name} does with them is not documented`,
+          );
       }
     }
   } else if (tools.length) {
@@ -251,9 +332,15 @@ function evaluateTools(server: ServerFacts, client: ClientProfile, acc: Acc) {
     const s = t.inputSchema as Record<string, unknown> | undefined;
     if (!s || typeof s !== 'object') continue;
     const text = JSON.stringify(s);
-    if (schema.rootCombinators === 'no' && ('anyOf' in s || 'oneOf' in s || 'allOf' in s)) offending.push({ rule: 'a root-level anyOf/oneOf/allOf', tool: t.name });
-    for (const kw of schema.rejectedKeywords) if (text.includes(`"${kw}"`)) offending.push({ rule: `\`${kw}\``, tool: t.name });
-    if ((schema.typeArrays === 'no' || schema.typeArrays === 'partial') && /"type"\s*:\s*\[/.test(text)) offending.push({ rule: 'type arrays', tool: t.name });
+    if (schema.rootCombinators === 'no' && ('anyOf' in s || 'oneOf' in s || 'allOf' in s))
+      offending.push({ rule: 'a root-level anyOf/oneOf/allOf', tool: t.name });
+    for (const kw of schema.rejectedKeywords)
+      if (text.includes(`"${kw}"`)) offending.push({ rule: `\`${kw}\``, tool: t.name });
+    if (
+      (schema.typeArrays === 'no' || schema.typeArrays === 'partial') &&
+      /"type"\s*:\s*\[/.test(text)
+    )
+      offending.push({ rule: 'type arrays', tool: t.name });
   }
   if (offending.length) {
     const rules = [...new Set(offending.map((o) => o.rule))].join(', ');
@@ -276,7 +363,10 @@ function evaluateTools(server: ServerFacts, client: ClientProfile, acc: Acc) {
   // Count.
   const cap = client.toolLimits.maxTools;
   if (cap && tools.length > cap && client.toolLimits.toolSearch !== 'yes') {
-    acc.warn('too_many_tools', `${tools.length} tools exceeds ${client.name}'s documented limit of ${cap}${client.toolLimits.scope ? ` (${client.toolLimits.scope.replace('_', ' ')})` : ''}`);
+    acc.warn(
+      'too_many_tools',
+      `${tools.length} tools exceeds ${client.name}'s documented limit of ${cap}${client.toolLimits.scope ? ` (${client.toolLimits.scope.replace('_', ' ')})` : ''}`,
+    );
   }
 }
 
@@ -285,27 +375,45 @@ export function evaluateClient(server: ServerFacts, client: ClientProfile): Clie
   const via = route(server, client);
 
   if (!via) {
-    acc.unknown('no_connection_info', 'lurq has neither a remote endpoint nor a package for this server', true);
+    acc.unknown(
+      'no_connection_info',
+      'lurq has neither a remote endpoint nor a package for this server',
+      true,
+    );
   } else if (via === 'remote') {
     const r = server.remote!;
     const kind = r.transport === 'sse' ? 'sse' : 'streamableHttp';
     const support = client.transports[kind];
     const label = kind === 'sse' ? 'legacy HTTP+SSE' : 'Streamable HTTP';
     if (support === 'no') {
-      acc.block('transport_unsupported', `the server is reachable only over ${label}${server.package ? ' or as a local package' : ''}, and ${client.name} supports neither`);
+      acc.block(
+        'transport_unsupported',
+        `the server is reachable only over ${label}${server.package ? ' or as a local package' : ''}, and ${client.name} supports neither`,
+      );
     } else if (support === 'unknown') {
       acc.unknown('transport_unknown', `no source confirms ${client.name} supports ${label}`, true);
     } else if (support === 'partial') {
-      acc.warn('transport_partial', `${client.name} supports ${label} only partially${kind === 'sse' ? ' (deprecated)' : ''}`);
+      acc.warn(
+        'transport_partial',
+        `${client.name} supports ${label} only partially${kind === 'sse' ? ' (deprecated)' : ''}`,
+      );
     }
 
-    if (r.templated) acc.step('fill_url', `the URL has placeholders to fill in before connecting: ${r.url}`);
+    if (r.templated)
+      acc.step('fill_url', `the URL has placeholders to fill in before connecting: ${r.url}`);
     if (r.status === null) {
       if (!r.templated) acc.unknown('not_probed', 'this endpoint has not been probed yet', true);
     } else if (DEAD_STATUSES.has(r.status)) {
-      acc.block('endpoint_dead', `the endpoint was ${r.status.replace('_', ' ')} when last checked${r.observedAt ? ` (${r.observedAt.toISOString().slice(0, 10)})` : ''}`);
+      acc.block(
+        'endpoint_dead',
+        `the endpoint was ${r.status.replace('_', ' ')} when last checked${r.observedAt ? ` (${r.observedAt.toISOString().slice(0, 10)})` : ''}`,
+      );
     } else if (r.status === 'blocked' || r.status === 'protocol_error' || r.status === 'timeout') {
-      acc.unknown('probe_inconclusive', `the last probe was inconclusive (${r.status.replace('_', ' ')})`, true);
+      acc.unknown(
+        'probe_inconclusive',
+        `the last probe was inconclusive (${r.status.replace('_', ' ')})`,
+        true,
+      );
     }
 
     if (!acc.blockers.length) {
@@ -315,13 +423,25 @@ export function evaluateClient(server: ServerFacts, client: ClientProfile): Clie
   } else {
     const p = server.package!;
     if (client.transports.stdio === 'no') {
-      acc.block('stdio_unsupported', `the server runs as a local ${p.registryType} package and ${client.name} cannot run local servers`);
+      acc.block(
+        'stdio_unsupported',
+        `the server runs as a local ${p.registryType} package and ${client.name} cannot run local servers`,
+      );
     } else if (client.transports.stdio === 'unknown') {
-      acc.unknown('stdio_unknown', `no source confirms ${client.name} can run local (stdio) servers`, true);
+      acc.unknown(
+        'stdio_unknown',
+        `no source confirms ${client.name} can run local (stdio) servers`,
+        true,
+      );
     } else {
-      if (client.transports.stdio === 'partial') acc.warn('stdio_partial', `${client.name} runs local servers only in some environments`);
+      if (client.transports.stdio === 'partial')
+        acc.warn('stdio_partial', `${client.name} runs local servers only in some environments`);
       const required = p.env.filter((e) => e.required);
-      if (required.length) acc.step('set_env', `set ${required.map((e) => e.name).join(', ')} in the server's environment`);
+      if (required.length)
+        acc.step(
+          'set_env',
+          `set ${required.map((e) => e.name).join(', ')} in the server's environment`,
+        );
       evaluateTools(server, client, acc);
     }
   }
@@ -336,6 +456,9 @@ export function evaluateClient(server: ServerFacts, client: ClientProfile): Clie
   return { client: client.id, clientName: client.name, verdict, via, ...acc };
 }
 
-export function evaluateClients(server: ServerFacts, clients: readonly ClientProfile[]): ClientCompat[] {
+export function evaluateClients(
+  server: ServerFacts,
+  clients: readonly ClientProfile[],
+): ClientCompat[] {
   return clients.map((c) => evaluateClient(server, c));
 }

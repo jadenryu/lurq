@@ -27,7 +27,13 @@ import { manifestFindings } from '../fix/manifest';
 import { deterministic, editsByFile, applyEdits, type Finding } from '../fix/types';
 import { unifiedDiff } from '../fix/diff';
 import type { UpgradeTarget } from '../surface/upgrade';
-import { SCAN_LIMIT, fixableTargets, parseUpgradeSpec, planUpgrades, type FixableSplit } from './checkUpgrade';
+import {
+  SCAN_LIMIT,
+  fixableTargets,
+  parseUpgradeSpec,
+  planUpgrades,
+  type FixableSplit,
+} from './checkUpgrade';
 
 export interface FixOpts {
   /** Targets from `upgrade-plan --json`. */
@@ -96,7 +102,11 @@ interface FixResult {
 async function derivePlanTargets(dir: string, opts: FixOpts): Promise<FixableSplit> {
   const { buildUpgradePlan } = await import('./upgradePlan');
   try {
-    const plan = await buildUpgradePlan(dir, { url: opts.url, apiKey: opts.apiKey, repo: opts.repo });
+    const plan = await buildUpgradePlan(dir, {
+      url: opts.url,
+      apiKey: opts.apiKey,
+      repo: opts.repo,
+    });
     // The same rules the --plan path uses, not a second reading of them.
     return fixableTargets(plan.upgrades, opts.max);
   } catch (err) {
@@ -120,7 +130,10 @@ async function derivePlanTargets(dir: string, opts: FixOpts): Promise<FixableSpl
  * partially applied rename is worse than none, because the build now fails for
  * a reason the tool invented.
  */
-export function stage(root: string, findings: Finding[]): { writes: Map<string, string>; diff: string } {
+export function stage(
+  root: string,
+  findings: Finding[],
+): { writes: Map<string, string>; diff: string } {
   const writes = new Map<string, string>();
   let diff = '';
   for (const [file, edits] of editsByFile(findings.filter(deterministic))) {
@@ -154,11 +167,21 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   const skipped = split.skipped;
 
   if (targets.length === 0) {
-    const empty: FixResult = { root: dir, files: [], applied: [], remaining: [], refused: [], skipped };
+    const empty: FixResult = {
+      root: dir,
+      files: [],
+      applied: [],
+      remaining: [],
+      refused: [],
+      skipped,
+    };
     // Silence here would be a lie when every upgrade was skipped: "nothing to
     // fix" and "nothing I am willing to fix" are different sentences.
     const nothing = skipped.length
-      ? [`Nothing attempted in ${dir}. ${skipped.length} upgrade(s) deliberately not tried:`, ...skippedLines(skipped)].join('\n')
+      ? [
+          `Nothing attempted in ${dir}. ${skipped.length} upgrade(s) deliberately not tried:`,
+          ...skippedLines(skipped),
+        ].join('\n')
       : asked
         ? 'Nothing to check.'
         : 'Nothing to fix: every dependency is current, or the repo policy holds the rest.';

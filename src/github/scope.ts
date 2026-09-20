@@ -98,7 +98,10 @@ export function scopeVerdict(
   }
 
   if (isUnassessed(u)) {
-    return { inScope: false, reason: 'surface not yet analysed — nothing for the agent to rewrite' };
+    return {
+      inScope: false,
+      reason: 'surface not yet analysed — nothing for the agent to rewrite',
+    };
   }
   if (breaksSomething(u)) return { inScope: true };
   return { inScope: false, reason: 'nothing referenced breaks — scope is security + blocking' };
@@ -174,7 +177,9 @@ export function applyScope(upgrades: UpgradeBrief[], policy: RepoPolicy | null):
 
   const scoped = upgrades.map((u): ScopedUpgrade => {
     const verdict = scopeVerdict(u, policy.scope);
-    return verdict.inScope ? { ...u, inScope: true } : { ...u, inScope: false, scopeReason: verdict.reason };
+    return verdict.inScope
+      ? { ...u, inScope: true }
+      : { ...u, inScope: false, scopeReason: verdict.reason };
   });
 
   return {

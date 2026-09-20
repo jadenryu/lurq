@@ -59,7 +59,12 @@ describe('what it refuses to attempt', () => {
 });
 
 describe('the blast radius', () => {
-  const four = [up({ package: 'a' }), up({ package: 'b' }), up({ package: 'c' }), up({ package: 'd' })];
+  const four = [
+    up({ package: 'a' }),
+    up({ package: 'b' }),
+    up({ package: 'c' }),
+    up({ package: 'd' }),
+  ];
 
   it('stops at the cap and names what it did not reach', () => {
     const { targets, skipped } = fixableTargets(four, 2);

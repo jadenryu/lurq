@@ -63,13 +63,23 @@ export interface ChannelSummary {
 
 const prefix = (channelId: number) => `ch${channelId}:`;
 
-type Verdict = { kind: 'sent' } | { kind: 'retry'; error: string } | { kind: 'reject'; error: string } | { kind: 'disable'; error: string };
+type Verdict =
+  | { kind: 'sent' }
+  | { kind: 'retry'; error: string }
+  | { kind: 'reject'; error: string }
+  | { kind: 'disable'; error: string };
 
 export function classify(o: PostOutcome): Verdict {
   if (o.status >= 200 && o.status < 300) return { kind: 'sent' };
-  if (o.code === 'EPRIVATE') return { kind: 'disable', error: 'the URL now resolves to a private network address' };
-  if (o.status === 404 || o.status === 410) return { kind: 'disable', error: `the destination no longer exists (HTTP ${o.status}); it may have been deleted` };
-  if (o.status === 429 || o.status >= 500 || o.status === 0) return { kind: 'retry', error: o.error ?? 'no response' };
+  if (o.code === 'EPRIVATE')
+    return { kind: 'disable', error: 'the URL now resolves to a private network address' };
+  if (o.status === 404 || o.status === 410)
+    return {
+      kind: 'disable',
+      error: `the destination no longer exists (HTTP ${o.status}); it may have been deleted`,
+    };
+  if (o.status === 429 || o.status >= 500 || o.status === 0)
+    return { kind: 'retry', error: o.error ?? 'no response' };
   return { kind: 'reject', error: o.error ?? `HTTP ${o.status}` };
 }
 
@@ -86,11 +96,19 @@ async function send(
   let signingSecret: string | null = null;
   try {
     url = open(channel.urlCiphertext, deps.secretsKey, channel.ownerId);
-    if (channel.signingSecretCiphertext) signingSecret = open(channel.signingSecretCiphertext, deps.secretsKey, channel.ownerId);
+    if (channel.signingSecretCiphertext)
+      signingSecret = open(channel.signingSecretCiphertext, deps.secretsKey, channel.ownerId);
   } catch {
     // Wrong key, or a row that was tampered with. Retrying cannot fix either.
-    await updateDelivery(db, delivery.id, { status: 'failed', attempts: MAX_CHANNEL_ATTEMPTS, error: 'stored URL could not be decrypted' });
-    await updateChannel(db, channel.ownerId, channel.id, { enabled: false, disabledReason: 'the stored URL could not be read; add the channel again' });
+    await updateDelivery(db, delivery.id, {
+      status: 'failed',
+      attempts: MAX_CHANNEL_ATTEMPTS,
+      error: 'stored URL could not be decrypted',
+    });
+    await updateChannel(db, channel.ownerId, channel.id, {
+      enabled: false,
+      disabledReason: 'the stored URL could not be read; add the channel again',
+    });
     s.disabled++;
     return;
   }
@@ -105,8 +123,17 @@ async function send(
   const attempts = delivery.attempts + 1;
 
   if (verdict.kind === 'sent') {
-    await updateDelivery(db, delivery.id, { status: 'sent', attempts, sentAt: new Date(), error: null });
-    await updateChannel(db, channel.ownerId, channel.id, { consecutiveFailures: 0, lastError: null, lastDeliveredAt: new Date() });
+    await updateDelivery(db, delivery.id, {
+      status: 'sent',
+      attempts,
+      sentAt: new Date(),
+      error: null,
+    });
+    await updateChannel(db, channel.ownerId, channel.id, {
+      consecutiveFailures: 0,
+      lastError: null,
+      lastDeliveredAt: new Date(),
+    });
     s.sent++;
     return;
   }
@@ -125,7 +152,13 @@ async function send(
     consecutiveFailures: failures,
     lastError: verdict.error.slice(0, 300),
     ...(disable
-      ? { enabled: false, disabledReason: verdict.kind === 'disable' ? verdict.error : `switched off after ${failures} failed deliveries in a row: ${verdict.error}` }
+      ? {
+          enabled: false,
+          disabledReason:
+            verdict.kind === 'disable'
+              ? verdict.error
+              : `switched off after ${failures} failed deliveries in a row: ${verdict.error}`,
+        }
       : {}),
   });
   if (disable) s.disabled++;
@@ -138,15 +171,24 @@ export async function runChannels(deps: ChannelDeps): Promise<ChannelSummary> {
   const s: ChannelSummary = { sent: 0, failed: 0, disabled: 0, skipped: 0 };
   const planCache = new Map<string, boolean | null>();
   const allowed = async (ownerId: string) => {
-    if (!planCache.has(ownerId)) planCache.set(ownerId, await deps.allowed(ownerId).catch(() => null));
+    if (!planCache.has(ownerId))
+      planCache.set(ownerId, await deps.allowed(ownerId).catch(() => null));
     return planCache.get(ownerId);
   };
 
   // 1. Retries.
-  for (const d of await retryableDeliveries(db, new Date(now.getTime() - RETRY_WINDOW_MS), MAX_CHANNEL_ATTEMPTS, ['channel'])) {
+  for (const d of await retryableDeliveries(
+    db,
+    new Date(now.getTime() - RETRY_WINDOW_MS),
+    MAX_CHANNEL_ATTEMPTS,
+    ['channel'],
+  )) {
     const channel = d.channelId ? await channelById(db, d.channelId) : null;
     if (!channel || !channel.enabled || (await allowed(channel.ownerId)) !== true) {
-      await updateDelivery(db, d.id, { status: 'skipped', error: 'channel removed, switched off, or no longer on a plan with channels' });
+      await updateDelivery(db, d.id, {
+        status: 'skipped',
+        error: 'channel removed, switched off, or no longer on a plan with channels',
+      });
       s.skipped++;
       continue;
     }
@@ -173,12 +215,23 @@ export async function runChannels(deps: ChannelDeps): Promise<ChannelSummary> {
       .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
     if (!eligible.length) continue;
 
-    const taken = await claimedKeys(db, eligible.map((i) => prefix(channel.id) + i.key));
+    const taken = await claimedKeys(
+      db,
+      eligible.map((i) => prefix(channel.id) + i.key),
+    );
     const fresh = eligible.filter((i) => !taken.has(prefix(channel.id) + i.key));
     if (!fresh.length) continue;
 
     const batch = fresh.slice(0, ITEM_CAP[channel.kind]);
-    const hash = createHash('sha256').update(batch.map((i) => i.key).sort().join('|')).digest('hex').slice(0, 24);
+    const hash = createHash('sha256')
+      .update(
+        batch
+          .map((i) => i.key)
+          .sort()
+          .join('|'),
+      )
+      .digest('hex')
+      .slice(0, 24);
     const { row, created } = await createDelivery(db, {
       ownerId: channel.ownerId,
       kind: 'channel',
@@ -186,10 +239,20 @@ export async function runChannels(deps: ChannelDeps): Promise<ChannelSummary> {
       idempotencyKey: `channel:${channel.id}:${hash}`,
     });
     if (!created) continue;
-    const won = new Set(await claimItems(db, channel.ownerId, row.id, batch.map((i) => prefix(channel.id) + i.key)));
+    const won = new Set(
+      await claimItems(
+        db,
+        channel.ownerId,
+        row.id,
+        batch.map((i) => prefix(channel.id) + i.key),
+      ),
+    );
     const items = batch.filter((i) => won.has(prefix(channel.id) + i.key));
     if (!items.length) {
-      await updateDelivery(db, row.id, { status: 'skipped', error: 'every item was claimed by another run' });
+      await updateDelivery(db, row.id, {
+        status: 'skipped',
+        error: 'every item was claimed by another run',
+      });
       s.skipped++;
       continue;
     }

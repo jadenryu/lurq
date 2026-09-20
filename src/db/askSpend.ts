@@ -55,11 +55,7 @@ export async function getAskSpendToday(db: Database, ownerId: string): Promise<n
  * is our own server), but a negative balance would hand out budget that was
  * never spent, so the floor is enforced in the statement rather than trusted.
  */
-export async function addAskSpend(
-  db: Database,
-  ownerId: string,
-  micros: number,
-): Promise<number> {
+export async function addAskSpend(db: Database, ownerId: string, micros: number): Promise<number> {
   if (micros === 0) return getAskSpendToday(db, ownerId);
   const rows = await db
     .insert(askSpendDaily)

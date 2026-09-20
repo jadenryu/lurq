@@ -86,15 +86,15 @@ const NOW = new Date('2026-08-10');
 
 describe('computeConfidence — growth needs a base to be growth', () => {
   it('refuses emerging for a 17/wk package with explosive relative growth', () => {
-    expect(computeConfidence(input({ weeklyDownloads: 17, downloadGrowth90d: 3.25 }), NOW, 40)).toBe(
-      'unproven',
-    );
+    expect(
+      computeConfidence(input({ weeklyDownloads: 17, downloadGrowth90d: 3.25 }), NOW, 40),
+    ).toBe('unproven');
   });
 
   it('refuses emerging at 275/wk, the case that outranked Prisma', () => {
-    expect(computeConfidence(input({ weeklyDownloads: 275, downloadGrowth90d: 1.75 }), NOW, 40)).toBe(
-      'unproven',
-    );
+    expect(
+      computeConfidence(input({ weeklyDownloads: 275, downloadGrowth90d: 1.75 }), NOW, 40),
+    ).toBe('unproven');
   });
 
   it('still grants emerging to real growth above the floor', () => {
@@ -104,9 +104,9 @@ describe('computeConfidence — growth needs a base to be growth', () => {
   });
 
   it('still grants emerging on volume alone, with no growth at all', () => {
-    expect(computeConfidence(input({ weeklyDownloads: 8_000, downloadGrowth90d: 0 }), NOW, 40)).toBe(
-      'emerging',
-    );
+    expect(
+      computeConfidence(input({ weeklyDownloads: 8_000, downloadGrowth90d: 0 }), NOW, 40),
+    ).toBe('emerging');
   });
 
   it('leaves the adoption-independent promising tier intact', () => {

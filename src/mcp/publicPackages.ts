@@ -19,7 +19,12 @@ import type { Database } from '../db/client';
 import type { getPackageByName } from '../db/packages';
 import { packages } from '../db/schema';
 import { assessVerdict } from '../security/verdict';
-import { PUBLIC_TOP_LIMIT, publicDownloadFloor, publicPackageRow, validPackageName } from './publicSet';
+import {
+  PUBLIC_TOP_LIMIT,
+  publicDownloadFloor,
+  publicPackageRow,
+  validPackageName,
+} from './publicSet';
 import { upgradePairsFor, type PublicUpgradePair } from './publicUpgrades';
 
 export { PUBLIC_TOP_LIMIT };

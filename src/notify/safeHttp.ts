@@ -60,13 +60,19 @@ export function isPrivateAddress(ip: string): boolean {
 }
 
 const SLACK_HOSTS = new Set(['hooks.slack.com']);
-const DISCORD_HOSTS = new Set(['discord.com', 'discordapp.com', 'ptb.discord.com', 'canary.discord.com']);
+const DISCORD_HOSTS = new Set([
+  'discord.com',
+  'discordapp.com',
+  'ptb.discord.com',
+  'canary.discord.com',
+]);
 const TEAMS_SUFFIXES = ['.logic.azure.com', '.powerplatform.com', '.powerautomate.com'];
 
 export type UrlCheck = { ok: true; url: URL } | { ok: false; error: string };
 
 export function validateChannelUrl(kind: ChannelKind, raw: string): UrlCheck {
-  if (typeof raw !== 'string' || !raw.trim() || raw.length > MAX_URL) return { ok: false, error: 'Paste the full webhook URL.' };
+  if (typeof raw !== 'string' || !raw.trim() || raw.length > MAX_URL)
+    return { ok: false, error: 'Paste the full webhook URL.' };
   let url: URL;
   try {
     url = new URL(raw.trim());
@@ -74,26 +80,46 @@ export function validateChannelUrl(kind: ChannelKind, raw: string): UrlCheck {
     return { ok: false, error: 'That is not a valid URL.' };
   }
   if (url.protocol !== 'https:') return { ok: false, error: 'The URL must start with https://.' };
-  if (url.username || url.password) return { ok: false, error: 'The URL must not contain a username or password.' };
+  if (url.username || url.password)
+    return { ok: false, error: 'The URL must not contain a username or password.' };
   const host = url.hostname.toLowerCase();
 
   if (kind === 'slack') {
     if (!SLACK_HOSTS.has(host) || !/^\/(services|triggers)\//.test(url.pathname)) {
-      return { ok: false, error: 'A Slack incoming webhook URL starts with https://hooks.slack.com/services/.' };
+      return {
+        ok: false,
+        error: 'A Slack incoming webhook URL starts with https://hooks.slack.com/services/.',
+      };
     }
   } else if (kind === 'discord') {
     if (!DISCORD_HOSTS.has(host) || !url.pathname.startsWith('/api/webhooks/')) {
-      return { ok: false, error: 'A Discord webhook URL starts with https://discord.com/api/webhooks/.' };
+      return {
+        ok: false,
+        error: 'A Discord webhook URL starts with https://discord.com/api/webhooks/.',
+      };
     }
   } else if (kind === 'teams') {
     if (host.endsWith('.webhook.office.com') || host === 'outlook.office.com') {
-      return { ok: false, error: 'Teams retired Office 365 connector webhooks in May 2026. Create one with the Workflows app instead.' };
+      return {
+        ok: false,
+        error:
+          'Teams retired Office 365 connector webhooks in May 2026. Create one with the Workflows app instead.',
+      };
     }
     if (!TEAMS_SUFFIXES.some((s) => host.endsWith(s))) {
-      return { ok: false, error: 'Use the webhook URL a Teams Workflows flow gives you (a logic.azure.com or powerplatform.com address).' };
+      return {
+        ok: false,
+        error:
+          'Use the webhook URL a Teams Workflows flow gives you (a logic.azure.com or powerplatform.com address).',
+      };
     }
   } else {
-    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
+    if (
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
       return { ok: false, error: 'The URL must be reachable on the public internet.' };
     }
     if (isIP(host.replace(/^\[|\]$/g, '')) && isPrivateAddress(host.replace(/^\[|\]$/g, ''))) {
@@ -103,7 +129,11 @@ export function validateChannelUrl(kind: ChannelKind, raw: string): UrlCheck {
   return { ok: true, url };
 }
 
-type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void;
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
 
 /**
  * A `lookup` for the socket that refuses private addresses. Runs at connect
@@ -117,7 +147,9 @@ export function safeLookup(
       if (err) return callback(err, []);
       const list = addresses as LookupAddress[];
       if (!list.length || list.some((a) => isPrivateAddress(a.address))) {
-        const e = Object.assign(new Error(`${hostname} resolves to a private network address`), { code: 'EPRIVATE' });
+        const e = Object.assign(new Error(`${hostname} resolves to a private network address`), {
+          code: 'EPRIVATE',
+        });
         return callback(e, []);
       }
       if (options?.all) return callback(null, list);
@@ -156,7 +188,12 @@ export function postJson(
         url,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': 'lurq-alerts', 'Content-Length': Buffer.byteLength(payload), ...headers },
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'lurq-alerts',
+            'Content-Length': Buffer.byteLength(payload),
+            ...headers,
+          },
           lookup: (opts.lookup ?? safeLookup()) as never,
           timeout: opts.timeoutMs ?? TIMEOUT_MS,
         },
@@ -168,20 +205,37 @@ export function postJson(
           });
           res.on('end', () => {
             const status = res.statusCode ?? 0;
-            done({ status, error: status >= 200 && status < 300 ? null : `HTTP ${status}${body ? `: ${body.slice(0, 120).replace(/\s+/g, ' ')}` : ''}` });
+            done({
+              status,
+              error:
+                status >= 200 && status < 300
+                  ? null
+                  : `HTTP ${status}${body ? `: ${body.slice(0, 120).replace(/\s+/g, ' ')}` : ''}`,
+            });
           });
-          res.on('error', () => done({ status: res.statusCode ?? 0, error: 'response interrupted' }));
+          res.on('error', () =>
+            done({ status: res.statusCode ?? 0, error: 'response interrupted' }),
+          );
         },
       );
     } catch (err) {
-      done({ status: 0, error: err instanceof Error ? err.message : 'request failed', code: 'EINVAL' });
+      done({
+        status: 0,
+        error: err instanceof Error ? err.message : 'request failed',
+        code: 'EINVAL',
+      });
       return;
     }
     req.on('timeout', () => {
       req.destroy(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }));
     });
     req.on('error', (err: NodeJS.ErrnoException) => {
-      done({ status: 0, error: err.code === 'EPRIVATE' ? err.message : `could not connect (${err.code ?? err.message})`, code: err.code ?? 'ECONNECT' });
+      done({
+        status: 0,
+        error:
+          err.code === 'EPRIVATE' ? err.message : `could not connect (${err.code ?? err.message})`,
+        code: err.code ?? 'ECONNECT',
+      });
     });
     req.end(payload);
   });

@@ -47,7 +47,8 @@ function classify(node: ts.Node): {
   if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isFunctionDeclaration(node)) {
     return { kind: 'function', arity: arityOf(node), maxArity: maxArityOf(node) };
   }
-  if (ts.isClassExpression(node) || ts.isClassDeclaration(node)) return { kind: 'class', arity: null };
+  if (ts.isClassExpression(node) || ts.isClassDeclaration(node))
+    return { kind: 'class', arity: null };
   if (ts.isObjectLiteralExpression(node)) return { kind: 'object', arity: null };
   if (
     ts.isStringLiteral(node) ||
@@ -96,10 +97,7 @@ function lineOf(sf: ts.SourceFile, node: ts.Node): number {
   return sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 }
 
-function put(
-  out: Map<string, SurfaceSymbol>,
-  sym: SurfaceSymbol,
-): void {
+function put(out: Map<string, SurfaceSymbol>, sym: SurfaceSymbol): void {
   // First writer wins: the entry file's own binding outranks a later re-export.
   if (!out.has(sym.path)) out.set(sym.path, sym);
 }
@@ -152,10 +150,7 @@ function hasDeprecatedTag(sf: ts.SourceFile, node: ts.Node): boolean {
  * Function and class bodies are deliberately NOT descended into: an assignment
  * inside a function is not the module's surface.
  */
-function flattenStatements(
-  stmts: readonly ts.Statement[],
-  depth = 0,
-): ts.Statement[] {
+function flattenStatements(stmts: readonly ts.Statement[], depth = 0): ts.Statement[] {
   if (depth > 6) return [...stmts];
   const out: ts.Statement[] = [];
   for (const s of stmts) {
@@ -242,7 +237,16 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
       for (const pick of picks) {
         const found = sub.get(pick.from);
         if (found) put(out, { ...found, path: pick.as });
-        else put(out, { path: pick.as, kind: 'object', arity: null, origin: 'local', deprecated: false, tier: TIER, sourceRef: { file: rel, line: 1 } });
+        else
+          put(out, {
+            path: pick.as,
+            kind: 'object',
+            arity: null,
+            origin: 'local',
+            deprecated: false,
+            tier: TIER,
+            sourceRef: { file: rel, line: 1 },
+          });
       }
       return;
     }
@@ -498,7 +502,8 @@ function walk(file: string, ctx: WalkCtx, out: Map<string, SurfaceSymbol>): void
  * returning anything else (`() => import_x.default`) is a value of unknown shape.
  */
 function throughGetter(sf: ts.SourceFile, value: ts.Node): ts.Node {
-  if (!(ts.isArrowFunction(value) || ts.isFunctionExpression(value)) || value.parameters.length) return value;
+  if (!(ts.isArrowFunction(value) || ts.isFunctionExpression(value)) || value.parameters.length)
+    return value;
   let returned: ts.Expression | undefined;
   if (!ts.isBlock(value.body)) returned = value.body;
   else if (value.body.statements.length === 1 && ts.isReturnStatement(value.body.statements[0]!)) {
@@ -580,7 +585,12 @@ export function extractSurface(
   // intact for the CJS packages it was chosen for. When no candidate reads, the
   // first attempt is what we report, because that is the entry a consumer would
   // actually load and "we could not read this one" is the honest answer.
-  const attempts: { entry: string; symbols: SurfaceSymbol[]; walked: number; external: string[] }[] = [];
+  const attempts: {
+    entry: string;
+    symbols: SurfaceSymbol[];
+    walked: number;
+    external: string[];
+  }[] = [];
   for (const entry of candidates) {
     const ctx: WalkCtx = {
       pkgDir,
@@ -638,7 +648,10 @@ export function usesTopLevelAwait(pkgDir: string, entry: string): boolean {
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
     for (const stmt of sf.statements) {
       if (awaitsAtTopLevel(stmt)) return true;
-      const spec = ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt) ? stmt.moduleSpecifier : undefined;
+      const spec =
+        ts.isImportDeclaration(stmt) || ts.isExportDeclaration(stmt)
+          ? stmt.moduleSpecifier
+          : undefined;
       if (spec && ts.isStringLiteral(spec) && resolvesInsidePackage(spec.text)) {
         const next = resolveInternal(file, spec.text, pkgDir);
         if (next) queue.push(next);

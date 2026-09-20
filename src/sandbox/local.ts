@@ -206,7 +206,9 @@ export class LocalSandbox implements Sandbox {
       nodeVersion = nodeOut.stdout.trim() || 'unknown';
       const npmOut = await execFileAsync('npm', ['--version']);
       npmVersion = npmOut.stdout.trim() || 'unknown';
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return { nodeVersion, npmVersion };
   }
 }

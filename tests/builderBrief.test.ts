@@ -48,14 +48,36 @@ function stack(repo: string, over: Partial<RepoStack> = {}): RepoStack {
 const clean = stack('ada/clean');
 const drifted = stack('ada/drifted', {
   majorDrift: 2,
-  deps: [{ name: 'react', range: '^17.0.0', resolved: '17.0.2', latest: '19.1.0', majorsBehind: 2, deprecated: false, advisories: 0 }],
+  deps: [
+    {
+      name: 'react',
+      range: '^17.0.0',
+      resolved: '17.0.2',
+      latest: '19.1.0',
+      majorsBehind: 2,
+      deprecated: false,
+      advisories: 0,
+    },
+  ],
 });
 const vulnerable = stack('ada/vulnerable', {
   depsDeclared: 12,
   advisories: 1,
   conflicts: 1,
-  deps: [{ name: 'lodash', range: '4.17.10', resolved: '4.17.10', latest: '4.17.21', majorsBehind: 0, deprecated: false, advisories: 1 }],
-  conflictDetail: [{ source: 'peer-deps', packages: ['eslint', 'eslint-plugin-x'], detail: 'peer eslint@^8' }],
+  deps: [
+    {
+      name: 'lodash',
+      range: '4.17.10',
+      resolved: '4.17.10',
+      latest: '4.17.21',
+      majorsBehind: 0,
+      deprecated: false,
+      advisories: 1,
+    },
+  ],
+  conflictDetail: [
+    { source: 'peer-deps', packages: ['eslint', 'eslint-plugin-x'], detail: 'peer eslint@^8' },
+  ],
 });
 
 const report: BuilderReport = {
@@ -76,16 +98,25 @@ const report: BuilderReport = {
 
 describe('rankRepos', () => {
   it('orders by advisories, then conflicts, then drift, keeping ties stable', () => {
-    expect(rankRepos(report.repos).map((s) => s.repo)).toEqual(['ada/vulnerable', 'ada/drifted', 'ada/clean']);
+    expect(rankRepos(report.repos).map((s) => s.repo)).toEqual([
+      'ada/vulnerable',
+      'ada/drifted',
+      'ada/clean',
+    ]);
   });
 });
 
 describe('summarize', () => {
   it('names strengths and gaps from traits and stacks', () => {
     const s = summarize(report)!;
-    expect(s.strengths.map((p) => p.title)).toEqual(['You ship often', 'Your dependencies stay current']);
+    expect(s.strengths.map((p) => p.title)).toEqual([
+      'You ship often',
+      'Your dependencies stay current',
+    ]);
     expect(s.gaps.map((p) => p.title)).toContain('Few long-lived projects');
-    expect(s.gaps.find((p) => p.title.includes('advisory'))?.detail).toContain('start with ada/vulnerable');
+    expect(s.gaps.find((p) => p.title.includes('advisory'))?.detail).toContain(
+      'start with ada/vulnerable',
+    );
   });
 
   it('is locked when traits are', () => {
@@ -103,13 +134,20 @@ describe('briefs', () => {
     const text = reportBrief(report);
     expect(text.indexOf('## ada/vulnerable')).toBeLessThan(text.indexOf('## ada/clean'));
     // The fixture's advisory was never checked at 4.17.10, so the brief says which release it is known for.
-    expect(text).toContain('| lodash | 4.17.10 | 4.17.10 | 4.17.21 | 1 advisory on the latest release |');
+    expect(text).toContain(
+      '| lodash | 4.17.10 | 4.17.10 | 4.17.21 | 1 advisory on the latest release |',
+    );
     expect(text).toContain('[peer-deps] eslint + eslint-plugin-x');
     expect(text).toContain('2 not indexed yet, so unchecked (not clean)');
   });
 
   it('says what a signed-out export left out', () => {
-    const text = reportBrief({ ...report, traits: null, repos: [vulnerable], locked: { repos: 2, deps: 5, conflicts: 1 } });
+    const text = reportBrief({
+      ...report,
+      traits: null,
+      repos: [vulnerable],
+      locked: { repos: 2, deps: 5, conflicts: 1 },
+    });
     expect(text).not.toContain('## Summary');
     expect(text).toContain('2 more repos read but not in this export');
     expect(text).toContain('5 more dependencies not included');
@@ -147,12 +185,30 @@ describe('cardStats', () => {
 describe('cardProfile', () => {
   it('labels each trait with the code its archetype uses', () => {
     const d = cardProfile(report)!;
-    expect(d.traits.map((t) => [t.code, t.score])).toEqual([['SHP', 90], ['ARC', 20], ['EXP', 50], ['STW', 70]]);
+    expect(d.traits.map((t) => [t.code, t.score])).toEqual([
+      ['SHP', 90],
+      ['ARC', 20],
+      ['EXP', 50],
+      ['STW', 70],
+    ]);
   });
 
   it('reads languages as a share of owned repos, not of the languages listed', () => {
-    const d = cardProfile({ ...report, stats: { ...report.stats, repos: 12, languages: [{ name: 'TypeScript', repos: 8 }, { name: 'Go', repos: 2 }] } })!;
-    expect(d.languages).toEqual([{ name: 'TypeScript', share: 8 / 12 }, { name: 'Go', share: 2 / 12 }]);
+    const d = cardProfile({
+      ...report,
+      stats: {
+        ...report.stats,
+        repos: 12,
+        languages: [
+          { name: 'TypeScript', repos: 8 },
+          { name: 'Go', repos: 2 },
+        ],
+      },
+    })!;
+    expect(d.languages).toEqual([
+      { name: 'TypeScript', share: 8 / 12 },
+      { name: 'Go', share: 2 / 12 },
+    ]);
     expect(d.github).toEqual([
       { label: 'repos', value: '12' },
       { label: 'active 90d', value: '9' },
@@ -164,7 +220,13 @@ describe('cardProfile', () => {
     const d = cardProfile({
       ...report,
       repos: [
-        stack('ada/a', { depsTracked: 40, anyDrift: 12, majorDrift: 5, deprecated: 1, advisories: 2 }),
+        stack('ada/a', {
+          depsTracked: 40,
+          anyDrift: 12,
+          majorDrift: 5,
+          deprecated: 1,
+          advisories: 2,
+        }),
         stack('ada/b', { depsTracked: 10, anyDrift: 3, majorDrift: 0, conflicts: 1 }),
       ],
     })!;
@@ -188,10 +250,21 @@ describe('cardProfile', () => {
   });
 
   it('ranks packages by how many repos declare them', () => {
-    const dep = (name: string) => ({ name, range: '^1', resolved: '1.0.0', latest: '1.0.0', majorsBehind: 0, deprecated: false, advisories: 0 });
+    const dep = (name: string) => ({
+      name,
+      range: '^1',
+      resolved: '1.0.0',
+      latest: '1.0.0',
+      majorsBehind: 0,
+      deprecated: false,
+      advisories: 0,
+    });
     const d = cardProfile({
       ...report,
-      repos: [stack('ada/a', { deps: [dep('zod'), dep('react')] }), stack('ada/b', { deps: [dep('react')] })],
+      repos: [
+        stack('ada/a', { deps: [dep('zod'), dep('react')] }),
+        stack('ada/b', { deps: [dep('react')] }),
+      ],
     })!;
     expect(d.packages).toEqual(['react', 'zod']);
   });
@@ -210,8 +283,24 @@ describe('drill-down', () => {
   const app = stack('ada/app', {
     majorDrift: 1,
     conflicts: 1,
-    deps: [{ name: 'react', range: '^18.0.0', resolved: '18.3.1', latest: '19.1.0', majorsBehind: 1, deprecated: false, advisories: 0 }],
-    conflictDetail: [{ source: 'peer-deps', packages: ['react@19.1.0', 'react-dom'], detail: 'react-dom wants react@^18' }],
+    deps: [
+      {
+        name: 'react',
+        range: '^18.0.0',
+        resolved: '18.3.1',
+        latest: '19.1.0',
+        majorsBehind: 1,
+        deprecated: false,
+        advisories: 0,
+      },
+    ],
+    conflictDetail: [
+      {
+        source: 'peer-deps',
+        packages: ['react@19.1.0', 'react-dom'],
+        detail: 'react-dom wants react@^18',
+      },
+    ],
   });
   const profile: BuilderReport = { ...report, repos: [app, drifted, clean] };
 
@@ -249,7 +338,10 @@ describe('drill-down', () => {
   });
 
   it('never reads an uncompared diff, or a missing one, as nothing changed', () => {
-    const pending = depBrief(profile, 'react', { ...detail, diff: { ...diff, verdict: 'unknown', inconclusive: 'queued', removed: [], renamed: [] } });
+    const pending = depBrief(profile, 'react', {
+      ...detail,
+      diff: { ...diff, verdict: 'unknown', inconclusive: 'queued', removed: [], renamed: [] },
+    });
     expect(pending).toContain('Not compared yet');
     expect(pending).not.toContain('No runtime exports');
     expect(depBrief(profile, 'react')).toContain('is not included here');
@@ -283,9 +375,9 @@ describe('dependency labels', () => {
 
   it('never calls a dependency current when it is behind or unknown', () => {
     expect(depLabel(d({ status: 'behind' }))).toBe('behind latest');
-    expect(depLabel(d({ status: 'major', majorsBehind: 0, resolved: '0.3.0', latest: '0.9.0' }))).toBe(
-      'breaking 0.x release behind',
-    );
+    expect(
+      depLabel(d({ status: 'major', majorsBehind: 0, resolved: '0.3.0', latest: '0.9.0' })),
+    ).toBe('breaking 0.x release behind');
     expect(depLabel(d({ status: 'unknown', latest: null }))).toBe('version unknown');
     expect(depLabel(d({ status: 'current', resolved: '1.5.0' }))).toBe('current');
   });
@@ -299,21 +391,28 @@ describe('dependency labels', () => {
 
   it('says which version advisories are about', () => {
     expect(depLabel(d({ advisories: 1, advisoriesAt: 'resolved' }))).toBe('1 advisory at 1.2.0');
-    expect(depLabel(d({ advisories: 2, advisoriesAt: 'package' }))).toBe('2 advisories on the latest release');
+    expect(depLabel(d({ advisories: 2, advisoriesAt: 'package' }))).toBe(
+      '2 advisories on the latest release',
+    );
     expect(depLabel(d({ advisories: 2 }))).toBe('2 advisories on the latest release');
   });
 });
 
 describe('summary accuracy', () => {
   it('titles a deprecated-only gap as deprecated, not as 0 majors behind', () => {
-    const s = summarize({ ...report, repos: [stack('ada/old', { deprecated: 2, advisoriesExact: true })] })!;
+    const s = summarize({
+      ...report,
+      repos: [stack('ada/old', { deprecated: 2, advisoriesExact: true })],
+    })!;
     expect(s.gaps.map((g) => g.title)).toContain('2 deprecated dependencies');
     expect(s.gaps.some((g) => g.title.startsWith('0 '))).toBe(false);
   });
 
   it('shows majors behind alongside advisories instead of hiding them', () => {
     const s = summarize({ ...report, repos: [stack('ada/x', { advisories: 1, majorDrift: 3 })] })!;
-    expect(s.gaps.map((g) => g.title)).toEqual(expect.arrayContaining(['1 known advisory', '3 dependencies a major behind']));
+    expect(s.gaps.map((g) => g.title)).toEqual(
+      expect.arrayContaining(['1 known advisory', '3 dependencies a major behind']),
+    );
   });
 
   it('claims no known advisories only when every repo was checked at its resolved versions', () => {
@@ -358,15 +457,30 @@ describe('mcpServerLabel', () => {
   it('states probed counts and never calls an unprobed server fine', () => {
     expect(mcpServerLabel(server())).toBe('3 tools, 2 can write, 1 destructive');
     expect(mcpServerLabel(server({ status: 'queued' }))).toBe('not probed yet, queued');
-    expect(mcpServerLabel(server({ status: 'needs-config', requiredConfig: ['GITHUB_TOKEN'] }))).toBe('needs GITHUB_TOKEN to probe');
-    expect(mcpServerLabel(server({ status: 'not-probed', kind: 'remote' }))).toBe('remote endpoint, not probed by lurq');
-    expect(mcpServerLabel(server({ status: 'not-probed', kind: 'other-registry' }))).toBe('PyPI or Docker, not probed by lurq');
+    expect(
+      mcpServerLabel(server({ status: 'needs-config', requiredConfig: ['GITHUB_TOKEN'] })),
+    ).toBe('needs GITHUB_TOKEN to probe');
+    expect(mcpServerLabel(server({ status: 'not-probed', kind: 'remote' }))).toBe(
+      'remote endpoint, not probed by lurq',
+    );
+    expect(mcpServerLabel(server({ status: 'not-probed', kind: 'other-registry' }))).toBe(
+      'PyPI or Docker, not probed by lurq',
+    );
   });
 });
 
 describe('mcp tool schema', () => {
   const t = (over: Record<string, unknown> = {}) =>
-    ({ name: 'search', required: ['query'], params: ['query', 'limit'], readOnly: true, destructive: false, output: true, deprecated: false, ...over }) as Parameters<typeof mcpToolSummary>[0];
+    ({
+      name: 'search',
+      required: ['query'],
+      params: ['query', 'limit'],
+      readOnly: true,
+      destructive: false,
+      output: true,
+      deprecated: false,
+      ...over,
+    }) as Parameters<typeof mcpToolSummary>[0];
 
   it('says what a tool takes and returns', () => {
     expect(mcpToolSummary(t())).toBe('2 params, 1 required · structured output');

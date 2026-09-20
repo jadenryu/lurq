@@ -186,7 +186,9 @@ export class OpenAISummaryProvider implements SummaryProvider {
         inferredCategory,
       };
     } catch (err) {
-      logger.warn(`summary LLM failed for ${input.name}, using fallback: ${(err as Error).message}`);
+      logger.warn(
+        `summary LLM failed for ${input.name}, using fallback: ${(err as Error).message}`,
+      );
       return new FallbackSummaryProvider().generate(input);
     }
   }

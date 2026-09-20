@@ -35,8 +35,7 @@ export async function assembleMembers(
     normalized.map(async (ref) => {
       const row = tracked.get(ref.name);
       const pin = ref.version?.trim() || null;
-      const canUseIndexed =
-        row && (!pin || !row.latestVersion || pin === row.latestVersion);
+      const canUseIndexed = row && (!pin || !row.latestVersion || pin === row.latestVersion);
 
       if (canUseIndexed && row) {
         members.push({

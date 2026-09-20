@@ -23,8 +23,7 @@ function causeText(cause: unknown): string | null {
   }
   if (typeof cause === 'object' && cause !== null && 'message' in cause) {
     const msg = truncate(String((cause as { message: unknown }).message), DEFAULT_MAX);
-    const code =
-      'code' in cause ? String((cause as { code: unknown }).code) : null;
+    const code = 'code' in cause ? String((cause as { code: unknown }).code) : null;
     return code ? `${code}: ${msg}` : msg;
   }
   return truncate(String(cause), DEFAULT_MAX);
@@ -32,8 +31,7 @@ function causeText(cause: unknown): string | null {
 
 /** Truncated message + optional Postgres/Drizzle cause for safe logging. */
 export function formatError(err: unknown, max = DEFAULT_MAX): string {
-  const message =
-    err instanceof Error ? truncate(err.message, max) : truncate(String(err), max);
+  const message = err instanceof Error ? truncate(err.message, max) : truncate(String(err), max);
   const cause = err instanceof Error ? causeText(err.cause) : null;
   return cause ? `${message} (cause: ${cause})` : message;
 }

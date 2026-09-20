@@ -7,24 +7,24 @@ Once lurq is installed, your agent can call these tools over MCP. Every response
 is compact (to stay cheap in tokens), and package answers carry a `dataAsOf`
 timestamp so the agent knows how fresh the underlying evidence is.
 
-| Tool | Inputs | What it answers |
-| --- | --- | --- |
-| [`verify`](#verify) | `package` | Is this package real, healthy, and not risky? |
-| [`evaluate`](#evaluate) | `package` | Full evidence read for one package |
-| [`compare`](#compare) | `packages` | 2–5 packages ranked head-to-head |
-| [`policy`](#policy) | none | The rules your account's selection policy enforces |
-| [`compat`](#compat) | `packages`, `versions`, `node` | Will these packages actually install together? |
-| [`audit`](#audit) | `packages`, `mcpServers` | A whole project's dependencies and MCP servers, in one call |
-| [`diagram`](#diagram) | `stack` | A reference-architecture Mermaid diagram for a stack |
-| [`usage`](#usage) | `package`, `version`, `knownVersion` | A version's *real* public API, and what changed since the one you know |
-| [`resolve_surface`](#resolve_surface) | `package`, `version` | Exactly what a version exports at runtime |
-| [`diff_surface`](#diff_surface) | `package`, `fromVersion`, `toVersion` | What a version bump adds, removes, or re-shapes |
-| [`mcp_surface`](#mcp_surface) | `server`, `version` | An MCP server's real tool contract |
-| [`mcp_drift`](#mcp_drift) | `server`, `fromVersion`, `toVersion` | What an MCP server changed between two versions |
-| [`mcp_stack`](#mcp_stack) | `servers` | Do these MCP servers collide in one agent? |
-| [`connect_check`](#connect_check) | `server`, `client` | Will this MCP server work in my client, and what does it take? |
-| [`capabilities`](#capabilities) | `query` | Which lurq tool answers this situation |
-| [`report_outcome`](#report_outcome) | `package`, `accepted`, `buildSignal`, `need` | What happened after a pick shipped |
+| Tool                                  | Inputs                                       | What it answers                                                        |
+| ------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
+| [`verify`](#verify)                   | `package`                                    | Is this package real, healthy, and not risky?                          |
+| [`evaluate`](#evaluate)               | `package`                                    | Full evidence read for one package                                     |
+| [`compare`](#compare)                 | `packages`                                   | 2–5 packages ranked head-to-head                                       |
+| [`policy`](#policy)                   | none                                         | The rules your account's selection policy enforces                     |
+| [`compat`](#compat)                   | `packages`, `versions`, `node`               | Will these packages actually install together?                         |
+| [`audit`](#audit)                     | `packages`, `mcpServers`                     | A whole project's dependencies and MCP servers, in one call            |
+| [`diagram`](#diagram)                 | `stack`                                      | A reference-architecture Mermaid diagram for a stack                   |
+| [`usage`](#usage)                     | `package`, `version`, `knownVersion`         | A version's _real_ public API, and what changed since the one you know |
+| [`resolve_surface`](#resolve_surface) | `package`, `version`                         | Exactly what a version exports at runtime                              |
+| [`diff_surface`](#diff_surface)       | `package`, `fromVersion`, `toVersion`        | What a version bump adds, removes, or re-shapes                        |
+| [`mcp_surface`](#mcp_surface)         | `server`, `version`                          | An MCP server's real tool contract                                     |
+| [`mcp_drift`](#mcp_drift)             | `server`, `fromVersion`, `toVersion`         | What an MCP server changed between two versions                        |
+| [`mcp_stack`](#mcp_stack)             | `servers`                                    | Do these MCP servers collide in one agent?                             |
+| [`connect_check`](#connect_check)     | `server`, `client`                           | Will this MCP server work in my client, and what does it take?         |
+| [`capabilities`](#capabilities)       | `query`                                      | Which lurq tool answers this situation                                 |
+| [`report_outcome`](#report_outcome)   | `package`, `accepted`, `buildSignal`, `need` | What happened after a pick shipped                                     |
 
 ## Before installing a package
 
@@ -102,11 +102,11 @@ Will this set of packages actually install together?
 
 The verdict is about the set, not its pairs:
 
-| Verdict | Meaning |
-| --- | --- |
-| `conflict` | Proven broken — a declared peer or engine range, a recorded failed co-install, or npm's own resolver refusing the set |
-| `compatible` | npm resolved this exact set of versions |
-| `unknown` | lurq could not determine it: a member it has no version for, or a resolve that timed out |
+| Verdict      | Meaning                                                                                                               |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `conflict`   | Proven broken — a declared peer or engine range, a recorded failed co-install, or npm's own resolver refusing the set |
+| `compatible` | npm resolved this exact set of versions                                                                               |
+| `unknown`    | lurq could not determine it: a member it has no version for, or a resolve that timed out                              |
 
 lurq never returns `compatible` on the mere absence of a declared conflict, and
 `unknown` is never a hedge on a set it did resolve. Read-only: nothing is
@@ -158,7 +158,7 @@ extracted from its shipped `.d.ts`, exact to the version.
   passed `knownVersion`, the precise **delta**: what was added, removed, renamed,
   or changed.
 
-Pass the version your model *thinks* it knows and get the delta to the version
+Pass the version your model _thinks_ it knows and get the delta to the version
 you're actually installing. That fact exists in no changelog and no model's
 training data.
 
@@ -292,11 +292,11 @@ skip.
 Every scored package carries one of four confidence labels, reflecting the
 strength of the **discovered** evidence, not anyone's opinion:
 
-| Label | Meaning |
-| --- | --- |
-| `proven` | Strong, broad, sustained evidence of health. |
-| `emerging` | Real traction, shorter track record. |
+| Label       | Meaning                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `proven`    | Strong, broad, sustained evidence of health.                                                                                         |
+| `emerging`  | Real traction, shorter track record.                                                                                                 |
 | `promising` | Early signals look good, limited history — **adoption-independent**, so a well-built new package isn't buried by an old popular one. |
-| `unproven` | Too little evidence to stand behind yet. |
+| `unproven`  | Too little evidence to stand behind yet.                                                                                             |
 
 See [How it works](/how-it-works) for how these are derived.

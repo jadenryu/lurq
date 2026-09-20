@@ -94,9 +94,7 @@ export async function fetchAdvisories(
     ),
   );
   return details
-    .filter(
-      (d): d is PromiseFulfilledResult<HttpResponse<any>> => d.status === 'fulfilled',
-    )
+    .filter((d): d is PromiseFulfilledResult<HttpResponse<any>> => d.status === 'fulfilled')
     .map((d) => parseAdvisoryDetail(d.value.data));
 }
 

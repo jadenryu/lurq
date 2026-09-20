@@ -66,7 +66,8 @@ export async function flush(): Promise<void> {
       body: JSON.stringify({ api_key: key, batch }),
       signal: AbortSignal.timeout(5_000),
     });
-    if (!res.ok) logger.warn(`posthog batch rejected (${res.status}), dropped ${batch.length} event(s)`);
+    if (!res.ok)
+      logger.warn(`posthog batch rejected (${res.status}), dropped ${batch.length} event(s)`);
   } catch (err) {
     logger.warn('posthog batch failed:', err instanceof Error ? err.message : String(err));
   }

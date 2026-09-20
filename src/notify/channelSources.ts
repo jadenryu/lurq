@@ -63,7 +63,11 @@ const eventColumns = {
   alias: mcpDeployments.alias,
 };
 
-export async function channelCandidates(db: Database, now: Date, webUrl: string): Promise<Map<string, ChannelItem[]>> {
+export async function channelCandidates(
+  db: Database,
+  now: Date,
+  webUrl: string,
+): Promise<Map<string, ChannelItem[]>> {
   const since = new Date(now.getTime() - URGENT_WINDOW_MS);
   const [alerts, events, publicChanges] = await Promise.all([
     db.select().from(repoAlerts).where(gte(repoAlerts.createdAt, since)).limit(10_000),
@@ -87,13 +91,25 @@ export async function channelCandidates(db: Database, now: Date, webUrl: string)
   return byOwner;
 }
 
-export async function loadChannelItems(db: Database, keys: string[], webUrl: string): Promise<ChannelItem[]> {
-  const ids = (p: string) => keys.filter((k) => k.startsWith(p)).map((k) => Number(k.slice(p.length))).filter(Number.isInteger);
+export async function loadChannelItems(
+  db: Database,
+  keys: string[],
+  webUrl: string,
+): Promise<ChannelItem[]> {
+  const ids = (p: string) =>
+    keys
+      .filter((k) => k.startsWith(p))
+      .map((k) => Number(k.slice(p.length)))
+      .filter(Number.isInteger);
   const alertIds = ids('alert:');
   const eventIds = ids('mcp:');
-  const publicPairs = keys.map(parsePublicItemKey).filter((p): p is NonNullable<typeof p> => p !== null);
+  const publicPairs = keys
+    .map(parsePublicItemKey)
+    .filter((p): p is NonNullable<typeof p> => p !== null);
   const [alerts, events, publicChanges] = await Promise.all([
-    alertIds.length ? db.select().from(repoAlerts).where(inArray(repoAlerts.id, alertIds)) : Promise.resolve([]),
+    alertIds.length
+      ? db.select().from(repoAlerts).where(inArray(repoAlerts.id, alertIds))
+      : Promise.resolve([]),
     eventIds.length
       ? db
           .select(eventColumns)

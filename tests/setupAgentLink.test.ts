@@ -17,7 +17,12 @@ import { runSetup } from '../src/cli/install';
 import { readUserConfig } from '../src/core/userConfig';
 
 describe('setup from an agent shell', () => {
-  const saved = { home: process.env.HOME, lurqHome: process.env.LURQ_HOME, ci: process.env.CI, key: process.env.LURQ_API_KEY };
+  const saved = {
+    home: process.env.HOME,
+    lurqHome: process.env.LURQ_HOME,
+    ci: process.env.CI,
+    key: process.env.LURQ_API_KEY,
+  };
   let out: string[];
 
   beforeEach(() => {
@@ -29,7 +34,9 @@ describe('setup from an agent shell', () => {
     delete process.env.LURQ_API_KEY;
     mkdirSync(join(home, '.cursor'));
     out = [];
-    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => void out.push(args.join(' ')));
+    vi.spyOn(console, 'log').mockImplementation(
+      (...args: unknown[]) => void out.push(args.join(' ')),
+    );
   });
 
   afterEach(() => {

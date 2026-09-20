@@ -119,7 +119,10 @@ describe('diffApiSurfaces', () => {
   });
 
   it('separates a newly required param from one that was already optional', () => {
-    const after = BASE.replace('        - name: trace\n          in: header', '        - name: trace\n          in: header\n          required: true').replace(
+    const after = BASE.replace(
+      '        - name: trace\n          in: header',
+      '        - name: trace\n          in: header\n          required: true',
+    ).replace(
       "      responses:\n        '200': { description: ok }",
       "      parameters2: ignored\n      responses:\n        '200': { description: ok }",
     );
@@ -138,7 +141,10 @@ describe('diffApiSurfaces', () => {
   });
 
   it('calls a removed response code breaking and an added one not', () => {
-    const after = BASE.replace("        '402': { description: payment required }", "        '409': { description: conflict }");
+    const after = BASE.replace(
+      "        '402': { description: payment required }",
+      "        '409': { description: conflict }",
+    );
     const diff = diffApiSurfaces(spec(BASE), spec(after));
     expect(diff.breaking.map((c) => c.kind)).toContain('response-removed');
     expect(diff.other.map((c) => c.kind)).toContain('response-added');

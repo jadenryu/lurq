@@ -1,9 +1,19 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { fillStatement, needsFill, resetSurfaceFill, scheduleFill } from '../src/pipeline/fillSurface';
+import {
+  fillStatement,
+  needsFill,
+  resetSurfaceFill,
+  scheduleFill,
+} from '../src/pipeline/fillSurface';
 
 const db = {} as never;
-const row = (over: object) => ({ tier: 'shipped_js_ast' as const, sourceOffset: null, maxArity: null, ...over });
+const row = (over: object) => ({
+  tier: 'shipped_js_ast' as const,
+  sourceOffset: null,
+  maxArity: null,
+  ...over,
+});
 
 afterEach(() => resetSurfaceFill());
 
@@ -57,7 +67,9 @@ describe('scheduling a fill', () => {
     // the drain can finish.
     let release!: () => void;
     const gate = new Promise<number>((r) => (release = () => r(0)));
-    const accepted = Array.from({ length: 40 }, (_, i) => scheduleFill(db, 'pkg', `2.0.${i}`, i, () => gate));
+    const accepted = Array.from({ length: 40 }, (_, i) =>
+      scheduleFill(db, 'pkg', `2.0.${i}`, i, () => gate),
+    );
     // The first job leaves the queue for the drain, so the cap admits one more.
     expect(accepted.filter(Boolean).length).toBeLessThan(40);
     expect(accepted.at(-1)).toBe(false);
@@ -74,7 +86,9 @@ describe('the fill statement', () => {
         { path: 'format', offset: null, maxArity: -1 },
       ]),
     );
-    expect(sql).toMatch(/^\s*UPDATE symbols AS s\s+SET source_offset = v\.new_offset, max_arity = v\.new_max_arity/);
+    expect(sql).toMatch(
+      /^\s*UPDATE symbols AS s\s+SET source_offset = v\.new_offset, max_arity = v\.new_max_arity/,
+    );
     expect(sql).toMatch(/s\.source_offset IS NULL\s+AND s\.max_arity IS NULL/);
     expect(sql).not.toMatch(/\b(DELETE|INSERT|TRUNCATE|DROP)\b/i);
     expect(params).toEqual(['parse', 2100, 2, 'format', null, -1, 42, 'shipped_js_ast']);

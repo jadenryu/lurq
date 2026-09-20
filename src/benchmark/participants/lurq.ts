@@ -11,12 +11,7 @@
  */
 import type { Database } from '../../db/client';
 import { handlePlan, type PlanOutput } from '../../mcp/plan';
-import type {
-  BenchmarkCase,
-  Participant,
-  ProposedSelection,
-  StackProposal,
-} from '../types';
+import type { BenchmarkCase, Participant, ProposedSelection, StackProposal } from '../types';
 
 export class LurqPlanParticipant implements Participant {
   readonly id = 'lurq-plan';
@@ -55,9 +50,7 @@ export class LurqPlanParticipant implements Participant {
       if (!matched) {
         // This is a pinned slot or an unexpected mutation.
         if (slot.recommended) {
-          selections.push(
-            toSelection(slot.recommended.name, slot, 'pinned'),
-          );
+          selections.push(toSelection(slot.recommended.name, slot, 'pinned'));
         }
         continue;
       }
@@ -73,10 +66,7 @@ export class LurqPlanParticipant implements Participant {
 
     // Also report fixture needs that had no slot at all (e.g. they were
     // deduplicated or capped by MAX_SLOTS).
-    const coveredNeeds = new Set([
-      ...selections.map((s) => s.needId),
-      ...unmatchedNeedIds,
-    ]);
+    const coveredNeeds = new Set([...selections.map((s) => s.needId), ...unmatchedNeedIds]);
     for (const need of benchCase.needs) {
       if (need.required && !coveredNeeds.has(need.id)) {
         unmatchedNeedIds.push(need.id);

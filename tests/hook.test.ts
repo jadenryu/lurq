@@ -35,14 +35,21 @@ const verdict = (level: SecurityVerdict['level'], reasons: string[] = []): Secur
 
 describe('installTargets', () => {
   it('reads names from every package manager and strips versions', () => {
-    expect(installTargets('npm install zod@^3 -D @tanstack/react-query@5')).toEqual(['zod', '@tanstack/react-query']);
+    expect(installTargets('npm install zod@^3 -D @tanstack/react-query@5')).toEqual([
+      'zod',
+      '@tanstack/react-query',
+    ]);
     expect(installTargets('cd apps/web && pnpm add --filter web lodahs')).toEqual(['lodahs']);
     expect(installTargets('CI=1 yarn add left-pad; bun i hono')).toEqual(['left-pad', 'hono']);
   });
 
   it('ignores installs with no names, paths, git, tarballs, aliases and non-install commands', () => {
     expect(installTargets('npm install')).toEqual([]);
-    expect(installTargets('npm i ./local ../x file:../y github:a/b a/b https://x.io/p.tgz pkg.tgz foo@npm:bar')).toEqual([]);
+    expect(
+      installTargets(
+        'npm i ./local ../x file:../y github:a/b a/b https://x.io/p.tgz pkg.tgz foo@npm:bar',
+      ),
+    ).toEqual([]);
     expect(installTargets('echo npm i zod')).toEqual([]);
     expect(installTargets('npm run build && git status')).toEqual([]);
   });
@@ -64,17 +71,31 @@ describe('decide', () => {
   });
 
   it('asks on high risk and stays silent otherwise', () => {
-    expect(decide([{ name: 'evil', verdict: verdict('high', ['install script\nreads ~/.ssh']) }])).toEqual({
+    expect(
+      decide([{ name: 'evil', verdict: verdict('high', ['install script\nreads ~/.ssh']) }]),
+    ).toEqual({
       permissionDecision: 'ask',
-      permissionDecisionReason: 'lurq flags evil as high risk: evil: install script reads ~/.ssh. Run `lurq verify <package>` for the evidence.',
+      permissionDecisionReason:
+        'lurq flags evil as high risk: evil: install script reads ~/.ssh. Run `lurq verify <package>` for the evidence.',
     });
-    expect(decide([{ name: 'zod', verdict: verdict('medium', ['deprecated']) }, { name: 'hono', verdict: verdict('low') }])).toBeNull();
+    expect(
+      decide([
+        { name: 'zod', verdict: verdict('medium', ['deprecated']) },
+        { name: 'hono', verdict: verdict('low') },
+      ]),
+    ).toBeNull();
     expect(decide([])).toBeNull();
   });
 });
 
 describe('Claude Code settings', () => {
-  const user = { model: 'opus', hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-guard' }] }], Stop: [] } };
+  const user = {
+    model: 'opus',
+    hooks: {
+      PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'my-guard' }] }],
+      Stop: [],
+    },
+  };
 
   it('adds each hook after the user’s, idempotently, and removes them back to the original', () => {
     const once = withLurqHooks(user, 'claude', 'lurq');
@@ -100,8 +121,15 @@ describe('Claude Code settings', () => {
 describe('runTargets', () => {
   it('reads the package a runner fetches, not its arguments', () => {
     expect(runTargets('npx -y create-next-app@latest my-app --ts')).toEqual(['create-next-app']);
-    expect(runTargets('pnpm dlx shadcn@latest add button && bunx cowsay hi')).toEqual(['shadcn', 'cowsay']);
-    expect(runTargets('npx -p @scope/tool --package=other run-it')).toEqual(['@scope/tool', 'other', 'run-it']);
+    expect(runTargets('pnpm dlx shadcn@latest add button && bunx cowsay hi')).toEqual([
+      'shadcn',
+      'cowsay',
+    ]);
+    expect(runTargets('npx -p @scope/tool --package=other run-it')).toEqual([
+      '@scope/tool',
+      'other',
+      'run-it',
+    ]);
   });
 
   it('skips local bins and commands that are not runners', () => {
@@ -115,20 +143,32 @@ describe('addedDependencies', () => {
     JSON.stringify({ name: 'app', dependencies: deps, devDependencies: dev });
 
   it('lists only registry names that were not declared before', () => {
-    expect(addedDependencies(pkg({ zod: '^3' }), pkg({ zod: '^4', hono: '^4' }, { lodahs: '1.0.0' }))).toEqual(['hono', 'lodahs']);
+    expect(
+      addedDependencies(pkg({ zod: '^3' }), pkg({ zod: '^4', hono: '^4' }, { lodahs: '1.0.0' })),
+    ).toEqual(['hono', 'lodahs']);
     expect(addedDependencies('', pkg({ zod: '^3' }))).toEqual(['zod']);
   });
 
   it('ignores workspace, file, git and alias ranges, and unparseable files', () => {
-    expect(addedDependencies(pkg({}), pkg({ a: 'workspace:*', b: 'file:../b', c: 'github:x/c', d: 'npm:zod@3' }))).toEqual([]);
+    expect(
+      addedDependencies(
+        pkg({}),
+        pkg({ a: 'workspace:*', b: 'file:../b', c: 'github:x/c', d: 'npm:zod@3' }),
+      ),
+    ).toEqual([]);
     expect(addedDependencies(pkg({}), '{ "dependencies": { oops')).toBeNull();
   });
 });
 
 describe('decide for runners', () => {
   it('never denies a missing name, still asks on high risk', () => {
-    expect(decide([{ name: 'nope', verdict: verdict('invalid', ['no such package']) }], { deny: false })).toBeNull();
-    expect(decide([{ name: 'evil', verdict: verdict('high', ['bad']) }], { deny: false })?.permissionDecision).toBe('ask');
+    expect(
+      decide([{ name: 'nope', verdict: verdict('invalid', ['no such package']) }], { deny: false }),
+    ).toBeNull();
+    expect(
+      decide([{ name: 'evil', verdict: verdict('high', ['bad']) }], { deny: false })
+        ?.permissionDecision,
+    ).toBe('ask');
   });
 });
 
@@ -142,8 +182,13 @@ describe('measured nudges', () => {
   });
 
   it('tips only prompts about choosing, adding or upgrading packages', () => {
-    expect(promptTips('which library should I use for dates?').map((t) => t.kind)).toEqual(['choose']);
-    expect(promptTips('upgrade next to 16 and install zod').map((t) => t.kind)).toEqual(['upgrade', 'install']);
+    expect(promptTips('which library should I use for dates?').map((t) => t.kind)).toEqual([
+      'choose',
+    ]);
+    expect(promptTips('upgrade next to 16 and install zod').map((t) => t.kind)).toEqual([
+      'upgrade',
+      'install',
+    ]);
     expect(promptTips('fix the flaky login test')).toEqual([]);
   });
 
@@ -153,8 +198,12 @@ describe('measured nudges', () => {
   });
 
   it('applies Edit replacements the way Claude Code would, or gives up', () => {
-    expect(applyEdits('{"a":1}', [{ old_string: '"a":1', new_string: '"a":1,"b":2' }])).toBe('{"a":1,"b":2}');
-    expect(applyEdits('x x', [{ old_string: 'x', new_string: '$&y', replace_all: true }])).toBe('$&y $&y');
+    expect(applyEdits('{"a":1}', [{ old_string: '"a":1', new_string: '"a":1,"b":2' }])).toBe(
+      '{"a":1,"b":2}',
+    );
+    expect(applyEdits('x x', [{ old_string: 'x', new_string: '$&y', replace_all: true }])).toBe(
+      '$&y $&y',
+    );
     expect(applyEdits('{}', [{ old_string: 'missing', new_string: 'y' }])).toBeNull();
   });
 });
@@ -163,7 +212,10 @@ describe('Codex and Cursor hook files', () => {
   it('nests Codex hooks like Claude Code, with the agent flag', () => {
     const codex = withLurqHooks({}, 'codex', 'lurq');
     expect(codex.hooks.PreToolUse).toEqual([
-      { matcher: 'Bash|apply_patch', hooks: [{ type: 'command', command: 'lurq hook --agent codex pre-tool-use', timeout: 30 }] },
+      {
+        matcher: 'Bash|apply_patch',
+        hooks: [{ type: 'command', command: 'lurq hook --agent codex pre-tool-use', timeout: 30 }],
+      },
     ]);
     expect(withoutLurqHooks(codex)).toEqual({});
   });
@@ -185,16 +237,21 @@ describe('patchedPackageJsons (Codex apply_patch)', () => {
   const read = () => pkg;
 
   it('applies an update hunk to package.json and finds the added dependency', () => {
-    const patch = '*** Begin Patch\n*** Update File: package.json\n@@\n   "dependencies": {\n+    "lodahs": "^1.0.0",\n     "zod": "^3.0.0"\n*** Update File: src/index.ts\n@@\n-a\n+b\n*** End Patch';
+    const patch =
+      '*** Begin Patch\n*** Update File: package.json\n@@\n   "dependencies": {\n+    "lodahs": "^1.0.0",\n     "zod": "^3.0.0"\n*** Update File: src/index.ts\n@@\n-a\n+b\n*** End Patch';
     const files = patchedPackageJsons(patch, '/repo', read);
     expect(files).toHaveLength(1);
     expect(addedDependencies(files[0]!.before, files[0]!.after)).toEqual(['lodahs']);
   });
 
   it('reads an added package.json, and skips a hunk that does not apply', () => {
-    const add = '*** Begin Patch\n*** Add File: packages/x/package.json\n+{"dependencies":{"hono":"^4"}}\n*** End Patch';
-    expect(addedDependencies('', patchedPackageJsons(add, '/repo', read)[0]!.after)).toEqual(['hono']);
-    const stale = '*** Begin Patch\n*** Update File: package.json\n@@\n-    "nope": "1"\n+    "ky": "1"\n*** End Patch';
+    const add =
+      '*** Begin Patch\n*** Add File: packages/x/package.json\n+{"dependencies":{"hono":"^4"}}\n*** End Patch';
+    expect(addedDependencies('', patchedPackageJsons(add, '/repo', read)[0]!.after)).toEqual([
+      'hono',
+    ]);
+    const stale =
+      '*** Begin Patch\n*** Update File: package.json\n@@\n-    "nope": "1"\n+    "ky": "1"\n*** End Patch';
     expect(patchedPackageJsons(stale, '/repo', read)).toEqual([]);
   });
 });
@@ -204,27 +261,42 @@ describe('agent wire formats', () => {
   const ask = { permissionDecision: 'ask' as const, permissionDecisionReason: 'risky.' };
 
   it('keeps Claude Code’s shape, and turns Codex’s unsupported ask into a deny with a way through', () => {
-    expect(render('claude', 'pre-tool-use', { decision: ask })).toEqual({ hookSpecificOutput: { hookEventName: 'PreToolUse', ...ask } });
+    expect(render('claude', 'pre-tool-use', { decision: ask })).toEqual({
+      hookSpecificOutput: { hookEventName: 'PreToolUse', ...ask },
+    });
     const codex = render('codex', 'pre-tool-use', { decision: ask }) as any;
     expect(codex.hookSpecificOutput.permissionDecision).toBe('deny');
     expect(codex.hookSpecificOutput.permissionDecisionReason).toContain('LURQ_ALLOW=1');
-    expect(render('codex', 'prompt', { context: 'tip' })).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'tip' } });
+    expect(render('codex', 'prompt', { context: 'tip' })).toEqual({
+      hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'tip' },
+    });
   });
 
   it('speaks Cursor’s field names', () => {
-    expect(render('cursor', 'pre-tool-use', { decision: deny })).toEqual({ permission: 'deny', user_message: 'not real', agent_message: 'not real' });
-    expect(render('cursor', 'post-tool-use', { context: 'call usage' })).toEqual({ additional_context: 'call usage' });
+    expect(render('cursor', 'pre-tool-use', { decision: deny })).toEqual({
+      permission: 'deny',
+      user_message: 'not real',
+      agent_message: 'not real',
+    });
+    expect(render('cursor', 'post-tool-use', { context: 'call usage' })).toEqual({
+      additional_context: 'call usage',
+    });
     expect(render('cursor', 'session-start', null)).toBeNull();
   });
 
   it('reads Cursor input as Claude Code input', () => {
-    expect(normalize('cursor', { conversation_id: 'c1', command: 'npm i zod', cwd: '/p' })).toEqual({
-      session_id: 'c1',
-      cwd: '/p',
-      tool_name: 'Bash',
-      tool_input: { command: 'npm i zod' },
+    expect(normalize('cursor', { conversation_id: 'c1', command: 'npm i zod', cwd: '/p' })).toEqual(
+      {
+        session_id: 'c1',
+        cwd: '/p',
+        tool_name: 'Bash',
+        tool_input: { command: 'npm i zod' },
+      },
+    );
+    expect(normalize('cursor', { session_id: 's', workspace_roots: ['/w'] })).toEqual({
+      session_id: 's',
+      cwd: '/w',
     });
-    expect(normalize('cursor', { session_id: 's', workspace_roots: ['/w'] })).toEqual({ session_id: 's', cwd: '/w' });
     const claude = { session_id: 's', tool_name: 'Edit' };
     expect(normalize('claude', claude)).toBe(claude);
   });

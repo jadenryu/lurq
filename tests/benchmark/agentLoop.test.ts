@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { extractJsonObject, parseStackProposalJson } from '../../src/benchmark/participants/agentLoop';
+import {
+  extractJsonObject,
+  parseStackProposalJson,
+} from '../../src/benchmark/participants/agentLoop';
 
 describe('parseStackProposalJson', () => {
   const valid = `{
@@ -29,16 +32,16 @@ describe('parseStackProposalJson', () => {
 
   it('parses fenced JSON with prose before the fence', () => {
     const raw =
-      'React Router v8 requires Node ≥22, so I will use v7.\n\n```json\n' +
-      valid +
-      '\n```';
+      'React Router v8 requires Node ≥22, so I will use v7.\n\n```json\n' + valid + '\n```';
     const parsed = parseStackProposalJson(raw, 'model-with-lurq');
     expect(parsed.unmatchedNeedIds).toEqual([]);
   });
 
   it('extractJsonObject rejects truncated JSON instead of inventing braces', () => {
     expect(() =>
-      extractJsonObject('```json\n{"selections":[{"needId":"a","package":"x","lurqSwappedFrom": nu'),
+      extractJsonObject(
+        '```json\n{"selections":[{"needId":"a","package":"x","lurqSwappedFrom": nu',
+      ),
     ).toThrow(/Incomplete JSON|No JSON/);
   });
 });

@@ -74,7 +74,7 @@ async function selectTargets(db: Database, opts: BackfillOptions): Promise<Targe
     where rn <= ${perCategory}
     limit ${limit}
   `);
-  return ((rows as unknown as { rows?: Target[] }).rows ?? (rows as unknown as Target[])) ?? [];
+  return (rows as unknown as { rows?: Target[] }).rows ?? (rows as unknown as Target[]) ?? [];
 }
 
 export async function backfillDependents(
@@ -110,7 +110,9 @@ export async function backfillDependents(
         // A backfill must never die on one bad row; the next pass retries it
         // because the columns are still null.
         stats.missing++;
-        logger.warn(`dependents: ${target.name} failed (${err instanceof Error ? err.message : String(err)})`);
+        logger.warn(
+          `dependents: ${target.name} failed (${err instanceof Error ? err.message : String(err)})`,
+        );
       }
       opts.onProgress?.(stats.attempted + stats.skipped, targets.length);
     }

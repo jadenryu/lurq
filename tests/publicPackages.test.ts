@@ -44,7 +44,10 @@ describe('toPublicSummary', () => {
   it('counts severe advisories and keeps unchecked distinct from none', () => {
     expect(toPublicSummary(row(), []).advisories).toEqual({ total: 2, severe: 1 });
     expect(toPublicSummary(row({ advisories: null }), []).advisories).toBeNull();
-    expect(toPublicSummary(row({ advisories: [] }), []).advisories).toEqual({ total: 0, severe: 0 });
+    expect(toPublicSummary(row({ advisories: [] }), []).advisories).toEqual({
+      total: 0,
+      severe: 0,
+    });
   });
 
   it('caps verdict reasons at three and serialises dates', () => {
@@ -55,6 +58,8 @@ describe('toPublicSummary', () => {
   });
 
   it('prefers the generated summary over the raw npm description', () => {
-    expect(toPublicSummary(row({ summary: 'Pads strings.' }), []).description).toBe('Pads strings.');
+    expect(toPublicSummary(row({ summary: 'Pads strings.' }), []).description).toBe(
+      'Pads strings.',
+    );
   });
 });

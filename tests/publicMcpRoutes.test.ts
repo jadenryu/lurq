@@ -35,8 +35,24 @@ const pinStatus = (ownerId: string) => {
   const p = pins.get(`${ownerId}:7`);
   if (!p || p.removed) return null;
   return {
-    pin: { id: 1, ownerId, endpointId: 7, contentHash: null, authHash: 'a', note: p.note, pinnedAt: new Date('2026-09-15T01:00:00Z'), removedAt: null },
-    endpoint: { id: 7, url: ENDPOINT.url, lastStatus: 'auth_required', lastProbedAt: ENDPOINT.lastProbedAt, lastContentHash: null, lastAuthHash: 'a' },
+    pin: {
+      id: 1,
+      ownerId,
+      endpointId: 7,
+      contentHash: null,
+      authHash: 'a',
+      note: p.note,
+      pinnedAt: new Date('2026-09-15T01:00:00Z'),
+      removedAt: null,
+    },
+    endpoint: {
+      id: 7,
+      url: ENDPOINT.url,
+      lastStatus: 'auth_required',
+      lastProbedAt: ENDPOINT.lastProbedAt,
+      lastContentHash: null,
+      lastAuthHash: 'a',
+    },
     contractChanged: false,
     authChanged: false,
     openChanges: 0,
@@ -45,20 +61,34 @@ const pinStatus = (ownerId: string) => {
 };
 
 vi.mock('../src/connect/check', () => ({
-  resolveServerEndpoint: vi.fn(async (_db: unknown, q: string) => (q === ENDPOINT.url || q === 'io.acme/tools' ? ENDPOINT : null)),
+  resolveServerEndpoint: vi.fn(async (_db: unknown, q: string) =>
+    q === ENDPOINT.url || q === 'io.acme/tools' ? ENDPOINT : null,
+  ),
   handleConnectCheck: vi.fn(async () => ({
-    clients: [{ client: 'chatgpt', clientName: 'ChatGPT', verdict: 'blocked', blockers: [{ code: 'x', detail: 'no shared registration' }], setup: [], warnings: [], unknowns: [] }],
+    clients: [
+      {
+        client: 'chatgpt',
+        clientName: 'ChatGPT',
+        verdict: 'blocked',
+        blockers: [{ code: 'x', detail: 'no shared registration' }],
+        setup: [],
+        warnings: [],
+        unknowns: [],
+      },
+    ],
     summary: { works: 0, needs_setup: 0, blocked: 1, unknown: 0 },
   })),
 }));
 vi.mock('../src/db/publicMcpAlerts', () => ({
   listPins: vi.fn(async (_db: unknown, ownerId: string) => [pinStatus(ownerId)].filter(Boolean)),
   getPin: vi.fn(async (_db: unknown, ownerId: string) => pinStatus(ownerId)),
-  pinEndpoint: vi.fn(async (_db: unknown, ownerId: string, endpointId: number, note: string | null = null) => {
-    if (endpointId !== 7) return null;
-    pins.set(`${ownerId}:7`, { endpointId, note, removed: false });
-    return { id: 1 };
-  }),
+  pinEndpoint: vi.fn(
+    async (_db: unknown, ownerId: string, endpointId: number, note: string | null = null) => {
+      if (endpointId !== 7) return null;
+      pins.set(`${ownerId}:7`, { endpointId, note, removed: false });
+      return { id: 1 };
+    },
+  ),
   unpinEndpoint: vi.fn(async (_db: unknown, ownerId: string) => {
     const p = pins.get(`${ownerId}:7`);
     if (!p || p.removed) return false;
@@ -66,14 +96,25 @@ vi.mock('../src/db/publicMcpAlerts', () => ({
     return true;
   }),
   publicChangeExists: vi.fn(async (_db: unknown, id: number) => id === 42),
-  acknowledgePublicChange: vi.fn(async (_db: unknown, ownerId: string, id: number) => void acks.push([ownerId, id])),
+  acknowledgePublicChange: vi.fn(
+    async (_db: unknown, ownerId: string, id: number) => void acks.push([ownerId, id]),
+  ),
   acknowledgedChangeIds: vi.fn(async () => new Set([42])),
 }));
 vi.mock('../src/db/remoteEndpoints', () => ({
   getEndpointById: vi.fn(async (_db: unknown, id: number) => (id === 7 ? ENDPOINT : null)),
   listServerNamesForEndpoint: vi.fn(async () => ['io.acme/tools']),
   listEndpointObservations: vi.fn(async () => []),
-  listEndpointChanges: vi.fn(async () => [{ id: 42, kind: 'auth', severity: 'high', summary: 'DCR no longer offered', createdAt: new Date() }, { id: 43, kind: 'status', severity: 'low', summary: 'answering again', createdAt: new Date() }]),
+  listEndpointChanges: vi.fn(async () => [
+    {
+      id: 42,
+      kind: 'auth',
+      severity: 'high',
+      summary: 'DCR no longer offered',
+      createdAt: new Date(),
+    },
+    { id: 43, kind: 'status', severity: 'low', summary: 'answering again', createdAt: new Date() },
+  ]),
 }));
 vi.mock('../src/db/mcpScans', () => ({ getContract: vi.fn(async () => null) }));
 vi.mock('../src/db/usage', () => ({ recordUsage: vi.fn(async () => {}) }));
@@ -94,7 +135,8 @@ beforeAll(async () => {
     auth: pass,
     keyLimiter: pass,
     requireIssuerSecret: pass,
-    ownerFrom: (req) => String((req.method === 'GET' ? req.query.ownerId : req.body?.ownerId) ?? '').trim(),
+    ownerFrom: (req) =>
+      String((req.method === 'GET' ? req.query.ownerId : req.body?.ownerId) ?? '').trim(),
     keyOwner: (req, res) => {
       const owner = req.header('x-test-owner') ?? null;
       if (!owner) res.status(403).json({ error: 'This key has no account attached.' });
@@ -123,13 +165,22 @@ describe('pins over the API key', () => {
   it('pins by URL or registry name, lists, and unpins', async () => {
     const pinned = await call('POST', '/mcp-pins', { server: 'io.acme/tools', note: 'reviewed' });
     expect(pinned.status).toBe(200);
-    expect(((await pinned.json()) as { pin: Record<string, unknown> }).pin).toMatchObject({ endpointId: 7, url: ENDPOINT.url, note: 'reviewed', contractChanged: false });
+    expect(((await pinned.json()) as { pin: Record<string, unknown> }).pin).toMatchObject({
+      endpointId: 7,
+      url: ENDPOINT.url,
+      note: 'reviewed',
+      contractChanged: false,
+    });
 
     const list = (await (await call('GET', '/mcp-pins')).json()) as { pins: unknown[] };
     expect(list.pins).toHaveLength(1);
 
-    expect(await (await call('POST', '/mcp-pins/unpin', { server: ENDPOINT.url })).json()).toEqual({ unpinned: true });
-    expect(await (await call('POST', '/mcp-pins/unpin', { server: ENDPOINT.url })).json()).toEqual({ unpinned: false });
+    expect(await (await call('POST', '/mcp-pins/unpin', { server: ENDPOINT.url })).json()).toEqual({
+      unpinned: true,
+    });
+    expect(await (await call('POST', '/mcp-pins/unpin', { server: ENDPOINT.url })).json()).toEqual({
+      unpinned: false,
+    });
   });
 
   it('refuses a missing body, an unprobed server, and a key with no account', async () => {
@@ -153,13 +204,29 @@ describe('dashboard routes', () => {
     await call('POST', '/mcp-public/7/pin', { ownerId: 'user_2' }, null);
     const res = await fetch(`${base}/mcp-public/7?ownerId=user_2`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown> & { changes: { id: number; acknowledged: boolean }[]; clients: unknown[] };
-    expect(body).toMatchObject({ endpoint: { id: 7, url: ENDPOINT.url, status: 'auth_required' }, servers: ['io.acme/tools'], contract: null, pin: { endpointId: 7 }, summary: { blocked: 1 } });
+    const body = (await res.json()) as Record<string, unknown> & {
+      changes: { id: number; acknowledged: boolean }[];
+      clients: unknown[];
+    };
+    expect(body).toMatchObject({
+      endpoint: { id: 7, url: ENDPOINT.url, status: 'auth_required' },
+      servers: ['io.acme/tools'],
+      contract: null,
+      pin: { endpointId: 7 },
+      summary: { blocked: 1 },
+    });
     expect(body.changes.map((c) => [c.id, c.acknowledged])).toEqual([
       [42, true],
       [43, false],
     ]);
-    expect(body.clients).toEqual([{ client: 'chatgpt', clientName: 'ChatGPT', verdict: 'blocked', reason: 'no shared registration' }]);
+    expect(body.clients).toEqual([
+      {
+        client: 'chatgpt',
+        clientName: 'ChatGPT',
+        verdict: 'blocked',
+        reason: 'no shared registration',
+      },
+    ]);
   });
 
   it('requires an owner and a real endpoint', async () => {
@@ -169,9 +236,14 @@ describe('dashboard routes', () => {
   });
 
   it('acknowledges and unpins for the dashboard owner', async () => {
-    expect((await call('POST', '/mcp-public/changes/42/acknowledge', { ownerId: 'user_3' }, null)).status).toBe(200);
+    expect(
+      (await call('POST', '/mcp-public/changes/42/acknowledge', { ownerId: 'user_3' }, null))
+        .status,
+    ).toBe(200);
     expect(acks).toEqual([['user_3', 42]]);
     await call('POST', '/mcp-public/7/pin', { ownerId: 'user_3' }, null);
-    expect(await (await call('POST', '/mcp-public/7/unpin', { ownerId: 'user_3' }, null)).json()).toEqual({ unpinned: true });
+    expect(
+      await (await call('POST', '/mcp-public/7/unpin', { ownerId: 'user_3' }, null)).json(),
+    ).toEqual({ unpinned: true });
   });
 });

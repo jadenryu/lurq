@@ -67,7 +67,10 @@ describe('parseUpgradeRuns', () => {
   });
 
   it('honours the batch cap', () => {
-    const { runs } = parseUpgradeRuns(Array.from({ length: 50 }, () => valid), 10);
+    const { runs } = parseUpgradeRuns(
+      Array.from({ length: 50 }, () => valid),
+      10,
+    );
     expect(runs).toHaveLength(10);
   });
 });
@@ -168,7 +171,7 @@ describe('renderWorkflow', () => {
     expect(yaml).not.toContain('auto-merge');
   });
 
-  it('merges on the repo\'s own checks, never on lurq\'s say-so', () => {
+  it("merges on the repo's own checks, never on lurq's say-so", () => {
     const yaml = renderWorkflow({ autoMerge: true });
     expect(yaml).toContain('gh pr merge --auto');
     // `--auto` defers to branch protection. Merging immediately would make lurq

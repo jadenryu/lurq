@@ -103,14 +103,32 @@ const RULES: Rule[] = [
     capability: 'code.exec',
     name: (w) =>
       has(w, 'eval', 'repl') ??
-      both(has(w, 'run', 'execute', 'exec'), has(w, 'code', 'python', 'javascript', 'js', 'notebook', 'cell')),
+      both(
+        has(w, 'run', 'execute', 'exec'),
+        has(w, 'code', 'python', 'javascript', 'js', 'notebook', 'cell'),
+      ),
     text: /\b(?:execut|run|evaluat)\w*\s+(?:arbitrary\s+)?(?:python|javascript|typescript|js)?\s*code\b/i,
   },
   {
     capability: 'filesystem.write',
     name: (w) =>
       both(
-        has(w, 'write', 'create', 'delete', 'remove', 'move', 'rename', 'edit', 'append', 'mkdir', 'rm', 'save', 'overwrite', 'copy'),
+        has(
+          w,
+          'write',
+          'create',
+          'delete',
+          'remove',
+          'move',
+          'rename',
+          'edit',
+          'append',
+          'mkdir',
+          'rm',
+          'save',
+          'overwrite',
+          'copy',
+        ),
         has(w, 'file', 'files', 'directory', 'dir', 'folder', 'path'),
       ),
     text: /\b(?:writes?|creates?|deletes?|overwrites?|modif(?:y|ies)|moves?|renames?)\s+(?:a\s+|the\s+|new\s+)?(?:files?|director(?:y|ies)|folders?)\b/i,
@@ -134,14 +152,39 @@ const RULES: Rule[] = [
   },
   {
     capability: 'browser.control',
-    name: (w) => has(w, 'browser', 'navigate', 'click', 'screenshot', 'playwright', 'puppeteer', 'hover', 'keypress'),
+    name: (w) =>
+      has(
+        w,
+        'browser',
+        'navigate',
+        'click',
+        'screenshot',
+        'playwright',
+        'puppeteer',
+        'hover',
+        'keypress',
+      ),
   },
   {
     capability: 'messaging.send',
     name: (w) =>
       both(
         has(w, 'send', 'post', 'reply', 'publish', 'notify', 'forward', 'broadcast'),
-        has(w, 'email', 'mail', 'message', 'messages', 'slack', 'sms', 'tweet', 'dm', 'chat', 'channel', 'comment', 'notification'),
+        has(
+          w,
+          'email',
+          'mail',
+          'message',
+          'messages',
+          'slack',
+          'sms',
+          'tweet',
+          'dm',
+          'chat',
+          'channel',
+          'comment',
+          'notification',
+        ),
       ),
     text: /\b(?:sends?|posts?|publish(?:es)?)\s+(?:an?\s+|the\s+)?(?:email|message|slack\s+message|sms|tweet|notification)s?\b/i,
   },
@@ -155,7 +198,19 @@ const RULES: Rule[] = [
     name: (w) =>
       both(
         has(w, 'insert', 'update', 'delete', 'drop', 'truncate', 'upsert', 'migrate', 'alter'),
-        has(w, 'row', 'rows', 'record', 'records', 'table', 'tables', 'database', 'db', 'sql', 'collection'),
+        has(
+          w,
+          'row',
+          'rows',
+          'record',
+          'records',
+          'table',
+          'tables',
+          'database',
+          'db',
+          'sql',
+          'collection',
+        ),
       ) ?? both(has(w, 'execute', 'exec', 'run', 'apply'), has(w, 'sql', 'migration')),
     text: /\b(?:execut|run)\w*\s+(?:a\s+|any\s+|arbitrary\s+|raw\s+)?sql\b/i,
   },
@@ -163,13 +218,19 @@ const RULES: Rule[] = [
     capability: 'database.read',
     name: (w) =>
       has(w, 'sql', 'select') ??
-      both(has(w, 'query', 'list', 'get', 'describe'), has(w, 'table', 'tables', 'schema', 'database', 'db', 'rows')),
+      both(
+        has(w, 'query', 'list', 'get', 'describe'),
+        has(w, 'table', 'tables', 'schema', 'database', 'db', 'rows'),
+      ),
   },
   {
     capability: 'vcs.write',
     name: (w) =>
       has(w, 'push', 'merge', 'commit') ??
-      both(has(w, 'create', 'delete', 'update', 'close'), has(w, 'branch', 'repository', 'repo', 'pull', 'release', 'tag')),
+      both(
+        has(w, 'create', 'delete', 'update', 'close'),
+        has(w, 'branch', 'repository', 'repo', 'pull', 'release', 'tag'),
+      ),
   },
   {
     capability: 'credentials',
@@ -276,7 +337,10 @@ function visible(s: string): string {
 function snippet(text: string, index: number, length: number): string {
   const start = Math.max(0, index - 40);
   const end = Math.min(text.length, index + length + 40);
-  return `${start > 0 ? '…' : ''}${visible(text.slice(start, end))}${end < text.length ? '…' : ''}`.slice(0, 240);
+  return `${start > 0 ? '…' : ''}${visible(text.slice(start, end))}${end < text.length ? '…' : ''}`.slice(
+    0,
+    240,
+  );
 }
 
 /** Text smuggled in Unicode tag characters, decoded. */
@@ -299,8 +363,12 @@ interface TextSite {
 function toolTexts(tool: McpTool): TextSite[] {
   const sites: TextSite[] = [];
   if (tool.title) sites.push({ tool: tool.name, where: 'title', text: tool.title });
-  if (tool.description) sites.push({ tool: tool.name, where: 'description', text: tool.description });
-  for (const [root, schema] of [['inputSchema', tool.inputSchema], ['outputSchema', tool.outputSchema]] as const) {
+  if (tool.description)
+    sites.push({ tool: tool.name, where: 'description', text: tool.description });
+  for (const [root, schema] of [
+    ['inputSchema', tool.inputSchema],
+    ['outputSchema', tool.outputSchema],
+  ] as const) {
     const stack: [unknown, string, number][] = [[schema, root, 0]];
     while (stack.length && sites.length < 500) {
       const [node, path, depth] = stack.pop()!;
@@ -321,7 +389,8 @@ function promptTexts(p: PromptInfo): TextSite[] {
   const sites: TextSite[] = [];
   if (p.description) sites.push({ tool: null, where: `prompt ${p.name}`, text: p.description });
   for (const a of p.arguments) {
-    if (a.description) sites.push({ tool: null, where: `prompt ${p.name}.${a.name}`, text: a.description });
+    if (a.description)
+      sites.push({ tool: null, where: `prompt ${p.name}.${a.name}`, text: a.description });
   }
   return sites;
 }
@@ -346,11 +415,21 @@ export function scanText(site: TextSite): McpFinding[] {
   const bidi = BIDI.exec(text);
   BIDI.lastIndex = 0;
   if (bidi) {
-    add('hidden_characters', 'high', 'bidirectional override characters reorder what a reviewer sees', snippet(text, bidi.index, 1));
+    add(
+      'hidden_characters',
+      'high',
+      'bidirectional override characters reorder what a reviewer sees',
+      snippet(text, bidi.index, 1),
+    );
   }
   const invisible = text.match(INVISIBLE);
   if (invisible) {
-    add('hidden_characters', 'moderate', `${invisible.length} zero-width character(s)`, snippet(text, text.search(INVISIBLE), 1));
+    add(
+      'hidden_characters',
+      'moderate',
+      `${invisible.length} zero-width character(s)`,
+      snippet(text, text.search(INVISIBLE), 1),
+    );
   }
 
   // The remaining patterns read the text as the model does, with invisibles gone.
@@ -359,20 +438,40 @@ export function scanText(site: TextSite): McpFinding[] {
 
   const override = match(OVERRIDE) ?? match(ROLE_TAG);
   if (override) {
-    add('instruction_override', 'high', 'tells the model to set aside its other instructions', snippet(plain, override.index, override[0].length));
+    add(
+      'instruction_override',
+      'high',
+      'tells the model to set aside its other instructions',
+      snippet(plain, override.index, override[0].length),
+    );
   }
   const conceal = match(CONCEAL);
   if (conceal) {
-    add('concealment', 'high', 'tells the model to keep something from the user', snippet(plain, conceal.index, conceal[0].length));
+    add(
+      'concealment',
+      'high',
+      'tells the model to keep something from the user',
+      snippet(plain, conceal.index, conceal[0].length),
+    );
   }
   const directive = match(DIRECTIVE);
   if (directive) {
-    add('model_directive', 'moderate', 'instructs the model how to use other tools, not just this one', snippet(plain, directive.index, directive[0].length));
+    add(
+      'model_directive',
+      'moderate',
+      'instructs the model how to use other tools, not just this one',
+      snippet(plain, directive.index, directive[0].length),
+    );
   }
   const exfil = match(EXFIL);
   const sensitive = match(SENSITIVE);
   if (exfil) {
-    add('exfiltration', 'high', 'asks for conversation or credential material to be sent through a tool', snippet(plain, exfil.index, exfil[0].length));
+    add(
+      'exfiltration',
+      'high',
+      'asks for conversation or credential material to be sent through a tool',
+      snippet(plain, exfil.index, exfil[0].length),
+    );
   }
   if (sensitive) {
     // A path alone is common in legitimate docs ("reads your .env"). Paired
@@ -389,13 +488,29 @@ export function scanText(site: TextSite): McpFinding[] {
   }
   const host = match(COLLECTOR_HOST);
   if (host) {
-    add('suspicious_url', 'high', 'references a request-capture or tunnelling host', snippet(plain, host.index, host[0].length));
+    add(
+      'suspicious_url',
+      'high',
+      'references a request-capture or tunnelling host',
+      snippet(plain, host.index, host[0].length),
+    );
   } else {
     const ip = match(RAW_IP_URL);
-    if (ip) add('suspicious_url', 'moderate', 'references a raw IP address url', snippet(plain, ip.index, ip[0].length));
+    if (ip)
+      add(
+        'suspicious_url',
+        'moderate',
+        'references a raw IP address url',
+        snippet(plain, ip.index, ip[0].length),
+      );
   }
   if (where === 'description' && text.length > OVERSIZED_DESCRIPTION) {
-    add('oversized_text', 'info', `description is ${text.length} characters, all of it in the model's context on every request`, null);
+    add(
+      'oversized_text',
+      'info',
+      `description is ${text.length} characters, all of it in the model's context on every request`,
+      null,
+    );
   }
   return out;
 }
@@ -417,21 +532,32 @@ export interface ServerAnalysis {
   stats: ServerStats;
 }
 
-export function analyzeServer(snapshot: Pick<Snapshot, 'tools' | 'prompts' | 'resourceTemplates' | 'instructions' | 'issues'>): ServerAnalysis {
+export function analyzeServer(
+  snapshot: Pick<Snapshot, 'tools' | 'prompts' | 'resourceTemplates' | 'instructions' | 'issues'>,
+): ServerAnalysis {
   const capabilities: Record<string, CapabilityHit[]> = {};
   const findings: McpFinding[] = [];
-  const stats: ServerStats = { tools: snapshot.tools.length, writes: 0, destroys: 0, openWorld: 0, annotated: 0, capabilities: {} };
+  const stats: ServerStats = {
+    tools: snapshot.tools.length,
+    writes: 0,
+    destroys: 0,
+    openWorld: 0,
+    annotated: 0,
+    capabilities: {},
+  };
 
   for (const tool of snapshot.tools) {
     const ann = resolveAnnotations(tool.annotations);
     if (!ann.readOnlyHint) stats.writes++;
     if (ann.destructiveHint) stats.destroys++;
     if (ann.openWorldHint) stats.openWorld++;
-    if (tool.annotations && Object.keys(tool.annotations).some((k) => k !== 'title')) stats.annotated++;
+    if (tool.annotations && Object.keys(tool.annotations).some((k) => k !== 'title'))
+      stats.annotated++;
 
     const hits = toolCapabilities(tool);
     if (hits.length) capabilities[tool.name] = hits;
-    for (const h of hits) stats.capabilities[h.capability] = (stats.capabilities[h.capability] ?? 0) + 1;
+    for (const h of hits)
+      stats.capabilities[h.capability] = (stats.capabilities[h.capability] ?? 0) + 1;
 
     // The server's claim against an independent reading of the same tool.
     const writing = hits.find((h) => WRITE_CAPABILITIES.has(h.capability));
@@ -450,11 +576,16 @@ export function analyzeServer(snapshot: Pick<Snapshot, 'tools' | 'prompts' | 're
     for (const site of sites) findings.push(...scanText(site));
   }
 
-  for (const p of snapshot.prompts) for (const site of promptTexts(p)) findings.push(...scanText(site));
+  for (const p of snapshot.prompts)
+    for (const site of promptTexts(p)) findings.push(...scanText(site));
   for (const t of snapshot.resourceTemplates) {
-    if (t.description) findings.push(...scanText({ tool: null, where: `resource template ${t.name}`, text: t.description }));
+    if (t.description)
+      findings.push(
+        ...scanText({ tool: null, where: `resource template ${t.name}`, text: t.description }),
+      );
   }
-  if (snapshot.instructions) findings.push(...scanText({ tool: null, where: 'instructions', text: snapshot.instructions }));
+  if (snapshot.instructions)
+    findings.push(...scanText({ tool: null, where: 'instructions', text: snapshot.instructions }));
 
   const dupes = snapshot.issues.filter((i) => i.kind === 'duplicate');
   if (dupes.length) {
@@ -464,10 +595,15 @@ export function analyzeServer(snapshot: Pick<Snapshot, 'tools' | 'prompts' | 're
       tool: null,
       where: 'tools/list',
       detail: `${dupes.length} name(s) listed twice; clients disagree on which copy an agent gets`,
-      evidence: dupes.map((d) => d.detail).slice(0, 3).join('; '),
+      evidence: dupes
+        .map((d) => d.detail)
+        .slice(0, 3)
+        .join('; '),
     });
   }
-  const malformed = snapshot.issues.filter((i) => i.kind === 'malformed' || i.kind === 'stdout_noise');
+  const malformed = snapshot.issues.filter(
+    (i) => i.kind === 'malformed' || i.kind === 'stdout_noise',
+  );
   if (malformed.length) {
     findings.push({
       kind: 'parse_issues',
@@ -475,7 +611,10 @@ export function analyzeServer(snapshot: Pick<Snapshot, 'tools' | 'prompts' | 're
       tool: null,
       where: 'tools/list',
       detail: `${malformed.length} protocol issue(s); stricter clients may reject this server's list`,
-      evidence: malformed.map((d) => d.detail).slice(0, 3).join('; '),
+      evidence: malformed
+        .map((d) => d.detail)
+        .slice(0, 3)
+        .join('; '),
     });
   }
 
@@ -484,7 +623,9 @@ export function analyzeServer(snapshot: Pick<Snapshot, 'tools' | 'prompts' | 're
 
 export function sortFindings(findings: McpFinding[]): McpFinding[] {
   return [...findings].sort(
-    (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || (a.tool ?? '').localeCompare(b.tool ?? ''),
+    (a, b) =>
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+      (a.tool ?? '').localeCompare(b.tool ?? ''),
   );
 }
 
@@ -499,7 +640,10 @@ export function worst(findings: { severity: Severity }[]): Severity | null {
 
 export interface ScanMember {
   alias: string;
-  snapshot: Pick<Snapshot, 'tools' | 'prompts' | 'resourceTemplates' | 'instructions' | 'issues'> | null;
+  snapshot: Pick<
+    Snapshot,
+    'tools' | 'prompts' | 'resourceTemplates' | 'instructions' | 'issues'
+  > | null;
 }
 
 export interface StackAnalysis {
@@ -528,7 +672,12 @@ export function analyzeStackScan(members: ScanMember[]): StackAnalysis {
     members.map((m) => ({
       server: m.alias,
       version: null,
-      tools: m.snapshot ? m.snapshot.tools.map((t) => ({ name: t.name, annotations: resolveAnnotations(t.annotations) })) : null,
+      tools: m.snapshot
+        ? m.snapshot.tools.map((t) => ({
+            name: t.name,
+            annotations: resolveAnnotations(t.annotations),
+          }))
+        : null,
     })),
   );
   const findings: McpFinding[] = stack.collisions.map((c) => ({
@@ -540,11 +689,17 @@ export function analyzeStackScan(members: ScanMember[]): StackAnalysis {
     evidence: null,
   }));
 
-  const read = members.filter((m): m is ScanMember & { snapshot: NonNullable<ScanMember['snapshot']> } => !!m.snapshot);
+  const read = members.filter(
+    (m): m is ScanMember & { snapshot: NonNullable<ScanMember['snapshot']> } => !!m.snapshot,
+  );
   for (const owner of read) {
     const foreign = read
       .filter((m) => m !== owner)
-      .flatMap((m) => m.snapshot.tools.filter((t) => distinctive(t.name)).map((t) => ({ server: m.alias, name: t.name })))
+      .flatMap((m) =>
+        m.snapshot.tools
+          .filter((t) => distinctive(t.name))
+          .map((t) => ({ server: m.alias, name: t.name })),
+      )
       // A name the owner also exposes is a collision, already reported.
       .filter((f) => !owner.snapshot.tools.some((t) => t.name === f.name));
     if (!foreign.length) continue;
@@ -555,7 +710,9 @@ export function analyzeStackScan(members: ScanMember[]): StackAnalysis {
         const m = pattern.exec(site.text);
         if (!m) continue;
         const target = foreign.find((f) => f.name === m[1])!;
-        const steering = scanText(site).some((f) => f.severity === 'high' || f.severity === 'critical');
+        const steering = scanText(site).some(
+          (f) => f.severity === 'high' || f.severity === 'critical',
+        );
         findings.push({
           kind: 'cross_server_reference',
           severity: steering ? 'high' : 'moderate',
@@ -573,13 +730,21 @@ export function analyzeStackScan(members: ScanMember[]): StackAnalysis {
 
 // ── Over time ─────────────────────────────────────────────────────────────────
 
-export type DiffInput = Pick<Snapshot, 'tools' | 'prompts' | 'resourceTemplates' | 'instructions'> & {
+export type DiffInput = Pick<
+  Snapshot,
+  'tools' | 'prompts' | 'resourceTemplates' | 'instructions'
+> & {
   issues?: Snapshot['issues'];
 };
 
 export interface SnapshotDiff {
   contract: McpDrift;
-  descriptionChanges: { tool: string; field: 'description' | 'title'; before: string | null; after: string | null }[];
+  descriptionChanges: {
+    tool: string;
+    field: 'description' | 'title';
+    before: string | null;
+    after: string | null;
+  }[];
   instructionsChanged: boolean;
   promptsAdded: string[];
   promptsRemoved: string[];
@@ -603,7 +768,10 @@ const findingKey = (f: McpFinding) => `${f.kind}|${f.tool ?? ''}|${f.where}|${f.
 const MAX_TEXT_CHANGES = 50;
 
 export function diffSnapshots(prev: DiffInput, next: DiffInput, label = 'server'): SnapshotDiff {
-  const contract = diffMcpSurfaces(mcpSurface(label, null, prev.tools), mcpSurface(label, null, next.tools));
+  const contract = diffMcpSurfaces(
+    mcpSurface(label, null, prev.tools),
+    mcpSurface(label, null, next.tools),
+  );
 
   const before = new Map(prev.tools.map((t) => [t.name, t]));
   const descriptionChanges: SnapshotDiff['descriptionChanges'] = [];
@@ -616,23 +784,37 @@ export function diffSnapshots(prev: DiffInput, next: DiffInput, label = 'server'
       if ((old[field] ?? null) !== (t[field] ?? null)) {
         changedText.add(t.name);
         if (descriptionChanges.length < MAX_TEXT_CHANGES) {
-          descriptionChanges.push({ tool: t.name, field, before: old[field] ?? null, after: t[field] ?? null });
+          descriptionChanges.push({
+            tool: t.name,
+            field,
+            before: old[field] ?? null,
+            after: t[field] ?? null,
+          });
         }
       }
     }
     const had = new Set(toolCapabilities(old).map((h) => h.capability));
-    const gained = toolCapabilities(t).map((h) => h.capability).filter((c) => !had.has(c));
+    const gained = toolCapabilities(t)
+      .map((h) => h.capability)
+      .filter((c) => !had.has(c));
     if (gained.length) capabilitiesGained.push({ tool: t.name, capabilities: gained });
   }
 
   const empty = { issues: [] as Snapshot['issues'] };
   const prevKeys = new Set(analyzeServer({ ...empty, ...prev }).findings.map(findingKey));
-  const newFindings = analyzeServer({ ...empty, ...next }).findings.filter((f) => !prevKeys.has(findingKey(f)));
+  const newFindings = analyzeServer({ ...empty, ...next }).findings.filter(
+    (f) => !prevKeys.has(findingKey(f)),
+  );
 
   const rugPull = [
     ...new Set(
       newFindings
-        .filter((f) => f.tool && changedText.has(f.tool) && (f.severity === 'high' || f.severity === 'critical'))
+        .filter(
+          (f) =>
+            f.tool &&
+            changedText.has(f.tool) &&
+            (f.severity === 'high' || f.severity === 'critical'),
+        )
         .map((f) => f.tool!),
     ),
   ].sort();
@@ -643,7 +825,9 @@ export function diffSnapshots(prev: DiffInput, next: DiffInput, label = 'server'
   const promptsRemoved = [...prevPrompts].filter((p) => !nextPrompts.has(p)).sort();
   const instructionsChanged = (prev.instructions ?? null) !== (next.instructions ?? null);
 
-  const writingGained = capabilitiesGained.some((g) => g.capabilities.some((c) => WRITE_CAPABILITIES.has(c)));
+  const writingGained = capabilitiesGained.some((g) =>
+    g.capabilities.some((c) => WRITE_CAPABILITIES.has(c)),
+  );
   const widened = contract.annotationFlips.some((f) => f.widensPrivilege);
   const findingWorst = worst(newFindings);
 
@@ -666,16 +850,23 @@ export function diffSnapshots(prev: DiffInput, next: DiffInput, label = 'server'
   }
 
   const parts: string[] = [];
-  if (rugPull.length) parts.push(`${rugPull.length} tool(s) rewrote their description and now instruct the model: ${rugPull.join(', ')}`);
-  const drift = contract.inconclusive ? `contract not comparable (${contract.inconclusive})` : summarizeDrift(contract);
+  if (rugPull.length)
+    parts.push(
+      `${rugPull.length} tool(s) rewrote their description and now instruct the model: ${rugPull.join(', ')}`,
+    );
+  const drift = contract.inconclusive
+    ? `contract not comparable (${contract.inconclusive})`
+    : summarizeDrift(contract);
   if (drift !== 'no contract change') parts.push(drift);
-  if (descriptionChanges.length && !rugPull.length) parts.push(`${changedText.size} tool description(s) changed`);
+  if (descriptionChanges.length && !rugPull.length)
+    parts.push(`${changedText.size} tool description(s) changed`);
   if (instructionsChanged) parts.push('server instructions changed');
   if (promptsAdded.length) parts.push(`${promptsAdded.length} prompt(s) added`);
   if (promptsRemoved.length) parts.push(`${promptsRemoved.length} prompt(s) removed`);
   if (writingGained) parts.push('a tool gained the ability to modify something');
   const serious = newFindings.filter((f) => f.severity === 'critical' || f.severity === 'high');
-  if (serious.length && !rugPull.length) parts.push(`${serious.length} new high-severity finding(s)`);
+  if (serious.length && !rugPull.length)
+    parts.push(`${serious.length} new high-severity finding(s)`);
 
   const unchanged =
     !contract.addedTools.length &&

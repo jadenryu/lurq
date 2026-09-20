@@ -76,9 +76,7 @@ export function appJwt(creds: GithubAppCredentials, now: Date = new Date()): str
   const payload = b64url(
     JSON.stringify({ iat: issued, exp: issued + JWT_TTL_S, iss: creds.appId }),
   );
-  const signature = createSign('RSA-SHA256')
-    .update(`${header}.${payload}`)
-    .sign(creds.privateKey);
+  const signature = createSign('RSA-SHA256').update(`${header}.${payload}`).sign(creds.privateKey);
   return `${header}.${payload}.${b64url(signature)}`;
 }
 
@@ -189,10 +187,7 @@ export async function installationPost<T>(
   }
 }
 
-export async function installationGet<T>(
-  installationId: number,
-  path: string,
-): Promise<T> {
+export async function installationGet<T>(installationId: number, path: string): Promise<T> {
   const token = await installationToken(installationId);
   const res = await httpRequest<T>(`${API}${path}`, {
     host: API_HOST,

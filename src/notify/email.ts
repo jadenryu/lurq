@@ -29,14 +29,22 @@ export class SendError extends Error {
 
 const TIMEOUT_MS = 15_000;
 
-async function timedFetch(fetchImpl: typeof fetch, url: string, init: RequestInit): Promise<Response> {
+async function timedFetch(
+  fetchImpl: typeof fetch,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   timer.unref?.();
   try {
     return await fetchImpl(url, { ...init, signal: controller.signal });
   } catch (err) {
-    throw new SendError(err instanceof Error && err.name === 'AbortError' ? 'timed out' : 'network error', true, 0);
+    throw new SendError(
+      err instanceof Error && err.name === 'AbortError' ? 'timed out' : 'network error',
+      true,
+      0,
+    );
   } finally {
     clearTimeout(timer);
   }
@@ -70,12 +78,20 @@ export async function sendEmail(
   // 429 and 5xx may work later; anything else (bad address, unverified domain,
   // bad key) will fail identically on every retry.
   const retryable = res.status === 429 || res.status >= 500;
-  throw new SendError(`resend ${res.status}: ${(body.name ?? body.message ?? 'error').slice(0, 120)}`, retryable, res.status);
+  throw new SendError(
+    `resend ${res.status}: ${(body.name ?? body.message ?? 'error').slice(0, 120)}`,
+    retryable,
+    res.status,
+  );
 }
 
 interface ClerkUser {
   primary_email_address_id?: string | null;
-  email_addresses?: { id: string; email_address: string; verification?: { status?: string } | null }[];
+  email_addresses?: {
+    id: string;
+    email_address: string;
+    verification?: { status?: string } | null;
+  }[];
 }
 
 /**
@@ -91,11 +107,16 @@ export async function lookupEmail(
   opts: { secretKey: string; fetchImpl?: typeof fetch },
 ): Promise<string | null> {
   if (!/^user_[A-Za-z0-9]+$/.test(ownerId)) return null;
-  const res = await timedFetch(opts.fetchImpl ?? fetch, `https://api.clerk.com/v1/users/${encodeURIComponent(ownerId)}`, {
-    headers: { Authorization: `Bearer ${opts.secretKey}` },
-  });
+  const res = await timedFetch(
+    opts.fetchImpl ?? fetch,
+    `https://api.clerk.com/v1/users/${encodeURIComponent(ownerId)}`,
+    {
+      headers: { Authorization: `Bearer ${opts.secretKey}` },
+    },
+  );
   if (res.status === 404) return null;
-  if (!res.ok) throw new SendError(`clerk ${res.status}`, res.status === 429 || res.status >= 500, res.status);
+  if (!res.ok)
+    throw new SendError(`clerk ${res.status}`, res.status === 429 || res.status >= 500, res.status);
   const user = (await res.json()) as ClerkUser;
   const primary = user.email_addresses?.find((e) => e.id === user.primary_email_address_id);
   if (!primary || primary.verification?.status !== 'verified') return null;

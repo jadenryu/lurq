@@ -208,7 +208,9 @@ export function isNamespaceMemberClaim(
 
 /** Does a call with `args` arguments fit? A null or absent `max` is no upper bound. */
 function accepts(args: number, required: number | null, max: number | null | undefined): boolean {
-  return (required === null || args >= required) && (max === null || max === undefined || args <= max);
+  return (
+    (required === null || args >= required) && (max === null || max === undefined || args <= max)
+  );
 }
 
 /**
@@ -227,7 +229,10 @@ function accepts(args: number, required: number | null, max: number | null | und
 export function judgeCalls(
   change: ArityChange,
   refs: SymbolReference[],
-): { broken: { file: string; line: number; args: number }[]; unmeasured: { file: string; line: number }[] } | null {
+): {
+  broken: { file: string; line: number; args: number }[];
+  unmeasured: { file: string; line: number }[];
+} | null {
   const valueRefs = refs.filter((r) => r.via !== 'type-only');
   if (!valueRefs.length || valueRefs.some((r) => r.calls === undefined)) return null;
   const broken: { file: string; line: number; args: number }[] = [];
@@ -235,7 +240,10 @@ export function judgeCalls(
   for (const r of valueRefs) {
     for (const c of r.calls!) {
       if (c.args === null) unmeasured.push({ file: r.file, line: c.line });
-      else if (accepts(c.args, change.from, change.fromMax) && !accepts(c.args, change.to, change.toMax)) {
+      else if (
+        accepts(c.args, change.from, change.fromMax) &&
+        !accepts(c.args, change.to, change.toMax)
+      ) {
         broken.push({ file: r.file, line: c.line, args: c.args });
       }
     }
@@ -302,7 +310,12 @@ function compareEntry(
     .filter((s) => referenced.has(s.path) && !toSurface.has(s.path))
     .map((s) => {
       const renamedTo = renames.get(s.path);
-      return { symbol: s.path, ...tag, ...(renamedTo ? { renamedTo } : {}), refs: symbols.get(s.path) ?? [] };
+      return {
+        symbol: s.path,
+        ...tag,
+        ...(renamedTo ? { renamedTo } : {}),
+        refs: symbols.get(s.path) ?? [],
+      };
     });
   // `export * from 'core'` may still provide every one of those names. Tier A
   // cannot see through another package, so the honest answer is "could not
@@ -370,9 +383,13 @@ export async function checkUpgradeOne(
   // A range is not a version. The registry answers `^2.0.0` with a 404, which
   // would read as "not published" and send someone looking for a missing
   // release. Dist-tags (`latest`, `next`) are not ranges and resolve fine.
-  const loose = [target.fromVersion, target.toVersion].filter((v) => semver.validRange(v) && !semver.valid(v));
+  const loose = [target.fromVersion, target.toVersion].filter(
+    (v) => semver.validRange(v) && !semver.valid(v),
+  );
   if (loose.length) {
-    return { unverified: `expected exact versions, got ${target.fromVersion}..${target.toVersion}` };
+    return {
+      unverified: `expected exact versions, got ${target.fromVersion}..${target.toVersion}`,
+    };
   }
 
   // Both versions stay unpacked until the comparison is done: extraction reads
@@ -385,10 +402,16 @@ export async function checkUpgradeOne(
   try {
     const failure = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected');
     if (failure) throw failure.reason;
-    const [fromPkg, toPkg] = settled.map((s) => (s as PromiseFulfilledResult<Unpacked | null>).value);
+    const [fromPkg, toPkg] = settled.map(
+      (s) => (s as PromiseFulfilledResult<Unpacked | null>).value,
+    );
     if (!fromPkg || !toPkg) {
-      const missing = [fromPkg ? null : target.fromVersion, toPkg ? null : target.toVersion].filter(Boolean);
-      return { unverified: `not published on npm: ${missing.map((v) => `${target.package}@${v}`).join(', ')}` };
+      const missing = [fromPkg ? null : target.fromVersion, toPkg ? null : target.toVersion].filter(
+        Boolean,
+      );
+      return {
+        unverified: `not published on npm: ${missing.map((v) => `${target.package}@${v}`).join(', ')}`,
+      };
     }
     return await compareVersions(target, refs, byEntry, fromPkg, toPkg, opts);
   } finally {
@@ -408,7 +431,10 @@ export async function checkUpgradeOne(
  * question; turning a network blip into "unverified" for every devDependency
  * in a plan would bury the findings that matter.
  */
-async function requirementsOnly(target: UpgradeTarget, runtime: RepoRuntime | undefined): Promise<UpgradeCheck> {
+async function requirementsOnly(
+  target: UpgradeTarget,
+  runtime: RepoRuntime | undefined,
+): Promise<UpgradeCheck> {
   if (!runtime?.root) return {};
   try {
     const [from, to] = await Promise.all([
@@ -650,7 +676,10 @@ export async function checkUpgrade(
 
   for (const t of targets) {
     try {
-      const res = await checkUpgradeOne(t, byPkg.get(t.package), { typeCheck: opts.typeCheck, runtime });
+      const res = await checkUpgradeOne(t, byPkg.get(t.package), {
+        typeCheck: opts.typeCheck,
+        runtime,
+      });
       if (res.types) {
         types.push(
           res.types.checked
@@ -690,7 +719,10 @@ function capped(items: string[], cap = REPORT_LOCATION_CAP): string {
 /** The import, then every use it leads to. In ESM a missing named export fails
  *  the whole module at load, so the import line is itself a break site. */
 function locations(refs: SymbolReference[]): string {
-  const all = refs.flatMap((r) => [`${r.file}:${r.line}`, ...(r.calls ?? []).map((c) => `${r.file}:${c.line}`)]);
+  const all = refs.flatMap((r) => [
+    `${r.file}:${r.line}`,
+    ...(r.calls ?? []).map((c) => `${r.file}:${c.line}`),
+  ]);
   return capped([...new Set(all)]) || '(no location)';
 }
 
@@ -729,8 +761,10 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
           ? `  require('${b.package}') now loads an ES module (was CommonJS)`
           : `  require('${b.package}') no longer resolves: its exports map offers require() nothing`,
       );
-      for (const x of m.broken.slice(0, REPORT_LOCATION_CAP)) out.push(`    · ${x.file}:${x.line}  ${x.why}`);
-      if (m.broken.length > REPORT_LOCATION_CAP) out.push(`    · (+${m.broken.length - REPORT_LOCATION_CAP} more)`);
+      for (const x of m.broken.slice(0, REPORT_LOCATION_CAP))
+        out.push(`    · ${x.file}:${x.line}  ${x.why}`);
+      if (m.broken.length > REPORT_LOCATION_CAP)
+        out.push(`    · (+${m.broken.length - REPORT_LOCATION_CAP} more)`);
       if (m.olderNode.length) {
         out.push(
           `    · throws ERR_REQUIRE_ESM on Node before 20.19 / 22.12: ${capped(m.olderNode.map((s) => `${s.file}:${s.line}`))}`,
@@ -791,17 +825,18 @@ export function formatUpgradeReport(report: UpgradeReport, title = 'upgrade chec
   }
 
   const typed = report.types ?? [];
-  const unchecked = typed.filter(
-    (t): t is Extract<TypeCoverage, { checked: false }> => !t.checked,
-  );
+  const unchecked = typed.filter((t): t is Extract<TypeCoverage, { checked: false }> => !t.checked);
   if (typed.length > unchecked.length) {
-    out.push(`TYPES     checked ${typed.length - unchecked.length} package(s) in the files that import them`);
+    out.push(
+      `TYPES     checked ${typed.length - unchecked.length} package(s) in the files that import them`,
+    );
   }
   if (unchecked.length) {
     out.push(`TYPES     not checked for ${unchecked.length} package(s):`);
     // Grouped by reason: a JavaScript project gives every package the same one.
     const byReason = new Map<string, string[]>();
-    for (const t of unchecked) byReason.set(t.reason, [...(byReason.get(t.reason) ?? []), t.package]);
+    for (const t of unchecked)
+      byReason.set(t.reason, [...(byReason.get(t.reason) ?? []), t.package]);
     for (const [reason, names] of byReason) out.push(`    · ${names.join(', ')}: ${reason}`);
   }
   if (typed.length) out.push('');

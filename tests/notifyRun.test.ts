@@ -83,7 +83,15 @@ describe.skipIf(!TEST_DB)('runNotifications against Postgres', () => {
   async function mcpEvent(ownerId: string, diff: Record<string, unknown>) {
     const [dep] = await db
       .insert(schema.mcpDeployments)
-      .values({ ownerId, serverKey: `local:${randomUUID()}`, configFingerprint: '0123456789abcdef', alias: 'notes', registry: 'local', transport: 'stdio', lastStatus: 'ok' })
+      .values({
+        ownerId,
+        serverKey: `local:${randomUUID()}`,
+        configFingerprint: '0123456789abcdef',
+        alias: 'notes',
+        registry: 'local',
+        transport: 'stdio',
+        lastStatus: 'ok',
+      })
       .returning();
     const [ev] = await db
       .insert(schema.mcpChangeEvents)
@@ -115,7 +123,9 @@ describe.skipIf(!TEST_DB)('runNotifications against Postgres', () => {
     expect(emails).toHaveLength(1);
     expect(emails[0]!.subject).toBe('lurq: 2 urgent changes to what your agents depend on');
     // Rug pull is listed before the release.
-    expect(emails[0]!.text.indexOf('now instructs your agent')).toBeLessThan(emails[0]!.text.indexOf('will install on its own in'));
+    expect(emails[0]!.text.indexOf('now instructs your agent')).toBeLessThan(
+      emails[0]!.text.indexOf('will install on its own in'),
+    );
     expect(emails[0]!.headers?.['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
 
     sent = [];
@@ -150,7 +160,8 @@ describe.skipIf(!TEST_DB)('runNotifications against Postgres', () => {
     await alert(dead, true);
     const send = vi.fn(async (m: OutgoingEmail) => {
       if (m.to.startsWith(dead)) throw new SendError('resend 422: invalid_to', false, 422);
-      if (send.mock.calls.filter((c) => c[0].to === m.to).length === 1) throw new SendError('resend 503', true, 503);
+      if (send.mock.calls.filter((c) => c[0].to === m.to).length === 1)
+        throw new SendError('resend 503', true, 503);
       sent.push(m);
       return { id: 'em_ok' };
     });
@@ -160,7 +171,9 @@ describe.skipIf(!TEST_DB)('runNotifications against Postgres', () => {
     await runNotifications(deps({ send }));
     expect(mine(flaky)).toHaveLength(1);
 
-    const keys = send.mock.calls.filter((c) => c[0].to.startsWith(flaky)).map((c) => c[0].idempotencyKey);
+    const keys = send.mock.calls
+      .filter((c) => c[0].to.startsWith(flaky))
+      .map((c) => c[0].idempotencyKey);
     expect(new Set(keys).size).toBe(1);
     expect(send.mock.calls.filter((c) => c[0].to.startsWith(dead))).toHaveLength(1);
   });

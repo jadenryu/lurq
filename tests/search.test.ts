@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  localEmbed,
-  buildEmbeddingText,
-  LocalEmbeddingProvider,
-} from '../src/search/embeddings';
+import { localEmbed, buildEmbeddingText, LocalEmbeddingProvider } from '../src/search/embeddings';
 import { inferCategory, inferCategoryFromSignals } from '../src/search/categoryInference';
 import { rrfFuse, recommend } from '../src/search/recommend';
 import { EMBEDDING_DIM } from '../src/core/constants';
@@ -41,10 +37,20 @@ describe('local embedder', () => {
 describe('buildEmbeddingText', () => {
   it('combines name, category, and summary/description', () => {
     expect(
-      buildEmbeddingText({ name: 'zod', category: 'validation', summary: 'schema validation', description: null }),
+      buildEmbeddingText({
+        name: 'zod',
+        category: 'validation',
+        summary: 'schema validation',
+        description: null,
+      }),
     ).toBe('zod. validation. schema validation');
     expect(
-      buildEmbeddingText({ name: 'zod', category: 'validation', summary: null, description: 'fallback desc' }),
+      buildEmbeddingText({
+        name: 'zod',
+        category: 'validation',
+        summary: null,
+        description: 'fallback desc',
+      }),
     ).toBe('zod. validation. fallback desc');
   });
 });
@@ -85,7 +91,13 @@ describe('rrfFuse (hybrid search §3)', () => {
   });
 
   it('sums contributions for docs present in both lists', () => {
-    const fused = rrfFuse([[n('a'), n('b')], [n('b'), n('a')]], 60);
+    const fused = rrfFuse(
+      [
+        [n('a'), n('b')],
+        [n('b'), n('a')],
+      ],
+      60,
+    );
     // a: 1/61 + 1/62 ; b: 1/62 + 1/61 — equal, both appear once per list.
     const a = fused.find((f) => f.row.name === 'a')!;
     expect(a.rrf).toBeCloseTo(1 / 61 + 1 / 62, 10);
@@ -98,7 +110,9 @@ describe('rrfFuse (hybrid search §3)', () => {
 });
 
 describe('inferCategoryFromSignals (categorize-on-ingest §2A)', () => {
-  function signals(over: Partial<RawPackageSignals['registry']> & { name?: string } = {}): RawPackageSignals {
+  function signals(
+    over: Partial<RawPackageSignals['registry']> & { name?: string } = {},
+  ): RawPackageSignals {
     const { name = 'pkg', ...reg } = over;
     return {
       name,
@@ -141,7 +155,9 @@ describe('inferCategoryFromSignals (categorize-on-ingest §2A)', () => {
       inferCategoryFromSignals(signals({ name: 'superorm', keywords: ['orm', 'query builder'] })),
     ).toBe('orm');
     expect(
-      inferCategoryFromSignals(signals({ description: 'a validation library for parsing input schemas' })),
+      inferCategoryFromSignals(
+        signals({ description: 'a validation library for parsing input schemas' }),
+      ),
     ).toBe('validation');
   });
 
@@ -169,11 +185,17 @@ describe('recommend degrades instead of failing', () => {
     // A db stub is enough: we assert on the degradation signal, and the query
     // legs are covered by the integration suite.
     const db = {
-      select: () => ({ from: () => ({ where: () => ({ orderBy: () => ({ limit: async () => [] }) }) }) }),
+      select: () => ({
+        from: () => ({ where: () => ({ orderBy: () => ({ limit: async () => [] }) }) }),
+      }),
     } as never;
 
     await expect(
-      recommend(db, { need: 'a react form library', onDegraded: (r) => reasons.push(r) }, brokenProvider),
+      recommend(
+        db,
+        { need: 'a react form library', onDegraded: (r) => reasons.push(r) },
+        brokenProvider,
+      ),
     ).resolves.toBeDefined();
 
     expect(reasons.length).toBeGreaterThan(0);

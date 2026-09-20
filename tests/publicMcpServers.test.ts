@@ -44,9 +44,21 @@ describe.skipIf(!TEST_DB)('public MCP server pages against Postgres', () => {
   let base = '';
 
   const result = (over: Partial<ProbeResult> = {}): ProbeResult => ({
-    url: 'x', status: 'open', httpStatus: 200, transport: 'streamable-http', protocolMode: 'stateless', protocolVersion: '2026-07-28',
-    serverName: null, serverVersion: null, auth: { mode: 'none', challengeStatus: null, oauth: null, declaredHeaders: [] },
-    violations: [], snapshot: null, error: null, latencyMs: 60, finalUrl: null, ...over,
+    url: 'x',
+    status: 'open',
+    httpStatus: 200,
+    transport: 'streamable-http',
+    protocolMode: 'stateless',
+    protocolVersion: '2026-07-28',
+    serverName: null,
+    serverVersion: null,
+    auth: { mode: 'none', challengeStatus: null, oauth: null, declaredHeaders: [] },
+    violations: [],
+    snapshot: null,
+    error: null,
+    latencyMs: 60,
+    finalUrl: null,
+    ...over,
   });
 
   beforeAll(async () => {
@@ -61,23 +73,64 @@ describe.skipIf(!TEST_DB)('public MCP server pages against Postgres', () => {
     close = handle.close;
 
     const entry = (name: string, url: string, status = 'active') => ({
-      name, version: '2.1.0', title: 'Weather', description: 'Forecasts for anywhere', websiteUrl: null, repositoryUrl: 'https://github.com/acme/weather',
-      remotes: [{ type: 'streamable-http', url }], packages: [], status, isLatest: true, publishedAt: null, updatedAt: new Date(),
+      name,
+      version: '2.1.0',
+      title: 'Weather',
+      description: 'Forecasts for anywhere',
+      websiteUrl: null,
+      repositoryUrl: 'https://github.com/acme/weather',
+      remotes: [{ type: 'streamable-http', url }],
+      packages: [],
+      status,
+      isLatest: true,
+      publishedAt: null,
+      updatedAt: new Date(),
     });
-    await store.storeRegistryEntries(db, [entry(probed, `https://w.${host}/mcp`), entry(unprobed, `https://q.${host}/mcp`), entry(deleted, `https://g.${host}/mcp`)]);
+    await store.storeRegistryEntries(db, [
+      entry(probed, `https://w.${host}/mcp`),
+      entry(unprobed, `https://q.${host}/mcp`),
+      entry(deleted, `https://g.${host}/mcp`),
+    ]);
 
-    const snap = { ...emptySnapshot(), tools: [
-      { name: 'forecast', description: 'secret prose', inputSchema: { type: 'object', properties: { city: { type: 'string' } } } },
-    ] };
+    const snap = {
+      ...emptySnapshot(),
+      tools: [
+        {
+          name: 'forecast',
+          description: 'secret prose',
+          inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+        },
+      ],
+    };
     const row = contractRow(snap);
     const ep = (await store.getEndpointByUrl(db, `https://w.${host}/mcp`))!;
-    await store.recordEndpointProbe(db, { endpointId: ep.id, result: result({ snapshot: snap }), contentHash: row.contentHash, authHash: 'none', contract: row, changes: [], consecutiveFailures: 0, nextProbeAt: new Date() });
+    await store.recordEndpointProbe(db, {
+      endpointId: ep.id,
+      result: result({ snapshot: snap }),
+      contentHash: row.contentHash,
+      authHash: 'none',
+      contract: row,
+      changes: [],
+      consecutiveFailures: 0,
+      nextProbeAt: new Date(),
+    });
     const gone = (await store.getEndpointByUrl(db, `https://g.${host}/mcp`))!;
-    await store.recordEndpointProbe(db, { endpointId: gone.id, result: result(), contentHash: null, authHash: 'none', contract: null, changes: [], consecutiveFailures: 0, nextProbeAt: new Date() });
+    await store.recordEndpointProbe(db, {
+      endpointId: gone.id,
+      result: result(),
+      contentHash: null,
+      authHash: 'none',
+      contract: null,
+      changes: [],
+      consecutiveFailures: 0,
+      nextProbeAt: new Date(),
+    });
     await store.storeRegistryEntries(db, [entry(deleted, `https://g.${host}/mcp`, 'deleted')]);
 
     const app = express();
-    registerPublicMcpServerRoutes(app, db, (_req: Request, _res: Response, next: NextFunction) => next());
+    registerPublicMcpServerRoutes(app, db, (_req: Request, _res: Response, next: NextFunction) =>
+      next(),
+    );
     await new Promise<void>((resolve) => {
       server = app.listen(0, '127.0.0.1', () => resolve());
     });
@@ -91,7 +144,9 @@ describe.skipIf(!TEST_DB)('public MCP server pages against Postgres', () => {
     await db.execute(sql`delete from mcp_endpoint_observations where endpoint_id in ${ids}`);
     await db.execute(sql`delete from mcp_endpoint_servers where endpoint_id in ${ids}`);
     await db.execute(sql`delete from mcp_remote_endpoints where host like ${`%.${host}`}`);
-    await db.execute(sql`delete from mcp_registry_servers where name like ${`io.test.public-${run}/%`}`);
+    await db.execute(
+      sql`delete from mcp_registry_servers where name like ${`io.test.public-${run}/%`}`,
+    );
     await close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
@@ -100,12 +155,20 @@ describe.skipIf(!TEST_DB)('public MCP server pages against Postgres', () => {
     const res = await fetch(`${base}/public/mcp-server?name=${encodeURIComponent(probed)}`);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toMatch(/s-maxage=86400/);
-    const body = (await res.json()) as Record<string, unknown> & { clients: { verdict: string }[]; summary: Record<string, number> };
+    const body = (await res.json()) as Record<string, unknown> & {
+      clients: { verdict: string }[];
+      summary: Record<string, number>;
+    };
     expect(body).toMatchObject({
       name: probed,
       version: '2.1.0',
       description: 'Forecasts for anywhere',
-      endpoint: { url: `https://w.${host}/mcp`, status: 'open', authMode: 'none', toolNames: ['forecast'] },
+      endpoint: {
+        url: `https://w.${host}/mcp`,
+        status: 'open',
+        authMode: 'none',
+        toolNames: ['forecast'],
+      },
       otherEndpoints: 0,
     });
     expect(body.clients).toHaveLength(CLIENT_PROFILES.length);
@@ -119,13 +182,19 @@ describe.skipIf(!TEST_DB)('public MCP server pages against Postgres', () => {
   });
 
   it('gives no page to an unprobed server, a deleted one, or a name that is not a registry name', async () => {
-    expect((await fetch(`${base}/public/mcp-server?name=${encodeURIComponent(unprobed)}`)).status).toBe(404);
-    expect((await fetch(`${base}/public/mcp-server?name=${encodeURIComponent(deleted)}`)).status).toBe(404);
+    expect(
+      (await fetch(`${base}/public/mcp-server?name=${encodeURIComponent(unprobed)}`)).status,
+    ).toBe(404);
+    expect(
+      (await fetch(`${base}/public/mcp-server?name=${encodeURIComponent(deleted)}`)).status,
+    ).toBe(404);
     expect((await fetch(`${base}/public/mcp-server?name=weather`)).status).toBe(400);
   });
 
   it('lists only servers with a live probed endpoint', async () => {
-    const body = (await (await fetch(`${base}/public/mcp-servers`)).json()) as { servers: { name: string; dataAsOf: string | null }[] };
+    const body = (await (await fetch(`${base}/public/mcp-servers`)).json()) as {
+      servers: { name: string; dataAsOf: string | null }[];
+    };
     const mine = body.servers.filter((s) => s.name.startsWith(`io.test.public-${run}/`));
     expect(mine.map((s) => s.name)).toEqual([probed]);
     expect(mine[0]!.dataAsOf).toMatch(/^\d{4}-\d{2}-\d{2}T/);

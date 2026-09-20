@@ -133,9 +133,9 @@ describe('resolveArchitectureCompat', () => {
       }),
     ]);
     expect(out.length).toBeGreaterThanOrEqual(1);
-    expect(out.some((c) => c.source === 'peer-deps' && c.packages.includes('@react-spring/web'))).toBe(
-      true,
-    );
+    expect(
+      out.some((c) => c.source === 'peer-deps' && c.packages.includes('@react-spring/web')),
+    ).toBe(true);
   });
 
   it('emits one conflict per pair when many members disagree about an unpinned peer', () => {

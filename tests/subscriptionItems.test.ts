@@ -3,7 +3,11 @@ import type Stripe from 'stripe';
 import { subscriptionItems } from '../src/billing/stripe';
 
 const item = (id: string, usage: 'licensed' | 'metered', quantity?: number) =>
-  ({ id, quantity, price: { id: `price_${id}`, recurring: { usage_type: usage } } }) as unknown as Stripe.SubscriptionItem;
+  ({
+    id,
+    quantity,
+    price: { id: `price_${id}`, recurring: { usage_type: usage } },
+  }) as unknown as Stripe.SubscriptionItem;
 
 const sub = (...items: Stripe.SubscriptionItem[]) =>
   ({ items: { data: items } }) as unknown as Pick<Stripe.Subscription, 'items'>;

@@ -124,7 +124,10 @@ describe('benchmark results', () => {
         template: 'x',
         attempted: true,
         installed: true,
-        loaded: [{ name: 'express', loaded: true }, { name: 'request', loaded: true }],
+        loaded: [
+          { name: 'express', loaded: true },
+          { name: 'request', loaded: true },
+        ],
         durationMs: 10,
         failureClass: null,
         scriptsFree: true,

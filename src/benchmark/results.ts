@@ -16,12 +16,7 @@ import { packages } from '../db/schema';
 import { compatEdges } from '../db/schema';
 import type { Config } from '../core/config';
 import type { Sandbox } from '../sandbox/types';
-import type {
-  BenchmarkManifest,
-  BenchmarkMetrics,
-  BenchmarkResult,
-  BenchmarkSuite,
-} from './types';
+import type { BenchmarkManifest, BenchmarkMetrics, BenchmarkResult, BenchmarkSuite } from './types';
 
 // ── E2B_TEMPLATE format guard ───────────────────────────────────────────────
 
@@ -56,10 +51,7 @@ export function validateTemplate(template: string | undefined): string {
 // ── Run ID ──────────────────────────────────────────────────────────────────
 
 export function makeRunId(suite: string): string {
-  const now = new Date()
-    .toISOString()
-    .replace(/[:.]/g, '-')
-    .replace(/Z$/, 'Z');
+  const now = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z');
   return `${now}-${suite}`;
 }
 
@@ -75,7 +67,9 @@ export async function collectManifest(
   let gitSha = 'unknown';
   try {
     gitSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-  } catch { /* not in a git repo */ }
+  } catch {
+    /* not in a git repo */
+  }
 
   // Package stats from DB
   const [[stats], [compatStats]] = await Promise.all([
@@ -89,9 +83,7 @@ export async function collectManifest(
         missingEmbedding: sql<number>`count(*) filter (where ${packages.embedding} is null)::int`,
       })
       .from(packages),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(compatEdges)
+    db.select({ count: sql<number>`count(*)::int` }).from(compatEdges),
   ]);
   // Selecting real columns (rather than only count(*)) detects unapplied
   // compat_edges migrations before a benchmark silently loses this evidence.
@@ -135,7 +127,9 @@ export function dryRunManifest(suite: BenchmarkSuite): BenchmarkManifest {
   let gitSha = 'unknown';
   try {
     gitSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-  } catch { /* ok */ }
+  } catch {
+    /* ok */
+  }
 
   return {
     gitSha,
@@ -206,13 +200,13 @@ export function writeSummary(dir: string, results: BenchmarkResult[]): void {
   if (groupedResults.size > 0) {
     const firstMetrics = Object.values(summaryJson)[0]!;
     const headers = ['participantId', ...Object.keys(firstMetrics)];
-    
+
     let csvContent = headers.join(',') + '\n';
     for (const [id, metrics] of Object.entries(summaryJson)) {
       const values = [id, ...Object.values(metrics).map((v) => (v === null ? '' : String(v)))];
       csvContent += values.join(',') + '\n';
     }
-    
+
     writeFileSync(join(dir, 'summary.csv'), csvContent);
   }
 }
@@ -240,8 +234,7 @@ export function computeMetrics(results: BenchmarkResult[]): BenchmarkMetrics {
   const riskyPackages = new Set<string>();
   for (const r of results) {
     totalExisting += r.packageValidity.existing;
-    totalPackages +=
-      r.packageValidity.existing + r.packageValidity.nonexistent.length;
+    totalPackages += r.packageValidity.existing + r.packageValidity.nonexistent.length;
     for (const name of [
       ...r.packageValidity.deprecated,
       ...r.packageValidity.archived,
@@ -284,8 +277,7 @@ export function computeMetrics(results: BenchmarkResult[]): BenchmarkMetrics {
     // This is deliberately mechanical: it proves filled slots plus safety and
     // E2B behavior. It does not claim that a package semantically fulfils a
     // requirement; that needs independent review.
-    const coverageMet =
-      r.coverage.required > 0 && r.coverage.covered >= r.coverage.threshold;
+    const coverageMet = r.coverage.required > 0 && r.coverage.covered >= r.coverage.threshold;
     const noBlocking =
       r.packageValidity.nonexistent.length === 0 &&
       r.packageValidity.deprecated.length === 0 &&

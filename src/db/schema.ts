@@ -53,7 +53,14 @@ import type {
   UsageGuide,
 } from '../core/types';
 import type { EntityKind, EvidenceClass, Verdict } from '../graph/types';
-import type { RepoDrift, RepoManifest, RepoPolicy, UpgradeRunStatus, UpgradeSeverity, RunTrigger } from '../github/types';
+import type {
+  RepoDrift,
+  RepoManifest,
+  RepoPolicy,
+  UpgradeRunStatus,
+  UpgradeSeverity,
+  RunTrigger,
+} from '../github/types';
 import type { ExtractionTier, SymbolKind } from '../surface/types';
 import type { Tier } from '../core/plans';
 import type { Severity } from '../audit/types';
@@ -299,7 +306,10 @@ export const apiKeys = pgTable(
      * Empty by default: `lurq setup` writes a key into agent config files, and
      * a key an agent holds must never be able to loosen the rules it runs under.
      */
-    scopes: text('scopes').array().notNull().default(sql`'{}'::text[]`),
+    scopes: text('scopes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     createdAt: ts('created_at').notNull().defaultNow(),
     lastUsedAt: ts('last_used_at'),
     revokedAt: ts('revoked_at'),
@@ -1223,7 +1233,11 @@ export const mcpDeployments = pgTable(
     lastChangedAt: ts('last_changed_at'),
   },
   (table) => [
-    uniqueIndex('mcp_deployments_identity_idx').on(table.ownerId, table.serverKey, table.configFingerprint),
+    uniqueIndex('mcp_deployments_identity_idx').on(
+      table.ownerId,
+      table.serverKey,
+      table.configFingerprint,
+    ),
     index('mcp_deployments_owner_idx').on(table.ownerId, table.lastScannedAt),
   ],
 );
@@ -1300,7 +1314,9 @@ export const mcpPublicReports = pgTable(
     reportedAt: ts('reported_at').notNull().defaultNow(),
   },
   (table) => [
-    primaryKey({ columns: [table.registry, table.packageName, table.version, table.contentHash, table.ownerId] }),
+    primaryKey({
+      columns: [table.registry, table.packageName, table.version, table.contentHash, table.ownerId],
+    }),
     index('mcp_public_reports_version_idx').on(table.registry, table.packageName, table.version),
   ],
 );
@@ -1496,7 +1512,9 @@ export const mcpRegistryServers = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.name, table.version] }),
-    index('mcp_registry_servers_latest_idx').on(table.name).where(sql`${table.isLatest}`),
+    index('mcp_registry_servers_latest_idx')
+      .on(table.name)
+      .where(sql`${table.isLatest}`),
     index('mcp_registry_servers_updated_idx').on(table.registryUpdatedAt),
   ],
 );
@@ -1556,7 +1574,9 @@ export const mcpRemoteEndpoints = pgTable(
     index('mcp_remote_endpoints_scan_key_idx').on(table.scanKey),
     index('mcp_remote_endpoints_due_idx')
       .on(table.nextProbeAt)
-      .where(sql`${table.optedOut} = false and ${table.templated} = false and ${table.removedAt} is null`),
+      .where(
+        sql`${table.optedOut} = false and ${table.templated} = false and ${table.removedAt} is null`,
+      ),
     index('mcp_remote_endpoints_host_idx').on(table.host),
   ],
 );
@@ -1605,7 +1625,9 @@ export const mcpEndpointObservations = pgTable(
     firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
     lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
   },
-  (table) => [index('mcp_endpoint_observations_endpoint_idx').on(table.endpointId, table.firstSeenAt)],
+  (table) => [
+    index('mcp_endpoint_observations_endpoint_idx').on(table.endpointId, table.firstSeenAt),
+  ],
 );
 
 /**
@@ -1629,7 +1651,12 @@ export const mcpEndpointChanges = pgTable(
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('mcp_endpoint_changes_pair_idx').on(table.endpointId, table.kind, table.fromKey, table.toKey),
+    uniqueIndex('mcp_endpoint_changes_pair_idx').on(
+      table.endpointId,
+      table.kind,
+      table.fromKey,
+      table.toKey,
+    ),
     index('mcp_endpoint_changes_endpoint_idx').on(table.endpointId, table.createdAt),
     index('mcp_endpoint_changes_created_idx').on(table.createdAt),
   ],

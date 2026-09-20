@@ -103,10 +103,14 @@ export function typeChecker(
 
   const parse = (configPath: string): TSApi.ParsedCommandLine | null => {
     if (!configs.has(configPath)) {
-      const parsed = ts.getParsedCommandLineOfConfigFile(configPath, {}, {
-        ...ts.sys,
-        onUnRecoverableConfigFileDiagnostic: () => {},
-      });
+      const parsed = ts.getParsedCommandLineOfConfigFile(
+        configPath,
+        {},
+        {
+          ...ts.sys,
+          onUnRecoverableConfigFileDiagnostic: () => {},
+        },
+      );
       configs.set(configPath, parsed ?? null);
     }
     return configs.get(configPath)!;
@@ -142,7 +146,9 @@ export function typeChecker(
       // Types that now lean on a dependency this checkout has not installed read
       // as empty interfaces, and those report errors an install would clear.
       const missingBefore = unresolvedTypeImports(ts, before);
-      const newlyMissing = [...unresolvedTypeImports(ts, after)].filter((s) => !missingBefore.has(s));
+      const newlyMissing = [...unresolvedTypeImports(ts, after)].filter(
+        (s) => !missingBefore.has(s),
+      );
       if (newlyMissing.length) {
         return {
           checked: false,
@@ -265,7 +271,8 @@ function unresolvedTypeImports(ts: Compiler, built: Built): Set<string> {
   for (const sf of built.program.getSourceFiles()) {
     if (!sf.isDeclarationFile || !built.overlaid(sf.fileName)) continue;
     for (const { fileName: spec } of ts.preProcessFile(sf.text, true, true).importedFiles) {
-      if (!ts.resolveModuleName(spec, sf.fileName, options, built.host).resolvedModule) out.add(spec);
+      if (!ts.resolveModuleName(spec, sf.fileName, options, built.host).resolvedModule)
+        out.add(spec);
     }
   }
   return out;
@@ -273,7 +280,9 @@ function unresolvedTypeImports(ts: Compiler, built: Built): Set<string> {
 
 function manifestVersion(ts: Compiler, dir: string): string | undefined {
   try {
-    const version = (JSON.parse(ts.sys.readFile(join(dir, 'package.json')) ?? '{}') as { version?: unknown }).version;
+    const version = (
+      JSON.parse(ts.sys.readFile(join(dir, 'package.json')) ?? '{}') as { version?: unknown }
+    ).version;
     return typeof version === 'string' ? version : undefined;
   } catch {
     return undefined;
@@ -292,14 +301,24 @@ function semanticDiagnostics(program: TSApi.Program, files: string[]): TSApi.Dia
  * resolves them, so relative paths and `paths` aliases both count.
  */
 function importersOf(ts: Compiler, program: TSApi.Program, targets: string[]): string[] {
-  const key = (p: string) => (ts.sys.useCaseSensitiveFileNames ? resolve(p) : resolve(p).toLowerCase());
+  const key = (p: string) =>
+    ts.sys.useCaseSensitiveFileNames ? resolve(p) : resolve(p).toLowerCase();
   const wanted = new Set(targets.map(key));
   const options = program.getCompilerOptions();
-  const cache = ts.createModuleResolutionCache(program.getCurrentDirectory(), (f) => key(f), options);
+  const cache = ts.createModuleResolutionCache(
+    program.getCurrentDirectory(),
+    (f) => key(f),
+    options,
+  );
   const out: string[] = [];
   for (const sf of program.getSourceFiles()) {
     if (out.length >= HOP_CAP) break;
-    if (sf.isDeclarationFile || sf.fileName.includes('/node_modules/') || wanted.has(key(sf.fileName))) continue;
+    if (
+      sf.isDeclarationFile ||
+      sf.fileName.includes('/node_modules/') ||
+      wanted.has(key(sf.fileName))
+    )
+      continue;
     const { importedFiles } = ts.preProcessFile(sf.text, true, true);
     const imports = importedFiles.some(({ fileName: spec }) => {
       const hit = ts.resolveModuleName(spec, sf.fileName, options, ts.sys, cache).resolvedModule;
@@ -341,7 +360,9 @@ function overlayHost(
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // pnpm writes a scoped name's slash as `+`, and appends peer suffixes after the version.
   const pnpmStore = installedVersion
-    ? new RegExp(`^(.*)/node_modules/\\.pnpm/${escape(pkg.replace('/', '+'))}@${escape(installedVersion)}(?:[_(][^/]*)?$`)
+    ? new RegExp(
+        `^(.*)/node_modules/\\.pnpm/${escape(pkg.replace('/', '+'))}@${escape(installedVersion)}(?:[_(][^/]*)?$`,
+      )
     : null;
   const ownInstall = (prefix: string) => {
     if (!prefix.includes('/node_modules/')) return true;
@@ -387,7 +408,10 @@ function overlayHost(
     // A fresh checkout may have no node_modules at all, and resolution only
     // looks inside one it believes exists. Probing an empty one costs nothing.
     const norm = p.replace(/\\/g, '/');
-    if (norm.endsWith('/node_modules') && !norm.slice(0, -'/node_modules'.length).includes('/node_modules')) {
+    if (
+      norm.endsWith('/node_modules') &&
+      !norm.slice(0, -'/node_modules'.length).includes('/node_modules')
+    ) {
       return true;
     }
     return base.directoryExists ? base.directoryExists(p) : ts.sys.directoryExists(p);

@@ -129,9 +129,7 @@ export async function fetchHeadSeq(
  *  it), and which of the tracked names are MCP servers (→ also re-probe the
  *  tool contract). Read together so a refresh can never leave them from
  *  different moments. */
-async function loadSeenSets(
-  db: Database,
-): Promise<[Set<string>, Set<string>, Set<string>]> {
+async function loadSeenSets(db: Database): Promise<[Set<string>, Set<string>, Set<string>]> {
   const [tracked, queued, mcp] = await Promise.all([
     getAllPackageNames(db),
     getQueuedNames(db),

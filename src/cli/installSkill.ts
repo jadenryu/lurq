@@ -303,7 +303,10 @@ export function writeJson(path: string, obj: unknown): void {
 }
 
 /** Local (stdio) lurq server entry for JSON configs. */
-export function buildServerEntry(env: Record<string, string>, withType: boolean): Record<string, any> {
+export function buildServerEntry(
+  env: Record<string, string>,
+  withType: boolean,
+): Record<string, any> {
   const entry: Record<string, any> = { command: 'npx', args: ['-y', PACKAGE_NAME, 'serve'] };
   if (withType) entry.type = 'stdio';
   if (Object.keys(env).length) entry.env = env;
@@ -343,7 +346,11 @@ export function buildRemoteServerEntry(
 
 /** Local (stdio) TOML block for the Codex config. */
 export function buildTomlBlock(env: Record<string, string>): string {
-  const lines = ['[mcp_servers.lurq]', 'command = "npx"', `args = ["-y", "${PACKAGE_NAME}", "serve"]`];
+  const lines = [
+    '[mcp_servers.lurq]',
+    'command = "npx"',
+    `args = ["-y", "${PACKAGE_NAME}", "serve"]`,
+  ];
   if (Object.keys(env).length) {
     lines.push('', '[mcp_servers.lurq.env]');
     for (const [k, v] of Object.entries(env)) lines.push(`${k} = ${JSON.stringify(v)}`);
@@ -408,7 +415,9 @@ function installTomlBlock(spec: AgentSpec, block: string): InstallResult {
     agent: spec.id,
     path: spec.path,
     status: 'installed',
-    message: current.includes('[mcp_servers.lurq]') ? 'replaced the existing lurq entry' : undefined,
+    message: current.includes('[mcp_servers.lurq]')
+      ? 'replaced the existing lurq entry'
+      : undefined,
   };
 }
 
@@ -427,7 +436,7 @@ const SKILL_DESCRIPTION =
   'Get current, evidence-scored facts about npm packages instead of recalling them. ' +
   'Use before adding, choosing, comparing, or upgrading any JS/TS dependency, before ' +
   'hand-rolling something a package may already do, and before writing code against a ' +
-  "package API that may have moved since training. Covers hallucinated and typosquatted " +
+  'package API that may have moved since training. Covers hallucinated and typosquatted ' +
   'package names, advisories, version-exact export surfaces, and stack compatibility.';
 
 function template(name: string): string | null {
@@ -530,9 +539,19 @@ const HOOK_TARGETS: Record<HookAgent, HookTarget> = {
     path: () => home('.claude', 'settings.json'),
     flat: false,
     hooks: [
-      { event: 'SessionStart', matcher: 'startup|clear|compact', arg: 'session-start', timeout: 10 },
+      {
+        event: 'SessionStart',
+        matcher: 'startup|clear|compact',
+        arg: 'session-start',
+        timeout: 10,
+      },
       { event: 'UserPromptSubmit', arg: 'prompt', timeout: 5 },
-      { event: 'PreToolUse', matcher: 'Bash|Edit|Write|MultiEdit', arg: 'pre-tool-use', timeout: 30 },
+      {
+        event: 'PreToolUse',
+        matcher: 'Bash|Edit|Write|MultiEdit',
+        arg: 'pre-tool-use',
+        timeout: 30,
+      },
     ],
   },
   codex: {
@@ -540,7 +559,12 @@ const HOOK_TARGETS: Record<HookAgent, HookTarget> = {
     path: () => home('.codex', 'hooks.json'),
     flat: false,
     hooks: [
-      { event: 'SessionStart', matcher: 'startup|clear|compact', arg: 'session-start', timeout: 10 },
+      {
+        event: 'SessionStart',
+        matcher: 'startup|clear|compact',
+        arg: 'session-start',
+        timeout: 10,
+      },
       { event: 'UserPromptSubmit', arg: 'prompt', timeout: 5 },
       { event: 'PreToolUse', matcher: 'Bash|apply_patch', arg: 'pre-tool-use', timeout: 30 },
     ],
@@ -557,7 +581,11 @@ const HOOK_TARGETS: Record<HookAgent, HookTarget> = {
   },
 };
 
-const AGENT_HOOKS: Record<string, HookAgent> = { 'claude-code': 'claude', codex: 'codex', cursor: 'cursor' };
+const AGENT_HOOKS: Record<string, HookAgent> = {
+  'claude-code': 'claude',
+  codex: 'codex',
+  cursor: 'cursor',
+};
 
 /** The hook family for a setup agent id, or null when it has no hooks. */
 export const hookAgentFor = (specId: string): HookAgent | null => AGENT_HOOKS[specId] ?? null;
@@ -566,12 +594,16 @@ export const hooksLabel = (agent: HookAgent): string => HOOK_TARGETS[agent].labe
 
 /** A command setup wrote for any agent: `<lurq> hook [--agent x] <event>`. */
 const isLurqCommand = (h: any): boolean =>
-  typeof h?.command === 'string' && / hook (--agent [a-z]+ )?(session-start|prompt|pre-tool-use|post-tool-use)$/.test(h.command);
+  typeof h?.command === 'string' &&
+  / hook (--agent [a-z]+ )?(session-start|prompt|pre-tool-use|post-tool-use)$/.test(h.command);
 
-const holdsLurq = (g: any): boolean => isLurqCommand(g) || (Array.isArray(g?.hooks) && g.hooks.some(isLurqCommand));
+const holdsLurq = (g: any): boolean =>
+  isLurqCommand(g) || (Array.isArray(g?.hooks) && g.hooks.some(isLurqCommand));
 
 export const hasLurqHooks = (config: Record<string, any>): boolean =>
-  Object.values(config.hooks ?? {}).some((groups) => Array.isArray(groups) && groups.some(holdsLurq));
+  Object.values(config.hooks ?? {}).some(
+    (groups) => Array.isArray(groups) && groups.some(holdsLurq),
+  );
 
 /** `config` without lurq's hooks. A group that held only ours goes, and so does an event or `hooks` left empty. */
 export function withoutLurqHooks(config: Record<string, any>): Record<string, any> {
@@ -596,7 +628,11 @@ export function withoutLurqHooks(config: Record<string, any>): Record<string, an
 }
 
 /** `config` with exactly one of each lurq hook for `agent`, after whatever hooks the user has. */
-export function withLurqHooks(config: Record<string, any>, agent: HookAgent, lurq: string): Record<string, any> {
+export function withLurqHooks(
+  config: Record<string, any>,
+  agent: HookAgent,
+  lurq: string,
+): Record<string, any> {
   const target = HOOK_TARGETS[agent];
   const base = withoutLurqHooks(config);
   const hooks: Record<string, any> = { ...base.hooks };
@@ -614,7 +650,10 @@ export function withLurqHooks(config: Record<string, any>, agent: HookAgent, lur
 }
 
 /** The lurq command an agent's hooks run. Cursor is a GUI app that may not inherit the shell's PATH, so it gets the absolute path. */
-export function lurqCommandFor(agent: HookAgent, invocation: { command: string; path?: string }): string {
+export function lurqCommandFor(
+  agent: HookAgent,
+  invocation: { command: string; path?: string },
+): string {
   if (agent !== 'cursor' || !invocation.path) return invocation.command;
   return /\s/.test(invocation.path) ? JSON.stringify(invocation.path) : invocation.path;
 }
@@ -623,7 +662,8 @@ export function lurqCommandFor(agent: HookAgent, invocation: { command: string; 
 export function hasLurqEntry(spec: AgentSpec): boolean {
   try {
     if (!existsSync(spec.path)) return false;
-    if (spec.format === 'toml') return readFileSync(spec.path, 'utf8').includes('[mcp_servers.lurq]');
+    if (spec.format === 'toml')
+      return readFileSync(spec.path, 'utf8').includes('[mcp_servers.lurq]');
     const servers = readJsonObject(spec.path)[spec.format === 'servers' ? 'servers' : 'mcpServers'];
     return !!servers && typeof servers === 'object' && Object.hasOwn(servers, 'lurq');
   } catch {
@@ -637,10 +677,19 @@ export function hasLurqEntry(spec: AgentSpec): boolean {
  * resolving `npx` each time costs more than they are worth, and for Codex when the
  * user already keeps hooks inline in config.toml (Codex warns when one layer has both).
  */
-export function installHooks(agent: HookAgent, path = hooksPath(agent), invocation = lurqInvocation()): string | null {
+export function installHooks(
+  agent: HookAgent,
+  path = hooksPath(agent),
+  invocation = lurqInvocation(),
+): string | null {
   if (!invocation.onPath) return null;
   const codexToml = home('.codex', 'config.toml');
-  if (agent === 'codex' && existsSync(codexToml) && /^\s*\[\[?hooks[.\]]/m.test(readFileSync(codexToml, 'utf8'))) return null;
+  if (
+    agent === 'codex' &&
+    existsSync(codexToml) &&
+    /^\s*\[\[?hooks[.\]]/m.test(readFileSync(codexToml, 'utf8'))
+  )
+    return null;
   const lurq = lurqCommandFor(agent, invocation);
   writeJson(path, withLurqHooks(readJsonObject(path), agent, lurq));
   writeUserConfig({ hooks: { ...readUserConfig().hooks, [agent]: { command: lurq } } });
@@ -776,8 +825,12 @@ export function printInstallReport(
   const hooked = results.filter((r) => r.hookPath);
   if (hooked.length) {
     console.log('\nHooks (installs verified first, lurq suggested where it helps):');
-    for (const r of hooked) console.log(`  ✓ ${specs.find((s) => s.id === r.agent)!.label.padEnd(26)} ${short(r.hookPath!)}`);
-    if (hooked.some((r) => r.agent === 'codex')) console.log('  • Codex skips new hooks until you trust them: run /hooks in Codex once.');
+    for (const r of hooked)
+      console.log(
+        `  ✓ ${specs.find((s) => s.id === r.agent)!.label.padEnd(26)} ${short(r.hookPath!)}`,
+      );
+    if (hooked.some((r) => r.agent === 'codex'))
+      console.log('  • Codex skips new hooks until you trust them: run /hooks in Codex once.');
   }
   if (instructionsPath) console.log(`\nFull guide: ${short(instructionsPath)}`);
 

@@ -90,7 +90,10 @@ export function resolveArchitectureCompat(members: CompatMember[]): CompatConfli
   for (const [peer, cs] of byPeer) {
     for (let i = 0; i < cs.length; i++) {
       for (let j = i + 1; j < cs.length; j++) {
-        if (cs[i]!.range !== cs[j]!.range && rangesIntersect(cs[i]!.range, cs[j]!.range) === false) {
+        if (
+          cs[i]!.range !== cs[j]!.range &&
+          rangesIntersect(cs[i]!.range, cs[j]!.range) === false
+        ) {
           conflicts.push({
             source: 'peer-deps',
             packages: [cs[i]!.requirer, cs[j]!.requirer],

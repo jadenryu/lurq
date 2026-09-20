@@ -124,7 +124,9 @@ export function applyEdits(contents: string, edits: Edit[]): string {
   const sorted = [...edits].sort((a, b) => a.start - b.start);
   for (let i = 1; i < sorted.length; i++) {
     if (sorted[i]!.start < sorted[i - 1]!.end) {
-      throw new Error(`overlapping edits at ${sorted[i - 1]!.start}-${sorted[i - 1]!.end} and ${sorted[i]!.start}-${sorted[i]!.end}`);
+      throw new Error(
+        `overlapping edits at ${sorted[i - 1]!.start}-${sorted[i - 1]!.end} and ${sorted[i]!.start}-${sorted[i]!.end}`,
+      );
     }
   }
   let out = contents;

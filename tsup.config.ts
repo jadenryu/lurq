@@ -8,7 +8,9 @@ import { defineConfig } from 'tsup';
 // drops the same list from the published dependencies, so they are one list.
 const INLINED: string[] = JSON.parse(readFileSync('package.json', 'utf8')).lurq.inlinedDependencies;
 // The package itself and any subpath (`@modelcontextprotocol/sdk/client/index.js`).
-const inlined = INLINED.map((name) => new RegExp(`^${name.replace(/[/.]/g, (c) => `\\${c}`)}(/|$)`));
+const inlined = INLINED.map(
+  (name) => new RegExp(`^${name.replace(/[/.]/g, (c) => `\\${c}`)}(/|$)`),
+);
 
 // Heavy CJS packages that MUST NOT be bundled into the ESM output: esbuild turns
 // their internal `require("fs")` etc. into a shim that throws "Dynamic require of

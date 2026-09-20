@@ -27,7 +27,12 @@ const MAX_QUEUED = 32;
 const MAX_ATTEMPTED = 50_000;
 const BATCH = 500;
 
-export type FillFn = (db: Database, pkg: string, version: string, entityId: number) => Promise<number>;
+export type FillFn = (
+  db: Database,
+  pkg: string,
+  version: string,
+  entityId: number,
+) => Promise<number>;
 
 interface FillJob {
   db: Database;
@@ -79,7 +84,9 @@ async function drain(): Promise<void> {
       const updated = await job.fill(job.db, job.pkg, job.version, job.entityId);
       logger.info(`surface fill ${key}: ${updated} symbol row(s) updated`);
     } catch (err) {
-      logger.warn(`surface fill failed for ${key}: ${err instanceof Error ? err.message : String(err)}`);
+      logger.warn(
+        `surface fill failed for ${key}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       pending.delete(key);
     }
@@ -89,14 +96,21 @@ async function drain(): Promise<void> {
 }
 
 /** Extract one version and write its offsets and argument limits onto the rows it already has. */
-export async function fillOne(db: Database, pkg: string, version: string, entityId: number): Promise<number> {
+export async function fillOne(
+  db: Database,
+  pkg: string,
+  version: string,
+  entityId: number,
+): Promise<number> {
   // Lazy for the same reason firstTouch.ts gives: extraction pulls in the compiler.
   const { fetchAndExtract } = await import('../surface/fetch');
   const fetched = await fetchAndExtract(pkg, version);
   if (!fetched) return 0;
 
   const values = fetched.surface.symbols
-    .filter((s) => s.tier === TIER && (s.sourceRef?.offset !== undefined || s.maxArity !== undefined))
+    .filter(
+      (s) => s.tier === TIER && (s.sourceRef?.offset !== undefined || s.maxArity !== undefined),
+    )
     .map((s) => ({
       path: s.path,
       offset: s.sourceRef?.offset ?? null,

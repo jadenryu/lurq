@@ -4,7 +4,10 @@ import { MissingKeyError, RemoteError } from '../src/cli/remote';
 
 describe('withSetupOnMissingKey', () => {
   it('runs setup and retries the command when the key is missing and the user agrees', async () => {
-    const run = vi.fn().mockRejectedValueOnce(new MissingKeyError()).mockResolvedValueOnce(undefined);
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new MissingKeyError())
+      .mockResolvedValueOnce(undefined);
     const setup = vi.fn().mockResolvedValue(undefined);
     await withSetupOnMissingKey(run, async () => true, setup);
     expect(setup).toHaveBeenCalledOnce();
@@ -14,7 +17,11 @@ describe('withSetupOnMissingKey', () => {
   it('keeps the original error when the user declines', async () => {
     const setup = vi.fn();
     await expect(
-      withSetupOnMissingKey(() => Promise.reject(new MissingKeyError()), async () => false, setup),
+      withSetupOnMissingKey(
+        () => Promise.reject(new MissingKeyError()),
+        async () => false,
+        setup,
+      ),
     ).rejects.toBeInstanceOf(MissingKeyError);
     expect(setup).not.toHaveBeenCalled();
   });

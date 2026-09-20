@@ -38,7 +38,7 @@ describe('getContributionsByOwner', () => {
     } as unknown as Database;
   }
 
-  it('returns the owner\'s packages plus the total count', async () => {
+  it("returns the owner's packages plus the total count", async () => {
     const rows = [
       { name: 'left-pad', category: 'utility', healthScore: 40, firstRequestedAt: new Date() },
     ];

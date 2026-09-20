@@ -47,26 +47,37 @@ const row = (over: Record<string, unknown>) => ({
 describe('createCheckoutSession for an existing subscriber', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each(['active', 'trialing', 'past_due'])('sends a %s subscriber to the portal', async (status) => {
-    m.getSubscription.mockResolvedValue(row({ status }));
-    expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe('https://billing.stripe.test/p');
-    expect(m.checkoutCreate).not.toHaveBeenCalled();
-  });
+  it.each(['active', 'trialing', 'past_due'])(
+    'sends a %s subscriber to the portal',
+    async (status) => {
+      m.getSubscription.mockResolvedValue(row({ status }));
+      expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe(
+        'https://billing.stripe.test/p',
+      );
+      expect(m.checkoutCreate).not.toHaveBeenCalled();
+    },
+  );
 
   it('lets a canceled subscriber buy again', async () => {
     m.getSubscription.mockResolvedValue(row({ status: 'canceled' }));
-    expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe('https://checkout.stripe.test/s');
+    expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe(
+      'https://checkout.stripe.test/s',
+    );
     expect(m.portalCreate).not.toHaveBeenCalled();
   });
 
   it('lets an account with only a linked customer (no subscription yet) check out', async () => {
     m.getSubscription.mockResolvedValue(row({ stripeSubscriptionId: null, status: null }));
-    expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe('https://checkout.stripe.test/s');
+    expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe(
+      'https://checkout.stripe.test/s',
+    );
   });
 
   it('lets a brand-new account check out', async () => {
     m.getSubscription.mockResolvedValue(null);
-    expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe('https://checkout.stripe.test/s');
+    expect(await createCheckoutSession(db, { ownerId: 'user_1', tier: 'pro' })).toBe(
+      'https://checkout.stripe.test/s',
+    );
     expect(m.customerCreate).toHaveBeenCalledTimes(1);
   });
 });

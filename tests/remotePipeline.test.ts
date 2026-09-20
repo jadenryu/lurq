@@ -41,7 +41,11 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
                 tools: tools.map((name) => ({
                   name,
                   description: `${name} the corpus`,
-                  inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
+                  inputSchema: {
+                    type: 'object',
+                    properties: { q: { type: 'string' } },
+                    required: ['q'],
+                  },
                   annotations: { readOnlyHint: true },
                 })),
               },
@@ -49,16 +53,29 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
           );
         }
         if (url === `/secure-${run}`) {
-          res.writeHead(401, { 'www-authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/secure-${run}"` });
+          res.writeHead(401, {
+            'www-authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/secure-${run}"`,
+          });
           return res.end();
         }
         if (url === `/.well-known/oauth-protected-resource/secure-${run}`) {
           res.writeHead(200, { 'content-type': 'application/json' });
-          return res.end(JSON.stringify({ resource: `${base}/secure-${run}`, authorization_servers: [`${base}/as`] }));
+          return res.end(
+            JSON.stringify({
+              resource: `${base}/secure-${run}`,
+              authorization_servers: [`${base}/as`],
+            }),
+          );
         }
         if (url === '/.well-known/oauth-authorization-server/as') {
           res.writeHead(200, { 'content-type': 'application/json' });
-          return res.end(JSON.stringify({ issuer: `${base}/as`, registration_endpoint: `${base}/as/r`, code_challenge_methods_supported: ['S256'] }));
+          return res.end(
+            JSON.stringify({
+              issuer: `${base}/as`,
+              registration_endpoint: `${base}/as/r`,
+              code_challenge_methods_supported: ['S256'],
+            }),
+          );
         }
         res.writeHead(404).end();
       });
@@ -79,9 +96,14 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
     const ids = sql`(select endpoint_id from mcp_endpoint_servers where server_name = ${serverName})`;
     await db.execute(sql`delete from mcp_endpoint_changes where endpoint_id in ${ids}`);
     await db.execute(sql`delete from mcp_endpoint_observations where endpoint_id in ${ids}`);
-    const endpointIds = await db.execute(sql`select endpoint_id from mcp_endpoint_servers where server_name = ${serverName}`);
+    const endpointIds = await db.execute(
+      sql`select endpoint_id from mcp_endpoint_servers where server_name = ${serverName}`,
+    );
     await db.execute(sql`delete from mcp_endpoint_servers where server_name = ${serverName}`);
-    for (const row of endpointIds) await db.execute(sql`delete from mcp_remote_endpoints where id = ${(row as { endpoint_id: number }).endpoint_id}`);
+    for (const row of endpointIds)
+      await db.execute(
+        sql`delete from mcp_remote_endpoints where id = ${(row as { endpoint_id: number }).endpoint_id}`,
+      );
     await db.execute(sql`delete from mcp_registry_servers where name = ${serverName}`);
     await db.execute(sql`delete from watch_state where id = ${`test-${run}`}`);
     await close();
@@ -99,10 +121,20 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
             version: '1.0.0',
             remotes: [
               { type: 'streamable-http', url: `${base}/open-${run}` },
-              { type: 'streamable-http', url: `${base}/secure-${run}`, headers: [{ name: 'Authorization', isRequired: false, isSecret: true }] },
+              {
+                type: 'streamable-http',
+                url: `${base}/secure-${run}`,
+                headers: [{ name: 'Authorization', isRequired: false, isSecret: true }],
+              },
             ],
           },
-          _meta: { 'io.modelcontextprotocol.registry/official': { status: 'active', isLatest: true, updatedAt: '2026-09-10T10:00:00Z' } },
+          _meta: {
+            'io.modelcontextprotocol.registry/official': {
+              status: 'active',
+              isLatest: true,
+              updatedAt: '2026-09-10T10:00:00Z',
+            },
+          },
         },
       ],
       metadata: {},
@@ -137,30 +169,60 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
     // Scoped to this run's endpoints: test files share the database and run in
     // parallel, and an unscoped drain would probe another file's rows.
     const t1 = new Date(Date.now() + 60_000);
-    const d1 = await drainRemoteProbes(db, { fetch: probeFetch, limit: 500, now: () => t1, budgetMs: 10_000, onlyIds: [...ours] });
+    const d1 = await drainRemoteProbes(db, {
+      fetch: probeFetch,
+      limit: 500,
+      now: () => t1,
+      budgetMs: 10_000,
+      onlyIds: [...ours],
+    });
     expect(d1.failed).toBe(0);
 
     const open = (await store.getEndpointByUrl(db, `${base}/open-${run}`))!;
-    expect(open).toMatchObject({ lastStatus: 'open', probeCount: 1, protocolMode: 'stateless', leaseUntil: null });
+    expect(open).toMatchObject({
+      lastStatus: 'open',
+      probeCount: 1,
+      protocolMode: 'stateless',
+      leaseUntil: null,
+    });
     expect(open.lastContentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(open.nextProbeAt.getTime()).toBeGreaterThan(t1.getTime() + 20 * 3_600_000);
 
     const secure = (await store.getEndpointByUrl(db, `${base}/secure-${run}`))!;
     expect(secure.lastStatus).toBe('auth_required');
-    expect(secure.auth).toMatchObject({ mode: 'oauth', oauth: { issuer: `${base}/as`, dcr: true, cimd: false, pkceS256: true } });
-    expect(secure.auth!.declaredHeaders).toEqual([expect.objectContaining({ name: 'Authorization', secret: true })]);
+    expect(secure.auth).toMatchObject({
+      mode: 'oauth',
+      oauth: { issuer: `${base}/as`, dcr: true, cimd: false, pkceS256: true },
+    });
+    expect(secure.auth!.declaredHeaders).toEqual([
+      expect.objectContaining({ name: 'Authorization', secret: true }),
+    ]);
 
     // The server drops a tool; the next probe (forced due) records the change.
     tools = ['search'];
     const t2 = new Date(open.nextProbeAt.getTime() + 60_000);
-    await drainRemoteProbes(db, { fetch: probeFetch, limit: 500, now: () => t2, budgetMs: 10_000, onlyIds: [...ours] });
+    await drainRemoteProbes(db, {
+      fetch: probeFetch,
+      limit: 500,
+      now: () => t2,
+      budgetMs: 10_000,
+      onlyIds: [...ours],
+    });
     const changed = (await store.getEndpointByUrl(db, `${base}/open-${run}`))!;
     expect(changed.lastContentHash).not.toBe(open.lastContentHash);
     expect(changed.lastChangedAt).toEqual(t2);
     const events = await store.listEndpointChanges(db, changed.id);
-    expect(events).toEqual([expect.objectContaining({ kind: 'contract', fromKey: open.lastContentHash, toKey: changed.lastContentHash })]);
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: 'contract',
+        fromKey: open.lastContentHash,
+        toKey: changed.lastContentHash,
+      }),
+    ]);
     expect(events[0]!.summary).toMatch(/removed/);
-    expect((events[0]!.diff as { contract: { removedTools: string[] } }).contract.removedTools).toEqual(['fetch']);
+    expect(
+      (events[0]!.diff as { contract: { removedTools: string[] } }).contract.removedTools,
+    ).toEqual(['fetch']);
     // Recently changed endpoints are looked at again sooner.
     expect(changed.nextProbeAt.getTime() - t2.getTime()).toBeLessThan(8 * 3_600_000);
 
@@ -168,7 +230,11 @@ describe.skipIf(!TEST_DB)('remote contract pipeline end to end', () => {
     const watermark = await getWatchCursor(db, cursorId);
     expect(watermark).toBe('2026-09-10T09:59:59.000Z');
     await syncMod.syncRegistry(db, { fetchImpl: registryFetch, cursorId });
-    expect(registryCalls.at(-1)!.searchParams.get('updated_since')).toBe('2026-09-10T09:59:59.000Z');
-    expect(ours).toEqual(new Set((await store.getEndpointsForServer(db, serverName)).map((l) => l.endpoint.id)));
+    expect(registryCalls.at(-1)!.searchParams.get('updated_since')).toBe(
+      '2026-09-10T09:59:59.000Z',
+    );
+    expect(ours).toEqual(
+      new Set((await store.getEndpointsForServer(db, serverName)).map((l) => l.endpoint.id)),
+    );
   });
 });

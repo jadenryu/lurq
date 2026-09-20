@@ -48,7 +48,9 @@ describe.skipIf(!TEST_DB)('upkeepByRepo against Postgres', () => {
    * (ownerId, repoFullName, packageName, toVersion, runUrl) — reusing a name
    * would upsert over the previous row instead of adding one.
    */
-  const row = (over: Partial<NewUpgradeRunRow> & { repoFullName: string; packageName: string }): NewUpgradeRunRow => ({
+  const row = (
+    over: Partial<NewUpgradeRunRow> & { repoFullName: string; packageName: string },
+  ): NewUpgradeRunRow => ({
     ownerId: owner,
     fromVersion: '1.0.0',
     toVersion: '2.0.0',

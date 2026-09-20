@@ -13,7 +13,12 @@ import { capture } from '../core/analytics';
 import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
-import { acknowledgeEvent, getDeploymentDetail, listChangeEvents, listDeployments } from '../db/mcpScans';
+import {
+  acknowledgeEvent,
+  getDeploymentDetail,
+  listChangeEvents,
+  listDeployments,
+} from '../db/mcpScans';
 import { recordUsage } from '../db/usage';
 import { failureProps, ingestScan, parseUpload } from '../mcpScan/ingest';
 
@@ -65,8 +70,14 @@ export function registerMcpScanRoutes(app: Express, d: McpScanRouteDeps): void {
         return;
       }
       if (parsed.servers.length === 0) {
-        capture(ownerId, 'mcp_scan_upload_rejected', { reason: 'no_server_accepted', rejected: parsed.rejected.length });
-        res.status(400).json({ error: 'No server in this upload could be accepted.', rejected: parsed.rejected });
+        capture(ownerId, 'mcp_scan_upload_rejected', {
+          reason: 'no_server_accepted',
+          rejected: parsed.rejected.length,
+        });
+        res.status(400).json({
+          error: 'No server in this upload could be accepted.',
+          rejected: parsed.rejected,
+        });
         return;
       }
       try {
@@ -125,19 +136,23 @@ export function registerMcpScanRoutes(app: Express, d: McpScanRouteDeps): void {
     }
   });
 
-  app.post('/mcp-servers/events/:id/acknowledge', d.requireIssuerSecret, async (req: Request, res: Response) => {
-    const ownerId = owner(req, res);
-    if (!ownerId) return;
-    const id = numericId(req, res);
-    if (!id) return;
-    try {
-      if (!(await acknowledgeEvent(d.db, ownerId, id))) {
-        res.status(404).json({ error: 'No such change for this account.' });
-        return;
+  app.post(
+    '/mcp-servers/events/:id/acknowledge',
+    d.requireIssuerSecret,
+    async (req: Request, res: Response) => {
+      const ownerId = owner(req, res);
+      if (!ownerId) return;
+      const id = numericId(req, res);
+      if (!id) return;
+      try {
+        if (!(await acknowledgeEvent(d.db, ownerId, id))) {
+          res.status(404).json({ error: 'No such change for this account.' });
+          return;
+        }
+        res.status(200).json({ acknowledged: true });
+      } catch (err) {
+        fail(res, 'acknowledge the change', err);
       }
-      res.status(200).json({ acknowledged: true });
-    } catch (err) {
-      fail(res, 'acknowledge the change', err);
-    }
-  });
+    },
+  );
 }

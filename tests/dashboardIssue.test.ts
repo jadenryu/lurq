@@ -20,7 +20,15 @@ const scan = (over: Partial<ScanReport['servers'][number]> = {}): ScanReport =>
     root: '/repo',
     filesRead: ['.mcp.json'],
     notes: [],
-    stack: { overall: 'compatible', members: [], collisions: [], totalTools: 2, estimatedContextTokens: 500, unread: [], note: '' },
+    stack: {
+      overall: 'compatible',
+      members: [],
+      collisions: [],
+      totalTools: 2,
+      estimatedContextTokens: 500,
+      unread: [],
+      note: '',
+    },
     findings: [],
     worst: null,
     account: null,
@@ -35,7 +43,14 @@ const scan = (over: Partial<ScanReport['servers'][number]> = {}): ScanReport =>
           capabilities: {},
           stats: { tools: 2, writes: 1, destroys: 0, openWorld: 2, annotated: 2, capabilities: {} },
           findings: [
-            { kind: 'concealment', severity: 'critical', tool: 'add_note', where: 'description', detail: 'ping @octocat and see #12 at https://evil.test', evidence: 'x' },
+            {
+              kind: 'concealment',
+              severity: 'critical',
+              tool: 'add_note',
+              where: 'description',
+              detail: 'ping @octocat and see #12 at https://evil.test',
+              evidence: 'x',
+            },
           ],
         },
         sinceLastScan: null,
@@ -98,7 +113,12 @@ describe('renderDashboardIssue', () => {
 
   it('keeps the same hash when only the time changed', () => {
     const a = renderDashboardIssue(input());
-    const b = renderDashboardIssue(input({ generatedAt: new Date('2026-09-15T06:30:00Z'), runUrl: 'https://github.com/acme/app/actions/runs/2' }));
+    const b = renderDashboardIssue(
+      input({
+        generatedAt: new Date('2026-09-15T06:30:00Z'),
+        runUrl: 'https://github.com/acme/app/actions/runs/2',
+      }),
+    );
     expect(a.hash).toBe(b.hash);
     expect(renderDashboardIssue(input({ plan: null, planNote: 'n' })).hash).not.toBe(a.hash);
   });
@@ -116,10 +136,24 @@ function github(issues: unknown[]) {
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ method: init.method ?? 'GET', path, body });
     if (init.method === 'GET') return new Response(JSON.stringify(issues), { status: 200 });
-    if (path.endsWith('/labels')) return new Response(JSON.stringify({ message: 'exists' }), { status: 422 });
-    return new Response(JSON.stringify({ number: 7, html_url: 'https://github.com/acme/app/issues/7', state: 'open', body: '' }), { status: 201 });
+    if (path.endsWith('/labels'))
+      return new Response(JSON.stringify({ message: 'exists' }), { status: 422 });
+    return new Response(
+      JSON.stringify({
+        number: 7,
+        html_url: 'https://github.com/acme/app/issues/7',
+        state: 'open',
+        body: '',
+      }),
+      { status: 201 },
+    );
   });
-  const env: GithubEnv = { token: 't', repo: 'acme/app', apiUrl: 'https://api.github.com', fetchImpl: fetchImpl as never };
+  const env: GithubEnv = {
+    token: 't',
+    repo: 'acme/app',
+    apiUrl: 'https://api.github.com',
+    fetchImpl: fetchImpl as never,
+  };
   return { env, calls };
 }
 
@@ -128,17 +162,26 @@ describe('upsertDashboardIssue', () => {
 
   it('creates the issue with its label when there is none, without an extra comment', async () => {
     const { env, calls } = github([]);
-    expect(await upsertDashboardIssue(env, rendered)).toMatchObject({ action: 'created', commented: 0 });
+    expect(await upsertDashboardIssue(env, rendered)).toMatchObject({
+      action: 'created',
+      commented: 0,
+    });
     expect(calls.map((c) => `${c.method} ${c.path.split('?')[0]}`)).toEqual([
       'GET /repos/acme/app/issues',
       'POST /repos/acme/app/labels',
       'POST /repos/acme/app/issues',
     ]);
-    expect(readMarkers((calls[2]!.body as { body: string }).body).alerted).toEqual(rendered.urgent.map((u) => u.key));
+    expect(readMarkers((calls[2]!.body as { body: string }).body).alerted).toEqual(
+      rendered.urgent.map((u) => u.key),
+    );
   });
 
   it('does nothing when nothing changed', async () => {
-    const body = withMarkers(rendered.body, rendered.hash, rendered.urgent.map((u) => u.key));
+    const body = withMarkers(
+      rendered.body,
+      rendered.hash,
+      rendered.urgent.map((u) => u.key),
+    );
     const { env, calls } = github([{ number: 7, state: 'open', body, html_url: 'u' }]);
     expect((await upsertDashboardIssue(env, rendered)).action).toBe('unchanged');
     expect(calls).toHaveLength(1);
@@ -147,7 +190,10 @@ describe('upsertDashboardIssue', () => {
   it('edits in place, and comments once on a new urgent finding', async () => {
     const body = withMarkers(rendered.body, 'oldhash', []);
     const { env, calls } = github([{ number: 7, state: 'open', body, html_url: 'u' }]);
-    expect(await upsertDashboardIssue(env, rendered)).toMatchObject({ action: 'updated', commented: 1 });
+    expect(await upsertDashboardIssue(env, rendered)).toMatchObject({
+      action: 'updated',
+      commented: 1,
+    });
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
       'GET /repos/acme/app/issues?labels=lurq&state=all&per_page=100',
       'PATCH /repos/acme/app/issues/7',
@@ -157,15 +203,30 @@ describe('upsertDashboardIssue', () => {
   });
 
   it('leaves a closed dashboard issue closed', async () => {
-    const { env, calls } = github([{ number: 7, state: 'closed', body: DASHBOARD_MARKER, html_url: 'u' }]);
+    const { env, calls } = github([
+      { number: 7, state: 'closed', body: DASHBOARD_MARKER, html_url: 'u' },
+    ]);
     expect((await upsertDashboardIssue(env, rendered)).action).toBe('closed');
     expect(calls).toHaveLength(1);
   });
 
   it('explains a permissions failure', async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ message: 'Resource not accessible by integration' }), { status: 403 }));
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: 'Resource not accessible by integration' }), {
+          status: 403,
+        }),
+    );
     await expect(
-      upsertDashboardIssue({ token: 't', repo: 'acme/app', apiUrl: 'https://api.github.com', fetchImpl: fetchImpl as never }, rendered),
+      upsertDashboardIssue(
+        {
+          token: 't',
+          repo: 'acme/app',
+          apiUrl: 'https://api.github.com',
+          fetchImpl: fetchImpl as never,
+        },
+        rendered,
+      ),
     ).rejects.toThrow(/issues: write/);
   });
 });

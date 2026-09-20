@@ -20,12 +20,18 @@ export function agentClient(value: unknown): string | null {
 }
 
 /** The client's self-reported name and version when the body is (or contains) an `initialize`; null otherwise. */
-export function initializeInfo(body: unknown): { name: string | null; version: string | null } | null {
+export function initializeInfo(
+  body: unknown,
+): { name: string | null; version: string | null } | null {
   const messages = Array.isArray(body) ? body : [body];
   const init = messages.find((m) => (m as { method?: unknown } | null)?.method === 'initialize') as
     | { params?: { clientInfo?: { name?: unknown; version?: unknown } } }
     | undefined;
   if (!init) return null;
-  const clip = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
-  return { name: clip(init.params?.clientInfo?.name, 64), version: clip(init.params?.clientInfo?.version, 32) };
+  const clip = (v: unknown, max: number) =>
+    typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
+  return {
+    name: clip(init.params?.clientInfo?.name, 64),
+    version: clip(init.params?.clientInfo?.version, 32),
+  };
 }

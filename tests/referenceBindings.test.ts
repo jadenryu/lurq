@@ -23,17 +23,37 @@ const write = (rel: string, src: string) => {
 
 let sources: Record<string, string> = {};
 let refs: SymbolReference[] = [];
-const find = (symbol: string, file: string) => refs.find((r) => r.symbol === symbol && r.file === file);
+const find = (symbol: string, file: string) =>
+  refs.find((r) => r.symbol === symbol && r.file === file);
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'lurq-refbind-'));
-  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fx', dependencies: { cookie: '^1.0.0' } }), 'utf8');
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({ name: 'fx', dependencies: { cookie: '^1.0.0' } }),
+    'utf8',
+  );
   sources = {
-    'src/bare.ts': write('src/bare.ts', `import { parse } from 'cookie';\n\nexport const read = (h: string) => parse(h);\n`),
-    'src/aliased.ts': write('src/aliased.ts', `import { parse as readCookie } from 'cookie';\n\nexport const read = (h: string) => readCookie(h);\n`),
-    'src/required.js': write('src/required.js', `const { parse } = require('cookie');\n\nmodule.exports = (h) => parse(h);\n`),
-    'src/shadowed.ts': write('src/shadowed.ts', `import { parse } from 'cookie';\n\nfunction wrap() {\n  const parse = (h: string) => h;\n  return parse('x');\n}\n\nexport const read = (h: string) => parse(h) ?? wrap();\n`),
-    'src/subpath.ts': write('src/subpath.ts', `import { parse } from 'cookie/lib';\n\nexport const read = (h: string) => parse(h);\n`),
+    'src/bare.ts': write(
+      'src/bare.ts',
+      `import { parse } from 'cookie';\n\nexport const read = (h: string) => parse(h);\n`,
+    ),
+    'src/aliased.ts': write(
+      'src/aliased.ts',
+      `import { parse as readCookie } from 'cookie';\n\nexport const read = (h: string) => readCookie(h);\n`,
+    ),
+    'src/required.js': write(
+      'src/required.js',
+      `const { parse } = require('cookie');\n\nmodule.exports = (h) => parse(h);\n`,
+    ),
+    'src/shadowed.ts': write(
+      'src/shadowed.ts',
+      `import { parse } from 'cookie';\n\nfunction wrap() {\n  const parse = (h: string) => h;\n  return parse('x');\n}\n\nexport const read = (h: string) => parse(h) ?? wrap();\n`,
+    ),
+    'src/subpath.ts': write(
+      'src/subpath.ts',
+      `import { parse } from 'cookie/lib';\n\nexport const read = (h: string) => parse(h);\n`,
+    ),
   };
   const scanned = scanReferences(root).find((p) => p.package === 'cookie');
   refs = [...(scanned?.symbols.values() ?? [])].flat();
@@ -47,7 +67,12 @@ const slice = (ref: SymbolReference) => sources[ref.file]!.slice(ref.nameStart!,
 describe('a bare named import', () => {
   it('records the local name, that it is not aliased, and offsets over the export name', () => {
     const ref = find('parse', 'src/bare.ts')!;
-    expect(ref).toMatchObject({ via: 'named', local: 'parse', aliased: false, specifier: 'cookie' });
+    expect(ref).toMatchObject({
+      via: 'named',
+      local: 'parse',
+      aliased: false,
+      specifier: 'cookie',
+    });
     expect(slice(ref)).toBe('parse');
     expect(ref.shadowed).toBeUndefined();
   });
@@ -66,14 +91,20 @@ describe('an aliased import', () => {
     expect(ref).toMatchObject({ local: 'readCookie', aliased: true });
     expect(slice(ref)).toBe('parse');
     // The local name is what the call sites read, and a rename of the export leaves it alone.
-    for (const u of ref.calls ?? []) expect(sources['src/aliased.ts']!.slice(u.start!, u.end!)).toBe('readCookie');
+    for (const u of ref.calls ?? [])
+      expect(sources['src/aliased.ts']!.slice(u.start!, u.end!)).toBe('readCookie');
   });
 });
 
 describe('a destructured require', () => {
   it('records the same binding facts as an ESM import', () => {
     const ref = find('parse', 'src/required.js')!;
-    expect(ref).toMatchObject({ via: 'destructured', local: 'parse', aliased: false, loader: 'require' });
+    expect(ref).toMatchObject({
+      via: 'destructured',
+      local: 'parse',
+      aliased: false,
+      loader: 'require',
+    });
     expect(slice(ref)).toBe('parse');
   });
 });
@@ -86,6 +117,9 @@ describe('a local that is declared twice', () => {
 
 describe('a subpath import', () => {
   it('keeps its own specifier, so a root-version rename is not applied to it', () => {
-    expect(find('parse', 'src/subpath.ts')).toMatchObject({ specifier: 'cookie/lib', local: 'parse' });
+    expect(find('parse', 'src/subpath.ts')).toMatchObject({
+      specifier: 'cookie/lib',
+      local: 'parse',
+    });
   });
 });

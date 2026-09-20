@@ -41,11 +41,7 @@ export async function upsertEnvironment(db: Database, env: Environment): Promise
   return row!;
 }
 
-export async function upsertEntity(
-  db: Database,
-  ref: EntityRef,
-  tenantId = 0,
-): Promise<EntityRow> {
+export async function upsertEntity(db: Database, ref: EntityRef, tenantId = 0): Promise<EntityRow> {
   const key = canonicalKey(ref);
   const [row] = await db
     .insert(entities)
@@ -100,7 +96,13 @@ export async function upsertClaim(
   // wrong verdict. Fully-populated tuples are protected by the index.
   const [row] = await db
     .insert(claims)
-    .values({ subjectId: args.subjectId, objectId, relation: args.relation, environmentId: envId, tenantId })
+    .values({
+      subjectId: args.subjectId,
+      objectId,
+      relation: args.relation,
+      environmentId: envId,
+      tenantId,
+    })
     .returning();
   return row!;
 }

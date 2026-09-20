@@ -11,7 +11,13 @@ import { resolveApiKey } from '../core/userConfig';
 import { describeRules, diffPolicies } from '../policy/enforce';
 import { validateSelectionPolicy } from '../policy/parse';
 import type { SelectionPolicy } from '../policy/types';
-import { getPolicy, getPolicyDecisions, getPolicyHistory, putPolicy, type RemoteOptions } from './remote';
+import {
+  getPolicy,
+  getPolicyDecisions,
+  getPolicyHistory,
+  putPolicy,
+  type RemoteOptions,
+} from './remote';
 
 export async function runPolicyPull(file: string | undefined, opts: RemoteOptions): Promise<void> {
   const text = `${JSON.stringify(await getPolicy(opts), null, 2)}\n`;

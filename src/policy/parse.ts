@@ -133,7 +133,8 @@ function allowRules(input: unknown): AllowRule[] {
 }
 
 function build(input: unknown): SelectionPolicy {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) fail('policy must be an object.');
+  if (!input || typeof input !== 'object' || Array.isArray(input))
+    fail('policy must be an object.');
   const raw = input as Record<string, unknown>;
 
   const allow = allowRules(raw.allow);

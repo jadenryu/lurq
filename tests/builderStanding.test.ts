@@ -5,7 +5,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { BuilderProfile } from '../src/github/builderProfile';
-import { builderMetrics, standing, type BuilderMetrics, type BuilderStanding, type StandingMetricId } from '../src/github/builderStanding';
+import {
+  builderMetrics,
+  standing,
+  type BuilderMetrics,
+  type BuilderStanding,
+  type StandingMetricId,
+} from '../src/github/builderStanding';
 
 const m = (over: Partial<BuilderMetrics> = {}): BuilderMetrics => ({
   repos: 10,
@@ -17,26 +23,41 @@ const m = (over: Partial<BuilderMetrics> = {}): BuilderMetrics => ({
   advisories: 1,
   ...over,
 });
-const field = (n: number, over: (i: number) => Partial<BuilderMetrics>) => Array.from({ length: n }, (_, i) => m(over(i)));
+const field = (n: number, over: (i: number) => Partial<BuilderMetrics>) =>
+  Array.from({ length: n }, (_, i) => m(over(i)));
 const rank = (s: BuilderStanding, id: StandingMetricId) => s.metrics.find((x) => x.id === id);
 const noStack = { depsTracked: 0, depsBehind: 0, depsMajor: 0, advisories: 0 };
 
 describe('standing', () => {
   it('ranks a higher-is-better metric by the builders below it', () => {
     // repos 0..19; 15 is above 15 of them and tied with one: (15 + 0.5) / 20.
-    const s = standing(m({ repos: 15 }), field(20, (i) => ({ repos: i })));
-    expect(rank(s, 'repos')).toMatchObject({ value: 15, percentile: 78, population: 20, better: 'higher' });
+    const s = standing(
+      m({ repos: 15 }),
+      field(20, (i) => ({ repos: i })),
+    );
+    expect(rank(s, 'repos')).toMatchObject({
+      value: 15,
+      percentile: 78,
+      population: 20,
+      better: 'higher',
+    });
   });
 
   it('ranks dependency metrics as shares, lower is better', () => {
     // More majors behind in absolute terms (10 vs 5), but 5% of the stack against 10%.
-    const s = standing(m({ depsTracked: 200, depsMajor: 10 }), field(20, () => ({ depsTracked: 50, depsMajor: 5 })));
+    const s = standing(
+      m({ depsTracked: 200, depsMajor: 10 }),
+      field(20, () => ({ depsTracked: 50, depsMajor: 5 })),
+    );
     expect(rank(s, 'majorShare')).toMatchObject({ value: 0.05, percentile: 100, better: 'lower' });
   });
 
   it('counts ties as half, so a common zero is not ahead of everyone', () => {
     // 10 builders with advisories (worse), 10 with none (tied): (10 + 5) / 20.
-    const s = standing(m({ advisories: 0 }), field(20, (i) => ({ advisories: i < 10 ? 0 : 3 })));
+    const s = standing(
+      m({ advisories: 0 }),
+      field(20, (i) => ({ advisories: i < 10 ? 0 : 3 })),
+    );
     expect(rank(s, 'advisoryRate')?.percentile).toBe(75);
   });
 
@@ -48,7 +69,12 @@ describe('standing', () => {
   });
 
   it('ranks nothing against fewer builders than the minimum', () => {
-    expect(standing(m(), field(19, () => ({})))).toEqual({ population: 19, minimum: 20, metrics: [] });
+    expect(
+      standing(
+        m(),
+        field(19, () => ({})),
+      ),
+    ).toEqual({ population: 19, minimum: 20, metrics: [] });
   });
 });
 

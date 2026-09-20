@@ -64,7 +64,11 @@ export const SURFACE_MAX_ATTEMPTS = 3;
  * version differs from the last one attempted, so a new release is always
  * given a fresh budget. One statement, so concurrent passes cannot lose a count.
  */
-export async function recordSurfaceMiss(db: Database, name: string, version: string): Promise<void> {
+export async function recordSurfaceMiss(
+  db: Database,
+  name: string,
+  version: string,
+): Promise<void> {
   await db
     .update(packages)
     .set({

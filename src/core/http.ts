@@ -231,7 +231,8 @@ export async function httpRequest<T = unknown>(
       const text = await res.text();
 
       if (res.ok) {
-        if (ttlMs > 0) await writeCache(key, { fetchedAt: Date.now(), status: res.status, body: text });
+        if (ttlMs > 0)
+          await writeCache(key, { fetchedAt: Date.now(), status: res.status, body: text });
         return { status: res.status, data: decode<T>(text, accept), fromCache: false };
       }
 

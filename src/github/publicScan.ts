@@ -20,12 +20,7 @@
  * GITHUB_TOKEN in production and the API budget stops being the constraint.
  */
 import { getConfig } from '../core/config';
-import {
-  AUTOMATION_PATHS,
-  automationAxis,
-  runtimeAxis,
-  type UpkeepAxis,
-} from './upkeepAxes';
+import { AUTOMATION_PATHS, automationAxis, runtimeAxis, type UpkeepAxis } from './upkeepAxes';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { computeDrift } from './drift';
@@ -62,7 +57,10 @@ export function parseTarget(raw: string): ScanTarget | null {
   // A pasted URL, with or without a scheme, with or without trailing path.
   input = input.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
   if (input.toLowerCase().startsWith('github.com/')) input = input.slice('github.com/'.length);
-  input = input.replace(/^@/, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+  input = input
+    .replace(/^@/, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '');
 
   const [owner, name] = input.split('/');
   if (!owner || !LOGIN.test(owner)) return null;
@@ -90,7 +88,9 @@ const TIMEOUT_MS = 6_000;
  */
 export class GitHubUnavailableError extends Error {
   constructor(public status: number) {
-    super(`GitHub did not answer (${status === 0 ? 'timeout or network error' : `HTTP ${status}`})`);
+    super(
+      `GitHub did not answer (${status === 0 ? 'timeout or network error' : `HTTP ${status}`})`,
+    );
     this.name = 'GitHubUnavailableError';
   }
 }
@@ -170,9 +170,12 @@ export async function rawPathExists(
 }
 
 export function rootManifestRead(owner: string, name: string): Promise<GitHubRead<unknown>> {
-  return readGitHub<unknown>(`https://raw.githubusercontent.com/${owner}/${name}/HEAD/package.json`, {
-    headers: { Accept: 'application/json' },
-  });
+  return readGitHub<unknown>(
+    `https://raw.githubusercontent.com/${owner}/${name}/HEAD/package.json`,
+    {
+      headers: { Accept: 'application/json' },
+    },
+  );
 }
 
 /** How many of a profile's repos to try before giving up on finding a JS one. */

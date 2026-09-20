@@ -88,7 +88,10 @@ function parseRuntimeProbe(stdout: string): ProbeResult | null {
   const marker = '@@LURQ@@';
   const idx = stdout.lastIndexOf(marker);
   if (idx < 0) return null;
-  const line = stdout.slice(idx + marker.length).split('\n')[0]!.trim();
+  const line = stdout
+    .slice(idx + marker.length)
+    .split('\n')[0]!
+    .trim();
   try {
     const parsed = JSON.parse(line) as ProbeResult;
     return typeof parsed.ok === 'boolean' ? parsed : null;

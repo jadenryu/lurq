@@ -76,13 +76,17 @@ export function formatEnvCheck(
     }
     out.push('');
     out.push(
-      dim('add each to .env.example so the next clone knows it exists; ask the user for any real value'),
+      dim(
+        'add each to .env.example so the next clone knows it exists; ask the user for any real value',
+      ),
     );
     out.push(dim(scanned));
   }
 
   if (plan.truncated) {
-    out.push(bold('the scan stopped at its file limit, so this is not a complete answer (--limit)'));
+    out.push(
+      bold('the scan stopped at its file limit, so this is not a complete answer (--limit)'),
+    );
   }
   return out.join('\n');
 }

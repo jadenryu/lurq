@@ -68,11 +68,7 @@ export interface SurfaceDiff {
   inconclusive?: string;
 }
 
-const empty = (
-  from: ExtractedSurface,
-  to: ExtractedSurface,
-  reason: string,
-): SurfaceDiff => ({
+const empty = (from: ExtractedSurface, to: ExtractedSurface, reason: string): SurfaceDiff => ({
   package: from.package,
   fromVersion: from.version,
   toVersion: to.version,

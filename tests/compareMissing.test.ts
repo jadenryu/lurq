@@ -8,7 +8,9 @@ vi.mock('../src/pipeline/single', () => ({
   FIRST_TOUCH_BUDGET_MS: 4000,
 }));
 // Cache off: run the compute path directly.
-vi.mock('../src/core/cache', () => ({ cached: (_ns: string, _k: string, fn: () => unknown) => fn() }));
+vi.mock('../src/core/cache', () => ({
+  cached: (_ns: string, _k: string, fn: () => unknown) => fn(),
+}));
 vi.mock('../src/db/selectionPolicy', () => ({
   getSelectionPolicy: vi.fn().mockResolvedValue(null),
   loadPolicyFacts: vi.fn().mockResolvedValue(new Map()),
@@ -26,7 +28,13 @@ const db = {
 } as never;
 
 const tracked = (name: string) =>
-  ({ name, healthScore: 50, scoreBreakdown: null, advisories: null, dataAsOf: new Date() }) as unknown as PackageRow;
+  ({
+    name,
+    healthScore: 50,
+    scoreBreakdown: null,
+    advisories: null,
+    dataAsOf: new Date(),
+  }) as unknown as PackageRow;
 
 function mockResults(map: Record<string, { row: PackageRow | null; existsOnNpm: boolean }>) {
   getOrFetchPackage.mockImplementation(async (_db, name) => ({
@@ -52,7 +60,7 @@ describe('compare — a name off npm is never reported as "being scored"', () =>
     // The union stays, in the caller's order, for clients pinned to an older lurq.
     expect(res.missing).toEqual(['zzz-not-real', 'freshpkg']);
     expect(res.note).toContain('Not found on the npm registry: zzz-not-real');
-    expect(res.note).toContain("first to add freshpkg");
+    expect(res.note).toContain('first to add freshpkg');
   });
 
   it('never congratulates the caller when nothing is pending', async () => {

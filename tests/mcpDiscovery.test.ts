@@ -1,14 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { DISCOVERY_METHODS, isAnonymousDiscovery } from '../src/mcp/http';
 
-const rpc = (method: string, id: number | null = 1) => ({ jsonrpc: '2.0', method, ...(id === null ? {} : { id }) });
+const rpc = (method: string, id: number | null = 1) => ({
+  jsonrpc: '2.0',
+  method,
+  ...(id === null ? {} : { id }),
+});
 
 // Registries and directories list a server's tools without anyone's key. The
 // rule that lets them has to stay exactly that narrow: describing lurq is free,
 // running it is not.
 describe('keyless MCP discovery', () => {
   it('lets the handshake and the list calls through without a key', () => {
-    for (const method of ['initialize', 'ping', 'tools/list', 'prompts/list', 'resources/list', 'resources/templates/list']) {
+    for (const method of [
+      'initialize',
+      'ping',
+      'tools/list',
+      'prompts/list',
+      'resources/list',
+      'resources/templates/list',
+    ]) {
       expect(isAnonymousDiscovery(undefined, rpc(method))).toBe(true);
     }
     expect(isAnonymousDiscovery(undefined, rpc('notifications/initialized', null))).toBe(true);
@@ -37,6 +48,6 @@ describe('keyless MCP discovery', () => {
     expect(isAnonymousDiscovery(undefined, null)).toBe(false);
     expect(isAnonymousDiscovery(undefined, [])).toBe(false);
     expect(isAnonymousDiscovery(undefined, { jsonrpc: '2.0', id: 1 })).toBe(false);
-    expect(isAnonymousDiscovery(undefined, rpc('initialize ') )).toBe(false);
+    expect(isAnonymousDiscovery(undefined, rpc('initialize '))).toBe(false);
   });
 });

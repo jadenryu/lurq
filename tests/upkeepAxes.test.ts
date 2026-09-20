@@ -82,10 +82,7 @@ describe('automationAxis', () => {
   });
 
   it('names the robot it found', () => {
-    const axis = automationAxis([
-      probe('.github/dependabot.yml', true),
-      ...allAbsent().slice(1),
-    ]);
+    const axis = automationAxis([probe('.github/dependabot.yml', true), ...allAbsent().slice(1)]);
     expect(axis.score).toBe(100);
     expect(axis.evidence.join(' ')).toContain('Dependabot');
   });

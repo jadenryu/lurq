@@ -149,9 +149,7 @@ describe('briefRepo', () => {
   });
 
   it('sequences a two-major upgrade through the middle major', async () => {
-    loadVersions.mockResolvedValue(
-      new Map([['pkg', ['1.0.0', '2.4.0', '3.0.0']]]),
-    );
+    loadVersions.mockResolvedValue(new Map([['pkg', ['1.0.0', '2.4.0', '3.0.0']]]));
     const brief = await briefRepo(
       db,
       drift([dep({ resolved: '1.0.0', latest: '3.0.0', majorsBehind: 2 })]),

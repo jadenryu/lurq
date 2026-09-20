@@ -101,7 +101,13 @@ export function decideRange(file: string, found: DeclaredRange, toVersion: strin
   }
   const prefix = simple[1] ?? '';
   return {
-    edit: { file, start: found.start, end: found.end, text: `${prefix}${toVersion}`, was: found.range },
+    edit: {
+      file,
+      start: found.start,
+      end: found.end,
+      text: `${prefix}${toVersion}`,
+      was: found.range,
+    },
   };
 }
 

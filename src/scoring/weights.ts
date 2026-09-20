@@ -220,7 +220,8 @@ export type WeightSource = 'defaults' | 'user-config' | 'project-config';
 
 /** Where overrides are read from, if anywhere — for `lurq weights` to report. */
 export function activeWeightsPath(): { path: string; source: WeightSource } | null {
-  if (existsSync(projectWeightsPath())) return { path: projectWeightsPath(), source: 'project-config' };
+  if (existsSync(projectWeightsPath()))
+    return { path: projectWeightsPath(), source: 'project-config' };
   if (existsSync(userWeightsPath())) return { path: userWeightsPath(), source: 'user-config' };
   return null;
 }
@@ -359,10 +360,12 @@ export const WEIGHT_EXPLANATIONS: Record<string, string> = {
   maintenance: 'release recency, cadence, and issue close-ratio (weights.ts MAINTENANCE_WEIGHTS).',
   adoption: 'weekly downloads (log-scaled), stars, and 90-day growth (weights.ts ADOPTION).',
   reliability: 'OpenSSF Scorecard scaled 0–100, minus advisory penalties (weights.ts RELIABILITY).',
-  efficiency: 'bundle size vs the category median; frontend categories only (weights.ts EFFICIENCY).',
+  efficiency:
+    'bundle size vs the category median; frontend categories only (weights.ts EFFICIENCY).',
   quality:
     'intrinsic, adoption-independent: types, tests, docs, changelog, deps, license, provenance (weights.ts QUALITY_WEIGHTS). A standalone axis, it does NOT feed health.',
-  lambda: 'how much the default sort composite favors quality over health: (1−λ)·health + λ·quality.',
+  lambda:
+    'how much the default sort composite favors quality over health: (1−λ)·health + λ·quality.',
 };
 
 /** Confidence-label thresholds (§10, §1). */

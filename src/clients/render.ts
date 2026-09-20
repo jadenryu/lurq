@@ -27,9 +27,12 @@ export interface RenderedConfig {
 }
 
 export const placeholderFor = (header: string) =>
-  /^authorization$/i.test(header) ? 'Bearer <your-token>' : `<your-${header.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>`;
+  /^authorization$/i.test(header)
+    ? 'Bearer <your-token>'
+    : `<your-${header.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>`;
 
-const headerObject = (names: string[]) => Object.fromEntries(names.map((h) => [h, placeholderFor(h)]));
+const headerObject = (names: string[]) =>
+  Object.fromEntries(names.map((h) => [h, placeholderFor(h)]));
 
 function entry(client: ClientProfile, input: RenderInput): Record<string, unknown> {
   const t = client.config.remote!;
@@ -64,23 +67,31 @@ function renderFile(client: ClientProfile, input: RenderInput): RenderedConfig {
     for (const [k, v] of Object.entries(e)) {
       if (v && typeof v === 'object') {
         lines.push(`    ${k}:`);
-        for (const [hk, hv] of Object.entries(v as Record<string, string>)) lines.push(`      ${hk}: ${JSON.stringify(hv)}`);
+        for (const [hk, hv] of Object.entries(v as Record<string, string>))
+          lines.push(`      ${hk}: ${JSON.stringify(hv)}`);
       } else lines.push(`    ${k}: ${JSON.stringify(v)}`);
     }
     return { kind: 'yaml', target: t.file, text: lines.join('\n') };
   }
-  return { kind: 'json', target: t.file, text: JSON.stringify({ [t.containerKey]: { [input.name]: e } }, null, 2) };
+  return {
+    kind: 'json',
+    target: t.file,
+    text: JSON.stringify({ [t.containerKey]: { [input.name]: e } }, null, 2),
+  };
 }
 
 function renderCommand(template: string, input: RenderInput): string {
-  const shellQuote = (s: string) => (/^[A-Za-z0-9_./:@%+=-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+  const shellQuote = (s: string) =>
+    /^[A-Za-z0-9_./:@%+=-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
   let cmd = template;
   const headerPart = /\s*--header\s+"\{header\}"/.exec(cmd);
   if (headerPart) {
     const repeated = input.headers.map((h) => ` --header "${h}: ${placeholderFor(h)}"`).join('');
     cmd = cmd.replace(headerPart[0], repeated);
   }
-  return cmd.replace(/\{name\}/g, shellQuote(input.name)).replace(/\{url\}/g, shellQuote(input.url));
+  return cmd
+    .replace(/\{name\}/g, shellQuote(input.name))
+    .replace(/\{url\}/g, shellQuote(input.url));
 }
 
 /** Deeplinks whose `{config}` encoding a primary source documents. */
@@ -91,14 +102,23 @@ function renderDeeplink(client: ClientProfile, input: RenderInput): string | nul
   switch (client.id) {
     case 'cursor': {
       const config = Buffer.from(JSON.stringify({ url: input.url, ...headers })).toString('base64');
-      return link.replace('{name}', encodeURIComponent(input.name)).replace('{config}', encodeURIComponent(config));
+      return link
+        .replace('{name}', encodeURIComponent(input.name))
+        .replace('{config}', encodeURIComponent(config));
     }
     case 'vscode':
-      return link.replace('{config}', encodeURIComponent(JSON.stringify({ name: input.name, type: 'http', url: input.url, ...headers })));
+      return link.replace(
+        '{config}',
+        encodeURIComponent(
+          JSON.stringify({ name: input.name, type: 'http', url: input.url, ...headers }),
+        ),
+      );
     case 'goose':
       return input.headers.length
         ? null
-        : link.replace('{url}', encodeURIComponent(input.url)).replace(/\{name\}/g, encodeURIComponent(input.name));
+        : link
+            .replace('{url}', encodeURIComponent(input.url))
+            .replace(/\{name\}/g, encodeURIComponent(input.name));
     default:
       return null;
   }

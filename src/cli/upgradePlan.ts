@@ -10,7 +10,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parseManifest } from '../github/manifests';
 import type { RepoManifest } from '../github/types';
-import { fetchUpgradePlan, type RemoteOptions, type RemotePlan, type RemoteUpgrade } from './remote';
+import {
+  fetchUpgradePlan,
+  type RemoteOptions,
+  type RemotePlan,
+  type RemoteUpgrade,
+} from './remote';
 
 /** Directories never worth walking for a workspace manifest. */
 const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', 'vendor']);
@@ -152,8 +157,11 @@ export function formatUpgradePlan(plan: UpgradePlanResult): string {
     if (upgrade.scopeReason) out.push(`  held: ${upgrade.scopeReason}`);
     if (upgrade.removed.length) {
       const renamed = new Map((upgrade.renamed ?? []).map((r) => [r.path, r.to]));
-      const label = (path: string) => (renamed.has(path) ? `${path} → ${renamed.get(path)!.join(' | ')}` : path);
-      out.push(`  removes ${upgrade.removed.length}: ${upgrade.removed.slice(0, 8).map(label).join(', ')}`);
+      const label = (path: string) =>
+        renamed.has(path) ? `${path} → ${renamed.get(path)!.join(' | ')}` : path;
+      out.push(
+        `  removes ${upgrade.removed.length}: ${upgrade.removed.slice(0, 8).map(label).join(', ')}`,
+      );
     }
     for (const change of upgrade.arityChanged.slice(0, 5)) {
       out.push(`  arity ${change.path}: ${change.from ?? '?'} → ${change.to ?? '?'}`);
@@ -161,7 +169,9 @@ export function formatUpgradePlan(plan: UpgradePlanResult): string {
     // The migration sequence, when this crosses two or more majors. Ordering is
     // most of the work, and a single 6→8 line hides which step owns which break.
     if (upgrade.hops?.length) {
-      out.push(`  via ${[upgrade.fromVersion, ...upgrade.hops.map((h) => h.toVersion)].join(' → ')}`);
+      out.push(
+        `  via ${[upgrade.fromVersion, ...upgrade.hops.map((h) => h.toVersion)].join(' → ')}`,
+      );
       for (const hop of upgrade.hops) {
         const detail = hop.removed.length
           ? `removes ${hop.removed.slice(0, 5).join(', ')}`

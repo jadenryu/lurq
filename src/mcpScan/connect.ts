@@ -153,8 +153,25 @@ function openHttp(spec: ServerSpec, kind: 'http' | 'sse'): Conn {
   const requestInit = { headers: spec.headers };
   const transport =
     kind === 'http'
-      ? new StreamableHTTPClientTransport(url, { requestInit, reconnectionOptions: { maxRetries: 0, initialReconnectionDelay: 1000, maxReconnectionDelay: 1000, reconnectionDelayGrowFactor: 1 } })
-      : new SSEClientTransport(url, { requestInit, eventSourceInit: { fetch: (u, init) => fetch(u, { ...init, headers: { ...(init?.headers as Record<string, string>), ...spec.headers } }) } });
+      ? new StreamableHTTPClientTransport(url, {
+          requestInit,
+          reconnectionOptions: {
+            maxRetries: 0,
+            initialReconnectionDelay: 1000,
+            maxReconnectionDelay: 1000,
+            reconnectionDelayGrowFactor: 1,
+          },
+        })
+      : new SSEClientTransport(url, {
+          requestInit,
+          eventSourceInit: {
+            fetch: (u, init) =>
+              fetch(u, {
+                ...init,
+                headers: { ...(init?.headers as Record<string, string>), ...spec.headers },
+              }),
+          },
+        });
   return wrap(transport, kind, () => '');
 }
 
@@ -192,7 +209,11 @@ async function paginate(
   let cursor: string | undefined;
   for (let page = 0; ; page++) {
     if (page >= maxPages) {
-      snapshot.issues.push({ list, kind: 'truncated', detail: `still paginating after ${maxPages} pages` });
+      snapshot.issues.push({
+        list,
+        kind: 'truncated',
+        detail: `still paginating after ${maxPages} pages`,
+      });
       return;
     }
     const result = await conn.client.request(
@@ -206,7 +227,11 @@ async function paginate(
     if (!next) return;
     if (seen.has(next)) {
       // A server handing back a cursor it already gave would page forever.
-      snapshot.issues.push({ list, kind: 'truncated', detail: 'the server repeated a pagination cursor' });
+      snapshot.issues.push({
+        list,
+        kind: 'truncated',
+        detail: 'the server repeated a pagination cursor',
+      });
       return;
     }
     seen.add(next);
@@ -226,9 +251,13 @@ async function readContract(
   snapshot.serverInfo = {
     name: typeof info?.name === 'string' ? info.name.slice(0, LIMITS.name) : null,
     version: typeof info?.version === 'string' ? info.version.slice(0, 100) : null,
-    title: typeof (info as { title?: unknown })?.title === 'string' ? (info as { title: string }).title.slice(0, LIMITS.name) : null,
+    title:
+      typeof (info as { title?: unknown })?.title === 'string'
+        ? (info as { title: string }).title.slice(0, LIMITS.name)
+        : null,
   };
-  snapshot.protocolVersion = (conn.transport as { protocolVersion?: string }).protocolVersion ?? null;
+  snapshot.protocolVersion =
+    (conn.transport as { protocolVersion?: string }).protocolVersion ?? null;
   snapshot.capabilities = {
     tools: !!caps.tools,
     prompts: !!caps.prompts,
@@ -241,7 +270,11 @@ async function readContract(
   if (typeof instructions === 'string' && instructions) {
     snapshot.instructions = instructions.slice(0, LIMITS.instructions);
     if (instructions.length > LIMITS.instructions) {
-      snapshot.issues.push({ list: 'initialize', kind: 'oversized', detail: `instructions are ${instructions.length} chars` });
+      snapshot.issues.push({
+        list: 'initialize',
+        kind: 'oversized',
+        detail: `instructions are ${instructions.length} chars`,
+      });
     }
   }
 
@@ -250,7 +283,9 @@ async function readContract(
   // more often than they lack tools, and "method not found" is a clean no.
   const tools = new Map<string, McpTool>();
   try {
-    await paginate(conn, 'tools/list', 'tools', 'tools', snapshot, opts, (e) => addTools(e, tools, snapshot.issues));
+    await paginate(conn, 'tools/list', 'tools', 'tools', snapshot, opts, (e) =>
+      addTools(e, tools, snapshot.issues),
+    );
   } catch (err) {
     if (!(isMethodNotFound(err) && !caps.tools)) throw err;
   }
@@ -262,22 +297,34 @@ async function readContract(
       await run();
     } catch (err) {
       if (isMethodNotFound(err)) return;
-      snapshot.issues.push({ list, kind: 'list_failed', detail: (err instanceof Error ? err.message : String(err)).slice(0, 300) });
+      snapshot.issues.push({
+        list,
+        kind: 'list_failed',
+        detail: (err instanceof Error ? err.message : String(err)).slice(0, 300),
+      });
     }
   };
 
   if (caps.prompts) {
     const prompts = new Map<string, PromptInfo>();
     await secondary('prompts', () =>
-      paginate(conn, 'prompts/list', 'prompts', 'prompts', snapshot, opts, (e) => addPrompts(e, prompts, snapshot.issues)),
+      paginate(conn, 'prompts/list', 'prompts', 'prompts', snapshot, opts, (e) =>
+        addPrompts(e, prompts, snapshot.issues),
+      ),
     );
     snapshot.prompts = [...prompts.values()];
   }
   if (caps.resources) {
     const templates = new Map<string, ResourceTemplateInfo>();
     await secondary('resourceTemplates', () =>
-      paginate(conn, 'resources/templates/list', 'resourceTemplates', 'resourceTemplates', snapshot, opts, (e) =>
-        addTemplates(e, templates, snapshot.issues),
+      paginate(
+        conn,
+        'resources/templates/list',
+        'resourceTemplates',
+        'resourceTemplates',
+        snapshot,
+        opts,
+        (e) => addTemplates(e, templates, snapshot.issues),
       ),
     );
     snapshot.resourceTemplates = [...templates.values()];
@@ -313,11 +360,16 @@ async function readContract(
 
 /** Should a failed Streamable HTTP attempt fall back to legacy SSE? */
 function shouldTrySse(err: unknown): boolean {
-  if (err instanceof StreamableHTTPError) return [400, 404, 405].includes(err.code ?? 0) || err.code === -1;
+  if (err instanceof StreamableHTTPError)
+    return [400, 404, 405].includes(err.code ?? 0) || err.code === -1;
   return false;
 }
 
-function result(spec: ServerSpec, started: number, fields: Partial<ServerScan> & Pick<ServerScan, 'status'>): ServerScan {
+function result(
+  spec: ServerSpec,
+  started: number,
+  fields: Partial<ServerScan> & Pick<ServerScan, 'status'>,
+): ServerScan {
   return {
     alias: spec.alias,
     serverKey: spec.serverKey,
@@ -336,8 +388,14 @@ function result(spec: ServerSpec, started: number, fields: Partial<ServerScan> &
   };
 }
 
-async function attempt(spec: ServerSpec, kind: 'stdio' | 'http' | 'sse', opts: ScanOptions, started: number): Promise<ServerScan | { retrySse: true }> {
-  const connectTimeoutMs = opts.connectTimeoutMs ?? (kind === 'stdio' ? DEFAULTS.connectTimeoutMs : 20_000);
+async function attempt(
+  spec: ServerSpec,
+  kind: 'stdio' | 'http' | 'sse',
+  opts: ScanOptions,
+  started: number,
+): Promise<ServerScan | { retrySse: true }> {
+  const connectTimeoutMs =
+    opts.connectTimeoutMs ?? (kind === 'stdio' ? DEFAULTS.connectTimeoutMs : 20_000);
   const requestTimeoutMs = opts.requestTimeoutMs ?? DEFAULTS.requestTimeoutMs;
   const budget = opts.serverBudgetMs ?? DEFAULTS.serverBudgetMs;
 
@@ -347,7 +405,11 @@ async function attempt(spec: ServerSpec, kind: 'stdio' | 'http' | 'sse', opts: S
     conn = kind === 'stdio' ? openStdio(spec, opts) : openHttp(spec, kind);
     const c = conn;
     const work = (async () => {
-      await before(c.client.connect(c.transport, { timeout: connectTimeoutMs, signal: opts.signal }), connectTimeoutMs + 2_000, 'connect');
+      await before(
+        c.client.connect(c.transport, { timeout: connectTimeoutMs, signal: opts.signal }),
+        connectTimeoutMs + 2_000,
+        'connect',
+      );
       stage = 'list';
       return readContract(c, { requestTimeoutMs, signal: opts.signal });
     })();
@@ -362,13 +424,25 @@ async function attempt(spec: ServerSpec, kind: 'stdio' | 'http' | 'sse', opts: S
       stderrTail: tailOf(conn, spec),
     });
   } catch (err) {
-    if (kind === 'http' && spec.transport === 'auto' && shouldTrySse(err)) return { retrySse: true };
+    if (kind === 'http' && spec.transport === 'auto' && shouldTrySse(err))
+      return { retrySse: true };
     if (opts.signal?.aborted) {
-      return result(spec, started, { status: 'cancelled', transportUsed: kind, error: 'scan interrupted' });
+      return result(spec, started, {
+        status: 'cancelled',
+        transportUsed: kind,
+        error: 'scan interrupted',
+      });
     }
     const c: Classified =
       err instanceof Deadline
-        ? { status: 'timeout', error: err.message, hint: stage === 'connect' && kind === 'stdio' ? 'a first run of npx/uvx downloads the package; retry with a longer --timeout' : null }
+        ? {
+            status: 'timeout',
+            error: err.message,
+            hint:
+              stage === 'connect' && kind === 'stdio'
+                ? 'a first run of npx/uvx downloads the package; retry with a longer --timeout'
+                : null,
+          }
         : classifyError(err, {
             stage,
             transport: kind,
@@ -396,7 +470,8 @@ function tailOf(conn: Conn | null, spec: ServerSpec): string | null {
 /** Scan one server. Never throws: every outcome is a `ServerScan`. */
 export async function scanServer(spec: ServerSpec, opts: ScanOptions = {}): Promise<ServerScan> {
   const started = Date.now();
-  if (spec.disabled) return result(spec, started, { status: 'disabled', hint: 'disabled in its config' });
+  if (spec.disabled)
+    return result(spec, started, { status: 'disabled', hint: 'disabled in its config' });
   if (!spec.trusted) return result(spec, started, { status: 'untrusted', hint: spec.trustReason });
   if (spec.unresolved.length) {
     return result(spec, started, {
@@ -405,25 +480,35 @@ export async function scanServer(spec: ServerSpec, opts: ScanOptions = {}): Prom
       hint: `export ${spec.unresolved.filter((v) => !v.startsWith('input:')).join(', ') || 'the missing values'} before scanning`,
     });
   }
-  if (opts.signal?.aborted) return result(spec, started, { status: 'cancelled', error: 'scan interrupted' });
+  if (opts.signal?.aborted)
+    return result(spec, started, { status: 'cancelled', error: 'scan interrupted' });
 
   try {
     if (spec.transport === 'stdio') {
-      if (!spec.command) return result(spec, started, { status: 'spawn_failed', error: 'no command configured' });
+      if (!spec.command)
+        return result(spec, started, { status: 'spawn_failed', error: 'no command configured' });
       return (await attempt(spec, 'stdio', opts, started)) as ServerScan;
     }
-    if (!spec.url) return result(spec, started, { status: 'unreachable', error: 'no url configured' });
+    if (!spec.url)
+      return result(spec, started, { status: 'unreachable', error: 'no url configured' });
     try {
       new URL(spec.url);
     } catch {
-      return result(spec, started, { status: 'unreachable', error: 'the configured url is not valid', hint: 'check the url in the config' });
+      return result(spec, started, {
+        status: 'unreachable',
+        error: 'the configured url is not valid',
+        hint: 'check the url in the config',
+      });
     }
     const first = await attempt(spec, spec.transport === 'sse' ? 'sse' : 'http', opts, started);
     if ('retrySse' in first) return (await attempt(spec, 'sse', opts, started)) as ServerScan;
     return first;
   } catch (err) {
     // attempt() classifies everything it can; this is a bug guard, not a path.
-    return result(spec, started, { status: 'protocol_error', error: scrub(err instanceof Error ? err.message : String(err), spec.secrets) });
+    return result(spec, started, {
+      status: 'protocol_error',
+      error: scrub(err instanceof Error ? err.message : String(err), spec.secrets),
+    });
   }
 }
 

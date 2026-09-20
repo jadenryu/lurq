@@ -91,19 +91,12 @@ export interface Sandbox {
    * (the sandbox itself dying) throw.
    */
   exec(command: string, opts?: ExecOptions): Promise<ExecResult>;
-  verify(
-    pkg: string,
-    version: string | null,
-    opts?: SandboxVerifyOptions,
-  ): Promise<SandboxResult>;
+  verify(pkg: string, version: string | null, opts?: SandboxVerifyOptions): Promise<SandboxResult>;
   /** Co-install a set of packages and smoke-load a subset (or all).
    *  `packages` are all co-installed; `opts.smokePackages` controls which are
    *  smoke-loaded (defaults to `packages`). A successful co-install proves
    *  the set coexists. */
-  verifySet(
-    packages: SandboxPackage[],
-    opts?: SandboxVerifyOptions,
-  ): Promise<SandboxSetResult>;
+  verifySet(packages: SandboxPackage[], opts?: SandboxVerifyOptions): Promise<SandboxSetResult>;
   /** Retrieve the node and npm versions running inside this sandbox. */
   getRuntimeInfo(): Promise<{ nodeVersion: string; npmVersion: string }>;
 }

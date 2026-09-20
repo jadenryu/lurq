@@ -4,7 +4,8 @@
 import readline from 'node:readline';
 
 const send = (m) => process.stdout.write(`${JSON.stringify(m)}\n`);
-const deep = (n) => (n === 0 ? { type: 'string' } : { type: 'object', properties: { x: deep(n - 1) } });
+const deep = (n) =>
+  n === 0 ? { type: 'string' } : { type: 'object', properties: { x: deep(n - 1) } };
 
 readline.createInterface({ input: process.stdin }).on('line', (line) => {
   const msg = JSON.parse(line);

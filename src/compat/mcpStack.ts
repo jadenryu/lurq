@@ -129,7 +129,10 @@ export async function loadStackMembers(
       out.push({
         server: s.server,
         version: s.version,
-        tools: s.tools.map((t) => ({ name: t.name, annotations: resolveAnnotations(t.annotations) })),
+        tools: s.tools.map((t) => ({
+          name: t.name,
+          annotations: resolveAnnotations(t.annotations),
+        })),
       });
       continue;
     }

@@ -16,7 +16,7 @@ bundle cost. This is what scoring runs on.
 
 **Executed** — an isolated sandbox that installs a package version, imports it,
 and records what happened. Co-installing a set is how compatibility is
-*established*: a successful co-install is positive proof two versions coexist, a
+_established_: a successful co-install is positive proof two versions coexist, a
 failure is proof they conflict, and the error is kept as evidence.
 
 **Extracted** — the shipped `.d.ts` and the shipped JavaScript of an exact
@@ -76,7 +76,7 @@ semantic vector search via pgvector for intent-based queries like "debounce a
 function." This catches both "I know the name" and "I know what I want it to do."
 
 The two are merged with **Reciprocal Rank Fusion**, which combines them using
-only each result's *position* in its list. That's deliberate: it means two
+only each result's _position_ in its list. That's deliberate: it means two
 incomparable scoring scales never have to be normalised against each other, and
 an exact-name hit the vector search ranks poorly still surfaces. The fused
 relevance is then blended with the composite score, so results are both relevant

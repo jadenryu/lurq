@@ -117,10 +117,26 @@ export async function recommend(
   const pool = Math.max(limit * 5, 25);
 
   // Primary search (category-filtered when we have one).
-  let fused = await hybridSearch(db, queryVec, provider.id, opts.need, opts.constraints, category, pool);
+  let fused = await hybridSearch(
+    db,
+    queryVec,
+    provider.id,
+    opts.need,
+    opts.constraints,
+    category,
+    pool,
+  );
   // If a category filter starved the results, broaden to all categories.
   if (category && fused.length < limit) {
-    const broad = await hybridSearch(db, queryVec, provider.id, opts.need, opts.constraints, null, pool);
+    const broad = await hybridSearch(
+      db,
+      queryVec,
+      provider.id,
+      opts.need,
+      opts.constraints,
+      null,
+      pool,
+    );
     const seen = new Set(fused.map((f) => f.row.name));
     fused = fused.concat(broad.filter((f) => !seen.has(f.row.name)));
   }
@@ -214,10 +230,7 @@ const ROW_COLUMNS = {
 } as const;
 
 /** Shared filter conditions (category + constraints) for both retrieval legs. */
-function buildConditions(
-  constraints: RecommendConstraints | undefined,
-  category: Category | null,
-) {
+function buildConditions(constraints: RecommendConstraints | undefined, category: Category | null) {
   const conditions = [];
   if (category) conditions.push(eq(packages.category, category));
   if (constraints?.license) conditions.push(eq(packages.license, constraints.license));
@@ -271,7 +284,10 @@ async function runLexicalQuery(
 ): Promise<Row[]> {
   const tsquery = sql`websearch_to_tsquery('english', ${need})`;
   const rank = sql<number>`ts_rank(${packages.searchVector}, ${tsquery})`;
-  const conditions = [sql`${packages.searchVector} @@ ${tsquery}`, ...buildConditions(constraints, category)];
+  const conditions = [
+    sql`${packages.searchVector} @@ ${tsquery}`,
+    ...buildConditions(constraints, category),
+  ];
   return db
     .select(ROW_COLUMNS)
     .from(packages)

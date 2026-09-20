@@ -195,8 +195,13 @@ describe('bundlephobia parser', () => {
 describe('deps.dev dependent counts', () => {
   it('keeps direct and indirect separate', () => {
     // The real shape from api.deps.dev ...:dependents
-    expect(parseDependents({ dependentCount: 6456, directDependentCount: 1760, indirectDependentCount: 4786 }))
-      .toEqual({ direct: 1760, indirect: 4786 });
+    expect(
+      parseDependents({
+        dependentCount: 6456,
+        directDependentCount: 1760,
+        indirectDependentCount: 4786,
+      }),
+    ).toEqual({ direct: 1760, indirect: 4786 });
   });
 
   it('returns null rather than guessing when either count is missing', () => {
@@ -209,7 +214,9 @@ describe('deps.dev dependent counts', () => {
   });
 
   it('preserves a genuine zero', () => {
-    expect(parseDependents({ directDependentCount: 0, indirectDependentCount: 0 }))
-      .toEqual({ direct: 0, indirect: 0 });
+    expect(parseDependents({ directDependentCount: 0, indirectDependentCount: 0 })).toEqual({
+      direct: 0,
+      indirect: 0,
+    });
   });
 });

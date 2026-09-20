@@ -264,13 +264,7 @@ export type UpgradeSeverity = 'blocking' | 'warning' | 'ok' | 'unverified';
  *   merged   — that PR landed
  *   failed   — the edit or the repo's own checks failed
  */
-export type UpgradeRunStatus =
-  | 'checked'
-  | 'skipped'
-  | 'edited'
-  | 'pr_open'
-  | 'merged'
-  | 'failed';
+export type UpgradeRunStatus = 'checked' | 'skipped' | 'edited' | 'pr_open' | 'merged' | 'failed';
 
 /**
  * What started an autopilot run.
@@ -287,13 +281,7 @@ export type UpgradeRunStatus =
  */
 export type RunTrigger = 'schedule' | 'dispatch' | 'push' | 'pull_request' | 'other';
 
-export const RUN_TRIGGERS: RunTrigger[] = [
-  'schedule',
-  'dispatch',
-  'push',
-  'pull_request',
-  'other',
-];
+export const RUN_TRIGGERS: RunTrigger[] = ['schedule', 'dispatch', 'push', 'pull_request', 'other'];
 
 export const UPGRADE_SEVERITIES: UpgradeSeverity[] = ['blocking', 'warning', 'ok', 'unverified'];
 export const UPGRADE_RUN_STATUSES: UpgradeRunStatus[] = [

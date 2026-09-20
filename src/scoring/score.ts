@@ -70,7 +70,10 @@ const monthsSince = (date: Date | null, now: Date): number | null =>
   date ? (now.getTime() - date.getTime()) / MONTH_MS : null;
 
 /** Build a ScoringInput from collected raw signals. */
-export function toScoringInput(signals: RawPackageSignals, category: Category | null): ScoringInput {
+export function toScoringInput(
+  signals: RawPackageSignals,
+  category: Category | null,
+): ScoringInput {
   const { registry, downloads, github, depsDev, bundle } = signals;
   const readme = registry?.readme ?? null;
   return {
@@ -116,19 +119,27 @@ export function computeMaintenance(input: ScoringInput, now: Date): number {
     const recency =
       days <= MAINTENANCE.freshDays
         ? 100
-        : clamp((100 * (MAINTENANCE.staleDays - days)) / (MAINTENANCE.staleDays - MAINTENANCE.freshDays));
+        : clamp(
+            (100 * (MAINTENANCE.staleDays - days)) /
+              (MAINTENANCE.staleDays - MAINTENANCE.freshDays),
+          );
     components.push({ value: recency, weight: MAINTENANCE_WEIGHTS.recency });
   }
 
   if (input.releasesLast12mo !== null) {
-    const cadence = clamp((Math.min(input.releasesLast12mo, MAINTENANCE.cadenceCap) / MAINTENANCE.cadenceCap) * 100);
+    const cadence = clamp(
+      (Math.min(input.releasesLast12mo, MAINTENANCE.cadenceCap) / MAINTENANCE.cadenceCap) * 100,
+    );
     components.push({ value: cadence, weight: MAINTENANCE_WEIGHTS.cadence });
   }
 
   if (input.openIssues !== null && input.closedIssues !== null) {
     const total = input.openIssues + input.closedIssues;
     if (total > 0) {
-      components.push({ value: (input.closedIssues / total) * 100, weight: MAINTENANCE_WEIGHTS.closeRatio });
+      components.push({
+        value: (input.closedIssues / total) * 100,
+        weight: MAINTENANCE_WEIGHTS.closeRatio,
+      });
     }
   }
 
@@ -186,7 +197,12 @@ export function computeEfficiency(
   category: Category | null,
   categoryMedian: number | null,
 ): number | null {
-  if (!isFrontendCategory(category) || bundleMinGzipKb === null || !categoryMedian || categoryMedian <= 0) {
+  if (
+    !isFrontendCategory(category) ||
+    bundleMinGzipKb === null ||
+    !categoryMedian ||
+    categoryMedian <= 0
+  ) {
     return null;
   }
   const ratio = bundleMinGzipKb / categoryMedian;
@@ -309,7 +325,14 @@ export function computeFieldScore(evidence: FieldEvidence | null): number | null
  */
 export function computeHealthScore(
   breakdown: ScoreBreakdown,
-  weights: typeof HEALTH_WEIGHTS | { maintenance: number; adoption: number; reliability: number; efficiency: number } = HEALTH_WEIGHTS,
+  weights:
+    | typeof HEALTH_WEIGHTS
+    | {
+        maintenance: number;
+        adoption: number;
+        reliability: number;
+        efficiency: number;
+      } = HEALTH_WEIGHTS,
 ): number {
   const w = weights;
   return weightedAverage(
@@ -377,8 +400,7 @@ export function computeConfidence(
   // is noise, not traction — see CONFIDENCE.emerging.minDownloadsForGrowth.
   const emergingAdoptionOk =
     dl >= CONFIDENCE.emerging.minWeeklyDownloads ||
-    (growth >= CONFIDENCE.emerging.strongGrowth &&
-      dl >= CONFIDENCE.emerging.minDownloadsForGrowth);
+    (growth >= CONFIDENCE.emerging.strongGrowth && dl >= CONFIDENCE.emerging.minDownloadsForGrowth);
 
   // `emerging` did not consider advisories at all, so a package with a critical
   // CVE could be labelled emerging and recommended on adoption alone. Every

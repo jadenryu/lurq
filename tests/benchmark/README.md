@@ -112,17 +112,17 @@ stack success by itself.
 
 Report these separately:
 
-| Metric | Meaning |
-| --- | --- |
-| Package existence rate | Fraction of proposed names that exist on npm. |
-| Package risk rate | Fraction of proposed packages that are deprecated, archived, or high risk. |
-| Requirement coverage | Required capabilities covered / required capabilities. |
-| Resolution success rate | Exact package set successfully installs in E2B. |
-| Runtime-load success rate | Relevant runtime packages load successfully. |
-| Valid-stack rate | Stack meets coverage threshold, has no blocking validity issue, and resolves. |
-| Failure-detection recall | Actual failures flagged by Lurq / all actual failures. |
-| Failure-detection precision | Correct Lurq flags / all Lurq flags. |
-| Unknown rate | Cases where Lurq honestly lacks sufficient evidence. |
+| Metric                      | Meaning                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| Package existence rate      | Fraction of proposed names that exist on npm.                                 |
+| Package risk rate           | Fraction of proposed packages that are deprecated, archived, or high risk.    |
+| Requirement coverage        | Required capabilities covered / required capabilities.                        |
+| Resolution success rate     | Exact package set successfully installs in E2B.                               |
+| Runtime-load success rate   | Relevant runtime packages load successfully.                                  |
+| Valid-stack rate            | Stack meets coverage threshold, has no blocking validity issue, and resolves. |
+| Failure-detection recall    | Actual failures flagged by Lurq / all actual failures.                        |
+| Failure-detection precision | Correct Lurq flags / all Lurq flags.                                          |
+| Unknown rate                | Cases where Lurq honestly lacks sufficient evidence.                          |
 
 Do not silently turn `unknown` into `compatible`.
 

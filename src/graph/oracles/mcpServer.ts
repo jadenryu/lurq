@@ -299,7 +299,14 @@ export async function probeMcpServer(
   let last: { probe: ProbeOutput | null; stderr: string } = { probe: null, stderr: '' };
   for (const args of ladder) {
     try {
-      const res = await attempt(sandbox, pkg, version, args, opts.env ?? {}, opts.maxPages ?? MAX_PAGES);
+      const res = await attempt(
+        sandbox,
+        pkg,
+        version,
+        args,
+        opts.env ?? {},
+        opts.maxPages ?? MAX_PAGES,
+      );
       if (res.probe?.ok) return { ...res, launchedWith: args };
       last = res;
     } catch (err) {

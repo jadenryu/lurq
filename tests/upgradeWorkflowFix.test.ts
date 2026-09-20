@@ -71,7 +71,9 @@ describe('where it sits', () => {
   it('runs before the model, which is the entire point', () => {
     const list = steps();
     const fix = indexOfStep(list, (s) => Boolean(s.run?.includes(' fix ')));
-    const agent = indexOfStep(list, (s) => Boolean(s.uses?.startsWith('anthropics/claude-code-action')));
+    const agent = indexOfStep(list, (s) =>
+      Boolean(s.uses?.startsWith('anthropics/claude-code-action')),
+    );
     expect(agent).toBeGreaterThan(fix);
   });
 });

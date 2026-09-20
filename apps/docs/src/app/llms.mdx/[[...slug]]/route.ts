@@ -7,7 +7,10 @@ import { source } from '@/lib/source';
 // so an agent that fetches a docs page can read it without the layout.
 export const revalidate = false;
 
-export async function GET(_req: Request, { params }: { params: Promise<{ slug?: string[] }> }): Promise<Response> {
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ slug?: string[] }> },
+): Promise<Response> {
   const { slug } = await params;
   const page = source.getPage(slug);
   if (!page) notFound();

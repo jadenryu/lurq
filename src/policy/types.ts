@@ -217,5 +217,4 @@ export interface PolicyFacts {
  */
 export type PolicyVerdict =
   // `warning` is set in warn mode: the package broke a rule that is not yet enforced.
-  | { allowed: true; warning?: Exclusion }
-  | ({ allowed: false } & Exclusion);
+  { allowed: true; warning?: Exclusion } | ({ allowed: false } & Exclusion);

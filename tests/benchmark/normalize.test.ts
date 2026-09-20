@@ -58,10 +58,12 @@ describe('isValidNpmName', () => {
 
 describe('normalizeProposal', () => {
   it('passes valid selections through unchanged', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: 'next', needId: 'web' }),
-      sel({ package: 'zod', needId: 'validation' }),
-    ]));
+    const result = normalizeProposal(
+      proposal([
+        sel({ package: 'next', needId: 'web' }),
+        sel({ package: 'zod', needId: 'validation' }),
+      ]),
+    );
     expect(result.invalidNames).toEqual([]);
     expect(result.duplicateNames).toEqual([]);
     expect(result.runtimePackages).toHaveLength(2);
@@ -69,64 +71,62 @@ describe('normalizeProposal', () => {
   });
 
   it('records and removes duplicates', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: 'next', needId: 'web' }),
-      sel({ package: 'next', needId: 'web-dup' }),
-    ]));
+    const result = normalizeProposal(
+      proposal([
+        sel({ package: 'next', needId: 'web' }),
+        sel({ package: 'next', needId: 'web-dup' }),
+      ]),
+    );
     expect(result.duplicateNames).toEqual(['next']);
     expect(result.runtimePackages).toHaveLength(1);
   });
 
   it('records and excludes invalid names — space', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: 'bad name' }),
-    ]));
+    const result = normalizeProposal(proposal([sel({ package: 'bad name' })]));
     expect(result.invalidNames).toEqual(['bad name']);
     expect(result.runtimePackages).toHaveLength(0);
   });
 
   it('records and excludes invalid names — leading dash', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: '-bad' }),
-    ]));
+    const result = normalizeProposal(proposal([sel({ package: '-bad' })]));
     expect(result.invalidNames).toEqual(['-bad']);
   });
 
   it('classifies @types/* as development', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: '@types/node', scopeHint: 'unknown' }),
-    ]));
+    const result = normalizeProposal(
+      proposal([sel({ package: '@types/node', scopeHint: 'unknown' })]),
+    );
     expect(result.developmentPackages).toHaveLength(1);
     expect(result.runtimePackages).toHaveLength(0);
     expect(result.developmentPackages[0]!.isRuntime).toBe(false);
   });
 
   it('scopeHint "development" overrides category fallback', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: 'express', scopeHint: 'development', category: 'framework' }),
-    ]));
+    const result = normalizeProposal(
+      proposal([sel({ package: 'express', scopeHint: 'development', category: 'framework' })]),
+    );
     expect(result.developmentPackages).toHaveLength(1);
     expect(result.developmentPackages[0]!.isRuntime).toBe(false);
   });
 
   it('classifies build-tool category as development', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: 'webpack', category: 'build-tool', scopeHint: 'unknown' }),
-    ]));
+    const result = normalizeProposal(
+      proposal([sel({ package: 'webpack', category: 'build-tool', scopeHint: 'unknown' })]),
+    );
     expect(result.developmentPackages).toHaveLength(1);
   });
 
   it('classifies bundler category as development', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: 'esbuild', category: 'bundler', scopeHint: 'unknown' }),
-    ]));
+    const result = normalizeProposal(
+      proposal([sel({ package: 'esbuild', category: 'bundler', scopeHint: 'unknown' })]),
+    );
     expect(result.developmentPackages).toHaveLength(1);
   });
 
   it('classifies linting category as development', () => {
-    const result = normalizeProposal(proposal([
-      sel({ package: 'eslint', category: 'linting', scopeHint: 'unknown' }),
-    ]));
+    const result = normalizeProposal(
+      proposal([sel({ package: 'eslint', category: 'linting', scopeHint: 'unknown' })]),
+    );
     expect(result.developmentPackages).toHaveLength(1);
   });
 });
@@ -148,20 +148,26 @@ describe('evaluateCoverage', () => {
   };
 
   it('counts covered needs by needId match', () => {
-    const result = evaluateCoverage(benchCase, proposal([
-      sel({ needId: 'web', package: 'next' }),
-      sel({ needId: 'orm', package: 'drizzle-orm' }),
-    ]));
+    const result = evaluateCoverage(
+      benchCase,
+      proposal([
+        sel({ needId: 'web', package: 'next' }),
+        sel({ needId: 'orm', package: 'drizzle-orm' }),
+      ]),
+    );
     expect(result.required).toBe(2);
     expect(result.covered).toBe(2);
     expect(result.missing).toEqual([]);
   });
 
   it('does not credit coverage for extra packages without needId match', () => {
-    const result = evaluateCoverage(benchCase, proposal([
-      sel({ needId: 'web', package: 'next' }),
-      sel({ needId: 'random', package: 'lodash' }),
-    ]));
+    const result = evaluateCoverage(
+      benchCase,
+      proposal([
+        sel({ needId: 'web', package: 'next' }),
+        sel({ needId: 'random', package: 'lodash' }),
+      ]),
+    );
     expect(result.covered).toBe(1);
     expect(result.missing).toEqual(['orm']);
   });
@@ -174,19 +180,20 @@ describe('evaluateCoverage', () => {
   });
 
   it('ignores optional needs for coverage count', () => {
-    const result = evaluateCoverage(benchCase, proposal([
-      sel({ needId: 'web', package: 'next' }),
-      sel({ needId: 'orm', package: 'drizzle-orm' }),
-      // styling is optional — not counted even if missing
-    ]));
+    const result = evaluateCoverage(
+      benchCase,
+      proposal([
+        sel({ needId: 'web', package: 'next' }),
+        sel({ needId: 'orm', package: 'drizzle-orm' }),
+        // styling is optional — not counted even if missing
+      ]),
+    );
     expect(result.required).toBe(2);
     expect(result.covered).toBe(2);
   });
 
   it('two required needs, one matched → covered: 1, missing the unmatched', () => {
-    const result = evaluateCoverage(benchCase, proposal([
-      sel({ needId: 'web', package: 'next' }),
-    ]));
+    const result = evaluateCoverage(benchCase, proposal([sel({ needId: 'web', package: 'next' })]));
     expect(result.covered).toBe(1);
     expect(result.missing).toEqual(['orm']);
   });

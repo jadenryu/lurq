@@ -29,11 +29,16 @@ export interface LocalSnapshot {
 const dir = () => join(lurqHome(), 'mcp-snapshots');
 
 const fileFor = (serverKey: string, fingerprint: string) =>
-  join(dir(), `${createHash('sha256').update(`${serverKey}#${fingerprint}`).digest('hex').slice(0, 32)}.json`);
+  join(
+    dir(),
+    `${createHash('sha256').update(`${serverKey}#${fingerprint}`).digest('hex').slice(0, 32)}.json`,
+  );
 
 export function loadLocal(serverKey: string, fingerprint: string): LocalSnapshot | null {
   try {
-    const parsed = JSON.parse(readFileSync(fileFor(serverKey, fingerprint), 'utf8')) as LocalSnapshot;
+    const parsed = JSON.parse(
+      readFileSync(fileFor(serverKey, fingerprint), 'utf8'),
+    ) as LocalSnapshot;
     // A file from a future format, or one a user hand-edited into nonsense, is
     // treated as absent: a wrong baseline would report changes that never happened.
     if (parsed?.version !== 1 || !Array.isArray(parsed.snapshot?.tools)) return null;

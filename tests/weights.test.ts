@@ -23,9 +23,15 @@ describe('applyOverrides (§4)', () => {
   });
 
   it('rejects unknown keys and malformed entries', () => {
-    expect(() => applyOverrides(DEFAULT_WEIGHTS, ['health.bogus=0.5'])).toThrow(/Unknown weight key/);
-    expect(() => applyOverrides(DEFAULT_WEIGHTS, ['composite.lambda'])).toThrow(/expected key=value/);
-    expect(() => applyOverrides(DEFAULT_WEIGHTS, ['composite.lambda=abc'])).toThrow(/must be a number/);
+    expect(() => applyOverrides(DEFAULT_WEIGHTS, ['health.bogus=0.5'])).toThrow(
+      /Unknown weight key/,
+    );
+    expect(() => applyOverrides(DEFAULT_WEIGHTS, ['composite.lambda'])).toThrow(
+      /expected key=value/,
+    );
+    expect(() => applyOverrides(DEFAULT_WEIGHTS, ['composite.lambda=abc'])).toThrow(
+      /must be a number/,
+    );
   });
 
   it('exposes the settable keys', () => {
@@ -56,8 +62,12 @@ describe('validateWeights (§4 sum-to-1 invariant)', () => {
   });
 
   it('clamps lambda into [0,1]', () => {
-    expect(validateWeights({ ...DEFAULT_WEIGHTS, composite: { lambda: 5 } }).weights.composite.lambda).toBe(1);
-    expect(validateWeights({ ...DEFAULT_WEIGHTS, composite: { lambda: -2 } }).weights.composite.lambda).toBe(0);
+    expect(
+      validateWeights({ ...DEFAULT_WEIGHTS, composite: { lambda: 5 } }).weights.composite.lambda,
+    ).toBe(1);
+    expect(
+      validateWeights({ ...DEFAULT_WEIGHTS, composite: { lambda: -2 } }).weights.composite.lambda,
+    ).toBe(0);
   });
 });
 

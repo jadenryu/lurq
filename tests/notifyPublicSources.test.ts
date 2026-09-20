@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { OwnerPublicChange } from '../src/db/publicMcpAlerts';
-import { parsePublicItemKey, publicChannelItem, publicItemKey, publicUrgentItem } from '../src/notify/publicSources';
+import {
+  parsePublicItemKey,
+  publicChannelItem,
+  publicItemKey,
+  publicUrgentItem,
+} from '../src/notify/publicSources';
 
 const change = (over: Partial<OwnerPublicChange> = {}): OwnerPublicChange => ({
   ownerId: 'user_2abc:with-colon',
@@ -20,7 +25,10 @@ const change = (over: Partial<OwnerPublicChange> = {}): OwnerPublicChange => ({
 describe('public item keys', () => {
   it('carry the account, so one shared change can reach every account once', () => {
     expect(publicItemKey(42, 'user_a')).not.toBe(publicItemKey(42, 'user_b'));
-    expect(parsePublicItemKey(publicItemKey(42, 'user_2abc:with-colon'))).toEqual({ changeId: 42, ownerId: 'user_2abc:with-colon' });
+    expect(parsePublicItemKey(publicItemKey(42, 'user_2abc:with-colon'))).toEqual({
+      changeId: 42,
+      ownerId: 'user_2abc:with-colon',
+    });
   });
 
   it('ignore keys they did not issue', () => {
@@ -38,9 +46,20 @@ describe('publicUrgentItem', () => {
 
   it('says what changed, why this account hears about it, and what to do', () => {
     const pinned = publicUrgentItem(change(), 'https://lurq.run')!;
-    expect(pinned).toMatchObject({ kind: 'mcp_public_change', title: 'weather changed the tools your agent calls since you pinned it', url: 'https://lurq.run/dashboard/mcp/public/7' });
+    expect(pinned).toMatchObject({
+      kind: 'mcp_public_change',
+      title: 'weather changed the tools your agent calls since you pinned it',
+      url: 'https://lurq.run/dashboard/mcp/public/7',
+    });
     expect(pinned.detail).toMatch(/1 tool\(s\) removed.*re-pin/);
-    const scanned = publicUrgentItem(change({ via: 'deployment', kind: 'auth', summary: 'Dynamic Client Registration no longer offered' }), 'https://lurq.run')!;
+    const scanned = publicUrgentItem(
+      change({
+        via: 'deployment',
+        kind: 'auth',
+        summary: 'Dynamic Client Registration no longer offered',
+      }),
+      'https://lurq.run',
+    )!;
     expect(scanned.title).toBe('weather changed how clients sign in since your last scan');
     expect(scanned.detail).toMatch(/still sign in/);
   });
@@ -48,6 +67,10 @@ describe('publicUrgentItem', () => {
 
 describe('publicChannelItem', () => {
   it('keeps the change severity for the channel threshold to filter', () => {
-    expect(publicChannelItem(change({ severity: 'low' }), 'https://lurq.run')).toMatchObject({ severity: 'low', source: 'mcp', key: 'pub:42:user_2abc:with-colon' });
+    expect(publicChannelItem(change({ severity: 'low' }), 'https://lurq.run')).toMatchObject({
+      severity: 'low',
+      source: 'mcp',
+      key: 'pub:42:user_2abc:with-colon',
+    });
   });
 });

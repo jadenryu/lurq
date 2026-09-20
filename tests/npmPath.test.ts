@@ -8,7 +8,12 @@ import { parseNpmPath, upgradePath } from '../apps/web/src/lib/npm-path';
 
 describe('parseNpmPath', () => {
   it('reads a trailing jump as an upgrade of the package before it', () => {
-    expect(parseNpmPath(['next', '15-to-16'])).toEqual({ kind: 'upgrade', name: 'next', from: 15, to: 16 });
+    expect(parseNpmPath(['next', '15-to-16'])).toEqual({
+      kind: 'upgrade',
+      name: 'next',
+      from: 15,
+      to: 16,
+    });
     expect(parseNpmPath(['@tanstack', 'react-query', '4-to-5'])).toEqual({
       kind: 'upgrade',
       name: '@tanstack/react-query',

@@ -42,7 +42,9 @@ export async function processStripeWebhook(
     // Verified over the raw bytes: a re-serialized parse is not byte-identical.
     event = await constructEvent(raw ?? '', signature);
   } catch (err) {
-    logger.warn(`billing webhook: bad signature: ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(
+      `billing webhook: bad signature: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return { status: 400, body: { error: 'Invalid signature.' } };
   }
   // Billing, the webhook secret, or the signature header is missing.
@@ -62,7 +64,10 @@ export async function processStripeWebhook(
     return { status: 200, body: { received: true } };
   } catch (err) {
     logger.error(`billing webhook failed for ${event.type} ${event.id}:`, formatError(err));
-    alert('stripe-webhook', `${event.type} ${event.id} failed (${errorKind(err)}); Stripe will retry`);
+    alert(
+      'stripe-webhook',
+      `${event.type} ${event.id} failed (${errorKind(err)}); Stripe will retry`,
+    );
     return { status: 500, body: { error: 'Could not process the event.' } };
   }
 }

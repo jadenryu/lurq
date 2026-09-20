@@ -14,13 +14,19 @@ afterEach(() => vi.unstubAllGlobals());
 const page = (n: number, next: boolean) =>
   new Response(JSON.stringify(Array.from({ length: n }, (_, i) => ({ name: `r${i}` }))), {
     status: 200,
-    headers: next ? { link: '<https://api.github.com/user/1/repos?page=2>; rel="next", <https://api.github.com/user/1/repos?page=9>; rel="last"' } : {},
+    headers: next
+      ? {
+          link: '<https://api.github.com/user/1/repos?page=2>; rel="next", <https://api.github.com/user/1/repos?page=9>; rel="last"',
+        }
+      : {},
   });
 
 describe('nextPageUrl', () => {
   it('reads the next link and nothing else', () => {
     expect(
-      nextPageUrl('<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=5>; rel="last"'),
+      nextPageUrl(
+        '<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=5>; rel="last"',
+      ),
     ).toBe('https://api.github.com/x?page=2');
     expect(nextPageUrl('<https://api.github.com/x?page=1>; rel="prev"')).toBeNull();
     expect(nextPageUrl(null)).toBeNull();
@@ -29,14 +35,23 @@ describe('nextPageUrl', () => {
 
 describe('listRepos', () => {
   it('is null only when GitHub says the login does not exist', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 404 })),
+    );
     await expect(listRepos('nobody')).resolves.toBeNull();
   });
 
   it('throws on a rate limit or a timeout instead of calling the profile missing', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 403 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 403 })),
+    );
     await expect(listRepos('someone')).rejects.toBeInstanceOf(GitHubUnavailableError);
-    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('fetch failed'))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Promise.reject(new TypeError('fetch failed'))),
+    );
     await expect(listRepos('someone')).rejects.toBeInstanceOf(GitHubUnavailableError);
   });
 
@@ -50,7 +65,10 @@ describe('listRepos', () => {
   });
 
   it('is not capped when the last page has no next link', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(page(100, true)).mockResolvedValueOnce(page(7, false));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(page(100, true))
+      .mockResolvedValueOnce(page(7, false));
     vi.stubGlobal('fetch', fetchMock);
     const listed = await listRepos('some');
     expect(listed).toMatchObject({ capped: false });
@@ -58,9 +76,15 @@ describe('listRepos', () => {
   });
 
   it('keeps the pages it read when a later page fails, and marks them capped', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(page(100, true)).mockResolvedValueOnce(new Response('{}', { status: 502 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(page(100, true))
+      .mockResolvedValueOnce(new Response('{}', { status: 502 }));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(listRepos('some')).resolves.toMatchObject({ capped: true, repos: expect.any(Array) });
+    await expect(listRepos('some')).resolves.toMatchObject({
+      capped: true,
+      repos: expect.any(Array),
+    });
   });
 });
 

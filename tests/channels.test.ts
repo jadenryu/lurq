@@ -6,7 +6,15 @@ import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { PLANS } from '../src/core/plans';
 import { open, seal, secretKey } from '../src/core/secretBox';
-import { formatChannel, formatTest, ITEM_CAP, mdEsc, slackEsc, verifySignature, type ChannelItem } from '../src/notify/channels';
+import {
+  formatChannel,
+  formatTest,
+  ITEM_CAP,
+  mdEsc,
+  slackEsc,
+  verifySignature,
+  type ChannelItem,
+} from '../src/notify/channels';
 import { classify } from '../src/notify/channelRun';
 import { isPrivateAddress, safeLookup, validateChannelUrl } from '../src/notify/safeHttp';
 
@@ -54,22 +62,34 @@ describe('isPrivateAddress', () => {
 
 describe('safeLookup', () => {
   const fakeDns = (addresses: { address: string; family: number }[]) =>
-    ((_h: string, _o: unknown, cb: (e: null, a: typeof addresses) => void) => cb(null, addresses)) as never;
+    ((_h: string, _o: unknown, cb: (e: null, a: typeof addresses) => void) =>
+      cb(null, addresses)) as never;
 
   it('refuses a hostname with any private answer, at connect time', async () => {
     const err = await new Promise<NodeJS.ErrnoException | null>((resolve) =>
-      safeLookup(fakeDns([{ address: '93.184.216.34', family: 4 }, { address: '10.0.0.5', family: 4 }]))('evil.test', {}, (e) => resolve(e)),
+      safeLookup(
+        fakeDns([
+          { address: '93.184.216.34', family: 4 },
+          { address: '10.0.0.5', family: 4 },
+        ]),
+      )('evil.test', {}, (e) => resolve(e)),
     );
     expect(err?.code).toBe('EPRIVATE');
   });
 
   it('passes a public answer through in both callback shapes', async () => {
     const single = await new Promise<string>((resolve) =>
-      safeLookup(fakeDns([{ address: '93.184.216.34', family: 4 }]))('ok.test', {}, (_e, a) => resolve(a as string)),
+      safeLookup(fakeDns([{ address: '93.184.216.34', family: 4 }]))('ok.test', {}, (_e, a) =>
+        resolve(a as string),
+      ),
     );
     expect(single).toBe('93.184.216.34');
     const all = await new Promise<unknown>((resolve) =>
-      safeLookup(fakeDns([{ address: '93.184.216.34', family: 4 }]))('ok.test', { all: true }, (_e, a) => resolve(a)),
+      safeLookup(fakeDns([{ address: '93.184.216.34', family: 4 }]))(
+        'ok.test',
+        { all: true },
+        (_e, a) => resolve(a),
+      ),
     );
     expect(all).toEqual([{ address: '93.184.216.34', family: 4 }]);
   });
@@ -79,20 +99,35 @@ describe('validateChannelUrl', () => {
   it('accepts each provider’s real URL shape', () => {
     expect(validateChannelUrl('slack', 'https://hooks.slack.com/services/T0/B0/abc').ok).toBe(true);
     expect(validateChannelUrl('discord', 'https://discord.com/api/webhooks/1/abc').ok).toBe(true);
-    expect(validateChannelUrl('teams', 'https://prod-01.westus.logic.azure.com:443/workflows/abc/triggers/manual/paths/invoke').ok).toBe(true);
+    expect(
+      validateChannelUrl(
+        'teams',
+        'https://prod-01.westus.logic.azure.com:443/workflows/abc/triggers/manual/paths/invoke',
+      ).ok,
+    ).toBe(true);
     expect(validateChannelUrl('webhook', 'https://example.com/lurq').ok).toBe(true);
   });
 
   it('refuses the wrong provider, plain http, credentials, and the retired Teams connector', () => {
-    expect(validateChannelUrl('slack', 'https://discord.com/api/webhooks/1/abc')).toMatchObject({ ok: false });
+    expect(validateChannelUrl('slack', 'https://discord.com/api/webhooks/1/abc')).toMatchObject({
+      ok: false,
+    });
     expect(validateChannelUrl('webhook', 'http://example.com/x')).toMatchObject({ ok: false });
-    expect(validateChannelUrl('webhook', 'https://user:pw@example.com/x')).toMatchObject({ ok: false });
+    expect(validateChannelUrl('webhook', 'https://user:pw@example.com/x')).toMatchObject({
+      ok: false,
+    });
     const teams = validateChannelUrl('teams', 'https://acme.webhook.office.com/webhookb2/x');
     expect(teams.ok === false && teams.error).toMatch(/retired/);
   });
 
   it('refuses private hosts for a generic webhook before any request', () => {
-    for (const url of ['https://localhost/x', 'https://127.0.0.1/x', 'https://[::1]/x', 'https://169.254.169.254/latest', 'https://db.internal/x']) {
+    for (const url of [
+      'https://localhost/x',
+      'https://127.0.0.1/x',
+      'https://[::1]/x',
+      'https://169.254.169.254/latest',
+      'https://db.internal/x',
+    ]) {
       expect(validateChannelUrl('webhook', url).ok, url).toBe(false);
     }
   });
@@ -107,18 +142,31 @@ const item = (over: Partial<ChannelItem> = {}): ChannelItem => ({
   url: 'https://lurq.run/dashboard/mcp/1',
   ...over,
 });
-const opts = { deliveryId: 'channel:1:abc', dashboardUrl: 'https://lurq.run/dashboard/notifications', now: new Date('2026-09-14T14:00:00Z') };
+const opts = {
+  deliveryId: 'channel:1:abc',
+  dashboardUrl: 'https://lurq.run/dashboard/notifications',
+  now: new Date('2026-09-14T14:00:00Z'),
+};
 
 describe('formatChannel', () => {
   it('builds Slack Block Kit with escaped text and a link', () => {
-    const body = JSON.parse(formatChannel('slack', [item({ title: '<!channel> & friends' })], 0, opts).payload);
+    const body = JSON.parse(
+      formatChannel('slack', [item({ title: '<!channel> & friends' })], 0, opts).payload,
+    );
     expect(body.blocks[0]).toMatchObject({ type: 'header' });
     expect(body.blocks[1].text.text).toContain('&lt;!channel&gt; &amp; friends');
     expect(body.blocks[1].text.text).toContain('<https://lurq.run/dashboard/mcp/1|');
   });
 
   it('never lets a Discord message mention anyone', () => {
-    const body = JSON.parse(formatChannel('discord', [item({ detail: 'hey @everyone see [this](https://evil.test)' })], 0, opts).payload);
+    const body = JSON.parse(
+      formatChannel(
+        'discord',
+        [item({ detail: 'hey @everyone see [this](https://evil.test)' })],
+        0,
+        opts,
+      ).payload,
+    );
     expect(body.allowed_mentions).toEqual({ parse: [] });
     expect(body.embeds[0].description).not.toContain('@everyone');
     expect(body.embeds[0].description).toContain('\\[this\\]\\(https://evil.test\\)');
@@ -135,10 +183,14 @@ describe('formatChannel', () => {
   });
 
   it('fits a Teams Adaptive Card under the size ceiling', () => {
-    const huge = Array.from({ length: 10 }, (_, i) => item({ key: `mcp:${i}`, detail: 'x'.repeat(20_000) }));
+    const huge = Array.from({ length: 10 }, (_, i) =>
+      item({ key: `mcp:${i}`, detail: 'x'.repeat(20_000) }),
+    );
     const payload = formatChannel('teams', huge, 0, opts).payload;
     expect(Buffer.byteLength(payload)).toBeLessThanOrEqual(25_000);
-    expect(JSON.parse(payload).attachments[0].contentType).toBe('application/vnd.microsoft.card.adaptive');
+    expect(JSON.parse(payload).attachments[0].contentType).toBe(
+      'application/vnd.microsoft.card.adaptive',
+    );
   });
 
   it('signs a generic webhook so a receiver can verify it, and rejects replays', () => {
@@ -147,9 +199,21 @@ describe('formatChannel', () => {
     const now = Math.floor(opts.now.getTime() / 1000);
     expect(m.headers['X-Lurq-Delivery']).toBe('channel:1:abc');
     expect(verifySignature(secret, m.headers['X-Lurq-Signature']!, m.payload, now)).toBe(true);
-    expect(verifySignature(secret, m.headers['X-Lurq-Signature']!, m.payload.replace('critical', 'low'), now)).toBe(false);
-    expect(verifySignature(secret, m.headers['X-Lurq-Signature']!, m.payload, now + 3600)).toBe(false);
-    expect(JSON.parse(m.payload)).toMatchObject({ type: 'lurq.alerts', items: [expect.objectContaining({ key: 'mcp:1' })] });
+    expect(
+      verifySignature(
+        secret,
+        m.headers['X-Lurq-Signature']!,
+        m.payload.replace('critical', 'low'),
+        now,
+      ),
+    ).toBe(false);
+    expect(verifySignature(secret, m.headers['X-Lurq-Signature']!, m.payload, now + 3600)).toBe(
+      false,
+    );
+    expect(JSON.parse(m.payload)).toMatchObject({
+      type: 'lurq.alerts',
+      items: [expect.objectContaining({ key: 'mcp:1' })],
+    });
   });
 
   it('sends a test message in every format', () => {
@@ -182,11 +246,11 @@ describe('classify', () => {
 
 describe('plans', () => {
   it('offers alert channels from Team up', () => {
-    expect([PLANS.free.alertChannels, PLANS.pro.alertChannels, PLANS.team.alertChannels, PLANS.enterprise.alertChannels]).toEqual([
-      false,
-      false,
-      true,
-      true,
-    ]);
+    expect([
+      PLANS.free.alertChannels,
+      PLANS.pro.alertChannels,
+      PLANS.team.alertChannels,
+      PLANS.enterprise.alertChannels,
+    ]).toEqual([false, false, true, true]);
   });
 });

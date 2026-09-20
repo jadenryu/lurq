@@ -35,12 +35,18 @@ describe.skipIf(!TEST_DB)('remote endpoint store against Postgres', () => {
     await db.execute(sql`delete from mcp_endpoint_changes where endpoint_id in ${ids}`);
     await db.execute(sql`delete from mcp_endpoint_observations where endpoint_id in ${ids}`);
     await db.execute(sql`delete from mcp_endpoint_servers where endpoint_id in ${ids}`);
-    await db.execute(sql`delete from mcp_remote_endpoints where host like ${`%-${run}.remote-test.example`}`);
-    await db.execute(sql`delete from mcp_registry_servers where name like ${`io.test.remote-${run}/%`}`);
+    await db.execute(
+      sql`delete from mcp_remote_endpoints where host like ${`%-${run}.remote-test.example`}`,
+    );
+    await db.execute(
+      sql`delete from mcp_registry_servers where name like ${`io.test.remote-${run}/%`}`,
+    );
     await close();
   });
 
-  const entry = (over: Partial<RegistryEntry> & { name: string; version: string }): RegistryEntry => ({
+  const entry = (
+    over: Partial<RegistryEntry> & { name: string; version: string },
+  ): RegistryEntry => ({
     title: null,
     description: null,
     websiteUrl: null,
@@ -80,7 +86,11 @@ describe.skipIf(!TEST_DB)('remote endpoint store against Postgres', () => {
         name: a,
         version: '1.1.0',
         remotes: [
-          { type: 'streamable-http', url: `https://${host('a')}/mcp`, headers: [{ name: 'Authorization', isRequired: true, isSecret: true }] },
+          {
+            type: 'streamable-http',
+            url: `https://${host('a')}/mcp`,
+            headers: [{ name: 'Authorization', isRequired: true, isSecret: true }],
+          },
           { type: 'streamable-http', url: `HTTPS://${host('a').toUpperCase()}/mcp#x` },
         ],
       }),
@@ -96,19 +106,34 @@ describe.skipIf(!TEST_DB)('remote endpoint store against Postgres', () => {
   it('marks links and orphaned endpoints removed when a new version drops a URL, without deleting', async () => {
     const b = name('drops');
     await store.storeRegistryEntries(db, [
-      entry({ name: b, version: '1.0.0', remotes: [{ type: 'sse', url: `https://${host('b1')}/sse` }, { type: 'streamable-http', url: `https://${host('b2')}/mcp` }] }),
+      entry({
+        name: b,
+        version: '1.0.0',
+        remotes: [
+          { type: 'sse', url: `https://${host('b1')}/sse` },
+          { type: 'streamable-http', url: `https://${host('b2')}/mcp` },
+        ],
+      }),
     ]);
     const stats = await store.storeRegistryEntries(db, [
-      entry({ name: b, version: '2.0.0', remotes: [{ type: 'streamable-http', url: `https://${host('b2')}/mcp` }] }),
+      entry({
+        name: b,
+        version: '2.0.0',
+        remotes: [{ type: 'streamable-http', url: `https://${host('b2')}/mcp` }],
+      }),
     ]);
     expect(stats).toMatchObject({ linksRemoved: 1, endpointsRemoved: 1 });
-    expect((await store.getEndpointsForServer(db, b)).map((l) => l.endpoint.host)).toEqual([host('b2')]);
+    expect((await store.getEndpointsForServer(db, b)).map((l) => l.endpoint.host)).toEqual([
+      host('b2'),
+    ]);
     const gone = await store.getEndpointByUrl(db, `https://${host('b1')}/sse`);
     expect(gone?.removedAt).toBeInstanceOf(Date);
     expect((await store.findRegistryServers(db, b)).map((s) => s.version)).toEqual(['2.0.0']);
 
     // A deleted server drops every link.
-    const del = await store.storeRegistryEntries(db, [entry({ name: b, version: '2.0.0', status: 'deleted' })]);
+    const del = await store.storeRegistryEntries(db, [
+      entry({ name: b, version: '2.0.0', status: 'deleted' }),
+    ]);
     expect(del).toMatchObject({ linksRemoved: 1, endpointsRemoved: 1 });
   });
 
@@ -118,7 +143,10 @@ describe.skipIf(!TEST_DB)('remote endpoint store against Postgres', () => {
       entry({
         name: c,
         version: '1.0.0',
-        remotes: Array.from({ length: 6 }, (_, i) => ({ type: 'streamable-http', url: `https://${host(`q${i}`)}/mcp` })),
+        remotes: Array.from({ length: 6 }, (_, i) => ({
+          type: 'streamable-http',
+          url: `https://${host(`q${i}`)}/mcp`,
+        })),
       }),
     ]);
     const mine = new Set((await store.getEndpointsForServer(db, c)).map((l) => l.endpoint.id));
@@ -133,38 +161,94 @@ describe.skipIf(!TEST_DB)('remote endpoint store against Postgres', () => {
 
     const again = await store.claimDueEndpoints(db, { limit: 500, now, onlyIds: [...mine] });
     expect(ours(again)).toEqual([]);
-    const later = await store.claimDueEndpoints(db, { limit: 500, now: new Date(now.getTime() + 11 * 60_000), onlyIds: [...mine] });
+    const later = await store.claimDueEndpoints(db, {
+      limit: 500,
+      now: new Date(now.getTime() + 11 * 60_000),
+      onlyIds: [...mine],
+    });
     expect(ours(later).sort()).toEqual([...mine].sort());
   });
 
   it('run-length encodes identical probes, re-arms a change, and keeps the last contract through a failure', async () => {
     const d = name('history');
-    await store.storeRegistryEntries(db, [entry({ name: d, version: '1.0.0', remotes: [{ type: 'streamable-http', url: `https://${host('h')}/mcp` }] })]);
+    await store.storeRegistryEntries(db, [
+      entry({
+        name: d,
+        version: '1.0.0',
+        remotes: [{ type: 'streamable-http', url: `https://${host('h')}/mcp` }],
+      }),
+    ]);
     const ep = (await store.getEndpointsForServer(db, d))[0]!.endpoint;
-    const base = { endpointId: ep.id, authHash: 'auth-none', contract: null, consecutiveFailures: 0, nextProbeAt: new Date(Date.now() + 86_400_000) };
+    const base = {
+      endpointId: ep.id,
+      authHash: 'auth-none',
+      contract: null,
+      consecutiveFailures: 0,
+      nextProbeAt: new Date(Date.now() + 86_400_000),
+    };
 
-    await store.recordEndpointProbe(db, { ...base, result: result(), contentHash: 'c1', changes: [] });
-    await store.recordEndpointProbe(db, { ...base, result: result(), contentHash: 'c1', changes: [] });
-    const obs = await db.execute(sql`select status, content_hash, probe_count from mcp_endpoint_observations where endpoint_id = ${ep.id} order by id`);
+    await store.recordEndpointProbe(db, {
+      ...base,
+      result: result(),
+      contentHash: 'c1',
+      changes: [],
+    });
+    await store.recordEndpointProbe(db, {
+      ...base,
+      result: result(),
+      contentHash: 'c1',
+      changes: [],
+    });
+    const obs = await db.execute(
+      sql`select status, content_hash, probe_count from mcp_endpoint_observations where endpoint_id = ${ep.id} order by id`,
+    );
     expect([...obs]).toEqual([{ status: 'open', content_hash: 'c1', probe_count: 2 }]);
 
-    const change = { kind: 'contract' as const, fromKey: 'c1', toKey: 'c2', severity: 'moderate' as const, summary: 'tool removed' };
-    await store.recordEndpointProbe(db, { ...base, result: result(), contentHash: 'c2', changes: [change] });
-    await store.recordEndpointProbe(db, { ...base, result: result(), contentHash: 'c2', changes: [{ ...change, severity: 'high' }] });
+    const change = {
+      kind: 'contract' as const,
+      fromKey: 'c1',
+      toKey: 'c2',
+      severity: 'moderate' as const,
+      summary: 'tool removed',
+    };
+    await store.recordEndpointProbe(db, {
+      ...base,
+      result: result(),
+      contentHash: 'c2',
+      changes: [change],
+    });
+    await store.recordEndpointProbe(db, {
+      ...base,
+      result: result(),
+      contentHash: 'c2',
+      changes: [{ ...change, severity: 'high' }],
+    });
     const changes = await store.listEndpointChanges(db, ep.id);
     expect(changes).toHaveLength(1);
     expect(changes[0]).toMatchObject({ severity: 'high', fromKey: 'c1', toKey: 'c2' });
 
     await store.recordEndpointProbe(db, {
       ...base,
-      result: result({ status: 'server_error', httpStatus: 503, error: 'HTTP 503', auth: { mode: 'unknown', challengeStatus: null, oauth: null, declaredHeaders: [] } }),
+      result: result({
+        status: 'server_error',
+        httpStatus: 503,
+        error: 'HTTP 503',
+        auth: { mode: 'unknown', challengeStatus: null, oauth: null, declaredHeaders: [] },
+      }),
       contentHash: null,
       authHash: null,
       changes: [],
       consecutiveFailures: 1,
     });
     const after = (await store.getEndpointByUrl(db, `https://${host('h')}/mcp`))!;
-    expect(after).toMatchObject({ lastStatus: 'server_error', lastContentHash: 'c2', lastAuthHash: 'auth-none', consecutiveFailures: 1, probeCount: 5, leaseUntil: null });
+    expect(after).toMatchObject({
+      lastStatus: 'server_error',
+      lastContentHash: 'c2',
+      lastAuthHash: 'auth-none',
+      consecutiveFailures: 1,
+      probeCount: 5,
+      leaseUntil: null,
+    });
     expect(after.auth).toMatchObject({ mode: 'none' });
   });
 });

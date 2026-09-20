@@ -79,7 +79,7 @@ for a card.**
 **Works with:** Claude Code · Cursor · Windsurf · VS Code / GitHub Copilot · OpenAI Codex CLI ·
 Gemini CLI · Google Antigravity · Kiro
 
-**Check it worked:** ask your agent to *"add zod to this project"*. It should call lurq's `verify`
+**Check it worked:** ask your agent to _"add zod to this project"_. It should call lurq's `verify`
 before installing anything.
 
 **Claude Code plugin**, no terminal needed:
@@ -123,16 +123,16 @@ a sign-in link on this computer can't work:
 npx lurqrun setup --yes --no-open --api-key <key> --agent <id>
 ```
 
-| Agent | `--agent` |
-|---|---|
-| Claude Code | `claude-code` |
-| Cursor | `cursor` |
-| Windsurf | `windsurf` |
-| VS Code / GitHub Copilot | `copilot` |
-| OpenAI Codex CLI | `codex` |
-| Gemini CLI | `gemini-cli` |
-| Google Antigravity | `antigravity` |
-| Kiro | `kiro` |
+| Agent                    | `--agent`     |
+| ------------------------ | ------------- |
+| Claude Code              | `claude-code` |
+| Cursor                   | `cursor`      |
+| Windsurf                 | `windsurf`    |
+| VS Code / GitHub Copilot | `copilot`     |
+| OpenAI Codex CLI         | `codex`       |
+| Gemini CLI               | `gemini-cli`  |
+| Google Antigravity       | `antigravity` |
+| Kiro                     | `kiro`        |
 
 `--agent all` configures every detected agent. With `--yes`, the key can also come from `LURQ_API_KEY`.
 
@@ -184,17 +184,17 @@ http_headers = { Authorization = "Bearer <key>" }
 
 ### When to call lurq
 
-| You are about to… | Call |
-|---|---|
-| Install or import a package | `verify` with the exact name, first |
-| Choose between libraries | `compare` your candidates, then `verify` the pick |
-| Commit to a set of packages | `compat` with the whole set in one call |
-| Write code against a package whose API may have moved | `usage`, with the version you remember as `knownVersion` |
-| Upgrade, or explain a break | `diff_surface` between the two versions |
-| Add dependencies in a team codebase | `policy`, before choosing |
-| Review a whole project | `audit` with names and versions from `package.json` and the lockfile |
-| Wire an MCP server into an agent | `mcp_surface`, or `mcp_stack` for several |
-| Not sure which tool fits | `capabilities` |
+| You are about to…                                     | Call                                                                 |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Install or import a package                           | `verify` with the exact name, first                                  |
+| Choose between libraries                              | `compare` your candidates, then `verify` the pick                    |
+| Commit to a set of packages                           | `compat` with the whole set in one call                              |
+| Write code against a package whose API may have moved | `usage`, with the version you remember as `knownVersion`             |
+| Upgrade, or explain a break                           | `diff_surface` between the two versions                              |
+| Add dependencies in a team codebase                   | `policy`, before choosing                                            |
+| Review a whole project                                | `audit` with names and versions from `package.json` and the lockfile |
+| Wire an MCP server into an agent                      | `mcp_surface`, or `mcp_stack` for several                            |
+| Not sure which tool fits                              | `capabilities`                                                       |
 
 When lurq flags something, tell the user what it found and that it came from lurq. An `unknown` or
 `UNVERIFIABLE` result means lurq could not check. It never means the package is clean.
@@ -210,42 +210,42 @@ Fifteen tools. Responses are compact to save tokens, and package answers carry `
 
 **Before installing**
 
-| Tool | What it answers |
-|---|---|
-| `verify` | Is this package real, healthy and safe? Catches hallucinated and typosquatted names |
-| `evaluate` | The full evidence for one package: scores, advisories, usage guide, sandbox verdict |
-| `compare` | 2–5 packages ranked head-to-head |
-| `policy` | What your team's selection policy refuses, so the agent picks an allowed package first |
+| Tool       | What it answers                                                                        |
+| ---------- | -------------------------------------------------------------------------------------- |
+| `verify`   | Is this package real, healthy and safe? Catches hallucinated and typosquatted names    |
+| `evaluate` | The full evidence for one package: scores, advisories, usage guide, sandbox verdict    |
+| `compare`  | 2–5 packages ranked head-to-head                                                       |
+| `policy`   | What your team's selection policy refuses, so the agent picks an allowed package first |
 
 **Across a stack**
 
-| Tool | What it answers |
-|---|---|
-| `compat` | Will these packages install together? Returns the exact clashing peer or engine range |
-| `audit` | A whole project's outdated, deprecated and vulnerable dependencies and drifted MCP servers, in one call |
-| `diagram` | A reference-architecture Mermaid diagram for a stack |
+| Tool      | What it answers                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------- |
+| `compat`  | Will these packages install together? Returns the exact clashing peer or engine range                   |
+| `audit`   | A whole project's outdated, deprecated and vulnerable dependencies and drifted MCP servers, in one call |
+| `diagram` | A reference-architecture Mermaid diagram for a stack                                                    |
 
 **Writing code**
 
-| Tool | What it answers |
-|---|---|
-| `usage` | A version's real public API from its shipped `.d.ts`, and what changed since the version you know |
-| `resolve_surface` | What a version actually exports at runtime |
-| `diff_surface` | What a version bump adds, removes, renames or changes arity on |
+| Tool              | What it answers                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| `usage`           | A version's real public API from its shipped `.d.ts`, and what changed since the version you know |
+| `resolve_surface` | What a version actually exports at runtime                                                        |
+| `diff_surface`    | What a version bump adds, removes, renames or changes arity on                                    |
 
 **MCP servers**
 
-| Tool | What it answers |
-|---|---|
+| Tool          | What it answers                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------- |
 | `mcp_surface` | A server's real tool contract, from a live `tools/list` handshake, including what each tool can write or reach |
-| `mcp_drift` | What a server changed between two versions |
-| `mcp_stack` | Do these servers collide in one agent's tool namespace? |
+| `mcp_drift`   | What a server changed between two versions                                                                     |
+| `mcp_stack`   | Do these servers collide in one agent's tool namespace?                                                        |
 
 **About lurq**
 
-| Tool | What it answers |
-|---|---|
-| `capabilities` | Which lurq tool answers this situation |
+| Tool             | What it answers                                                 |
+| ---------------- | --------------------------------------------------------------- |
+| `capabilities`   | Which lurq tool answers this situation                          |
 | `report_outcome` | What happened after a pick shipped, which feeds future rankings |
 
 Inputs, outputs and verdict definitions for each: [MCP tools reference](https://www.lurq.run/docs/mcp-tools).
@@ -306,14 +306,14 @@ ok         nothing referenced is affected
 unverified could not be established                         → never counted as safe
 ```
 
-| Step | Runs on | Needs |
-|---|---|---|
-| 1. `lurq upgrade-plan`: drift, plus what each upgrade removes | your runner | lurq key |
-| 2. `lurq check-upgrade`: matched against your source, with `file:line` | your runner | nothing |
-| 3. `lurq fix`: applies what the package itself proves — renames, and the range bump in every manifest | your runner | nothing |
-| 4. `claude-code-action`: migrates what a rule cannot, and runs your tests | your runner | Anthropic credential |
-| 5. `create-pull-request`: one branch, one PR | your runner | `GITHUB_TOKEN` |
-| 6. Outcomes post back: names and counts, never source | lurq | nothing |
+| Step                                                                                                  | Runs on     | Needs                |
+| ----------------------------------------------------------------------------------------------------- | ----------- | -------------------- |
+| 1. `lurq upgrade-plan`: drift, plus what each upgrade removes                                         | your runner | lurq key             |
+| 2. `lurq check-upgrade`: matched against your source, with `file:line`                                | your runner | nothing              |
+| 3. `lurq fix`: applies what the package itself proves — renames, and the range bump in every manifest | your runner | nothing              |
+| 4. `claude-code-action`: migrates what a rule cannot, and runs your tests                             | your runner | Anthropic credential |
+| 5. `create-pull-request`: one branch, one PR                                                          | your runner | `GITHUB_TOKEN`       |
+| 6. Outcomes post back: names and counts, never source                                                 | lurq        | nothing              |
 
 **Three modes, and editing is opt-in.** The workflow starts in `comment`: it plans, checks, writes the
 brief to the run summary, and changes nothing. `fix` opens a pull request containing only what the
@@ -329,7 +329,7 @@ that a daily run mostly reports nothing new; daily for a repo set to advisories-
 can mean seven days sitting on a known CVE.
 
 **Trust model.** lurq's GitHub App holds `Contents: read-only` and `Actions: write`. It can read your
-manifests and *start* the workflow you committed — it cannot write a byte to your repository, change
+manifests and _start_ the workflow you committed — it cannot write a byte to your repository, change
 this file, or set a repository variable. Every write is made by the workflow itself using your own
 ephemeral `GITHUB_TOKEN`, bounded by the `permissions:` block in the file you control. The agent's allowlist is
 `Read,Edit,Write,Bash(<pkg-manager>:*)`, so it edits files but never touches version control.
@@ -372,12 +372,12 @@ Every weight lives in [`src/scoring/weights.ts`](src/scoring/weights.ts) and pri
 
 ## Plans
 
-| Plan | Price | Hosted calls |
-|---|---|---|
-| Free | $0 | 1,000 a month |
-| Pro | $15/mo | 10,000 a month |
-| Team | $25/seat/mo, 3-seat minimum | 15,000 per seat, pooled |
-| Business | from $1,000/mo | Uncapped, with SSO and audit export |
+| Plan     | Price                       | Hosted calls                        |
+| -------- | --------------------------- | ----------------------------------- |
+| Free     | $0                          | 1,000 a month                       |
+| Pro      | $15/mo                      | 10,000 a month                      |
+| Team     | $25/seat/mo, 3-seat minimum | 15,000 per seat, pooled             |
+| Business | from $1,000/mo              | Uncapped, with SSO and audit export |
 
 Past the limit, calls slow to 20 a day rather than stopping. The CLI run against your own database
 is never metered. Details: [pricing](https://www.lurq.run/#pricing).
@@ -397,16 +397,16 @@ npm uninstall -g lurqrun        # then remove the `lurq` command
 
 It lists what it will remove and asks first (`--yes` skips the question).
 
-| Agent | MCP config | Instructions |
-|---|---|---|
-| Claude Code | `~/.claude.json` | `~/.claude/skills/lurq/SKILL.md` |
-| Cursor | `~/.cursor/mcp.json` | none (tool descriptions carry the guidance) |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `~/.codeium/windsurf/memories/global_rules.md` |
-| VS Code / Copilot | `<VS Code user dir>/mcp.json` | none |
-| Codex | `~/.codex/config.toml` | `~/.codex/AGENTS.md` |
-| Gemini CLI | `~/.gemini/settings.json` | `~/.gemini/GEMINI.md` |
-| Antigravity | `~/.gemini/config/mcp_config.json` | `~/.gemini/GEMINI.md` |
-| Kiro | `~/.kiro/settings/mcp.json` | `~/.kiro/steering/lurq.md` |
+| Agent             | MCP config                            | Instructions                                   |
+| ----------------- | ------------------------------------- | ---------------------------------------------- |
+| Claude Code       | `~/.claude.json`                      | `~/.claude/skills/lurq/SKILL.md`               |
+| Cursor            | `~/.cursor/mcp.json`                  | none (tool descriptions carry the guidance)    |
+| Windsurf          | `~/.codeium/windsurf/mcp_config.json` | `~/.codeium/windsurf/memories/global_rules.md` |
+| VS Code / Copilot | `<VS Code user dir>/mcp.json`         | none                                           |
+| Codex             | `~/.codex/config.toml`                | `~/.codex/AGENTS.md`                           |
+| Gemini CLI        | `~/.gemini/settings.json`             | `~/.gemini/GEMINI.md`                          |
+| Antigravity       | `~/.gemini/config/mcp_config.json`    | `~/.gemini/GEMINI.md`                          |
+| Kiro              | `~/.kiro/settings/mcp.json`           | `~/.kiro/steering/lurq.md`                     |
 
 `lurq logout` only clears the CLI's stored key. A copy stays in each MCP entry until `lurq uninstall`
 removes it, and the key keeps working until you revoke it in

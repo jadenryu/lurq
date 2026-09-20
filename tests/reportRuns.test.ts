@@ -42,11 +42,12 @@ const report: UpgradeReport = {
       toVersion: '8.0.0',
       severity: 'blocking',
       symbolsRemoved: [
-        { symbol: 'useHistory', refs: [ref('src/a.ts', 3), ref('src/b.ts', 9), ref('src/a.ts', 40)] },
+        {
+          symbol: 'useHistory',
+          refs: [ref('src/a.ts', 3), ref('src/b.ts', 9), ref('src/a.ts', 40)],
+        },
       ],
-      arityChanged: [
-        { symbol: 'matchPath', from: 2, to: 1, refs: [ref('src/c.ts', 7)] },
-      ],
+      arityChanged: [{ symbol: 'matchPath', from: 2, to: 1, refs: [ref('src/c.ts', 7)] }],
       newExports: [],
     },
   ],
@@ -66,7 +67,9 @@ describe('buildRunReports', () => {
   });
 
   it('counts call sites across removals AND arity changes, and dedupes files', () => {
-    const row = buildRunReports(report, targets, ctx).find((r) => r.packageName === 'react-router')!;
+    const row = buildRunReports(report, targets, ctx).find(
+      (r) => r.packageName === 'react-router',
+    )!;
     expect(row.callSites).toBe(4); // 3 removal refs + 1 arity ref
     expect(row.symbolsAffected).toEqual(['useHistory', 'matchPath']);
     // src/a.ts appears twice in the refs; the file list is a set.

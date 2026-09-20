@@ -25,7 +25,9 @@ export default function NotFound() {
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-4 py-16">
         <p className="font-mono text-xs uppercase tracking-wider text-fd-muted-foreground">404</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">Not a real page</h1>
-        <p className="mt-3 text-fd-muted-foreground">The link may be old, or the page may have moved.</p>
+        <p className="mt-3 text-fd-muted-foreground">
+          The link may be old, or the page may have moved.
+        </p>
         <NotFoundVerdict />
         <h2 className="mt-10 font-mono text-xs uppercase tracking-wider text-fd-muted-foreground">
           Pages that do exist
