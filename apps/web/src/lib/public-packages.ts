@@ -62,10 +62,12 @@ export interface PublicUpgrade {
   observedAt: string | null;
 }
 
-export const PACKAGE_REVALIDATE = 86_400;
+export const PACKAGE_REVALIDATE = 604_800;
 
-/** Hourly: a pending page fills in when the worker extracts it, and should not wait a day to show that. */
-export const UPGRADE_REVALIDATE = 3_600;
+/** Daily, not hourly: a fetch revalidate lower than the segment drags the WHOLE route down to it,
+ * so 3_600 here meant 318 upgrade pages regenerating 24x a day. A pending page filling in one day
+ * late is worth more than the ISR writes. */
+export const UPGRADE_REVALIDATE = 86_400;
 
 function apiBase(): string | null {
   const base = process.env.LURQ_MCP_URL;
