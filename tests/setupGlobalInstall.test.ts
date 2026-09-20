@@ -14,7 +14,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const spawnSync = vi.fn(() => ({ status: 0, stderr: '', error: undefined }));
-vi.mock('node:child_process', () => ({ spawnSync: (...args: unknown[]) => spawnSync(...(args as [])) }));
+vi.mock('node:child_process', () => ({
+  spawnSync: (...args: unknown[]) => spawnSync(...(args as [])),
+}));
 
 import { runningFromNpx, runSetup } from '../src/cli/install';
 import { readUserConfig } from '../src/core/userConfig';
@@ -29,7 +31,10 @@ describe('setup --yes', () => {
     process.env.LURQ_HOME = mkdtempSync(join(tmpdir(), 'lurq-yes-cfg-'));
     vi.spyOn(console, 'log').mockImplementation(() => {});
     // setup --yes validates the key before writing; never against the real service.
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    );
   });
 
   afterEach(() => {
@@ -47,7 +52,11 @@ describe('setup --yes', () => {
   });
 
   it('detects the npx cache by path, not by guesswork', () => {
-    expect(runningFromNpx('file:///Users/x/.npm/_npx/9c1/node_modules/lurqrun/dist/bin/lurq.js')).toBe(true);
-    expect(runningFromNpx('file:///opt/homebrew/lib/node_modules/lurqrun/dist/bin/lurq.js')).toBe(false);
+    expect(
+      runningFromNpx('file:///Users/x/.npm/_npx/9c1/node_modules/lurqrun/dist/bin/lurq.js'),
+    ).toBe(true);
+    expect(runningFromNpx('file:///opt/homebrew/lib/node_modules/lurqrun/dist/bin/lurq.js')).toBe(
+      false,
+    );
   });
 });

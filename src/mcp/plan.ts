@@ -210,7 +210,8 @@ export async function handlePlan(
   // Effective category per slot — the decomposition hint, else inferred from the
   // ORIGINAL need text (before any framework context is appended, so the word we
   // inject below can never misclassify the slot).
-  const effCat = (n: PlanNeed): Category | undefined => n.category ?? inferCategory(n.need) ?? undefined;
+  const effCat = (n: PlanNeed): Category | undefined =>
+    n.category ?? inferCategory(n.need) ?? undefined;
 
   // Detect the framework family from the WHOLE spec (document + need texts), so the
   // plan stays coherent even when decomposition doesn't emit a framework slot.
@@ -250,7 +251,8 @@ export async function handlePlan(
   // framework bindings last), then — for 'speed' — prefer the lightest bundle,
   // otherwise preserve recommend's relevance order. One batched lookup keeps
   // `recommend` itself untouched.
-  const bundleByName = optimize === 'speed' ? await bundleSizes(db, recs.flat()) : new Map<string, number>();
+  const bundleByName =
+    optimize === 'speed' ? await bundleSizes(db, recs.flat()) : new Map<string, number>();
 
   // Adjacent needs often retrieve the same package (an "auth" slot and a
   // "session" slot both landing on the same library). Emitting it twice reads as
@@ -430,7 +432,9 @@ function planNote(
   const ctx = framework
     ? ` Anchored to the ${framework} ecosystem so sibling libraries stay coherent across the stack.`
     : '';
-  const tail = unmatched ? ` ${unmatched} need(s) had no tracked match (listed in \`unmatched\`).` : '';
+  const tail = unmatched
+    ? ` ${unmatched} need(s) had no tracked match (listed in \`unmatched\`).`
+    : '';
   const opt = optimize === 'speed' ? ' Ranking favored the lightest-bundle option per slot.' : '';
   // Leads the note rather than trailing it: if the ranking is degraded, that is
   // the first thing a reader needs to know about every pick below it.
@@ -512,7 +516,9 @@ async function bundleSizes(db: Database, candidates: Candidate[]): Promise<Map<s
 
 // ── Decomposition (document → needs) ─────────────────────────────────────────
 
-async function decompose(document: string): Promise<{ needs: PlanNeed[]; source: 'llm' | 'heuristic' }> {
+async function decompose(
+  document: string,
+): Promise<{ needs: PlanNeed[]; source: 'llm' | 'heuristic' }> {
   const config = getConfig();
   if (config.SUMMARY_PROVIDER === 'openai' && config.SUMMARY_API_KEY) {
     const llm = await decomposeWithLlm(
@@ -571,7 +577,8 @@ async function decomposeWithLlm(
     .map((n: any): PlanNeed | null => {
       const need = typeof n?.need === 'string' ? n.need.trim() : '';
       if (!need) return null;
-      const cat = typeof n?.category === 'string' && isCategory(n.category) ? n.category : undefined;
+      const cat =
+        typeof n?.category === 'string' && isCategory(n.category) ? n.category : undefined;
       return { need, category: cat };
     })
     .filter(Boolean) as PlanNeed[];
@@ -587,7 +594,10 @@ export function decomposeHeuristic(document: string): PlanNeed[] {
   for (const rawLine of document.split('\n')) {
     // Strip markdown headings/blockquotes/bullets, then an ordered-list "12. "
     // marker — but NOT bare leading digits, so "2FA auth" stays intact.
-    const line = rawLine.replace(/^[#>*\-\s]+/, '').replace(/^\d+\.\s+/, '').trim();
+    const line = rawLine
+      .replace(/^[#>*\-\s]+/, '')
+      .replace(/^\d+\.\s+/, '')
+      .trim();
     if (line.length < 3) continue;
     const category = inferCategory(line);
     if (category && !byCategory.has(category)) {

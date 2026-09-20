@@ -94,9 +94,7 @@ export function runtimeAxis(raw: unknown): UpkeepAxis {
   }
   const engines = (raw as { engines?: unknown }).engines;
   const declared =
-    engines && typeof engines === 'object'
-      ? (engines as { node?: unknown }).node
-      : undefined;
+    engines && typeof engines === 'object' ? (engines as { node?: unknown }).node : undefined;
 
   if (typeof declared !== 'string' || !declared.trim()) {
     return {

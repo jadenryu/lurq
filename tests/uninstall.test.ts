@@ -29,7 +29,11 @@ import {
 import { runUninstall } from '../src/cli/uninstall';
 import { readUserConfig, userConfigPath, writeUserConfig } from '../src/core/userConfig';
 
-const mode: InstallMode = { kind: 'remote', url: 'https://api.lurq.run/mcp', apiKey: 'lurq_live_x' };
+const mode: InstallMode = {
+  kind: 'remote',
+  url: 'https://api.lurq.run/mcp',
+  apiKey: 'lurq_live_x',
+};
 const spec = (id: string) => agentSpecs().find((s) => s.id === id)!;
 const put = (path: string, text: string) => {
   mkdirSync(dirname(path), { recursive: true });
@@ -55,7 +59,10 @@ afterEach(() => {
 });
 
 describe('lurq uninstall', () => {
-  const claudeJson = JSON.stringify({ projects: { '/a': {} }, mcpServers: { other: { command: 'x' } } });
+  const claudeJson = JSON.stringify({
+    projects: { '/a': {} },
+    mcpServers: { other: { command: 'x' } },
+  });
   const codexToml = '[mcp_servers.other]\ncommand = "x"\n';
   const geminiRules = '# My rules\n\nBe terse.\n';
 
@@ -95,18 +102,25 @@ describe('lurq uninstall', () => {
     await runUninstall({ agent: 'codex', yes: true });
 
     expect(readFileSync(join(home, '.codex', 'config.toml'), 'utf8')).toBe(codexToml);
-    expect(JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8')).mcpServers.lurq).toBeTruthy();
+    expect(
+      JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8')).mcpServers.lurq,
+    ).toBeTruthy();
     expect(readUserConfig().apiKey).toBe('lurq_live_x');
   });
 
   it('takes the hooks out of Claude Code, Codex and Cursor, and keeps the user’s own', async () => {
     const on = { command: 'lurq', onPath: true, path: '/usr/local/bin/lurq' };
-    const claude = { hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'fmt' }] }] } };
+    const claude = {
+      hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'fmt' }] }] },
+    };
     const cursor = { version: 1, hooks: { afterFileEdit: [{ command: './format.sh' }] } };
     put(hooksPath('claude'), JSON.stringify(claude));
     put(hooksPath('cursor'), JSON.stringify(cursor));
-    for (const agent of ['claude', 'codex', 'cursor'] as const) expect(installHooks(agent, undefined, on)).toBe(hooksPath(agent));
-    expect(JSON.parse(readFileSync(hooksPath('cursor'), 'utf8')).hooks.sessionStart[0].command).toBe('/usr/local/bin/lurq hook --agent cursor session-start');
+    for (const agent of ['claude', 'codex', 'cursor'] as const)
+      expect(installHooks(agent, undefined, on)).toBe(hooksPath(agent));
+    expect(
+      JSON.parse(readFileSync(hooksPath('cursor'), 'utf8')).hooks.sessionStart[0].command,
+    ).toBe('/usr/local/bin/lurq hook --agent cursor session-start');
     expect(installHooks('claude', undefined, { command: 'npx lurqrun', onPath: false })).toBeNull();
 
     await runUninstall({ yes: true });
@@ -124,7 +138,9 @@ describe('lurq uninstall', () => {
   it('refuses to act without --yes when nobody can answer the prompt', async () => {
     setUp();
     await expect(runUninstall({})).rejects.toThrow(/--yes/);
-    expect(JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8')).mcpServers.lurq).toBeTruthy();
+    expect(
+      JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8')).mcpServers.lurq,
+    ).toBeTruthy();
   });
 });
 

@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { hasScope, parseScopes } from '../src/auth/apiKeys';
 import { readPolicyFile, runPolicyPush } from '../src/cli/policy';
-import { applyPolicy, check, describeRules, diffPolicies, withoutExpired } from '../src/policy/enforce';
+import {
+  applyPolicy,
+  check,
+  describeRules,
+  diffPolicies,
+  withoutExpired,
+} from '../src/policy/enforce';
 import { validateSelectionPolicy } from '../src/policy/parse';
 import type { Candidate } from '../src/core/types';
 import { DEFAULT_SELECTION_POLICY, type SelectionPolicy } from '../src/policy/types';
@@ -123,7 +129,9 @@ describe('validateSelectionPolicy', () => {
   });
 
   it('refuses an impossible expiry rather than rolling it into next month', () => {
-    expect(validateSelectionPolicy({ ...base, allow: [{ name: 'a', expires: '2026-02-31' }] })).toEqual({
+    expect(
+      validateSelectionPolicy({ ...base, allow: [{ name: 'a', expires: '2026-02-31' }] }),
+    ).toEqual({
       error: 'allow[0].expires must be a date like 2026-12-31.',
     });
   });
@@ -194,7 +202,10 @@ describe('diffPolicies', () => {
 
   it('shows a switch to warn mode, the one change that loosens every rule at once', () => {
     expect(
-      diffPolicies(policy({ blockDeprecated: true }), policy({ blockDeprecated: true, mode: 'warn' })),
+      diffPolicies(
+        policy({ blockDeprecated: true }),
+        policy({ blockDeprecated: true, mode: 'warn' }),
+      ),
     ).toEqual(['+ Warn only: packages that break these rules are reported, not refused.']);
   });
 

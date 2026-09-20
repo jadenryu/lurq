@@ -78,7 +78,12 @@ export async function handleAudit(
   };
 
   // The account's own live scans answer servers the index cannot read at all.
-  const report = await withAccountScans(db, ownerId, await assessInventory(db, inv), inv.mcpServers);
+  const report = await withAccountScans(
+    db,
+    ownerId,
+    await assessInventory(db, inv),
+    inv.mcpServers,
+  );
   await queueUnknown(db, report);
   // `root` is the caller's path and is not ours to echo back.
   return { ...report, root: null };

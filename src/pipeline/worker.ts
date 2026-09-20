@@ -66,7 +66,10 @@ export interface ExtractPassIo {
  * Handed over only while the surface queue has headroom, so demand-driven
  * misses never wait behind this backfill. Returns how many were queued.
  */
-export async function recordExtractOutcomes(results: ExtractOutcome[], io: ExtractPassIo): Promise<number> {
+export async function recordExtractOutcomes(
+  results: ExtractOutcome[],
+  io: ExtractPassIo,
+): Promise<number> {
   for (const r of results) if (!r.ok) await io.recordMiss(r.name, r.version);
 
   let room = io.headroom - (await io.queueDepth());
@@ -236,10 +239,16 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
       const { drainRemoteProbes, REMOTE_PROBES_PER_CYCLE } = await import('../remoteProbe/drain');
       const handle = createDb({ max: 4 });
       try {
-        const s = await drainRemoteProbes(handle.db, { limit: opts.remoteProbesPerCycle ?? REMOTE_PROBES_PER_CYCLE });
+        const s = await drainRemoteProbes(handle.db, {
+          limit: opts.remoteProbesPerCycle ?? REMOTE_PROBES_PER_CYCLE,
+        });
         if (s.claimed) {
-          const statuses = Object.entries(s.byStatus).map(([k, v]) => `${v} ${k}`).join(', ');
-          logger.info(`worker: remote probes, ${s.probed} probed (${statuses || 'none'}), ${s.changes} change(s), ${s.failed} failed`);
+          const statuses = Object.entries(s.byStatus)
+            .map(([k, v]) => `${v} ${k}`)
+            .join(', ');
+          logger.info(
+            `worker: remote probes, ${s.probed} probed (${statuses || 'none'}), ${s.changes} change(s), ${s.failed} failed`,
+          );
         }
       } finally {
         await handle.close();
@@ -269,7 +278,9 @@ export async function runWorker(opts: WorkerOptions = {}): Promise<void> {
       try {
         const s = await channelsFromConfig(handle.db);
         if (s && (s.sent || s.failed || s.disabled)) {
-          logger.info(`worker: channels, ${s.sent} sent, ${s.failed} failed, ${s.disabled} switched off, ${s.skipped} skipped`);
+          logger.info(
+            `worker: channels, ${s.sent} sent, ${s.failed} failed, ${s.disabled} switched off, ${s.skipped} skipped`,
+          );
         }
       } finally {
         await handle.close();

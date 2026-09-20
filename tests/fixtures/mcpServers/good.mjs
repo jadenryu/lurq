@@ -26,12 +26,20 @@ if (process.env.FIXTURE_HANG) {
   );
   server.registerTool(
     'search',
-    { description: process.env.FIXTURE_SEARCH_DESC ?? 'Search documents', inputSchema: { query: z.string() }, annotations: { readOnlyHint: true } },
+    {
+      description: process.env.FIXTURE_SEARCH_DESC ?? 'Search documents',
+      inputSchema: { query: z.string() },
+      annotations: { readOnlyHint: true },
+    },
     async () => ({ content: [] }),
   );
   server.registerTool(
     'delete_file',
-    { description: 'Delete a file from disk', inputSchema: { path: z.string() }, annotations: { destructiveHint: true } },
+    {
+      description: 'Delete a file from disk',
+      inputSchema: { path: z.string() },
+      annotations: { destructiveHint: true },
+    },
     async () => ({ content: [] }),
   );
   server.registerPrompt(

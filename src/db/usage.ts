@@ -96,12 +96,7 @@ export async function getUsageByTool(
       count: sql<number>`sum(${ownerUsageDaily.count})::int`,
     })
     .from(ownerUsageDaily)
-    .where(
-      and(
-        eq(ownerUsageDaily.ownerId, ownerId),
-        gte(ownerUsageDaily.date, windowStart(days)),
-      ),
-    )
+    .where(and(eq(ownerUsageDaily.ownerId, ownerId), gte(ownerUsageDaily.date, windowStart(days))))
     .groupBy(ownerUsageDaily.tool)
     .orderBy(desc(sql`sum(${ownerUsageDaily.count})`));
 

@@ -46,7 +46,10 @@ describe('declaredRange', () => {
   });
 
   it('finds one in devDependencies too', () => {
-    expect(declaredRange(MANIFEST, 'vitest')).toMatchObject({ block: 'devDependencies', range: '~2.1.9' });
+    expect(declaredRange(MANIFEST, 'vitest')).toMatchObject({
+      block: 'devDependencies',
+      range: '~2.1.9',
+    });
   });
 
   it('is null for a package the manifest does not declare', () => {
@@ -78,13 +81,19 @@ describe('decideRange', () => {
   });
 
   it('keeps the operator when it rewrites', () => {
-    expect(decideRange('package.json', at('^1.1.1'), '2.0.1').edit).toMatchObject({ text: '^2.0.1' });
-    expect(decideRange('package.json', at('~1.1.1'), '2.0.1').edit).toMatchObject({ text: '~2.0.1' });
+    expect(decideRange('package.json', at('^1.1.1'), '2.0.1').edit).toMatchObject({
+      text: '^2.0.1',
+    });
+    expect(decideRange('package.json', at('~1.1.1'), '2.0.1').edit).toMatchObject({
+      text: '~2.0.1',
+    });
     expect(decideRange('package.json', at('1.1.1'), '2.0.1').edit).toMatchObject({ text: '2.0.1' });
   });
 
   it('records what it replaced, so a changed file refuses instead of writing', () => {
-    expect(decideRange('package.json', at('^1.1.1'), '2.0.1').edit).toMatchObject({ was: '^1.1.1' });
+    expect(decideRange('package.json', at('^1.1.1'), '2.0.1').edit).toMatchObject({
+      was: '^1.1.1',
+    });
   });
 
   it('refuses a range that excludes the target and is not plain', () => {
@@ -104,7 +113,9 @@ describe('decideRange', () => {
   });
 
   it('refuses a target that is not an exact version', () => {
-    expect(decideRange('package.json', at('^1.1.1'), '^2').refusedBecause).toMatch(/not an exact version/);
+    expect(decideRange('package.json', at('^1.1.1'), '^2').refusedBecause).toMatch(
+      /not an exact version/,
+    );
   });
 });
 

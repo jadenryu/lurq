@@ -5,7 +5,6 @@ import { LocalSandbox } from '../sandbox';
 import { getConfig } from '../core/config';
 import { httpRequest } from '../core/http';
 
-
 /*
   Author: Shivansh Singh
   - Testing among 3 different latest GPT-models against Lurq.run
@@ -26,20 +25,26 @@ async function runBakeOff() {
   try {
     for (const spec of specs) {
       console.log(`\n Testing spec: ${spec.id}`);
-      
+
       const baselineOutcomes = [];
 
       // TEST 1: The AI Baseline (No Lurq)
       for (const model of TEST_MODELS) {
         console.log(`\nGetting baseline recommendations for ${model}...`);
-        
+
         try {
-          const rawLLMPackages = await fetchWithTimeout(getLLMBaseLine(spec.document, model), 15000);
+          const rawLLMPackages = await fetchWithTimeout(
+            getLLMBaseLine(spec.document, model),
+            15000,
+          );
           console.log(`Baseline LLM (${model}) picked: ${rawLLMPackages.join(',')}`);
 
           // Testing compatibility by installing the baseline stack
           console.log(`Running npm install on baseline stack for ${model}...`);
-          const baselineSandboxPackages = rawLLMPackages.map((name: any) => ({ name, version: null }));
+          const baselineSandboxPackages = rawLLMPackages.map((name: any) => ({
+            name,
+            version: null,
+          }));
           const baselineResult = await sandbox.verifySet(baselineSandboxPackages, {
             target: { node: '20', moduleSystem: 'esm' },
           });
@@ -55,9 +60,8 @@ async function runBakeOff() {
             packages: rawLLMPackages,
             installSuccess: baselineResult.installed,
             installTimeMs: baselineResult.durationMs,
-            error: baselineResult.error ?? null
+            error: baselineResult.error ?? null,
           });
-
         } catch (err: any) {
           console.log(`Baseline (${model}) failed or timed out: ${err.message}`);
           baselineOutcomes.push({
@@ -65,7 +69,7 @@ async function runBakeOff() {
             packages: [],
             installSuccess: false,
             installTimeMs: 0,
-            error: err.message
+            error: err.message,
           });
         }
       }
@@ -200,6 +204,5 @@ const fetchWithTimeout = (promise: Promise<any>, ms: number) => {
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 };
-
 
 runBakeOff().catch(console.error);

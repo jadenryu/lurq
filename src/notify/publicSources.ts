@@ -61,14 +61,28 @@ function detail(c: OwnerPublicChange): string {
   return `${c.summary} ${action}`.slice(0, 600);
 }
 
-const pageFor = (c: OwnerPublicChange, webUrl: string) => `${webUrl}/dashboard/mcp/public/${c.endpointId}`;
+const pageFor = (c: OwnerPublicChange, webUrl: string) =>
+  `${webUrl}/dashboard/mcp/public/${c.endpointId}`;
 
 /** The urgent item for a routed change, or null when it can wait for the dashboard. */
 export function publicUrgentItem(c: OwnerPublicChange, webUrl: string): UrgentItem | null {
   if (!URGENT_SEVERITIES.has(c.severity)) return null;
-  return { key: publicItemKey(c.changeId, c.ownerId), kind: 'mcp_public_change', title: title(c), detail: detail(c), url: pageFor(c, webUrl) };
+  return {
+    key: publicItemKey(c.changeId, c.ownerId),
+    kind: 'mcp_public_change',
+    title: title(c),
+    detail: detail(c),
+    url: pageFor(c, webUrl),
+  };
 }
 
 export function publicChannelItem(c: OwnerPublicChange, webUrl: string): ChannelItem {
-  return { key: publicItemKey(c.changeId, c.ownerId), severity: c.severity, source: 'mcp', title: title(c), detail: detail(c), url: pageFor(c, webUrl) };
+  return {
+    key: publicItemKey(c.changeId, c.ownerId),
+    severity: c.severity,
+    source: 'mcp',
+    title: title(c),
+    detail: detail(c),
+    url: pageFor(c, webUrl),
+  };
 }

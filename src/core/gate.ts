@@ -39,9 +39,18 @@ const OWNER_HASH = '9675c37e56783e747e4a89ee3919d95d1364f2e5dd0f14501b0f878f8cc3
  *    evaluate, compare, verify, plan, install, install-skill, weights).
  */
 const ALLOWED = new Set([
-  '-v', '--version', '-h', '--help', 'help',
-  'serve', 'serve-http',
-  'sync', 'discover', 'rescore', 'db', 'keys',
+  '-v',
+  '--version',
+  '-h',
+  '--help',
+  'help',
+  'serve',
+  'serve-http',
+  'sync',
+  'discover',
+  'rescore',
+  'db',
+  'keys',
 ]);
 
 /** True when the caller has proven they are the owner via `LURQ_OWNER_KEY`. */

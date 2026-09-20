@@ -87,7 +87,8 @@ describe.skipIf(!TEST_DB)('runChannels against Postgres', () => {
     await runChannels(d);
     const bodies = d.post.mock.calls.map((c) => JSON.parse(c[1].payload));
     expect(d.post).toHaveBeenCalledTimes(2);
-    const sections = (b: { blocks: { type: string }[] }) => b.blocks.filter((x) => x.type === 'section').length;
+    const sections = (b: { blocks: { type: string }[] }) =>
+      b.blocks.filter((x) => x.type === 'section').length;
     expect(bodies.map(sections).sort()).toEqual([1, 2]);
 
     const again = deps(ok);
@@ -115,7 +116,9 @@ describe.skipIf(!TEST_DB)('runChannels against Postgres', () => {
     expect((await store.getChannel(db, o, c.id))!.consecutiveFailures).toBe(1);
     const second = deps(ok);
     await runChannels(second);
-    const mine = second.post.mock.calls.filter((call) => JSON.parse(call[1].payload).blocks.length > 1);
+    const mine = second.post.mock.calls.filter(
+      (call) => JSON.parse(call[1].payload).blocks.length > 1,
+    );
     expect(mine.length).toBeGreaterThanOrEqual(1);
     expect((await store.getChannel(db, o, c.id))!.consecutiveFailures).toBe(0);
   });
@@ -135,7 +138,10 @@ describe.skipIf(!TEST_DB)('runChannels against Postgres', () => {
     expect(await store.removeChannel(db, o, c.id)).toBe(true);
     expect(await store.getChannel(db, o, c.id)).toBeNull();
     const { eq } = await import('drizzle-orm');
-    const [row] = await db.select().from(schema.notificationChannels).where(eq(schema.notificationChannels.id, c.id));
+    const [row] = await db
+      .select()
+      .from(schema.notificationChannels)
+      .where(eq(schema.notificationChannels.id, c.id));
     expect(row).toMatchObject({ urlCiphertext: '', enabled: false });
     expect(row!.deletedAt).not.toBeNull();
   });

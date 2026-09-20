@@ -2,15 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { hopPairs, planHops, tooFarToSequence, MAX_HOPS } from '../src/github/hops';
 
 /** Releases across majors 6–8, plus a prerelease that must never be routed through. */
-const VERSIONS = [
-  '6.4.0',
-  '6.9.2',
-  '7.0.0',
-  '7.4.1',
-  '8.0.0-beta.1',
-  '8.0.0',
-  '8.1.0',
-];
+const VERSIONS = ['6.4.0', '6.9.2', '7.0.0', '7.4.1', '8.0.0-beta.1', '8.0.0', '8.1.0'];
 
 describe('planHops', () => {
   it('routes a two-major upgrade through the highest release of the middle major', () => {

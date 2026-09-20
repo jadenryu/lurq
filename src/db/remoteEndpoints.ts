@@ -44,8 +44,17 @@ export interface RegistryStoreStats {
  * Store one page of registry entries and reconcile the endpoints their latest
  * versions name. Idempotent: replaying a page changes nothing but `synced_at`.
  */
-export async function storeRegistryEntries(db: Database, entries: RegistryEntry[], now = new Date()): Promise<RegistryStoreStats> {
-  const stats: RegistryStoreStats = { versions: 0, endpointsLinked: 0, linksRemoved: 0, endpointsRemoved: 0 };
+export async function storeRegistryEntries(
+  db: Database,
+  entries: RegistryEntry[],
+  now = new Date(),
+): Promise<RegistryStoreStats> {
+  const stats: RegistryStoreStats = {
+    versions: 0,
+    endpointsLinked: 0,
+    linksRemoved: 0,
+    endpointsRemoved: 0,
+  };
   if (entries.length === 0) return stats;
 
   // The same name@version can repeat inside one page on a registry replay;
@@ -99,12 +108,22 @@ export async function storeRegistryEntries(db: Database, entries: RegistryEntry[
       await tx
         .update(mcpRegistryServers)
         .set({ isLatest: false })
-        .where(and(eq(mcpRegistryServers.name, e.name), sql`${mcpRegistryServers.version} <> ${e.version}`, eq(mcpRegistryServers.isLatest, true)));
+        .where(
+          and(
+            eq(mcpRegistryServers.name, e.name),
+            sql`${mcpRegistryServers.version} <> ${e.version}`,
+            eq(mcpRegistryServers.isLatest, true),
+          ),
+        );
     }
 
     // Endpoints named by live latest versions, deduplicated by canonical URL.
     const endpoints = new Map<string, { host: string; transport: string; templated: boolean }>();
-    const wanted: { url: string; serverName: string; headers: RegistryEntry['remotes'][number]['headers'] }[] = [];
+    const wanted: {
+      url: string;
+      serverName: string;
+      headers: RegistryEntry['remotes'][number]['headers'];
+    }[] = [];
     for (const e of latest.values()) {
       if (e.status === 'deleted') continue;
       for (const r of e.remotes) {
@@ -130,7 +149,12 @@ export async function storeRegistryEntries(db: Database, entries: RegistryEntry[
         )
         .onConflictDoUpdate({
           target: mcpRemoteEndpoints.url,
-          set: { transport: sql`excluded.transport`, templated: sql`excluded.templated`, scanKey: sql`excluded.scan_key`, removedAt: null },
+          set: {
+            transport: sql`excluded.transport`,
+            templated: sql`excluded.templated`,
+            scanKey: sql`excluded.scan_key`,
+            removedAt: null,
+          },
         })
         .returning({ id: mcpRemoteEndpoints.id, url: mcpRemoteEndpoints.url });
       for (const r of rows) idByUrl.set(r.url, r.id);
@@ -138,14 +162,22 @@ export async function storeRegistryEntries(db: Database, entries: RegistryEntry[
 
     // One server can list the same endpoint twice under spellings that canonicalize
     // together; its declared headers are the union, first declaration of a name wins.
-    const links = new Map<string, { endpointId: number; serverName: string; headers: NonNullable<RegistryEntry['remotes'][number]['headers']> }>();
+    const links = new Map<
+      string,
+      {
+        endpointId: number;
+        serverName: string;
+        headers: NonNullable<RegistryEntry['remotes'][number]['headers']>;
+      }
+    >();
     for (const w of wanted) {
       const endpointId = idByUrl.get(w.url);
       if (endpointId === undefined) continue;
       const key = `${endpointId}:${w.serverName}`;
       const link = links.get(key) ?? { endpointId, serverName: w.serverName, headers: [] };
       for (const h of w.headers ?? []) {
-        if (!link.headers.some((x) => x.name.toLowerCase() === h.name.toLowerCase())) link.headers.push(h);
+        if (!link.headers.some((x) => x.name.toLowerCase() === h.name.toLowerCase()))
+          link.headers.push(h);
       }
       links.set(key, link);
     }
@@ -212,18 +244,31 @@ export interface ClaimedEndpoint {
 }
 
 /** Declared headers per endpoint, merged across every live registry server naming it. */
-export async function getDeclaredHeaders(db: Database, endpointIds: number[]): Promise<Map<number, DeclaredHeader[]>> {
+export async function getDeclaredHeaders(
+  db: Database,
+  endpointIds: number[],
+): Promise<Map<number, DeclaredHeader[]>> {
   const out = new Map<number, DeclaredHeader[]>();
   if (endpointIds.length === 0) return out;
   const rows = await db
     .select({ endpointId: mcpEndpointServers.endpointId, headers: mcpEndpointServers.headers })
     .from(mcpEndpointServers)
-    .where(and(inArray(mcpEndpointServers.endpointId, endpointIds), isNull(mcpEndpointServers.removedAt)));
+    .where(
+      and(
+        inArray(mcpEndpointServers.endpointId, endpointIds),
+        isNull(mcpEndpointServers.removedAt),
+      ),
+    );
   for (const r of rows) {
     const list = out.get(r.endpointId) ?? [];
     for (const h of r.headers ?? []) {
       if (list.some((x) => x.name.toLowerCase() === h.name.toLowerCase())) continue;
-      list.push({ name: h.name, required: h.isRequired === true, secret: h.isSecret === true, description: h.description ?? null });
+      list.push({
+        name: h.name,
+        required: h.isRequired === true,
+        secret: h.isSecret === true,
+        description: h.description ?? null,
+      });
     }
     out.set(r.endpointId, list);
   }
@@ -270,7 +315,12 @@ export async function claimDueEndpoints(
     return tx
       .update(mcpRemoteEndpoints)
       .set({ leaseUntil })
-      .where(inArray(mcpRemoteEndpoints.id, due.map((d) => d.id)))
+      .where(
+        inArray(
+          mcpRemoteEndpoints.id,
+          due.map((d) => d.id),
+        ),
+      )
       .returning({
         id: mcpRemoteEndpoints.id,
         url: mcpRemoteEndpoints.url,
@@ -289,7 +339,10 @@ export async function claimDueEndpoints(
 /** Give a lease back untouched, e.g. when a drain is interrupted before probing. */
 export async function releaseEndpoints(db: Database, ids: number[]): Promise<void> {
   if (ids.length === 0) return;
-  await db.update(mcpRemoteEndpoints).set({ leaseUntil: null }).where(inArray(mcpRemoteEndpoints.id, ids));
+  await db
+    .update(mcpRemoteEndpoints)
+    .set({ leaseUntil: null })
+    .where(inArray(mcpRemoteEndpoints.id, ids));
 }
 
 export interface EndpointChangeInput {
@@ -363,7 +416,12 @@ export async function recordEndpointProbe(db: Database, input: ProbeRecordInput)
         .insert(mcpEndpointChanges)
         .values({ endpointId: input.endpointId, ...c, diff: c.diff ?? null, createdAt: now })
         .onConflictDoUpdate({
-          target: [mcpEndpointChanges.endpointId, mcpEndpointChanges.kind, mcpEndpointChanges.fromKey, mcpEndpointChanges.toKey],
+          target: [
+            mcpEndpointChanges.endpointId,
+            mcpEndpointChanges.kind,
+            mcpEndpointChanges.fromKey,
+            mcpEndpointChanges.toKey,
+          ],
           set: { severity: c.severity, summary: c.summary, diff: c.diff ?? null, createdAt: now },
         });
     }
@@ -398,8 +456,15 @@ export async function recordEndpointProbe(db: Database, input: ProbeRecordInput)
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 
-export async function getEndpointById(db: Database, id: number): Promise<McpRemoteEndpointRow | null> {
-  const [row] = await db.select().from(mcpRemoteEndpoints).where(eq(mcpRemoteEndpoints.id, id)).limit(1);
+export async function getEndpointById(
+  db: Database,
+  id: number,
+): Promise<McpRemoteEndpointRow | null> {
+  const [row] = await db
+    .select()
+    .from(mcpRemoteEndpoints)
+    .where(eq(mcpRemoteEndpoints.id, id))
+    .limit(1);
   return row ?? null;
 }
 
@@ -414,7 +479,10 @@ export async function listEndpointObservations(db: Database, endpointId: number,
 }
 
 /** Registry servers currently naming an endpoint. */
-export async function listServerNamesForEndpoint(db: Database, endpointId: number): Promise<string[]> {
+export async function listServerNamesForEndpoint(
+  db: Database,
+  endpointId: number,
+): Promise<string[]> {
   const rows = await db
     .select({ name: mcpEndpointServers.serverName })
     .from(mcpEndpointServers)
@@ -423,10 +491,17 @@ export async function listServerNamesForEndpoint(db: Database, endpointId: numbe
   return rows.map((r) => r.name);
 }
 
-export async function getEndpointByUrl(db: Database, raw: string): Promise<McpRemoteEndpointRow | null> {
+export async function getEndpointByUrl(
+  db: Database,
+  raw: string,
+): Promise<McpRemoteEndpointRow | null> {
   const id = endpointIdentity(raw);
   if (!id) return null;
-  const [row] = await db.select().from(mcpRemoteEndpoints).where(eq(mcpRemoteEndpoints.url, id.url)).limit(1);
+  const [row] = await db
+    .select()
+    .from(mcpRemoteEndpoints)
+    .where(eq(mcpRemoteEndpoints.url, id.url))
+    .limit(1);
   return row ?? null;
 }
 
@@ -436,7 +511,10 @@ export interface LinkedEndpoint {
 }
 
 /** The live endpoints a registry server names, with the headers it declares for each. */
-export async function getEndpointsForServer(db: Database, serverName: string): Promise<LinkedEndpoint[]> {
+export async function getEndpointsForServer(
+  db: Database,
+  serverName: string,
+): Promise<LinkedEndpoint[]> {
   const rows = await db
     .select({ endpoint: mcpRemoteEndpoints, headers: mcpEndpointServers.headers })
     .from(mcpEndpointServers)
@@ -447,7 +525,11 @@ export async function getEndpointsForServer(db: Database, serverName: string): P
 }
 
 /** Registry servers (latest version) a caller might mean: exact name, or a package identifier. */
-export async function findRegistryServers(db: Database, query: string, limit = 5): Promise<McpRegistryServerRow[]> {
+export async function findRegistryServers(
+  db: Database,
+  query: string,
+  limit = 5,
+): Promise<McpRegistryServerRow[]> {
   const q = query.trim();
   if (!q) return [];
   return db
@@ -466,7 +548,11 @@ export async function findRegistryServers(db: Database, query: string, limit = 5
     .limit(limit);
 }
 
-export async function listEndpointChanges(db: Database, endpointId: number, limit = 10): Promise<McpEndpointChangeRow[]> {
+export async function listEndpointChanges(
+  db: Database,
+  endpointId: number,
+  limit = 10,
+): Promise<McpEndpointChangeRow[]> {
   return db
     .select()
     .from(mcpEndpointChanges)
@@ -476,9 +562,14 @@ export async function listEndpointChanges(db: Database, endpointId: number, limi
 }
 
 /** Endpoint counts by last status, for the operator view. */
-export async function endpointStatusCounts(db: Database): Promise<{ status: string; count: number }[]> {
+export async function endpointStatusCounts(
+  db: Database,
+): Promise<{ status: string; count: number }[]> {
   return db
-    .select({ status: sql<string>`coalesce(${mcpRemoteEndpoints.lastStatus}, 'unprobed')`, count: sql<number>`count(*)::int` })
+    .select({
+      status: sql<string>`coalesce(${mcpRemoteEndpoints.lastStatus}, 'unprobed')`,
+      count: sql<number>`count(*)::int`,
+    })
     .from(mcpRemoteEndpoints)
     .where(isNull(mcpRemoteEndpoints.removedAt))
     .groupBy(sql`1`)

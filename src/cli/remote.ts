@@ -27,7 +27,7 @@ export class RemoteError extends Error {
  */
 export class MissingKeyError extends RemoteError {
   constructor(
-    message = 'No API key configured. Run `npx lurqrun setup` to connect this machine; from an agent\'s shell it prints a sign-in link to give the user.',
+    message = "No API key configured. Run `npx lurqrun setup` to connect this machine; from an agent's shell it prints a sign-in link to give the user.",
   ) {
     super(message, 401);
     this.name = 'MissingKeyError';
@@ -174,8 +174,9 @@ export async function callTool<T>(
   const message = errorText(body);
   if (message) throw new RemoteError(message, 200);
 
-  const result = (body as { result?: { content?: { type: string; text?: string }[]; isError?: boolean } })
-    ?.result;
+  const result = (
+    body as { result?: { content?: { type: string; text?: string }[]; isError?: boolean } }
+  )?.result;
   const text = result?.content?.find((c) => c.type === 'text')?.text;
   if (text === undefined) throw new RemoteError(`${tool} returned no content.`, 502);
   // A tool that threw server-side comes back as a normal result with isError
@@ -198,7 +199,12 @@ export async function callTool<T>(
 function parseRpcBody(raw: string): unknown {
   const text = raw.trimStart().startsWith('{')
     ? raw
-    : (raw.split('\n').filter((l) => l.startsWith('data:')).pop() ?? '').slice(5);
+    : (
+        raw
+          .split('\n')
+          .filter((l) => l.startsWith('data:'))
+          .pop() ?? ''
+      ).slice(5);
   try {
     return JSON.parse(text);
   } catch {
@@ -308,7 +314,9 @@ export function reportUpgradeRuns(
 }
 
 /** The account's open urgent changes, worded for an agent. Null when there are none. */
-export async function getAlerts(opts: RemoteOptions & { agent?: string } = {}): Promise<string | null> {
+export async function getAlerts(
+  opts: RemoteOptions & { agent?: string } = {},
+): Promise<string | null> {
   const path = opts.agent ? `/alerts?agent=${encodeURIComponent(opts.agent)}` : '/alerts';
   return (await request<{ notice: string | null }>('GET', path, undefined, opts)).notice;
 }
@@ -345,8 +353,9 @@ export interface RemoteDecision {
 }
 
 export async function getPolicyHistory(opts: RemoteOptions = {}): Promise<RemotePolicyChange[]> {
-  return (await request<{ changes: RemotePolicyChange[] }>('GET', '/policy/history', undefined, opts))
-    .changes;
+  return (
+    await request<{ changes: RemotePolicyChange[] }>('GET', '/policy/history', undefined, opts)
+  ).changes;
 }
 
 export async function getPolicyDecisions(
@@ -388,7 +397,12 @@ export interface McpScanUploadResult {
  * servers are offered as corroboration unless `contribute` is false.
  */
 export function uploadMcpScan(
-  body: { source: 'cli' | 'ci'; clientVersion: string; contribute: boolean; servers: UploadedServer[] },
+  body: {
+    source: 'cli' | 'ci';
+    clientVersion: string;
+    contribute: boolean;
+    servers: UploadedServer[];
+  },
   opts: RemoteOptions = {},
 ): Promise<McpScanUploadResult> {
   return post<McpScanUploadResult>('/mcp-scans', body, { timeoutMs: 120_000, ...opts });
@@ -413,14 +427,25 @@ export async function listMcpPins(opts: RemoteOptions = {}): Promise<RemotePin[]
 }
 
 /** Pin a remote MCP server as it is now; re-pinning approves a change you reviewed. */
-export async function pinMcpServer(server: string, note?: string, opts: RemoteOptions = {}): Promise<RemotePin | null> {
-  return (await post<{ pin: RemotePin | null }>('/mcp-pins', { server, ...(note ? { note } : {}) }, opts)).pin;
+export async function pinMcpServer(
+  server: string,
+  note?: string,
+  opts: RemoteOptions = {},
+): Promise<RemotePin | null> {
+  return (
+    await post<{ pin: RemotePin | null }>('/mcp-pins', { server, ...(note ? { note } : {}) }, opts)
+  ).pin;
 }
 
 export async function unpinMcpServer(server: string, opts: RemoteOptions = {}): Promise<boolean> {
   return (await post<{ unpinned: boolean }>('/mcp-pins/unpin', { server }, opts)).unpinned;
 }
 
-export async function acknowledgePublicMcpChange(changeId: number, opts: RemoteOptions = {}): Promise<boolean> {
-  return (await post<{ acknowledged: boolean }>(`/mcp-public-changes/${changeId}/acknowledge`, {}, opts)).acknowledged;
+export async function acknowledgePublicMcpChange(
+  changeId: number,
+  opts: RemoteOptions = {},
+): Promise<boolean> {
+  return (
+    await post<{ acknowledged: boolean }>(`/mcp-public-changes/${changeId}/acknowledge`, {}, opts)
+  ).acknowledged;
 }

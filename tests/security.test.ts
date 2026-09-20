@@ -57,4 +57,3 @@ describe('detectTyposquat', () => {
  * moderate CVE came back as "no supply-chain red flags". Anything still
  * importing it would quietly get that answer back.
  */
-

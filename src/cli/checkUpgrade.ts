@@ -179,9 +179,12 @@ export function fixableTargets(upgrades: PlanUpgrade[], max?: number): FixableSp
   for (const u of upgrades) {
     if (!u.package || !u.fromVersion || !u.toVersion) continue;
     if (u.inScope === false) {
-      skipped.push({ package: u.package, reason: 'held by this repository\'s policy' });
+      skipped.push({ package: u.package, reason: "held by this repository's policy" });
     } else if (u.sequenceNote) {
-      skipped.push({ package: u.package, reason: `a migration, not an upgrade: ${u.sequenceNote}` });
+      skipped.push({
+        package: u.package,
+        reason: `a migration, not an upgrade: ${u.sequenceNote}`,
+      });
     } else if (u.hops && u.hops.length > 0) {
       skipped.push({
         package: u.package,
@@ -241,14 +244,16 @@ export interface CheckUpgradeOpts {
  * did not land would trade the feature for the thing it is decorating.
  */
 async function reportOutcome(
-  report: Awaited<ReturnType<typeof import('../surface/upgrade')['checkUpgrade']>>,
+  report: Awaited<ReturnType<(typeof import('../surface/upgrade'))['checkUpgrade']>>,
   targets: UpgradeTarget[],
   opts: CheckUpgradeOpts,
 ): Promise<void> {
   const { buildRunReports, runContextFromEnv } = await import('./reportRuns');
   const ctx = runContextFromEnv();
   if (!ctx) {
-    console.error('--report: no $GITHUB_REPOSITORY, so there is no run to attribute this to. Skipped.');
+    console.error(
+      '--report: no $GITHUB_REPOSITORY, so there is no run to attribute this to. Skipped.',
+    );
     return;
   }
   const runs = buildRunReports(report, targets, ctx);
@@ -272,7 +277,7 @@ async function reportOutcome(
     const noKey = /no api key/i.test(message);
     console.error(
       noKey
-        ? '--report: no API key, so there was nothing to report with. Set LURQ_API_KEY in this repository\'s secrets to see these results on your dashboard. The check itself is unaffected.'
+        ? "--report: no API key, so there was nothing to report with. Set LURQ_API_KEY in this repository's secrets to see these results on your dashboard. The check itself is unaffected."
         : `--report: could not reach the lurq dashboard (${message}). The check itself is unaffected.`,
     );
   }

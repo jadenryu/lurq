@@ -72,13 +72,27 @@ export function contractRow(snapshot: Snapshot): NewMcpContract {
 
 const ALIVE: ReadonlySet<EndpointStatus> = new Set(['open', 'auth_required']);
 
-export function describeAuthChange(before: AuthProfile, after: AuthProfile): { severity: Severity; summary: string } {
+export function describeAuthChange(
+  before: AuthProfile,
+  after: AuthProfile,
+): { severity: Severity; summary: string } {
   if (before.mode !== after.mode) {
     if (before.mode === 'none') {
-      return { severity: 'high', summary: after.mode === 'oauth' ? 'now requires OAuth sign-in' : 'now requires a key or token configured by hand' };
+      return {
+        severity: 'high',
+        summary:
+          after.mode === 'oauth'
+            ? 'now requires OAuth sign-in'
+            : 'now requires a key or token configured by hand',
+      };
     }
-    if (after.mode === 'none') return { severity: 'moderate', summary: 'no longer requires credentials' };
-    if (before.mode === 'oauth') return { severity: 'high', summary: 'OAuth discovery disappeared; clients can no longer sign in on their own' };
+    if (after.mode === 'none')
+      return { severity: 'moderate', summary: 'no longer requires credentials' };
+    if (before.mode === 'oauth')
+      return {
+        severity: 'high',
+        summary: 'OAuth discovery disappeared; clients can no longer sign in on their own',
+      };
     return { severity: 'moderate', summary: 'now supports OAuth sign-in' };
   }
   const a = before.oauth;
@@ -92,15 +106,21 @@ export function describeAuthChange(before: AuthProfile, after: AuthProfile): { s
     if (rank[s] > rank[severity]) severity = s;
   };
   if (a.issuer !== b.issuer) {
-    parts.push(`authorization server changed (${a.issuer ?? 'none'} → ${b.issuer ?? 'none'}); existing client registrations must be redone`);
+    parts.push(
+      `authorization server changed (${a.issuer ?? 'none'} → ${b.issuer ?? 'none'}); existing client registrations must be redone`,
+    );
     raise('high');
   }
   if (a.cimd && !b.cimd) {
-    parts.push('Client ID Metadata Documents no longer offered; clients that register that way will fail');
+    parts.push(
+      'Client ID Metadata Documents no longer offered; clients that register that way will fail',
+    );
     raise('high');
   }
   if (a.dcr && !b.dcr) {
-    parts.push('Dynamic Client Registration no longer offered; clients that register that way will fail');
+    parts.push(
+      'Dynamic Client Registration no longer offered; clients that register that way will fail',
+    );
     raise('high');
   }
   if (a.pkceS256 && !b.pkceS256) {
@@ -110,7 +130,10 @@ export function describeAuthChange(before: AuthProfile, after: AuthProfile): { s
   if (!a.cimd && b.cimd) parts.push('now offers Client ID Metadata Documents');
   if (!a.dcr && b.dcr) parts.push('now offers Dynamic Client Registration');
   if (!a.pkceS256 && b.pkceS256) parts.push('now advertises PKCE S256');
-  if (canonicalJson([...(a.scopesSupported ?? [])].sort()) !== canonicalJson([...(b.scopesSupported ?? [])].sort())) {
+  if (
+    canonicalJson([...(a.scopesSupported ?? [])].sort()) !==
+    canonicalJson([...(b.scopesSupported ?? [])].sort())
+  ) {
     parts.push('supported scopes changed');
     raise('moderate');
   }
@@ -132,29 +155,65 @@ export interface NextState {
   authHash: string | null;
 }
 
-export function detectChanges(prev: PreviousState, next: NextState, label: string): EndpointChangeInput[] {
+export function detectChanges(
+  prev: PreviousState,
+  next: NextState,
+  label: string,
+): EndpointChangeInput[] {
   const out: EndpointChangeInput[] = [];
   const now = next.result.status;
 
   if (prev.status && prev.status !== now) {
     const change = (severity: Severity, summary: string) =>
-      out.push({ kind: 'status', fromKey: prev.status!, toKey: now, severity, summary: `${label} ${summary}` });
-    if (ALIVE.has(prev.status) && DEAD_STATUSES.has(now)) change('high', `stopped answering (${prev.status} → ${now})`);
-    else if (DEAD_STATUSES.has(prev.status) && ALIVE.has(now)) change('low', `is answering again (${now})`);
-    else if (prev.status === 'open' && now === 'auth_required') change('high', 'now refuses requests without credentials; clients connected without them will fail');
-    else if (prev.status === 'auth_required' && now === 'open') change('moderate', 'now answers without credentials');
+      out.push({
+        kind: 'status',
+        fromKey: prev.status!,
+        toKey: now,
+        severity,
+        summary: `${label} ${summary}`,
+      });
+    if (ALIVE.has(prev.status) && DEAD_STATUSES.has(now))
+      change('high', `stopped answering (${prev.status} → ${now})`);
+    else if (DEAD_STATUSES.has(prev.status) && ALIVE.has(now))
+      change('low', `is answering again (${now})`);
+    else if (prev.status === 'open' && now === 'auth_required')
+      change(
+        'high',
+        'now refuses requests without credentials; clients connected without them will fail',
+      );
+    else if (prev.status === 'auth_required' && now === 'open')
+      change('moderate', 'now answers without credentials');
   }
 
-  if (prev.contentHash && next.contentHash && prev.contentHash !== next.contentHash && prev.contract && next.result.snapshot) {
+  if (
+    prev.contentHash &&
+    next.contentHash &&
+    prev.contentHash !== next.contentHash &&
+    prev.contract &&
+    next.result.snapshot
+  ) {
     const diff = diffSnapshots(prev.contract, next.result.snapshot, label);
     if (!diff.unchanged) {
-      out.push({ kind: 'contract', fromKey: prev.contentHash, toKey: next.contentHash, severity: diff.severity, summary: diff.summary, diff });
+      out.push({
+        kind: 'contract',
+        fromKey: prev.contentHash,
+        toKey: next.contentHash,
+        severity: diff.severity,
+        summary: diff.summary,
+        diff,
+      });
     }
   }
 
   if (prev.authHash && next.authHash && prev.authHash !== next.authHash && prev.auth) {
     const { severity, summary } = describeAuthChange(prev.auth, next.result.auth);
-    out.push({ kind: 'auth', fromKey: prev.authHash, toKey: next.authHash, severity, summary: `${label}: ${summary}` });
+    out.push({
+      kind: 'auth',
+      fromKey: prev.authHash,
+      toKey: next.authHash,
+      severity,
+      summary: `${label}: ${summary}`,
+    });
   }
   return out;
 }

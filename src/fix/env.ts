@@ -119,8 +119,7 @@ const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * LURQ_TEST_DATABASE_URL as undeclared. Both are set by the harness that
  * spawns the code reading them, so every one of those findings was false.
  */
-const HARNESS_FILE =
-  /(^|\/)(tests?|__tests__|e2e|fixtures?)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
+const HARNESS_FILE = /(^|\/)(tests?|__tests__|e2e|fixtures?)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
 
 export interface EnvRead {
   name: string;
@@ -224,7 +223,10 @@ export function declaredNames(root: string, files: string[] = ENV_FILES): Set<st
       // "# Database settings" would declare a variable called Database.
       const eq = line.indexOf('=');
       if (eq === -1) continue;
-      const name = line.slice(0, eq).replace(/^export\s+/, '').trim();
+      const name = line
+        .slice(0, eq)
+        .replace(/^export\s+/, '')
+        .trim();
       if (NAME.test(name)) names.add(name);
     }
   }
@@ -310,7 +312,10 @@ export function envFindings(root: string, opts: EnvOptions = {}): EnvPlan {
             `so the next clone knows it exists. If a real value is needed to run, ask the user for it — never from a log, ` +
             'an example file, a previous run, or a guess.',
           files: [...new Set(where.map((r) => r.file))],
-          evidence: [`${where.length} read(s)`, ...where.slice(0, 5).map((r) => `${r.file}:${r.line}`)],
+          evidence: [
+            `${where.length} read(s)`,
+            ...where.slice(0, 5).map((r) => `${r.file}:${r.line}`),
+          ],
         },
         verify: ['tests'],
       },

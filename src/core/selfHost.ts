@@ -20,7 +20,9 @@ export function selfHostHint(err: unknown): string | null {
   if (!missing || !SELF_HOST_DEPENDENCIES.includes(missing)) return null;
   // Every one, not only the first that failed: installing them one error at a
   // time is seven round trips.
-  const deps = SELF_HOST_DEPENDENCIES.map((name) => `${name}@${pkg.dependencies[name as keyof typeof pkg.dependencies]}`);
+  const deps = SELF_HOST_DEPENDENCIES.map(
+    (name) => `${name}@${pkg.dependencies[name as keyof typeof pkg.dependencies]}`,
+  );
   return (
     `This command runs lurq's server or a local index, which needs packages the CLI does not install ` +
     `("${missing}" is missing). Hosted users never need them: run \`lurq setup\` instead.\n` +

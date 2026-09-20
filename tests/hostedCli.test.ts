@@ -108,7 +108,9 @@ describe('callTool', () => {
         error: { code: -32001, message: 'Invalid API key.' },
       }),
     };
-    await expect(callTool('verify', { package: 'zod' }, stub())).rejects.toThrow('Invalid API key.');
+    await expect(callTool('verify', { package: 'zod' }, stub())).rejects.toThrow(
+      'Invalid API key.',
+    );
   });
 
   it('treats an isError tool result as a failure, not as a package record', async () => {
@@ -241,7 +243,12 @@ describe('selection-policy reporting', () => {
         healthScore: 88,
         confidence: 'proven',
         weeklyDownloads: 1,
-        policy: { allowed: false, name: 'axios', rule: 'denied', reason: 'use the internal client' },
+        policy: {
+          allowed: false,
+          name: 'axios',
+          rule: 'denied',
+          reason: 'use the internal client',
+        },
       }),
     };
     const { runEvaluate } = await import('../src/cli/commands');
@@ -269,7 +276,10 @@ describe('runSetup endpoint handling', () => {
     delete process.env.LURQ_ENDPOINT;
     vi.spyOn(console, 'log').mockImplementation(() => {});
     // setup --yes validates the key before writing; never against a real endpoint.
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    );
   });
 
   afterEach(() => {
@@ -316,12 +326,22 @@ describe('runSetup endpoint handling', () => {
 // runs `npm install --global` on someone who never asked for it.
 describe('npx detection', () => {
   it('recognises npm’s npx cache and nothing else', () => {
-    expect(runningFromNpx('file:///Users/x/.npm/_npx/8f3a/node_modules/lurqrun/dist/bin/lurq.js')).toBe(true);
+    expect(
+      runningFromNpx('file:///Users/x/.npm/_npx/8f3a/node_modules/lurqrun/dist/bin/lurq.js'),
+    ).toBe(true);
     // Windows npx cache: still a slash-separated file URL.
-    expect(runningFromNpx('file:///C:/Users/x/AppData/npm-cache/_npx/1b2/node_modules/lurqrun/dist/bin/lurq.js')).toBe(true);
+    expect(
+      runningFromNpx(
+        'file:///C:/Users/x/AppData/npm-cache/_npx/1b2/node_modules/lurqrun/dist/bin/lurq.js',
+      ),
+    ).toBe(true);
 
-    expect(runningFromNpx('file:///usr/local/lib/node_modules/lurqrun/dist/bin/lurq.js')).toBe(false);
-    expect(runningFromNpx('file:///Users/x/proj/node_modules/lurqrun/dist/bin/lurq.js')).toBe(false);
+    expect(runningFromNpx('file:///usr/local/lib/node_modules/lurqrun/dist/bin/lurq.js')).toBe(
+      false,
+    );
+    expect(runningFromNpx('file:///Users/x/proj/node_modules/lurqrun/dist/bin/lurq.js')).toBe(
+      false,
+    );
     // A project that merely has "_npx" in a directory name is not an npx run.
     expect(runningFromNpx('file:///Users/x/my_npx_experiments/dist/bin/lurq.js')).toBe(false);
   });

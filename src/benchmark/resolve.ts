@@ -65,18 +65,28 @@ export async function resolveProposal(
   // A dry run skips live registry version resolution to stay fast and reproducible.
   let resolvedSelections: ResolvedSelection[];
   let unresolvedVersions: { package: string; requestedVersion: string | null }[] = [];
-  
+
   if (opts.dryRun) {
-    resolvedSelections = allSelections.map((selection) => ({ ...selection, resolvedVersion: null }));
+    resolvedSelections = allSelections.map((selection) => ({
+      ...selection,
+      resolvedVersion: null,
+    }));
   } else {
     resolvedSelections = await resolveVersions(allSelections, opts.versionResolver);
     unresolvedVersions = resolvedSelections
       .filter((selection) => selection.resolvedVersion === null)
-      .map((selection) => ({ package: selection.package, requestedVersion: selection.requestedVersion }));
+      .map((selection) => ({
+        package: selection.package,
+        requestedVersion: selection.requestedVersion,
+      }));
   }
 
   // ── Step 3: handleVerify per package ──────────────────────────────────────
-  const packageValidity = await verifyAll(db, resolvedSelections, opts.verifyPackage ?? handleVerify);
+  const packageValidity = await verifyAll(
+    db,
+    resolvedSelections,
+    opts.verifyPackage ?? handleVerify,
+  );
   packageValidity.unresolvedVersions = unresolvedVersions;
 
   // ── Step 4: handleCompat preflight (version-aware + runtime engines) ──────
@@ -164,7 +174,9 @@ async function resolveVersions(
   // Promise.all retains input order, which keeps benchmark artifacts stable.
   return Promise.all(
     selections.map(async (selection) => {
-      const resolvedVersion = await resolver(selection.package, selection.requestedVersion).catch(() => null);
+      const resolvedVersion = await resolver(selection.package, selection.requestedVersion).catch(
+        () => null,
+      );
       return { ...selection, resolvedVersion };
     }),
   );
@@ -284,16 +296,31 @@ function classifyFailure(error: string | null): FailureClass {
   if (!error) return 'unknown-resolution-failure';
   const lower = error.toLowerCase();
 
-  if (lower.includes('eresolve') || lower.includes('peer dep') || lower.includes('could not resolve')) {
+  if (
+    lower.includes('eresolve') ||
+    lower.includes('peer dep') ||
+    lower.includes('could not resolve')
+  ) {
     return 'peer-dependency-conflict';
   }
-  if (lower.includes('engine') && (lower.includes('not compatible') || lower.includes('unsupported'))) {
+  if (
+    lower.includes('engine') &&
+    (lower.includes('not compatible') || lower.includes('unsupported'))
+  ) {
     return 'engine-conflict';
   }
-  if (lower.includes('e404') || lower.includes('404 not found') || lower.includes('not found in the npm registry')) {
+  if (
+    lower.includes('e404') ||
+    lower.includes('404 not found') ||
+    lower.includes('not found in the npm registry')
+  ) {
     return 'nonexistent-package';
   }
-  if (lower.includes('node-gyp') || lower.includes('node-pre-gyp') || lower.includes('prebuild-install')) {
+  if (
+    lower.includes('node-gyp') ||
+    lower.includes('node-pre-gyp') ||
+    lower.includes('prebuild-install')
+  ) {
     return 'native-build-failure';
   }
   if (lower.includes('timeout') || lower.includes('timed out')) {

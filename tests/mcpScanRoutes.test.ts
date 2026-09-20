@@ -14,7 +14,9 @@ vi.mock('../src/db/usage', () => ({ recordUsage: vi.fn(async () => {}) }));
 vi.mock('../src/db/mcpScans', () => ({
   listDeployments: vi.fn(async () => [{ id: 1, alias: 'calc' }]),
   listChangeEvents: vi.fn(async () => []),
-  getDeploymentDetail: vi.fn(async (_db: unknown, _owner: string, id: number) => (id === 1 ? { deployment: { id } } : null)),
+  getDeploymentDetail: vi.fn(async (_db: unknown, _owner: string, id: number) =>
+    id === 1 ? { deployment: { id } } : null,
+  ),
   acknowledgeEvent: vi.fn(async (_db: unknown, _owner: string, id: number) => id === 7),
 }));
 vi.mock('../src/mcpScan/ingest', async (importOriginal) => {
@@ -22,7 +24,11 @@ vi.mock('../src/mcpScan/ingest', async (importOriginal) => {
   return { ...actual, ingestScan: vi.fn(async () => ({ servers: [], rejected: [] })) };
 });
 
-import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from '../src/mcp/mcpScanRoutes';
+import {
+  MCP_SCAN_BODY_LIMIT,
+  MCP_SCAN_UPLOAD_PATH,
+  registerMcpScanRoutes,
+} from '../src/mcp/mcpScanRoutes';
 import * as ingest from '../src/mcpScan/ingest';
 import * as analytics from '../src/core/analytics';
 
@@ -35,21 +41,28 @@ beforeAll(async () => {
   const app = express();
   // The production global parser, including its skip for the upload path.
   const jsonBody = express.json({ limit: '1mb' });
-  app.use((req, res, next) => (req.path === MCP_SCAN_UPLOAD_PATH ? next() : jsonBody(req, res, next)));
+  app.use((req, res, next) =>
+    req.path === MCP_SCAN_UPLOAD_PATH ? next() : jsonBody(req, res, next),
+  );
   registerMcpScanRoutes(app, {
     db: {} as never,
     ipLimiter: pass,
     keyLimiter: pass,
     quota: pass,
     auth: (req, _res, next) => {
-      (req as Request & { lurqKey?: { ownerId: string | null } }).lurqKey = { ownerId: (req.headers['x-owner'] as string) || null };
+      (req as Request & { lurqKey?: { ownerId: string | null } }).lurqKey = {
+        ownerId: (req.headers['x-owner'] as string) || null,
+      };
       next();
     },
     bigJson: express.json({ limit: MCP_SCAN_BODY_LIMIT }),
-    requireIssuerSecret: (req, res, next) => (req.headers['x-issuer'] === 'ok' ? next() : void res.status(401).end()),
-    ownerFrom: (req) => String((req.method === 'GET' ? req.query.ownerId : req.body?.ownerId) ?? '').trim(),
+    requireIssuerSecret: (req, res, next) =>
+      req.headers['x-issuer'] === 'ok' ? next() : void res.status(401).end(),
+    ownerFrom: (req) =>
+      String((req.method === 'GET' ? req.query.ownerId : req.body?.ownerId) ?? '').trim(),
     keyOwner: (req, res) => {
-      const ownerId = (req as Request & { lurqKey?: { ownerId: string | null } }).lurqKey?.ownerId ?? null;
+      const ownerId =
+        (req as Request & { lurqKey?: { ownerId: string | null } }).lurqKey?.ownerId ?? null;
       if (!ownerId) res.status(403).json({ error: 'This key has no account attached.' });
       return ownerId;
     },
@@ -66,7 +79,11 @@ beforeEach(() => {
   vi.mocked(analytics.capture).mockClear();
 });
 
-const tool = (i: number) => ({ name: `tool_${i}`, description: 'x'.repeat(1500), inputSchema: { type: 'object' } });
+const tool = (i: number) => ({
+  name: `tool_${i}`,
+  description: 'x'.repeat(1500),
+  inputSchema: { type: 'object' },
+});
 
 const serverPayload = (tools: unknown[] = [tool(0)]) => ({
   alias: 'calc',
@@ -78,7 +95,13 @@ const serverPayload = (tools: unknown[] = [tool(0)]) => ({
   transport: 'stdio',
   status: 'ok',
   error: null,
-  snapshot: { serverInfo: { name: 'calc', version: '1' }, instructions: null, tools, prompts: [], resourceTemplates: [] },
+  snapshot: {
+    serverInfo: { name: 'calc', version: '1' },
+    instructions: null,
+    tools,
+    prompts: [],
+    resourceTemplates: [],
+  },
 });
 
 const upload = (body: unknown, owner = 'user_1') =>
@@ -126,23 +149,30 @@ describe('POST /mcp-scans', () => {
 describe('upload failures reach analytics', () => {
   it('counts a rejected body without describing it', async () => {
     await upload({ servers: 'no' });
-    expect(analytics.capture).toHaveBeenCalledWith('user_1', 'mcp_scan_upload_rejected', { reason: 'invalid_body' });
+    expect(analytics.capture).toHaveBeenCalledWith('user_1', 'mcp_scan_upload_rejected', {
+      reason: 'invalid_body',
+    });
   });
 
   it('reports an ingest that threw, by code and never by message', async () => {
     vi.mocked(ingest.ingestScan).mockRejectedValueOnce(
-      Object.assign(new Error('insert failed: (description)=(internal roadmap tool)'), { code: '08006' }),
+      Object.assign(new Error('insert failed: (description)=(internal roadmap tool)'), {
+        code: '08006',
+      }),
     );
     const res = await upload({ servers: [serverPayload()] });
     expect(res.status).toBe(500);
-    const call = vi.mocked(analytics.capture).mock.calls.find((c) => c[1] === 'mcp_scan_ingest_failed')!;
+    const call = vi
+      .mocked(analytics.capture)
+      .mock.calls.find((c) => c[1] === 'mcp_scan_ingest_failed')!;
     expect(call[2]).toEqual({ stage: 'request', error: 'Error', code: '08006' });
     expect(JSON.stringify(call)).not.toContain('roadmap');
   });
 });
 
 describe('dashboard routes', () => {
-  const get = (path: string, issuer = 'ok') => fetch(`${base}${path}`, { headers: { 'x-issuer': issuer } });
+  const get = (path: string, issuer = 'ok') =>
+    fetch(`${base}${path}`, { headers: { 'x-issuer': issuer } });
 
   it('require the issuer secret and an ownerId', async () => {
     expect((await get('/mcp-servers?ownerId=user_1', 'bad')).status).toBe(401);

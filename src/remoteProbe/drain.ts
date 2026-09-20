@@ -65,7 +65,8 @@ export function laneByHost(endpoints: ClaimedEndpoint[], perHost: number): Claim
       hostLanes = [];
       byHost.set(ep.host, hostLanes);
     }
-    const shortest = hostLanes.length < perHost ? null : hostLanes.reduce((a, b) => (b.length < a.length ? b : a));
+    const shortest =
+      hostLanes.length < perHost ? null : hostLanes.reduce((a, b) => (b.length < a.length ? b : a));
     if (shortest) shortest.push(ep);
     else {
       const lane = [ep];
@@ -76,13 +77,22 @@ export function laneByHost(endpoints: ClaimedEndpoint[], perHost: number): Claim
   return lanes;
 }
 
-export async function drainRemoteProbes(db: Database, opts: RemoteDrainOptions = {}): Promise<RemoteDrainSummary> {
+export async function drainRemoteProbes(
+  db: Database,
+  opts: RemoteDrainOptions = {},
+): Promise<RemoteDrainSummary> {
   const clock = opts.now ?? (() => new Date());
   const budgetMs = opts.budgetMs ?? PROBE_DEFAULTS.budgetMs;
   const limit = opts.limit ?? REMOTE_PROBES_PER_CYCLE;
   const concurrency = opts.concurrency ?? 16;
   const perHost = opts.perHost ?? 2;
-  const summary: RemoteDrainSummary = { claimed: 0, probed: 0, failed: 0, changes: 0, byStatus: {} };
+  const summary: RemoteDrainSummary = {
+    claimed: 0,
+    probed: 0,
+    failed: 0,
+    changes: 0,
+    byStatus: {},
+  };
 
   // A lease long enough for the slowest lane to reach its last endpoint.
   const claimed = await claimDueEndpoints(db, {
@@ -99,11 +109,18 @@ export async function drainRemoteProbes(db: Database, opts: RemoteDrainOptions =
   // would otherwise hold a `worker --once` process open after the cycle.
   const ownFetch = opts.fetch ? null : createSafeFetch();
   const fetch = opts.fetch ?? ownFetch!;
-  const headers = await getDeclaredHeaders(db, claimed.map((c) => c.id));
+  const headers = await getDeclaredHeaders(
+    db,
+    claimed.map((c) => c.id),
+  );
 
   const probeOne = async (ep: ClaimedEndpoint) => {
     try {
-      const result = await probeEndpoint(ep.url, { fetch, declaredHeaders: headers.get(ep.id) ?? [], budgetMs });
+      const result = await probeEndpoint(ep.url, {
+        fetch,
+        declaredHeaders: headers.get(ep.id) ?? [],
+        budgetMs,
+      });
       const row = result.snapshot ? contractRow(result.snapshot) : null;
       const cHash = row?.contentHash ?? null;
       const aHash = authHash(result.auth);
@@ -111,10 +128,22 @@ export async function drainRemoteProbes(db: Database, opts: RemoteDrainOptions =
       let prevContract = null;
       if (ep.lastContentHash && cHash && ep.lastContentHash !== cHash) {
         const prev = await getContract(db, ep.lastContentHash);
-        if (prev) prevContract = { tools: prev.tools, prompts: prev.prompts, resourceTemplates: prev.resourceTemplates, instructions: prev.instructions };
+        if (prev)
+          prevContract = {
+            tools: prev.tools,
+            prompts: prev.prompts,
+            resourceTemplates: prev.resourceTemplates,
+            instructions: prev.instructions,
+          };
       }
       const changes = detectChanges(
-        { status: ep.lastStatus, contentHash: ep.lastContentHash, authHash: ep.lastAuthHash, auth: ep.auth, contract: prevContract },
+        {
+          status: ep.lastStatus,
+          contentHash: ep.lastContentHash,
+          authHash: ep.lastAuthHash,
+          auth: ep.auth,
+          contract: prevContract,
+        },
         { result, contentHash: cHash, authHash: aHash },
         ep.url,
       );
@@ -128,7 +157,13 @@ export async function drainRemoteProbes(db: Database, opts: RemoteDrainOptions =
         contract: row,
         changes,
         consecutiveFailures: failures,
-        nextProbeAt: nextProbeAt({ endpointId: ep.id, status: result.status, consecutiveFailures: failures, lastChangedAt: changes.length ? now : ep.lastChangedAt, now }),
+        nextProbeAt: nextProbeAt({
+          endpointId: ep.id,
+          status: result.status,
+          consecutiveFailures: failures,
+          lastChangedAt: changes.length ? now : ep.lastChangedAt,
+          now,
+        }),
         now,
       });
       summary.probed++;
@@ -136,15 +171,22 @@ export async function drainRemoteProbes(db: Database, opts: RemoteDrainOptions =
       summary.byStatus[result.status] = (summary.byStatus[result.status] ?? 0) + 1;
     } catch (err) {
       summary.failed++;
-      logger.warn({ endpoint: ep.url, err: formatError(err) }, 'remote probe: could not record; lease released');
+      logger.warn(
+        { endpoint: ep.url, err: formatError(err) },
+        'remote probe: could not record; lease released',
+      );
       await releaseEndpoints(db, [ep.id]).catch(() => {});
     }
   };
 
   try {
-    await pMap(laneByHost(claimed, perHost), async (lane) => {
-      for (const ep of lane) await probeOne(ep);
-    }, concurrency);
+    await pMap(
+      laneByHost(claimed, perHost),
+      async (lane) => {
+        for (const ep of lane) await probeOne(ep);
+      },
+      concurrency,
+    );
   } finally {
     await ownFetch?.close?.().catch(() => {});
   }

@@ -65,7 +65,14 @@ async function validatePackage(
 ): Promise<PackageValidation> {
   const fetched = await fetchAndExtract(pkg, version);
   if (!fetched) {
-    return { package: pkg, version, claimed: 0, confirmed: 0, precision: null, unverifiable: 'no dist' };
+    return {
+      package: pkg,
+      version,
+      claimed: 0,
+      confirmed: 0,
+      precision: null,
+      unverifiable: 'no dist',
+    };
   }
   const resolved = fetched.resolvedVersion;
   const tierA = fetched.surface;

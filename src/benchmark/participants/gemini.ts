@@ -8,7 +8,7 @@ export class GeminiParticipant implements Participant {
 
   constructor(
     public readonly id: string,
-    public readonly model: string
+    public readonly model: string,
   ) {}
 
   async run(_db: Database, benchCase: BenchmarkCase): Promise<StackProposal> {
@@ -26,9 +26,9 @@ export class GeminiParticipant implements Participant {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { 
+        generationConfig: {
           temperature: 0,
-          responseMimeType: "application/json"
+          responseMimeType: 'application/json',
         },
       }),
     });
@@ -38,13 +38,16 @@ export class GeminiParticipant implements Participant {
       throw new Error(`Gemini API error ${res.status}: ${text}`);
     }
 
-    const data = await res.json() as any;
+    const data = (await res.json()) as any;
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!content) {
       throw new Error('Gemini returned no content');
     }
 
-    let jsonStr = content.replace(/^[\s\S]*```(?:json)?\s*/i, '').replace(/```\s*[\s\S]*$/, '').trim();
+    let jsonStr = content
+      .replace(/^[\s\S]*```(?:json)?\s*/i, '')
+      .replace(/```\s*[\s\S]*$/, '')
+      .trim();
 
     // Extract balanced JSON object to handle Gemini emitting extra or missing trailing braces
     const start = jsonStr.indexOf('{');
@@ -75,7 +78,9 @@ export class GeminiParticipant implements Participant {
       }
       return parsed as StackProposal;
     } catch (err) {
-      throw new Error(`Failed to parse Gemini JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${content}`);
+      throw new Error(
+        `Failed to parse Gemini JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${content}`,
+      );
     }
   }
 }

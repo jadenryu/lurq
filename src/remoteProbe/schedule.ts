@@ -62,7 +62,8 @@ export function nextProbeAt(input: ScheduleInput): Date {
   switch (input.status) {
     case 'open':
     case 'auth_required': {
-      const recent = input.lastChangedAt && now.getTime() - input.lastChangedAt.getTime() < CADENCE.changeWindow;
+      const recent =
+        input.lastChangedAt && now.getTime() - input.lastChangedAt.getTime() < CADENCE.changeWindow;
       delay = recent ? CADENCE.afterChange : CADENCE.healthy;
       break;
     }

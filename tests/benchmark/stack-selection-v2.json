@@ -14,8 +14,18 @@
       "document": "Greenfield Node service. The team wants a modern TypeScript release and a maintained ESLint-based TypeScript lint setup (the community typescript-eslint line, not legacy tslint). Prefer the newest TypeScript that still co-installs with typescript-eslint — do not leave lint unmatched just to take a TypeScript major with no compatible lint peer yet. This mirrors agents that cheerfully bump typescript to absolute latest and abandon the lint stack.",
       "topology": "library",
       "needs": [
-        { "id": "typescript", "need": "newest stable TypeScript language compiler that still co-installs with typescript-eslint", "category": "build-tool", "required": true },
-        { "id": "lint", "need": "maintained ESLint TypeScript integration (typescript-eslint)", "category": "linting", "required": true }
+        {
+          "id": "typescript",
+          "need": "newest stable TypeScript language compiler that still co-installs with typescript-eslint",
+          "category": "build-tool",
+          "required": true
+        },
+        {
+          "id": "lint",
+          "need": "maintained ESLint TypeScript integration (typescript-eslint)",
+          "category": "linting",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 2,
@@ -35,8 +45,18 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "routing", "need": "client-side routing for a React SPA", "category": "routing", "required": true },
-        { "id": "fetching", "need": "client data-fetching and cache library for React", "category": "data-fetching", "required": true }
+        {
+          "id": "routing",
+          "need": "client-side routing for a React SPA",
+          "category": "routing",
+          "required": true
+        },
+        {
+          "id": "fetching",
+          "need": "client data-fetching and cache library for React",
+          "category": "data-fetching",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -53,8 +73,18 @@
       "document": "Brownfield Node 20 API still depending on the deprecated request package for outbound HTTP. Rebuild the outbound client layer with a maintained HTTP client and keep a small HTTP server framework for health checks. This is a common migration agents are asked to perform when security scanners flag request.",
       "topology": "api-service",
       "needs": [
-        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
-        { "id": "http", "need": "maintained Node HTTP client to replace deprecated request", "category": "http-client", "required": true }
+        {
+          "id": "server",
+          "need": "Node HTTP server framework",
+          "category": "framework",
+          "required": true
+        },
+        {
+          "id": "http",
+          "need": "maintained Node HTTP client to replace deprecated request",
+          "category": "http-client",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 2,
@@ -70,8 +100,18 @@
       "document": "Front-end build pipeline that compiles SCSS. Older repos still list node-sass, which is deprecated and breaks on newer Node versions. Choose a maintained Sass compiler and a bundler. Real migration path teams still hit in 2026.",
       "topology": "library",
       "needs": [
-        { "id": "sass", "need": "maintained Sass/SCSS stylesheet compiler", "category": "styling", "required": true },
-        { "id": "bundler", "need": "JavaScript bundler for front-end assets", "category": "bundler", "required": true }
+        {
+          "id": "sass",
+          "need": "maintained Sass/SCSS stylesheet compiler",
+          "category": "styling",
+          "required": true
+        },
+        {
+          "id": "bundler",
+          "need": "JavaScript bundler for front-end assets",
+          "category": "bundler",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 2,
@@ -90,7 +130,12 @@
         { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
         { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
-        { "id": "animation", "need": "React spring-physics animation library", "category": "animation", "required": true }
+        {
+          "id": "animation",
+          "need": "React spring-physics animation library",
+          "category": "animation",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -110,8 +155,18 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "tooltip", "need": "accessible React tooltip primitive package", "category": "ui-component-library", "required": true },
-        { "id": "positioning", "need": "maintained @popperjs/core positioning library (not deprecated popper.js v1)", "category": "utility", "required": true }
+        {
+          "id": "tooltip",
+          "need": "accessible React tooltip primitive package",
+          "category": "ui-component-library",
+          "required": true
+        },
+        {
+          "id": "positioning",
+          "need": "maintained @popperjs/core positioning library (not deprecated popper.js v1)",
+          "category": "utility",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -130,8 +185,18 @@
       "document": "Ship a multi-tenant SaaS on Next.js App Router with React, schema validation, and PostgreSQL access via an ORM. Runtime and CI are Node 20. Typical agent starter-stack task — value is avoiding deprecated or engine-incompatible primary picks, not inventing an exotic stack.",
       "topology": "single-app",
       "needs": [
-        { "id": "web", "need": "React meta-framework with App Router / SSR", "category": "meta-framework", "required": true },
-        { "id": "validation", "need": "runtime schema validation", "category": "validation", "required": true },
+        {
+          "id": "web",
+          "need": "React meta-framework with App Router / SSR",
+          "category": "meta-framework",
+          "required": true
+        },
+        {
+          "id": "validation",
+          "need": "runtime schema validation",
+          "category": "validation",
+          "required": true
+        },
         { "id": "orm", "need": "PostgreSQL ORM", "category": "orm", "required": true }
       ],
       "acceptance": {
@@ -148,9 +213,24 @@
       "document": "Production JSON API on Node 20 LTS: HTTP framework, request validation, and structured logging. Baseline service scaffold agents generate constantly — keep engine and deprecation constraints explicit so 'latest everything' cannot silently require Node 22+.",
       "topology": "api-service",
       "needs": [
-        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
-        { "id": "validation", "need": "HTTP request schema validation", "category": "validation", "required": true },
-        { "id": "logging", "need": "structured Node logging library", "category": "utility", "required": true }
+        {
+          "id": "server",
+          "need": "Node HTTP server framework",
+          "category": "framework",
+          "required": true
+        },
+        {
+          "id": "validation",
+          "need": "HTTP request schema validation",
+          "category": "validation",
+          "required": true
+        },
+        {
+          "id": "logging",
+          "need": "structured Node logging library",
+          "category": "utility",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 3,
@@ -168,8 +248,18 @@
       "needs": [
         { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
-        { "id": "runner", "need": "JavaScript unit test runner", "category": "testing", "required": true },
-        { "id": "rtl", "need": "maintained React Testing Library for DOM assertions", "category": "testing", "required": true }
+        {
+          "id": "runner",
+          "need": "JavaScript unit test runner",
+          "category": "testing",
+          "required": true
+        },
+        {
+          "id": "rtl",
+          "need": "maintained React Testing Library for DOM assertions",
+          "category": "testing",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -188,7 +278,12 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "dates", "need": "maintained date formatting / parsing library to replace moment", "category": "date-time", "required": true }
+        {
+          "id": "dates",
+          "need": "maintained date formatting / parsing library to replace moment",
+          "category": "date-time",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 3,
@@ -207,8 +302,18 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "bundler", "need": "maintained Vite-based front-end build tool", "category": "bundler", "required": true },
-        { "id": "routing", "need": "client-side routing for a React SPA", "category": "routing", "required": true }
+        {
+          "id": "bundler",
+          "need": "maintained Vite-based front-end build tool",
+          "category": "bundler",
+          "required": true
+        },
+        {
+          "id": "routing",
+          "need": "client-side routing for a React SPA",
+          "category": "routing",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -228,8 +333,18 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "forms", "need": "React form state management library", "category": "forms", "required": true },
-        { "id": "validation", "need": "runtime schema validation library", "category": "validation", "required": true }
+        {
+          "id": "forms",
+          "need": "React form state management library",
+          "category": "forms",
+          "required": true
+        },
+        {
+          "id": "validation",
+          "need": "runtime schema validation library",
+          "category": "validation",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -249,7 +364,12 @@
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
         { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
-        { "id": "charts", "need": "React charting library for dashboards", "category": "charts", "required": true }
+        {
+          "id": "charts",
+          "need": "React charting library for dashboards",
+          "category": "charts",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -270,7 +390,12 @@
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
         { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
-        { "id": "i18n", "need": "React internationalization / translation library", "category": "i18n", "required": true }
+        {
+          "id": "i18n",
+          "need": "React internationalization / translation library",
+          "category": "i18n",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -288,9 +413,24 @@
       "document": "Node 20 JSON API using Express-style middleware: HTTP framework, JWT/session auth helper, and request schema validation. Baseline B2B backend scaffold — keep Node 20 engines and avoid deprecated auth packages.",
       "topology": "api-service",
       "needs": [
-        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
-        { "id": "auth", "need": "JWT or session auth middleware for Node APIs", "category": "auth", "required": true },
-        { "id": "validation", "need": "HTTP request schema validation", "category": "validation", "required": true }
+        {
+          "id": "server",
+          "need": "Node HTTP server framework",
+          "category": "framework",
+          "required": true
+        },
+        {
+          "id": "auth",
+          "need": "JWT or session auth middleware for Node APIs",
+          "category": "auth",
+          "required": true
+        },
+        {
+          "id": "validation",
+          "need": "HTTP request schema validation",
+          "category": "validation",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 3,
@@ -309,7 +449,12 @@
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
         { "id": "routing", "need": "client-side routing", "category": "routing", "required": true },
-        { "id": "state", "need": "React client global state management library", "category": "state-management", "required": true }
+        {
+          "id": "state",
+          "need": "React client global state management library",
+          "category": "state-management",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -329,8 +474,18 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "routing", "need": "client-side routing for a React SPA", "category": "routing", "required": true },
-        { "id": "animation", "need": "React spring-physics animation library", "category": "animation", "required": true }
+        {
+          "id": "routing",
+          "need": "client-side routing for a React SPA",
+          "category": "routing",
+          "required": true
+        },
+        {
+          "id": "animation",
+          "need": "React spring-physics animation library",
+          "category": "animation",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -350,8 +505,18 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "typescript", "need": "newest stable TypeScript language compiler that still co-installs with typescript-eslint", "category": "build-tool", "required": true },
-        { "id": "lint", "need": "maintained ESLint TypeScript integration (typescript-eslint)", "category": "linting", "required": true }
+        {
+          "id": "typescript",
+          "need": "newest stable TypeScript language compiler that still co-installs with typescript-eslint",
+          "category": "build-tool",
+          "required": true
+        },
+        {
+          "id": "lint",
+          "need": "maintained ESLint TypeScript integration (typescript-eslint)",
+          "category": "linting",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -372,8 +537,18 @@
       "needs": [
         { "id": "ui", "need": "React UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React DOM renderer", "category": "framework", "required": true },
-        { "id": "http", "need": "maintained Node HTTP client to replace deprecated request", "category": "http-client", "required": true },
-        { "id": "rtl", "need": "maintained React Testing Library for DOM assertions", "category": "testing", "required": true }
+        {
+          "id": "http",
+          "need": "maintained Node HTTP client to replace deprecated request",
+          "category": "http-client",
+          "required": true
+        },
+        {
+          "id": "rtl",
+          "need": "maintained React Testing Library for DOM assertions",
+          "category": "testing",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -391,10 +566,30 @@
       "document": "Next.js App Router SaaS dashboard on Node 20 CI with React and a charting library for admin metrics. Combining meta-framework, React 19 peers, and chart libs with stale peer ranges is a common agent failure when each package is chosen from a different tutorial year.",
       "topology": "single-app",
       "needs": [
-        { "id": "web", "need": "React meta-framework with App Router / SSR", "category": "meta-framework", "required": true },
-        { "id": "ui", "need": "React 19 UI framework (the react package)", "category": "framework", "required": true },
-        { "id": "dom", "need": "React 19 DOM renderer (the react-dom package)", "category": "framework", "required": true },
-        { "id": "charts", "need": "React charting library for dashboards", "category": "charts", "required": true }
+        {
+          "id": "web",
+          "need": "React meta-framework with App Router / SSR",
+          "category": "meta-framework",
+          "required": true
+        },
+        {
+          "id": "ui",
+          "need": "React 19 UI framework (the react package)",
+          "category": "framework",
+          "required": true
+        },
+        {
+          "id": "dom",
+          "need": "React 19 DOM renderer (the react-dom package)",
+          "category": "framework",
+          "required": true
+        },
+        {
+          "id": "charts",
+          "need": "React charting library for dashboards",
+          "category": "charts",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 4,
@@ -415,7 +610,12 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "routing", "need": "newest stable React client-side router major on npm", "category": "routing", "required": true }
+        {
+          "id": "routing",
+          "need": "newest stable React client-side router major on npm",
+          "category": "routing",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 3,
@@ -435,7 +635,12 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "kit", "need": "full-featured React UI component kit", "category": "ui-component-library", "required": true },
+        {
+          "id": "kit",
+          "need": "full-featured React UI component kit",
+          "category": "ui-component-library",
+          "required": true
+        },
         { "id": "routing", "need": "client-side routing", "category": "routing", "required": true }
       ],
       "acceptance": {
@@ -456,9 +661,24 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "fetching", "need": "client data-fetching and cache library for React", "category": "data-fetching", "required": true },
-        { "id": "forms", "need": "React form state management library", "category": "forms", "required": true },
-        { "id": "validation", "need": "runtime schema validation library", "category": "validation", "required": true }
+        {
+          "id": "fetching",
+          "need": "client data-fetching and cache library for React",
+          "category": "data-fetching",
+          "required": true
+        },
+        {
+          "id": "forms",
+          "need": "React form state management library",
+          "category": "forms",
+          "required": true
+        },
+        {
+          "id": "validation",
+          "need": "runtime schema validation library",
+          "category": "validation",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 5,
@@ -477,7 +697,12 @@
       "needs": [
         { "id": "ui", "need": "React 19 UI framework", "category": "framework", "required": true },
         { "id": "dom", "need": "React 19 DOM renderer", "category": "framework", "required": true },
-        { "id": "bundler", "need": "maintained Vite-based front-end build tool", "category": "bundler", "required": true }
+        {
+          "id": "bundler",
+          "need": "maintained Vite-based front-end build tool",
+          "category": "bundler",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 3,
@@ -495,9 +720,24 @@
       "document": "Production JSON API on Node 20: HTTP framework plus standard security middleware (helmet-style headers, CORS). Clean control scaffold agents should pass without exotic packages.",
       "topology": "api-service",
       "needs": [
-        { "id": "server", "need": "Node HTTP server framework", "category": "framework", "required": true },
-        { "id": "headers", "need": "HTTP security headers middleware for Node", "category": "utility", "required": true },
-        { "id": "cors", "need": "CORS middleware for Node HTTP APIs", "category": "utility", "required": true }
+        {
+          "id": "server",
+          "need": "Node HTTP server framework",
+          "category": "framework",
+          "required": true
+        },
+        {
+          "id": "headers",
+          "need": "HTTP security headers middleware for Node",
+          "category": "utility",
+          "required": true
+        },
+        {
+          "id": "cors",
+          "need": "CORS middleware for Node HTTP APIs",
+          "category": "utility",
+          "required": true
+        }
       ],
       "acceptance": {
         "minimumCovered": 3,

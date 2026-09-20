@@ -10,7 +10,14 @@
  * authenticated key. A payload that could name its own owner would let any key
  * write rows against any account.
  */
-import { UPGRADE_RUN_STATUSES, UPGRADE_SEVERITIES, type UpgradeRunStatus, type UpgradeSeverity, RUN_TRIGGERS, RunTrigger } from './types';
+import {
+  UPGRADE_RUN_STATUSES,
+  UPGRADE_SEVERITIES,
+  type UpgradeRunStatus,
+  type UpgradeSeverity,
+  RUN_TRIGGERS,
+  RunTrigger,
+} from './types';
 
 /** Package names, versions, and repo slugs are all short; paths can be longer. */
 const MAX_NAME = 214; // npm's own package-name limit
@@ -78,7 +85,8 @@ export function parseUpgradeRun(input: unknown): ParsedUpgradeRun | null {
 
   // Absent means "not shared", which is different from "no files" — keep null so
   // the dashboard can tell a repo that opted out from one with nothing to report.
-  const files = raw.callSiteFiles === undefined ? null : strList(raw.callSiteFiles, MAX_FILES, MAX_PATH);
+  const files =
+    raw.callSiteFiles === undefined ? null : strList(raw.callSiteFiles, MAX_FILES, MAX_PATH);
 
   return {
     repoFullName,

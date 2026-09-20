@@ -16,7 +16,9 @@ vi.mock('../src/billing/stripe', () => ({
   constructEvent: m.constructEvent,
   handleEvent: m.handleEvent,
 }));
-vi.mock('../src/db/subscriptions', () => ({ getSubscriptionByCustomer: m.getSubscriptionByCustomer }));
+vi.mock('../src/db/subscriptions', () => ({
+  getSubscriptionByCustomer: m.getSubscriptionByCustomer,
+}));
 vi.mock('../src/core/alert', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/core/alert')>()),
   alert: m.alert,
@@ -69,14 +71,18 @@ describe('processStripeWebhook', () => {
 
   it('answers 200 to a duplicate delivery, including one the guard drops as superseded', async () => {
     const first = await processStripeWebhook(db, raw, 'sig', onPlanChanged);
-    m.handleEvent.mockResolvedValueOnce('customer.subscription.updated: superseded by a newer event, dropped');
+    m.handleEvent.mockResolvedValueOnce(
+      'customer.subscription.updated: superseded by a newer event, dropped',
+    );
     const second = await processStripeWebhook(db, raw, 'sig', onPlanChanged);
     expect([first.status, second.status]).toEqual([200, 200]);
     expect(m.handleEvent).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a bad signature with 400 and never processes it', async () => {
-    m.constructEvent.mockRejectedValue(new Error('No signatures found matching the expected signature'));
+    m.constructEvent.mockRejectedValue(
+      new Error('No signatures found matching the expected signature'),
+    );
     const reply = await processStripeWebhook(db, raw, 'bad', onPlanChanged);
     expect(reply.status).toBe(400);
     expect(m.handleEvent).not.toHaveBeenCalled();

@@ -51,7 +51,9 @@ describe('draftCliAlert', () => {
   });
 
   it('stays silent when the last upgrade already reached that major', () => {
-    expect(draftCliAlert({ ...watcher, lastToVersion: '19.0.0-beta.1' }, 'stripe', '19.0.0')).toBeNull();
+    expect(
+      draftCliAlert({ ...watcher, lastToVersion: '19.0.0-beta.1' }, 'stripe', '19.0.0'),
+    ).toBeNull();
     expect(draftCliAlert({ ...watcher, lastToVersion: '19.1.0' }, 'stripe', '19.2.0')).toBeNull();
   });
 });
@@ -61,7 +63,12 @@ describe('emitPublishAlerts', () => {
 
   it('alerts a CLI-only repo from its upgrade runs', async () => {
     vi.mocked(alertsDb.cliUpgradeWatchers).mockResolvedValueOnce([watcher]);
-    const written = await emitPublishAlerts(db, 'stripe', { latestVersion: '18.9.0' }, { latestVersion: '19.0.0' });
+    const written = await emitPublishAlerts(
+      db,
+      'stripe',
+      { latestVersion: '18.9.0' },
+      { latestVersion: '19.0.0' },
+    );
     expect(written).toBe(1);
     const rows = vi.mocked(alertsDb.insertAlerts).mock.calls[0]![1];
     expect(rows[0]).toMatchObject({ repoId: null, repoFullName: 'acme/web' });
@@ -86,7 +93,14 @@ describe('emitPublishAlerts', () => {
 
   it('writes nothing for a minor release', async () => {
     vi.mocked(alertsDb.cliUpgradeWatchers).mockResolvedValueOnce([watcher]);
-    expect(await emitPublishAlerts(db, 'stripe', { latestVersion: '18.9.0' }, { latestVersion: '18.10.0' })).toBe(0);
+    expect(
+      await emitPublishAlerts(
+        db,
+        'stripe',
+        { latestVersion: '18.9.0' },
+        { latestVersion: '18.10.0' },
+      ),
+    ).toBe(0);
     expect(alertsDb.cliUpgradeWatchers).not.toHaveBeenCalled();
   });
 });
@@ -145,7 +159,12 @@ describe('emitPublishAlerts: starting a run', () => {
     ]);
     vi.mocked(alertsDb.insertAlerts).mockResolvedValueOnce([]);
 
-    const written = await emitPublishAlerts(db, 'stripe', { latestVersion: '18.9.0' }, { latestVersion: '19.0.0' });
+    const written = await emitPublishAlerts(
+      db,
+      'stripe',
+      { latestVersion: '18.9.0' },
+      { latestVersion: '19.0.0' },
+    );
     expect(written).toBe(0);
     expect(dispatch.dispatchForAlerts).not.toHaveBeenCalled();
   });

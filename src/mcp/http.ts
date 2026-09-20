@@ -55,12 +55,7 @@ import {
 import { validateSelectionPolicy } from '../policy/parse';
 import { repoConformance } from '../policy/conformance';
 import { getUsageByTool, getUsageSummary, recordUsage } from '../db/usage';
-import {
-  entitlementFor,
-  isAllowed,
-  getSubscription,
-  type Entitlement,
-} from '../db/subscriptions';
+import { entitlementFor, isAllowed, getSubscription, type Entitlement } from '../db/subscriptions';
 import {
   billingEnabled,
   createCheckoutSession,
@@ -78,10 +73,24 @@ import { computeDrift } from '../github/drift';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
 import { applyScope, permits, repoMode } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
-import { MAX_RUNS_PER_POST, findRepoIdByFullName, getUpgradeImpact, listRunsForOwner, listRunsForRepo, recordUpgradeRuns, type RepoUpkeep, upkeepByRepo } from '../db/upgradeRuns';
+import {
+  MAX_RUNS_PER_POST,
+  findRepoIdByFullName,
+  getUpgradeImpact,
+  listRunsForOwner,
+  listRunsForRepo,
+  recordUpgradeRuns,
+  type RepoUpkeep,
+  upkeepByRepo,
+} from '../db/upgradeRuns';
 import { listInstallationRepos } from '../github/manifests';
 import { builderProfile, type BuilderProfile } from '../github/builderProfile';
-import { GitHubUnavailableError, parseTarget, publicScan, type PublicScan } from '../github/publicScan';
+import {
+  GitHubUnavailableError,
+  parseTarget,
+  publicScan,
+  type PublicScan,
+} from '../github/publicScan';
 import { parseWebhook, verifyWebhookSignature } from '../github/webhook';
 import { newFileUrl, renderWorkflow, WORKFLOW_PATH, cronForScope } from '../github/workflow';
 import { byRecentPush, scanRepo, scanRepos } from '../pipeline/repoScan';
@@ -343,7 +352,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     res.on('finish', () => {
       if (res.statusCode < 500 || req.path === '/billing/webhook') return;
       const route = (req.route as { path?: unknown } | undefined)?.path;
-      alert('server-error', `${req.method} ${typeof route === 'string' ? route : req.path} answered ${res.statusCode}`);
+      alert(
+        'server-error',
+        `${req.method} ${typeof route === 'string' ? route : req.path} answered ${res.statusCode}`,
+      );
     });
     next();
   });
@@ -359,7 +371,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // Scan uploads carry whole tool contracts and parse their own body, with a
   // larger ceiling and only after auth (see mcpScanRoutes). Every other route
   // keeps the 1mb limit.
-  app.use((req, res, next) => (req.path === MCP_SCAN_UPLOAD_PATH ? next() : jsonBody(req, res, next)));
+  app.use((req, res, next) =>
+    req.path === MCP_SCAN_UPLOAD_PATH ? next() : jsonBody(req, res, next),
+  );
 
   // Unauthenticated, no DB hit — for Railway's healthcheck. Intentionally not
   // rate-limited: it's a static response with no backend cost, and limiting it
@@ -516,7 +530,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const featured = target.kind === 'repo' ? target.name : undefined;
     // GitHub logins and repo names are case-insensitive, so the cache is too.
     const key = `${login}/${featured ?? ''}`.toLowerCase();
-    const missing = () => res.status(404).json({ error: 'No public GitHub profile found for that.' });
+    const missing = () =>
+      res.status(404).json({ error: 'No public GitHub profile found for that.' });
 
     const hit = profileCache.get(key);
     if (hit && Date.now() - hit.at < hit.ttl) {
@@ -537,7 +552,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         // would turn one rate-limited minute into a quarter hour of "try again".
         logger.warn(`profile scan: ${err.message}`);
         res.status(503).json({
-          error: "GitHub didn't answer (a rate limit or a timeout), so nothing could be read. Try again in a minute.",
+          error:
+            "GitHub didn't answer (a rate limit or a timeout), so nothing could be read. Try again in a minute.",
         });
         return;
       }
@@ -556,7 +572,9 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const header = req.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token) {
-      res.status(401).json(rpcError(-32001, `Missing API key. Pass Authorization: Bearer <key>. ${GET_A_KEY}`));
+      res
+        .status(401)
+        .json(rpcError(-32001, `Missing API key. Pass Authorization: Bearer <key>. ${GET_A_KEY}`));
       return;
     }
     try {
@@ -1195,7 +1213,6 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       : null,
   });
 
-
   /**
    * Register everything an installation currently covers, then scan in the
    * background. Returns the number of repos registered.
@@ -1391,30 +1408,37 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * twice is a filter that can disagree with itself between the click and the
    * write. The user selected rows; those rows are the contract.
    */
-  app.patch('/repos', requireIssuerSecret, requireGithubApp, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    const body = (req.body ?? {}) as { ids?: unknown; policy?: unknown };
-    const policy = parseRepoPolicy(body.policy);
-    const ids = Array.isArray(body.ids)
-      ? body.ids.filter((id): id is number => Number.isInteger(id))
-      : null;
-    if (!ownerId || !policy || !ids || ids.length === 0) {
-      res.status(400).json({ error: 'ownerId, a complete policy, and at least one id are required.' });
-      return;
-    }
-    // A cap, not pagination: the write is one statement, but an unbounded id
-    // list from a request body is an unbounded query parameter list.
-    if (ids.length > 500) {
-      res.status(400).json({ error: 'At most 500 repositories at a time.' });
-      return;
-    }
-    try {
-      res.status(200).json({ applied: await applyPolicyToRepos(db, ownerId, ids, policy) });
-    } catch (err) {
-      logger.error('bulk policy write failed:', err instanceof Error ? err.message : String(err));
-      res.status(500).json({ error: 'Could not apply the policy.' });
-    }
-  });
+  app.patch(
+    '/repos',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const body = (req.body ?? {}) as { ids?: unknown; policy?: unknown };
+      const policy = parseRepoPolicy(body.policy);
+      const ids = Array.isArray(body.ids)
+        ? body.ids.filter((id): id is number => Number.isInteger(id))
+        : null;
+      if (!ownerId || !policy || !ids || ids.length === 0) {
+        res
+          .status(400)
+          .json({ error: 'ownerId, a complete policy, and at least one id are required.' });
+        return;
+      }
+      // A cap, not pagination: the write is one statement, but an unbounded id
+      // list from a request body is an unbounded query parameter list.
+      if (ids.length > 500) {
+        res.status(400).json({ error: 'At most 500 repositories at a time.' });
+        return;
+      }
+      try {
+        res.status(200).json({ applied: await applyPolicyToRepos(db, ownerId, ids, policy) });
+      } catch (err) {
+        logger.error('bulk policy write failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not apply the policy.' });
+      }
+    },
+  );
 
   // Declared BEFORE `/repos/:id`: Express matches in registration order, so the
   // pattern route would otherwise capture 'defaults' as an id and 400 on it.
@@ -1437,7 +1461,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       try {
         res.status(200).json({ policy: await getRepoPolicyDefault(db, ownerId) });
       } catch (err) {
-        logger.error('repo defaults read failed:', err instanceof Error ? err.message : String(err));
+        logger.error(
+          'repo defaults read failed:',
+          err instanceof Error ? err.message : String(err),
+        );
         res.status(500).json({ error: 'Could not read the default policy.' });
       }
     },
@@ -1467,7 +1494,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         await setRepoPolicyDefault(db, ownerId, policy);
         res.status(200).json({ policy });
       } catch (err) {
-        logger.error('repo defaults write failed:', err instanceof Error ? err.message : String(err));
+        logger.error(
+          'repo defaults write failed:',
+          err instanceof Error ? err.message : String(err),
+        );
         res.status(500).json({ error: 'Could not save the default policy.' });
       }
     },
@@ -1787,7 +1817,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
         .status(200)
         .json({ days: served, maxDays, decisions: await summarizeDecisions(db, ownerId, served) });
     } catch (err) {
-      logger.error('policy decisions read failed:', err instanceof Error ? err.message : String(err));
+      logger.error(
+        'policy decisions read failed:',
+        err instanceof Error ? err.message : String(err),
+      );
       res.status(500).json({ error: 'Could not read policy decisions.' });
     }
   };
@@ -1801,14 +1834,18 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     await sendPolicyHistory(ownerId, res);
   });
 
-  app.get('/selection-policy/decisions', requireIssuerSecret, async (req: Request, res: Response) => {
-    const ownerId = ownerFrom(req);
-    if (!ownerId) {
-      res.status(400).json({ error: 'ownerId is required.' });
-      return;
-    }
-    await sendPolicyDecisions(ownerId, req.query.days, res);
-  });
+  app.get(
+    '/selection-policy/decisions',
+    requireIssuerSecret,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      if (!ownerId) {
+        res.status(400).json({ error: 'ownerId is required.' });
+        return;
+      }
+      await sendPolicyDecisions(ownerId, req.query.days, res);
+    },
+  );
 
   const keyOwner = (req: Request, res: Response): string | null => {
     const ownerId = (req as AuthedRequest).lurqKey?.ownerId ?? null;
@@ -1824,7 +1861,14 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const ownerId = keyOwner(req, res);
     if (!ownerId) return;
     try {
-      res.status(200).json({ notice: await agentAlertNotice(db, ownerId, new Date(), config.LURQ_WEB_URL.replace(/\/$/, '')) });
+      res.status(200).json({
+        notice: await agentAlertNotice(
+          db,
+          ownerId,
+          new Date(),
+          config.LURQ_WEB_URL.replace(/\/$/, ''),
+        ),
+      });
       capture(ownerId, 'agent_session_start', { agent: agentClient(req.query.agent) });
       void recordUsage(db, ownerId, SESSION_START_USAGE);
     } catch (err) {
@@ -1849,7 +1893,8 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     if (!ownerId) return;
     if (!hasScope((req as AuthedRequest).lurqKey!, 'policy:write')) {
       res.status(403).json({
-        error: 'This key cannot change policy. Create a key with the policy:write scope in the dashboard.',
+        error:
+          'This key cannot change policy. Create a key with the policy:write scope in the dashboard.',
       });
       return;
     }
@@ -1986,23 +2031,19 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
    * here would have made this route unreachable from the only thing that wants
    * it.
    */
-  app.get(
-    '/upgrade-runs',
-    requireIssuerSecret,
-    async (req: Request, res: Response) => {
-      const ownerId = ownerFrom(req);
-      if (!ownerId) {
-        res.status(400).json({ error: 'ownerId is required.' });
-        return;
-      }
-      try {
-        res.status(200).json({ runs: await listRunsForOwner(db, ownerId) });
-      } catch (err) {
-        logger.error('upgrade run list failed:', err instanceof Error ? err.message : String(err));
-        res.status(500).json({ error: 'Could not read the upgrade runs.' });
-      }
-    },
-  );
+  app.get('/upgrade-runs', requireIssuerSecret, async (req: Request, res: Response) => {
+    const ownerId = ownerFrom(req);
+    if (!ownerId) {
+      res.status(400).json({ error: 'ownerId is required.' });
+      return;
+    }
+    try {
+      res.status(200).json({ runs: await listRunsForOwner(db, ownerId) });
+    } catch (err) {
+      logger.error('upgrade run list failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not read the upgrade runs.' });
+    }
+  });
 
   app.post(
     '/upgrade-runs',
@@ -2100,10 +2141,18 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     const client = agentClient(req.headers['x-lurq-client']);
     const handshake = initializeInfo(req.body);
     if (handshake) {
-      capture(ownerId, 'mcp_initialized', { client, clientName: handshake.name, clientVersion: handshake.version });
+      capture(ownerId, 'mcp_initialized', {
+        client,
+        clientName: handshake.name,
+        clientVersion: handshake.version,
+      });
     }
     const notices = [quotaNotice(authed.entitlement), await alertNotice(ownerId, req.body)];
-    const server = buildMcpServer(db, { ownerId, client, notice: notices.filter(Boolean).join('\n\n') || null });
+    const server = buildMcpServer(db, {
+      ownerId,
+      client,
+      notice: notices.filter(Boolean).join('\n\n') || null,
+    });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -2200,10 +2249,12 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     force.unref();
     server.close(() => {
       // Queued PostHog events go before the pool; flush never throws.
-      void flushAnalytics().then(closeDb).then(
-        () => process.exit(0),
-        () => process.exit(0),
-      );
+      void flushAnalytics()
+        .then(closeDb)
+        .then(
+          () => process.exit(0),
+          () => process.exit(0),
+        );
     });
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));

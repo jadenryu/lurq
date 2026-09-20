@@ -8,7 +8,11 @@
  */
 import type { Severity } from '../audit/types';
 
-export type UrgentKind = 'mcp_rug_pull' | 'mcp_privilege' | 'breaking_release' | 'mcp_public_change';
+export type UrgentKind =
+  | 'mcp_rug_pull'
+  | 'mcp_privilege'
+  | 'breaking_release'
+  | 'mcp_public_change';
 
 export interface UrgentItem {
   key: string;
@@ -41,7 +45,12 @@ export interface Rendered {
 }
 
 export const esc = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 /** Subject lines are plain text, but must not carry newlines (header injection). */
 const oneLine = (s: string, max = 120) => s.replace(/[\r\n]+/g, ' ').slice(0, max);
@@ -77,14 +86,20 @@ const row = (label: string, title: string, detail: string, url: string) =>
 const footerHtml = (why: string, links: Links) =>
   `${esc(why)}<br /><a href="${esc(links.unsubscribeUrl)}" style="color:#8a8a8a;">Turn these off</a> · <a href="${esc(links.settingsUrl)}" style="color:#8a8a8a;">Email settings</a>`;
 
-const footerText = (why: string, links: Links) => `${why}\nTurn these off: ${links.unsubscribeUrl}\nEmail settings: ${links.settingsUrl}`;
+const footerText = (why: string, links: Links) =>
+  `${why}\nTurn these off: ${links.unsubscribeUrl}\nEmail settings: ${links.settingsUrl}`;
 
 export function renderUrgent(items: UrgentItem[], links: Links): Rendered {
   const subject =
-    items.length === 1 ? `lurq: ${oneLine(items[0]!.title)}` : `lurq: ${items.length} urgent changes to what your agents depend on`;
+    items.length === 1
+      ? `lurq: ${oneLine(items[0]!.title)}`
+      : `lurq: ${items.length} urgent changes to what your agents depend on`;
   const intro =
-    items.length === 1 ? 'One change needs a look today.' : `${items.length} changes need a look today.`;
-  const why = 'You get this because urgent alerts are on for your lurq account. They only fire for changes like these.';
+    items.length === 1
+      ? 'One change needs a look today.'
+      : `${items.length} changes need a look today.`;
+  const why =
+    'You get this because urgent alerts are on for your lurq account. They only fire for changes like these.';
 
   const html = shell(
     esc(intro),
@@ -103,34 +118,82 @@ export function renderUrgent(items: UrgentItem[], links: Links): Rendered {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export function renderDigest(s: DigestSummary, links: Links): Rendered {
-  const quiet = s.mcpChangeTotal === 0 && s.alertTotal === 0 && s.unreadable.length === 0 && s.stale.length === 0;
+  const quiet =
+    s.mcpChangeTotal === 0 &&
+    s.alertTotal === 0 &&
+    s.unreadable.length === 0 &&
+    s.stale.length === 0;
   const headline = quiet
     ? `A quiet week: nothing changed across ${plural(s.watched.servers, 'MCP server')} and ${plural(s.watched.repos, 'repo')}.`
     : `This week: ${plural(s.mcpChangeTotal, 'MCP change')}, ${plural(s.alertTotal, 'breaking release')}.`;
-  const subject = oneLine(`lurq weekly: ${quiet ? 'nothing changed' : `${plural(s.mcpChangeTotal, 'MCP change')}, ${plural(s.alertTotal, 'breaking release')}`}`);
+  const subject = oneLine(
+    `lurq weekly: ${quiet ? 'nothing changed' : `${plural(s.mcpChangeTotal, 'MCP change')}, ${plural(s.alertTotal, 'breaking release')}`}`,
+  );
   const why = 'You get this because you turned on the weekly summary.';
 
   const section = (title: string, rows: string) =>
-    rows ? `<div style="margin-top:18px;font-size:12px;color:#8a8a8a;">${esc(title)}</div>${rows}` : '';
+    rows
+      ? `<div style="margin-top:18px;font-size:12px;color:#8a8a8a;">${esc(title)}</div>${rows}`
+      : '';
   const more = (shown: number, total: number) =>
-    total > shown ? `<div style="padding-top:8px;font-size:12px;color:#6b6b6b;">and ${total - shown} more in the dashboard</div>` : '';
+    total > shown
+      ? `<div style="padding-top:8px;font-size:12px;color:#6b6b6b;">and ${total - shown} more in the dashboard</div>`
+      : '';
 
   const html = shell(
     esc(headline),
     [
-      section('MCP server changes', s.mcpChanges.map((c) => row(c.severity === 'critical' || c.severity === 'high' ? c.severity : '', c.alias, c.summary, c.url)).join('') + more(s.mcpChanges.length, s.mcpChangeTotal)),
-      section('Breaking releases', s.alerts.map((a) => row('', a.title, a.detail, a.url)).join('') + more(s.alerts.length, s.alertTotal)),
-      section('Could not be read last scan', s.unreadable.map((u) => row('', u.alias, u.status.replace(/_/g, ' '), u.url)).join('')),
-      section('Not scanned in over a week', s.stale.map((u) => row('', u.alias, `last scanned ${u.days} days ago`, u.url)).join('')),
+      section(
+        'MCP server changes',
+        s.mcpChanges
+          .map((c) =>
+            row(
+              c.severity === 'critical' || c.severity === 'high' ? c.severity : '',
+              c.alias,
+              c.summary,
+              c.url,
+            ),
+          )
+          .join('') + more(s.mcpChanges.length, s.mcpChangeTotal),
+      ),
+      section(
+        'Breaking releases',
+        s.alerts.map((a) => row('', a.title, a.detail, a.url)).join('') +
+          more(s.alerts.length, s.alertTotal),
+      ),
+      section(
+        'Could not be read last scan',
+        s.unreadable.map((u) => row('', u.alias, u.status.replace(/_/g, ' '), u.url)).join(''),
+      ),
+      section(
+        'Not scanned in over a week',
+        s.stale.map((u) => row('', u.alias, `last scanned ${u.days} days ago`, u.url)).join(''),
+      ),
     ].join(''),
     footerHtml(why, links),
   );
 
   const lines = [headline, ''];
-  if (s.mcpChanges.length) lines.push('MCP server changes:', ...s.mcpChanges.map((c) => `- [${c.severity}] ${c.alias}: ${c.summary} ${c.url}`), '');
-  if (s.alerts.length) lines.push('Breaking releases:', ...s.alerts.map((a) => `- ${a.title} ${a.url}`), '');
-  if (s.unreadable.length) lines.push('Could not be read last scan:', ...s.unreadable.map((u) => `- ${u.alias} (${u.status}) ${u.url}`), '');
-  if (s.stale.length) lines.push('Not scanned in over a week:', ...s.stale.map((u) => `- ${u.alias}, ${u.days} days ${u.url}`), '');
+  if (s.mcpChanges.length)
+    lines.push(
+      'MCP server changes:',
+      ...s.mcpChanges.map((c) => `- [${c.severity}] ${c.alias}: ${c.summary} ${c.url}`),
+      '',
+    );
+  if (s.alerts.length)
+    lines.push('Breaking releases:', ...s.alerts.map((a) => `- ${a.title} ${a.url}`), '');
+  if (s.unreadable.length)
+    lines.push(
+      'Could not be read last scan:',
+      ...s.unreadable.map((u) => `- ${u.alias} (${u.status}) ${u.url}`),
+      '',
+    );
+  if (s.stale.length)
+    lines.push(
+      'Not scanned in over a week:',
+      ...s.stale.map((u) => `- ${u.alias}, ${u.days} days ${u.url}`),
+      '',
+    );
   lines.push(footerText(why, links));
   return { subject, html, text: lines.join('\n') };
 }

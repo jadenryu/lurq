@@ -11,7 +11,15 @@
  */
 import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from './client';
-import { UNBOUNDED_ARITY, claims, entities, observations, packages, surfaceQueue, symbols } from './schema';
+import {
+  UNBOUNDED_ARITY,
+  claims,
+  entities,
+  observations,
+  packages,
+  surfaceQueue,
+  symbols,
+} from './schema';
 import type { SurfaceQueueRow } from './schema';
 import { recordObservation, upsertClaim, upsertEntity } from './graph';
 import { canonicalKey, type EntityKind, type EntityRef } from '../graph/types';

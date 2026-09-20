@@ -137,11 +137,7 @@ const record = (v: unknown): Record<string, string> => {
  * editor, so it is reported unresolved rather than silently emptied — an empty
  * token reads as "auth failed", which is the misleading outcome.
  */
-export function expandVars(
-  value: string,
-  env: NodeJS.ProcessEnv,
-  missing: Set<string>,
-): string {
+export function expandVars(value: string, env: NodeJS.ProcessEnv, missing: Set<string>): string {
   return value.replace(/\$\{([^}]+)\}/g, (whole, body: string) => {
     if (body.startsWith('input:')) {
       missing.add(body);
@@ -188,8 +184,22 @@ function splitImage(image: string): { name: string; version: string | null } {
 
 /** Docker flags that take a value, so the image is not mistaken for one. */
 const DOCKER_VALUE_FLAGS = new Set([
-  '-e', '--env', '-v', '--volume', '-p', '--publish', '--name', '--network', '-w',
-  '--workdir', '--env-file', '-u', '--user', '--mount', '--entrypoint', '--platform',
+  '-e',
+  '--env',
+  '-v',
+  '--volume',
+  '-p',
+  '--publish',
+  '--name',
+  '--network',
+  '-w',
+  '--workdir',
+  '--env-file',
+  '-u',
+  '--user',
+  '--mount',
+  '--entrypoint',
+  '--platform',
 ]);
 
 /**
@@ -218,7 +228,12 @@ export function identify(
 
   const base = classifyServer(alias, { command: bin, args: rest });
   if (base.kind === 'npm-stdio' && base.packageName) {
-    return { kind: base.kind, registry: 'npm', packageName: base.packageName, pinnedVersion: base.version };
+    return {
+      kind: base.kind,
+      registry: 'npm',
+      packageName: base.packageName,
+      pinnedVersion: base.version,
+    };
   }
 
   if (bin === 'uvx' || bin === 'pipx' || bin === 'uv') {
@@ -228,10 +243,17 @@ export function identify(
     if (bin === 'uv' && tokens[0] === 'tool' && tokens[1] === 'run') tokens = tokens.slice(2);
     const from = tokens.indexOf('--from');
     const spec =
-      from >= 0 ? tokens[from + 1] : tokens.find((t, i) => !t.startsWith('-') && tokens[i - 1] !== '--python');
+      from >= 0
+        ? tokens[from + 1]
+        : tokens.find((t, i) => !t.startsWith('-') && tokens[i - 1] !== '--python');
     if (spec) {
       const { name, version } = splitPypi(spec);
-      return { kind: 'other-registry', registry: 'pypi', packageName: name, pinnedVersion: version };
+      return {
+        kind: 'other-registry',
+        registry: 'pypi',
+        packageName: name,
+        pinnedVersion: version,
+      };
     }
   }
 
@@ -244,7 +266,12 @@ export function identify(
       }
       if (a.startsWith('-')) continue;
       const { name, version } = splitImage(a);
-      return { kind: 'other-registry', registry: 'docker', packageName: name, pinnedVersion: version };
+      return {
+        kind: 'other-registry',
+        registry: 'docker',
+        packageName: name,
+        pinnedVersion: version,
+      };
     }
   }
 
@@ -258,7 +285,8 @@ export function serverKeyFor(
   alias: string,
 ): string {
   if (registry === 'remote' && url) return `remote:${hostPath(url)}`;
-  if (packageName && registry !== 'local' && registry !== 'remote') return `${registry}:${packageName}`;
+  if (packageName && registry !== 'local' && registry !== 'remote')
+    return `${registry}:${packageName}`;
   return `local:${alias}`;
 }
 
@@ -308,7 +336,10 @@ export function collectSecrets(
  *     whole product
  */
 export function fingerprintConfig(
-  spec: Pick<ServerSpec, 'transport' | 'command' | 'args' | 'env' | 'headers' | 'url' | 'registry' | 'packageName'>,
+  spec: Pick<
+    ServerSpec,
+    'transport' | 'command' | 'args' | 'env' | 'headers' | 'url' | 'registry' | 'packageName'
+  >,
   secrets: string[],
   root: string,
   home: string,
@@ -323,7 +354,8 @@ export function fingerprintConfig(
     if (secrets.includes(a)) return '<secret>';
     const kv = /^([A-Za-z-_][A-Za-z0-9-_]*)=(.*)$/.exec(a);
     if (kv && secrets.includes(kv[2]!)) return `${kv[1]}=<secret>`;
-    if (spec.packageName && spec.registry === 'npm' && a.startsWith(spec.packageName)) return spec.packageName;
+    if (spec.packageName && spec.registry === 'npm' && a.startsWith(spec.packageName))
+      return spec.packageName;
     if (spec.packageName && spec.registry === 'pypi' && splitPypi(a).name === spec.packageName) {
       return spec.packageName;
     }
@@ -337,14 +369,21 @@ export function fingerprintConfig(
     c: spec.command ? basename(spec.command) : null,
     a: args,
     e: Object.keys(spec.env).sort(),
-    h: Object.keys(spec.headers).map((h) => h.toLowerCase()).sort(),
+    h: Object.keys(spec.headers)
+      .map((h) => h.toLowerCase())
+      .sort(),
     u: spec.url ? hostPath(spec.url) : null,
   };
   return sha(JSON.stringify(shape)).slice(0, 16);
 }
 
 function transportOf(raw: RawEntry, url: string | null, file: string): Transport {
-  const declared = typeof raw.type === 'string' ? raw.type : typeof raw.transport === 'string' ? raw.transport : '';
+  const declared =
+    typeof raw.type === 'string'
+      ? raw.type
+      : typeof raw.transport === 'string'
+        ? raw.transport
+        : '';
   const t = declared.toLowerCase().replace(/[-_]/g, '');
   if (t === 'stdio') return 'stdio';
   if (t === 'sse') return 'sse';
@@ -382,7 +421,9 @@ const canonicalPath = (p: string) => {
 
 /** Claude Code's record for this project: local-scope servers and approvals. */
 function claudeProject(home: string, root: string): ClaudeProjectState | null {
-  const cfg = readJson(join(home, '.claude.json')) as { projects?: Record<string, ClaudeProjectState> } | null;
+  const cfg = readJson(join(home, '.claude.json')) as {
+    projects?: Record<string, ClaudeProjectState>;
+  } | null;
   const projects = cfg?.projects;
   if (!projects) return null;
   const want = canonicalPath(root);
@@ -404,14 +445,21 @@ export function readServerConfigs(root: string, opts: ReadServerOptions = {}): S
   const env = opts.env ?? process.env;
   const filesRead: string[] = [];
   const notes: string[] = [];
-  const rel = (p: string) => (isAbsolute(p) && p.startsWith(abs) ? relative(abs, p) || '.' : p.replace(home, '~'));
+  const rel = (p: string) =>
+    isAbsolute(p) && p.startsWith(abs) ? relative(abs, p) || '.' : p.replace(home, '~');
 
   const project = claudeProject(home, abs);
   const approved = new Set(strings(project?.enabledMcpjsonServers));
   const rejected = new Set(strings(project?.disabledMcpjsonServers));
   const approveAll = project?.enableAllProjectMcpServers === true;
 
-  const entries: { alias: string; raw: RawEntry; file: string; section: string; scope: ConfigScope }[] = [];
+  const entries: {
+    alias: string;
+    raw: RawEntry;
+    file: string;
+    section: string;
+    scope: ConfigScope;
+  }[] = [];
 
   for (const path of mcpConfigPaths(abs, home)) {
     const inProject = path.startsWith(abs + '/') || path.startsWith(abs + '\\');
@@ -428,7 +476,13 @@ export function readServerConfigs(root: string, opts: ReadServerOptions = {}): S
       if (!block || typeof block !== 'object') continue;
       for (const [alias, raw] of Object.entries(block as Record<string, unknown>)) {
         if (!raw || typeof raw !== 'object') continue;
-        entries.push({ alias, raw: raw as RawEntry, file: path, section, scope: inProject ? 'project' : 'user' });
+        entries.push({
+          alias,
+          raw: raw as RawEntry,
+          file: path,
+          section,
+          scope: inProject ? 'project' : 'user',
+        });
         found++;
       }
     }
@@ -457,12 +511,20 @@ export function readServerConfigs(root: string, opts: ReadServerOptions = {}): S
     const x = (v: string) => expandVars(v, env, missing);
 
     const rawUrl =
-      typeof raw.httpUrl === 'string' ? raw.httpUrl : typeof raw.url === 'string' ? raw.url : typeof raw.serverUrl === 'string' ? raw.serverUrl : null;
+      typeof raw.httpUrl === 'string'
+        ? raw.httpUrl
+        : typeof raw.url === 'string'
+          ? raw.url
+          : typeof raw.serverUrl === 'string'
+            ? raw.serverUrl
+            : null;
     const url = rawUrl ? x(rawUrl) : null;
     const command = typeof raw.command === 'string' ? x(raw.command) : null;
     const args = strings(raw.args).map(x);
     const envVars = Object.fromEntries(Object.entries(record(raw.env)).map(([k, v]) => [k, x(v)]));
-    const headers = Object.fromEntries(Object.entries(record(raw.headers)).map(([k, v]) => [k, x(v)]));
+    const headers = Object.fromEntries(
+      Object.entries(record(raw.headers)).map(([k, v]) => [k, x(v)]),
+    );
     const cwd = typeof raw.cwd === 'string' ? resolve(abs, x(raw.cwd)) : null;
     const transport = transportOf(raw, url, file);
 
@@ -475,7 +537,16 @@ export function readServerConfigs(root: string, opts: ReadServerOptions = {}): S
     const secrets = collectSecrets(args, envVars, headers);
     const serverKey = serverKeyFor(id.registry, id.packageName, url, alias);
     const configFingerprint = fingerprintConfig(
-      { transport, command, args, env: envVars, headers, url, registry: id.registry, packageName: id.packageName },
+      {
+        transport,
+        command,
+        args,
+        env: envVars,
+        headers,
+        url,
+        registry: id.registry,
+        packageName: id.packageName,
+      },
       secrets,
       abs,
       home,

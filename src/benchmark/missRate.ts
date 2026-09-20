@@ -121,7 +121,10 @@ function providerOf(model: string): Provider {
 
 /** Strip markdown fences models add despite instructions. */
 function unfence(text: string): string {
-  return text.replace(/^```[a-z]*\n?/gim, '').replace(/```$/gm, '').trim();
+  return text
+    .replace(/^```[a-z]*\n?/gim, '')
+    .replace(/```$/gm, '')
+    .trim();
 }
 
 /**
@@ -186,7 +189,9 @@ async function generateOpenAI(model: string, prompt: string): Promise<string> {
     body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 1 }),
   });
   if (!res.ok) {
-    throw new Error(`OpenAI API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    throw new Error(
+      `OpenAI API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`,
+    );
   }
   const body = (await res.json()) as {
     choices?: { message?: { content?: string }; finish_reason?: string }[];
@@ -218,7 +223,9 @@ async function generateAnthropic(model: string, prompt: string): Promise<string>
     }),
   });
   if (!res.ok) {
-    throw new Error(`Anthropic API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    throw new Error(
+      `Anthropic API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`,
+    );
   }
   const body = (await res.json()) as {
     content?: { type: string; text?: string }[];
@@ -245,7 +252,9 @@ async function generateGemini(model: string, prompt: string): Promise<string> {
     },
   );
   if (!res.ok) {
-    throw new Error(`Gemini API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    throw new Error(
+      `Gemini API error ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`,
+    );
   }
   const body = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
@@ -406,8 +415,7 @@ export async function runMissRate(
       ? scored.filter((r) => r.missing.length > 0).length / scored.length
       : null,
     symbolsPerCase,
-    projectedBreakRate:
-      p !== null && symbolsPerCase ? 1 - Math.pow(1 - p, symbolsPerCase) : null,
+    projectedBreakRate: p !== null && symbolsPerCase ? 1 - Math.pow(1 - p, symbolsPerCase) : null,
     results,
   };
 }

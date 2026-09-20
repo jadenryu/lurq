@@ -10,7 +10,12 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from './client';
 import { deleteAlertsForRepo } from './alerts';
 import { repoPolicyDefaults, repos, type RepoRow } from './schema';
-import { DEFAULT_REPO_POLICY, type RepoDrift, type RepoManifest, type RepoPolicy } from '../github/types';
+import {
+  DEFAULT_REPO_POLICY,
+  type RepoDrift,
+  type RepoManifest,
+  type RepoPolicy,
+} from '../github/types';
 
 export interface RepoUpsert {
   ownerId: string;
@@ -58,11 +63,7 @@ export async function upsertRepos(
 }
 
 export async function listRepos(db: Database, ownerId: string): Promise<RepoRow[]> {
-  return db
-    .select()
-    .from(repos)
-    .where(eq(repos.ownerId, ownerId))
-    .orderBy(repos.fullName);
+  return db.select().from(repos).where(eq(repos.ownerId, ownerId)).orderBy(repos.fullName);
 }
 
 /**
@@ -149,11 +150,7 @@ export async function deleteReposByInstallation(
   return deleted;
 }
 
-export async function getRepo(
-  db: Database,
-  ownerId: string,
-  id: number,
-): Promise<RepoRow | null> {
+export async function getRepo(db: Database, ownerId: string, id: number): Promise<RepoRow | null> {
   const rows = await db
     .select()
     .from(repos)
@@ -208,11 +205,7 @@ export async function saveScan(
  * data plus a visible error beats an empty table: the user can still see what
  * their repo looked like at the last successful read.
  */
-export async function saveScanError(
-  db: Database,
-  id: number,
-  message: string,
-): Promise<void> {
+export async function saveScanError(db: Database, id: number, message: string): Promise<void> {
   await db
     .update(repos)
     .set({ lastScanAt: new Date(), lastScanError: message.slice(0, 500) })
@@ -234,11 +227,7 @@ export async function setRepoPolicy(
 }
 
 /** Forget a repo. The GitHub App install itself is revoked on GitHub, not here. */
-export async function deleteRepo(
-  db: Database,
-  ownerId: string,
-  id: number,
-): Promise<boolean> {
+export async function deleteRepo(db: Database, ownerId: string, id: number): Promise<boolean> {
   // Alerts first: they carry no foreign key, so leaving them would strand rows
   // in the owner's feed naming a repo that no longer exists.
   await deleteAlertsForRepo(db, ownerId, id);

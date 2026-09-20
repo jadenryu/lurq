@@ -253,7 +253,9 @@ describe('buildRemoteTomlBlock (hosted)', () => {
     expect(toml).toContain('[mcp_servers.lurq]');
     expect(toml).toContain('url = "https://api.lurq.run/mcp"');
     // Codex expects an inline `http_headers` table, NOT a `[...headers]` subtable.
-    expect(toml).toContain('http_headers = { Authorization = "Bearer lurq_live_abc", X-Lurq-Client = "codex" }');
+    expect(toml).toContain(
+      'http_headers = { Authorization = "Bearer lurq_live_abc", X-Lurq-Client = "codex" }',
+    );
     expect(toml).not.toContain('[mcp_servers.lurq.headers]');
     expect(toml).not.toContain('command');
     expect(toml).not.toContain('DATABASE_URL');

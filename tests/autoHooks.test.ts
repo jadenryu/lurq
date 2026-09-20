@@ -2,7 +2,14 @@
  * Automatic hook upkeep: installs for agents set up with lurq, respects removals,
  * refreshes a moved binary, runs once a day, and can be turned off.
  */
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -13,7 +20,12 @@ import { readUserConfig, writeUserConfig } from '../src/core/userConfig';
 const DAY = 24 * 60 * 60 * 1000;
 
 describe('planHookMaintenance', () => {
-  const base = { agent: 'cursor' as const, hasEntry: true, hooksPresent: false, current: '/bin/lurq' };
+  const base = {
+    agent: 'cursor' as const,
+    hasEntry: true,
+    hooksPresent: false,
+    current: '/bin/lurq',
+  };
 
   it('installs for a set-up agent lurq never hooked, and nothing without the MCP entry', () => {
     expect(planHookMaintenance([base])).toEqual([{ agent: 'cursor', kind: 'install' }]);
@@ -22,14 +34,25 @@ describe('planHookMaintenance', () => {
 
   it('leaves hooks the user removed, and refreshes a command that moved', () => {
     expect(planHookMaintenance([{ ...base, recorded: '/bin/lurq' }])).toEqual([]);
-    expect(planHookMaintenance([{ ...base, hooksPresent: true, recorded: '/old/lurq' }])).toEqual([{ agent: 'cursor', kind: 'refresh' }]);
-    expect(planHookMaintenance([{ ...base, hooksPresent: true, recorded: '/bin/lurq' }])).toEqual([]);
+    expect(planHookMaintenance([{ ...base, hooksPresent: true, recorded: '/old/lurq' }])).toEqual([
+      { agent: 'cursor', kind: 'refresh' },
+    ]);
+    expect(planHookMaintenance([{ ...base, hooksPresent: true, recorded: '/bin/lurq' }])).toEqual(
+      [],
+    );
   });
 });
 
 describe('maintainHooks', () => {
   // Restored key by key: replacing process.env detaches it from the real environment, and os.homedir() stops seeing HOME.
-  const KEYS = ['HOME', 'LURQ_HOME', 'XDG_CACHE_HOME', 'PATH', 'LURQ_NO_AUTO_HOOKS', 'LURQ_API_KEY'] as const;
+  const KEYS = [
+    'HOME',
+    'LURQ_HOME',
+    'XDG_CACHE_HOME',
+    'PATH',
+    'LURQ_NO_AUTO_HOOKS',
+    'LURQ_API_KEY',
+  ] as const;
   const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   let home: string;
   let bin: string;
@@ -37,7 +60,8 @@ describe('maintainHooks', () => {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, text);
   };
-  const cursorCommand = () => JSON.parse(readFileSync(hooksPath('cursor'), 'utf8')).hooks.sessionStart[0].command;
+  const cursorCommand = () =>
+    JSON.parse(readFileSync(hooksPath('cursor'), 'utf8')).hooks.sessionStart[0].command;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'lurq-autohooks-'));
@@ -52,7 +76,10 @@ describe('maintainHooks', () => {
     chmodSync(bin, 0o755);
     process.env.PATH = binDir;
     writeUserConfig({ apiKey: 'lurq_live_x' });
-    put(join(home, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: { lurq: { type: 'http' } } }));
+    put(
+      join(home, '.cursor', 'mcp.json'),
+      JSON.stringify({ mcpServers: { lurq: { type: 'http' } } }),
+    );
     put(join(home, '.claude.json'), JSON.stringify({ mcpServers: {} }));
   });
 

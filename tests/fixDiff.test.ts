@@ -6,12 +6,24 @@ import { describe, expect, it } from 'vitest';
 import { unifiedDiff } from '../src/fix/diff';
 import type { Edit } from '../src/fix/types';
 
-const edit = (over: Partial<Edit>): Edit => ({ file: 'src/a.ts', start: 0, end: 0, text: '', ...over });
+const edit = (over: Partial<Edit>): Edit => ({
+  file: 'src/a.ts',
+  start: 0,
+  end: 0,
+  text: '',
+  ...over,
+});
 
 /** 12 numbered lines, so hunk headers are checkable by eye. */
 const numbered = Array.from({ length: 12 }, (_, i) => `line${i + 1}`).join('\n') + '\n';
 const at = (line: number, text: string) => {
-  const start = numbered.indexOf(text, numbered.split('\n').slice(0, line - 1).join('\n').length);
+  const start = numbered.indexOf(
+    text,
+    numbered
+      .split('\n')
+      .slice(0, line - 1)
+      .join('\n').length,
+  );
   return { start, end: start + text.length };
 };
 
@@ -22,7 +34,9 @@ describe('unifiedDiff', () => {
 
   it('prints a git-appliable header and three lines of context either side', () => {
     const { start, end } = at(6, 'line6');
-    const out = unifiedDiff('src/a.ts', numbered, [edit({ start, end, text: 'SIX', was: 'line6' })]);
+    const out = unifiedDiff('src/a.ts', numbered, [
+      edit({ start, end, text: 'SIX', was: 'line6' }),
+    ]);
     expect(out).toBe(
       [
         '--- a/src/a.ts',
@@ -97,9 +111,9 @@ describe('unifiedDiff', () => {
   });
 
   it('says nothing about newlines for a file that ends in one', () => {
-    expect(unifiedDiff('src/a.ts', 'a\nb\n', [edit({ start: 0, end: 1, text: 'A', was: 'a' })])).not.toContain(
-      'No newline',
-    );
+    expect(
+      unifiedDiff('src/a.ts', 'a\nb\n', [edit({ start: 0, end: 1, text: 'A', was: 'a' })]),
+    ).not.toContain('No newline');
   });
 });
 
@@ -118,19 +132,26 @@ describe('git apply', () => {
       writeFileSync(join(dir, name), before, 'utf8');
       writeFileSync(join(dir, 'p.patch'), unifiedDiff(name, before, edits), 'utf8');
       // Throws with git's own message if the patch is malformed or does not fit.
-      execFileSync('git', ['apply', '--check', '--verbose', 'p.patch'], { cwd: dir, stdio: 'pipe' });
+      execFileSync('git', ['apply', '--check', '--verbose', 'p.patch'], {
+        cwd: dir,
+        stdio: 'pipe',
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   };
 
   it('accepts a patch for a file that ends in a newline', () => {
-    expect(() => check('src/a.ts', numbered, [edit({ ...at(6, 'line6'), text: 'SIX', was: 'line6' })])).not.toThrow();
+    expect(() =>
+      check('src/a.ts', numbered, [edit({ ...at(6, 'line6'), text: 'SIX', was: 'line6' })]),
+    ).not.toThrow();
   });
 
   it('accepts a patch for a file that does not end in a newline', () => {
     const src = 'line1\nline2\nline3';
-    expect(() => check('src/a.ts', src, [edit({ start: 12, end: 17, text: 'THREE', was: 'line3' })])).not.toThrow();
+    expect(() =>
+      check('src/a.ts', src, [edit({ start: 12, end: 17, text: 'THREE', was: 'line3' })]),
+    ).not.toThrow();
   });
 
   it('accepts a multi-hunk patch', () => {
@@ -143,8 +164,8 @@ describe('git apply', () => {
   });
 
   it('refuses to print a diff for an offset that no longer holds what was read', () => {
-    expect(() => unifiedDiff('src/a.ts', numbered, [edit({ start: 0, end: 5, text: 'x', was: 'other' })])).toThrow(
-      /changed since it was read/,
-    );
+    expect(() =>
+      unifiedDiff('src/a.ts', numbered, [edit({ start: 0, end: 5, text: 'x', was: 'other' })]),
+    ).toThrow(/changed since it was read/);
   });
 });

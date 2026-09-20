@@ -38,7 +38,13 @@ async function presentNewKey(
 ): Promise<void> {
   if (opts.json) {
     console.log(
-      JSON.stringify({ key, prefix: row.prefix, tier: row.tier, label: row.label, ...opts.extraJson }),
+      JSON.stringify({
+        key,
+        prefix: row.prefix,
+        tier: row.tier,
+        label: row.label,
+        ...opts.extraJson,
+      }),
     );
     return;
   }
@@ -57,8 +63,10 @@ async function presentNewKey(
     // Enter advanced past), clear to end of screen, and clear scroll-back.
     process.stdout.write(`\x1b[${block.length + 1}F\x1b[0J\x1b[3J`);
     console.log(
-      dim(`New key (prefix ${row.prefix}) erased from the terminal. ` +
-        `It is stored only as a hash and cannot be recovered, so make sure you saved it.`),
+      dim(
+        `New key (prefix ${row.prefix}) erased from the terminal. ` +
+          `It is stored only as a hash and cannot be recovered, so make sure you saved it.`,
+      ),
     );
   } else {
     // Non-TTY (piped, or over a non-interactive SSH exec): can't erase, so just
@@ -87,10 +95,7 @@ export async function runKeysCreate(opts: {
   }
 }
 
-export async function runKeysRotate(
-  prefixOrId: string,
-  opts: { json?: boolean },
-): Promise<void> {
+export async function runKeysRotate(prefixOrId: string, opts: { json?: boolean }): Promise<void> {
   requireConfig(['DATABASE_URL']);
   const { db, close } = createDb({ max: 1 });
   try {

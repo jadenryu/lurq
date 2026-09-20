@@ -156,7 +156,14 @@ export type LurqDiagnosis =
 
 // ── Result row ──────────────────────────────────────────────────────────────
 
-export type ParticipantKind = 'lurq' | 'openai' | 'anthropic' | 'gemini' | 'openai-with-lurq' | 'anthropic-with-lurq' | 'gemini-with-lurq';
+export type ParticipantKind =
+  | 'lurq'
+  | 'openai'
+  | 'anthropic'
+  | 'gemini'
+  | 'openai-with-lurq'
+  | 'anthropic-with-lurq'
+  | 'gemini-with-lurq';
 
 export interface BenchmarkResult {
   runId: string;

@@ -18,9 +18,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <body className="flex flex-col min-h-screen">
         {/* search uses raw fetch, which doesn't get basePath applied — point it
             at the prefixed endpoint so it works behind the /docs zone rewrite. */}
-        <RootProvider search={{ options: { api: '/docs/api/search' } }}>
-          {children}
-        </RootProvider>
+        <RootProvider search={{ options: { api: '/docs/api/search' } }}>{children}</RootProvider>
       </body>
     </html>
   );

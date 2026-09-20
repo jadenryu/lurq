@@ -36,5 +36,7 @@ export function open(sealed: string, key: Buffer, context: string): string {
   const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'));
   decipher.setAAD(Buffer.from(context, 'utf8'));
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-  return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
+  return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString(
+    'utf8',
+  );
 }

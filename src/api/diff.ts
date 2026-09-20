@@ -106,8 +106,14 @@ export function diffApiSurfaces(before: ApiSurface, after: ApiSurface): ApiDiff 
   // against a real `after` would report the entire API as newly added; the other
   // way round it reports the whole API as deleted. Both are measurement failures
   // wearing a verdict.
-  if (before.unreadableReason) return { breaking: [], other: [], inconclusive: `previous revision: ${before.unreadableReason}` };
-  if (after.unreadableReason) return { breaking: [], other: [], inconclusive: `current revision: ${after.unreadableReason}` };
+  if (before.unreadableReason)
+    return {
+      breaking: [],
+      other: [],
+      inconclusive: `previous revision: ${before.unreadableReason}`,
+    };
+  if (after.unreadableReason)
+    return { breaking: [], other: [], inconclusive: `current revision: ${after.unreadableReason}` };
 
   const changes: ApiChange[] = [];
   for (const [id, op] of before.operations) {

@@ -57,7 +57,11 @@ export function listDashboardTools(db: Db): Promise<DashboardTool[]> {
       const { tools } = await client.listTools();
       return tools
         .filter((t) => DASHBOARD_TOOLS.has(t.name))
-        .map((t) => ({ name: t.name, description: t.description ?? '', inputSchema: t.inputSchema }));
+        .map((t) => ({
+          name: t.name,
+          description: t.description ?? '',
+          inputSchema: t.inputSchema,
+        }));
     } finally {
       await close();
     }

@@ -70,7 +70,9 @@ const REGISTRIES = ['npm', 'pypi', 'docker', 'remote', 'local'] as const;
 const ServerSchema = z.object({
   alias: z.string().trim().min(1).max(200),
   serverKey: z.string().min(3).max(600),
-  configFingerprint: z.string().regex(/^[0-9a-f]{16}$/, 'configFingerprint must be 16 hex characters'),
+  configFingerprint: z
+    .string()
+    .regex(/^[0-9a-f]{16}$/, 'configFingerprint must be 16 hex characters'),
   registry: z.enum(REGISTRIES),
   packageName: z.string().max(300).nullable(),
   pinnedVersion: z.string().max(100).nullable(),
@@ -80,13 +82,22 @@ const ServerSchema = z.object({
   snapshot: z
     .object({
       serverInfo: z
-        .object({ name: z.string().max(256).nullable().optional(), version: z.string().max(100).nullable().optional() })
+        .object({
+          name: z.string().max(256).nullable().optional(),
+          version: z.string().max(100).nullable().optional(),
+        })
         .passthrough()
         .optional(),
       instructions: z.string().nullable().optional(),
       tools: z.array(z.unknown()).max(LIMITS.tools * 2),
-      prompts: z.array(z.unknown()).max(LIMITS.prompts * 2).optional(),
-      resourceTemplates: z.array(z.unknown()).max(LIMITS.resourceTemplates * 2).optional(),
+      prompts: z
+        .array(z.unknown())
+        .max(LIMITS.prompts * 2)
+        .optional(),
+      resourceTemplates: z
+        .array(z.unknown())
+        .max(LIMITS.resourceTemplates * 2)
+        .optional(),
       issues: z.array(z.unknown()).optional(),
     })
     .nullable()
@@ -144,7 +155,13 @@ export function parseUpload(body: unknown): {
 } {
   const top = UploadSchema.safeParse(body);
   if (!top.success) {
-    return { servers: [], rejected: [], source: 'cli', contribute: false, error: top.error.issues[0]?.message ?? 'invalid upload' };
+    return {
+      servers: [],
+      rejected: [],
+      source: 'cli',
+      contribute: false,
+      error: top.error.issues[0]?.message ?? 'invalid upload',
+    };
   }
   const servers: ParsedServer[] = [];
   const rejected: Rejection[] = [];
@@ -152,18 +169,28 @@ export function parseUpload(body: unknown): {
 
   top.data.servers.forEach((raw, index) => {
     const alias = (raw as { alias?: unknown })?.alias;
-    const reject = (reason: string) => rejected.push({ index, alias: typeof alias === 'string' ? alias.slice(0, 200) : null, reason });
+    const reject = (reason: string) =>
+      rejected.push({
+        index,
+        alias: typeof alias === 'string' ? alias.slice(0, 200) : null,
+        reason,
+      });
 
     const parsed = ServerSchema.safeParse(raw);
-    if (!parsed.success) return reject(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
+    if (!parsed.success)
+      return reject(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
     const s = parsed.data;
 
     // Identity must be internally consistent, or one server could file its
     // history under another's key.
     const [prefix, ...rest] = s.serverKey.split(':');
     const keyName = rest.join(':');
-    if (prefix !== s.registry || !keyName) return reject(`serverKey must start with "${s.registry}:"`);
-    if ((s.registry === 'npm' || s.registry === 'pypi' || s.registry === 'docker') && keyName !== s.packageName) {
+    if (prefix !== s.registry || !keyName)
+      return reject(`serverKey must start with "${s.registry}:"`);
+    if (
+      (s.registry === 'npm' || s.registry === 'pypi' || s.registry === 'docker') &&
+      keyName !== s.packageName
+    ) {
       return reject('serverKey does not match packageName');
     }
     const dedupe = `${s.serverKey}#${s.configFingerprint}`;
@@ -187,11 +214,20 @@ export function parseUpload(body: unknown): {
         tools: [...tools.values()],
         prompts: [...prompts.values()],
         resourceTemplates: [...templates.values()],
-        instructions: s.snapshot.instructions ? s.snapshot.instructions.slice(0, LIMITS.instructions) : null,
+        instructions: s.snapshot.instructions
+          ? s.snapshot.instructions.slice(0, LIMITS.instructions)
+          : null,
       });
       const bytes = JSON.stringify(clean).length;
-      if (bytes > MAX_CONTRACT_BYTES) return reject(`contract is ${bytes} bytes (limit ${MAX_CONTRACT_BYTES})`);
-      contract = { ...clean, issues, contentHash: contentHash(clean), contractHash: contractHash(clean), bytes };
+      if (bytes > MAX_CONTRACT_BYTES)
+        return reject(`contract is ${bytes} bytes (limit ${MAX_CONTRACT_BYTES})`);
+      contract = {
+        ...clean,
+        issues,
+        contentHash: contentHash(clean),
+        contractHash: contractHash(clean),
+        bytes,
+      };
     }
 
     servers.push({
@@ -210,7 +246,13 @@ export function parseUpload(body: unknown): {
     });
   });
 
-  return { servers, rejected, source: top.data.source, contribute: top.data.contribute, error: null };
+  return {
+    servers,
+    rejected,
+    source: top.data.source,
+    contribute: top.data.contribute,
+    error: null,
+  };
 }
 
 export interface IngestedServer {
@@ -268,7 +310,10 @@ async function contributePublic(db: Database, ownerId: string, s: ParsedServer):
     ref: mcpSurfaceRef(s.packageName, version),
     oracleId: 'mcp_server.crowd',
   });
-  logger.info({ server: s.packageName, version, agree }, 'mcp: contract promoted to the public index by quorum');
+  logger.info(
+    { server: s.packageName, version, agree },
+    'mcp: contract promoted to the public index by quorum',
+  );
 }
 
 export async function ingestScan(
@@ -282,8 +327,15 @@ export async function ingestScan(
   for (let i = 0; i < parsed.servers.length; i++) {
     const s = parsed.servers[i]!;
     try {
-      if (tracked >= MAX_DEPLOYMENTS_PER_OWNER && !(await deploymentExists(db, ownerId, s.serverKey, s.configFingerprint))) {
-        out.rejected.push({ index: i, alias: s.alias, reason: `this account already tracks ${MAX_DEPLOYMENTS_PER_OWNER} servers` });
+      if (
+        tracked >= MAX_DEPLOYMENTS_PER_OWNER &&
+        !(await deploymentExists(db, ownerId, s.serverKey, s.configFingerprint))
+      ) {
+        out.rejected.push({
+          index: i,
+          alias: s.alias,
+          reason: `this account already tracks ${MAX_DEPLOYMENTS_PER_OWNER} servers`,
+        });
         continue;
       }
 
@@ -334,10 +386,14 @@ export async function ingestScan(
             {
               tools: s.contract!.tools,
               // A list that failed this scan is carried forward, never read as emptied.
-              prompts: s.contract!.issues.some((x) => x.list === 'prompts' && x.kind === 'list_failed')
+              prompts: s.contract!.issues.some(
+                (x) => x.list === 'prompts' && x.kind === 'list_failed',
+              )
                 ? previous.prompts
                 : s.contract!.prompts,
-              resourceTemplates: s.contract!.issues.some((x) => x.list === 'resourceTemplates' && x.kind === 'list_failed')
+              resourceTemplates: s.contract!.issues.some(
+                (x) => x.list === 'resourceTemplates' && x.kind === 'list_failed',
+              )
                 ? previous.resourceTemplates
                 : s.contract!.resourceTemplates,
               instructions: s.contract!.instructions,
@@ -361,12 +417,21 @@ export async function ingestScan(
         change: res.change,
         worstSeverity,
         since: res.event
-          ? { at: res.event.at.toISOString(), severity: res.event.severity, summary: res.event.summary, rugPull: res.event.rugPull }
+          ? {
+              at: res.event.at.toISOString(),
+              severity: res.event.severity,
+              summary: res.event.summary,
+              rugPull: res.event.rugPull,
+            }
           : null,
       });
     } catch (err) {
       logger.error({ server: s.serverKey, err: formatError(err) }, 'mcp: scan ingest failed');
-      capture(ownerId, 'mcp_scan_ingest_failed', { stage: 'record', registry: s.registry, ...failureProps(err) });
+      capture(ownerId, 'mcp_scan_ingest_failed', {
+        stage: 'record',
+        registry: s.registry,
+        ...failureProps(err),
+      });
       out.rejected.push({ index: i, alias: s.alias, reason: 'could not be recorded; try again' });
     }
   }
@@ -380,7 +445,9 @@ export async function ingestScan(
     rejected: out.rejected.length,
     first: out.servers.filter((s) => s.change === 'first').length,
     changed: out.servers.filter((s) => s.change === 'changed').length,
-    worstChange: worst(out.servers.flatMap((s) => (s.since ? [{ severity: s.since.severity as Severity }] : []))),
+    worstChange: worst(
+      out.servers.flatMap((s) => (s.since ? [{ severity: s.since.severity as Severity }] : [])),
+    ),
     registries: [...new Set(parsed.servers.map((s) => s.registry))].sort(),
   });
   return out;

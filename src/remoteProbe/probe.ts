@@ -28,7 +28,13 @@ import { UnsafeUrlError, type SafeFetch } from '../core/safeFetch';
 import { addTools, emptySnapshot, LIMITS, type Snapshot } from '../mcpScan/snapshot';
 import type { McpTool } from '../surface/mcp';
 import { discoverOAuth, parseWwwAuthenticate } from './oauth';
-import type { AuthProfile, DeclaredHeader, EndpointStatus, ProbeResult, ProtocolMode } from './types';
+import type {
+  AuthProfile,
+  DeclaredHeader,
+  EndpointStatus,
+  ProbeResult,
+  ProtocolMode,
+} from './types';
 import { endpointIdentity } from './url';
 
 export const PROBE_PROTOCOL_VERSION = '2026-07-28';
@@ -88,14 +94,27 @@ export function classifyNetworkError(err: unknown): { status: EndpointStatus; er
   const e = err as { name?: string; code?: string; cause?: { code?: string; name?: string } };
   const code = e?.code ?? e?.cause?.code ?? '';
   const name = e?.name ?? e?.cause?.name ?? '';
-  if (code === 'EPRIVATE') return { status: 'blocked', error: 'the hostname resolves to a private network address' };
-  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return { status: 'dns_failed', error: 'the hostname does not resolve' };
-  if (name === 'AbortError' || name === 'TimeoutError' || code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT' || code === 'ETIMEDOUT') {
+  if (code === 'EPRIVATE')
+    return { status: 'blocked', error: 'the hostname resolves to a private network address' };
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN')
+    return { status: 'dns_failed', error: 'the hostname does not resolve' };
+  if (
+    name === 'AbortError' ||
+    name === 'TimeoutError' ||
+    code === 'UND_ERR_HEADERS_TIMEOUT' ||
+    code === 'UND_ERR_BODY_TIMEOUT' ||
+    code === 'ETIMEDOUT'
+  ) {
     return { status: 'timeout', error: 'no response within the time limit' };
   }
-  if (code === 'ETOOLARGE') return { status: 'protocol_error', error: 'the response was larger than lurq reads' };
-  if (/CERT|SSL|TLS|ERR_TLS/i.test(code)) return { status: 'unreachable', error: `TLS failure (${code})` };
-  return { status: 'unreachable', error: code ? `connection failed (${code})` : 'connection failed' };
+  if (code === 'ETOOLARGE')
+    return { status: 'protocol_error', error: 'the response was larger than lurq reads' };
+  if (/CERT|SSL|TLS|ERR_TLS/i.test(code))
+    return { status: 'unreachable', error: `TLS failure (${code})` };
+  return {
+    status: 'unreachable',
+    error: code ? `connection failed (${code})` : 'connection failed',
+  };
 }
 
 function statusForHttp(status: number): EndpointStatus {
@@ -128,7 +147,9 @@ async function readRpc(res: Response, id: number): Promise<Record<string, unknow
   }
   try {
     const msg = JSON.parse(text) as unknown;
-    return msg && typeof msg === 'object' && !Array.isArray(msg) ? (msg as Record<string, unknown>) : null;
+    return msg && typeof msg === 'object' && !Array.isArray(msg)
+      ? (msg as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }
@@ -157,7 +178,10 @@ async function statelessToolsList(
 ): Promise<ToolsRead | null> {
   const pages: unknown[][] = [];
   let cursor: string | undefined;
-  let info: Pick<ToolsRead, 'serverName' | 'serverVersion'> = { serverName: null, serverVersion: null };
+  let info: Pick<ToolsRead, 'serverName' | 'serverVersion'> = {
+    serverName: null,
+    serverVersion: null,
+  };
   for (let page = 0; page < opts.maxPages; page++) {
     const id = page + 1;
     const res = await fetch(url, {
@@ -169,7 +193,12 @@ async function statelessToolsList(
         'mcp-method': 'tools/list',
         'mcp-protocol-version': PROBE_PROTOCOL_VERSION,
       },
-      body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list', params: { ...(cursor ? { cursor } : {}), _meta: meta() } }),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/list',
+        params: { ...(cursor ? { cursor } : {}), _meta: meta() },
+      }),
     });
     if (page === 0) onFirst(res);
     if (res.status === 401 || res.status === 403) {
@@ -189,22 +218,32 @@ async function statelessToolsList(
       break;
     }
     pages.push(result.tools);
-    const serverInfo = (result._meta as Record<string, unknown> | undefined)?.['io.modelcontextprotocol/serverInfo'] as
-      | { name?: unknown; version?: unknown }
-      | undefined;
+    const serverInfo = (result._meta as Record<string, unknown> | undefined)?.[
+      'io.modelcontextprotocol/serverInfo'
+    ] as { name?: unknown; version?: unknown } | undefined;
     if (page === 0 && serverInfo) {
       info = {
         serverName: typeof serverInfo.name === 'string' ? serverInfo.name : null,
         serverVersion: typeof serverInfo.version === 'string' ? serverInfo.version : null,
       };
     }
-    cursor = typeof result.nextCursor === 'string' && result.nextCursor ? result.nextCursor : undefined;
-    if (!cursor) return { tools: pages, truncated: false, ...info, protocolVersion: PROBE_PROTOCOL_VERSION };
+    cursor =
+      typeof result.nextCursor === 'string' && result.nextCursor ? result.nextCursor : undefined;
+    if (!cursor)
+      return { tools: pages, truncated: false, ...info, protocolVersion: PROBE_PROTOCOL_VERSION };
   }
-  return { tools: pages, truncated: Boolean(cursor), ...info, protocolVersion: PROBE_PROTOCOL_VERSION };
+  return {
+    tools: pages,
+    truncated: Boolean(cursor),
+    ...info,
+    protocolVersion: PROBE_PROTOCOL_VERSION,
+  };
 }
 
-const ToolsPage = z.looseObject({ tools: z.array(z.unknown()).optional(), nextCursor: z.string().optional() });
+const ToolsPage = z.looseObject({
+  tools: z.array(z.unknown()).optional(),
+  nextCursor: z.string().optional(),
+});
 
 /** Attempts 2 and 3: the SDK handshake over Streamable HTTP, then SSE. */
 async function handshakeToolsList(
@@ -219,9 +258,17 @@ async function handshakeToolsList(
     kind === 'streamable-http'
       ? new StreamableHTTPClientTransport(target, {
           fetch: fetch as never,
-          reconnectionOptions: { maxRetries: 0, initialReconnectionDelay: 1_000, maxReconnectionDelay: 1_000, reconnectionDelayGrowFactor: 1 },
+          reconnectionOptions: {
+            maxRetries: 0,
+            initialReconnectionDelay: 1_000,
+            maxReconnectionDelay: 1_000,
+            reconnectionDelayGrowFactor: 1,
+          },
         })
-      : new SSEClientTransport(target, { fetch: fetch as never, eventSourceInit: { fetch: fetch as never } });
+      : new SSEClientTransport(target, {
+          fetch: fetch as never,
+          eventSourceInit: { fetch: fetch as never },
+        });
   try {
     // The budget, not just the per-request timeout: two handshake attempts each
     // taking the full requestTimeoutMs would otherwise run well past the cap
@@ -230,10 +277,14 @@ async function handshakeToolsList(
     const pages: unknown[][] = [];
     let cursor: string | undefined;
     for (let page = 0; page < opts.maxPages; page++) {
-      const res = await client.request({ method: 'tools/list', params: cursor ? { cursor } : {} }, ToolsPage, {
-        timeout: opts.requestTimeoutMs,
-        signal: opts.signal,
-      });
+      const res = await client.request(
+        { method: 'tools/list', params: cursor ? { cursor } : {} },
+        ToolsPage,
+        {
+          timeout: opts.requestTimeoutMs,
+          signal: opts.signal,
+        },
+      );
       pages.push(res.tools ?? []);
       cursor = res.nextCursor || undefined;
       if (!cursor) break;
@@ -253,10 +304,12 @@ async function handshakeToolsList(
 
 /** Pull an HTTP status and challenge out of whatever the SDK threw. */
 function httpFromSdkError(err: unknown): { status: number; wwwAuthenticate: string | null } | null {
-  if (err instanceof HttpStatusError) return { status: err.status, wwwAuthenticate: err.wwwAuthenticate };
+  if (err instanceof HttpStatusError)
+    return { status: err.status, wwwAuthenticate: err.wwwAuthenticate };
   const e = err as { code?: unknown; name?: string; message?: string };
   if (e?.name === 'UnauthorizedError') return { status: 401, wwwAuthenticate: null };
-  if (typeof e?.code === 'number' && e.code >= 400 && e.code < 600) return { status: e.code, wwwAuthenticate: null };
+  if (typeof e?.code === 'number' && e.code >= 400 && e.code < 600)
+    return { status: e.code, wwwAuthenticate: null };
   const m = /\b(?:HTTP|status(?: code)?)[\s:]*([45]\d\d)\b/i.exec(e?.message ?? '');
   return m ? { status: Number(m[1]), wwwAuthenticate: null } : null;
 }
@@ -270,7 +323,11 @@ function buildSnapshot(read: ToolsRead): Snapshot {
   for (const page of read.tools) if (!addTools(page, seen, snapshot.issues)) break;
   snapshot.tools = [...seen.values()];
   if (read.truncated) {
-    snapshot.issues.push({ list: 'tools', kind: 'truncated', detail: `still paginating after ${LIMITS.pages} pages` });
+    snapshot.issues.push({
+      list: 'tools',
+      kind: 'truncated',
+      detail: `still paginating after ${LIMITS.pages} pages`,
+    });
   }
   return snapshot;
 }
@@ -280,7 +337,12 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
   const identity = endpointIdentity(rawUrl);
   const out = base(identity?.url ?? rawUrl, declared);
   if (!identity) return { ...out, status: 'blocked', error: 'not an http(s) URL' };
-  if (identity.templated) return { ...out, status: 'templated', error: 'the URL has placeholders that must be filled in first' };
+  if (identity.templated)
+    return {
+      ...out,
+      status: 'templated',
+      error: 'the URL has placeholders that must be filled in first',
+    };
 
   const started = Date.now();
   const budget = AbortSignal.timeout(opts.budgetMs ?? PROBE_DEFAULTS.budgetMs);
@@ -292,11 +354,16 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
   let transport: ProbeResult['transport'] = null;
 
   try {
-    read = await statelessToolsList(opts.fetch, identity.url, { signal: budget, maxPages }, (res) => {
-      out.latencyMs = Date.now() - started;
-      out.httpStatus = res.status;
-      if (res.url && res.url !== identity.url) out.finalUrl = res.url;
-    });
+    read = await statelessToolsList(
+      opts.fetch,
+      identity.url,
+      { signal: budget, maxPages },
+      (res) => {
+        out.latencyMs = Date.now() - started;
+        out.httpStatus = res.status;
+        if (res.url && res.url !== identity.url) out.finalUrl = res.url;
+      },
+    );
     if (read) {
       mode = 'stateless';
       transport = 'streamable-http';
@@ -306,7 +373,13 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
     if (http) {
       out.httpStatus = http.status;
       if (http.status === 401 || http.status === 403) challenge = http;
-      else return { ...out, status: statusForHttp(http.status), error: `HTTP ${http.status}`, auth: { ...out.auth, mode: 'unknown' } };
+      else
+        return {
+          ...out,
+          status: statusForHttp(http.status),
+          error: `HTTP ${http.status}`,
+          auth: { ...out.auth, mode: 'unknown' },
+        };
     } else {
       const c = classifyNetworkError(err);
       return { ...out, ...c, latencyMs: out.latencyMs ?? Date.now() - started };
@@ -317,7 +390,11 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
     for (const kind of ['streamable-http', 'sse'] as const) {
       if (budget.aborted) break;
       try {
-        read = await handshakeToolsList(opts.fetch, identity.url, kind, { requestTimeoutMs, maxPages, signal: budget });
+        read = await handshakeToolsList(opts.fetch, identity.url, kind, {
+          requestTimeoutMs,
+          maxPages,
+          signal: budget,
+        });
         mode = 'initialize';
         transport = kind;
         break;
@@ -331,7 +408,9 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
         if (http) out.httpStatus = http.status;
         // A server that 404s on Streamable HTTP may still speak SSE; anything else is final.
         if (kind === 'sse' || (http && ![400, 404, 405].includes(http.status))) {
-          const c = http ? { status: statusForHttp(http.status), error: `HTTP ${http.status}` } : classifyNetworkError(err);
+          const c = http
+            ? { status: statusForHttp(http.status), error: `HTTP ${http.status}` }
+            : classifyNetworkError(err);
           return { ...out, ...c, latencyMs: out.latencyMs ?? Date.now() - started };
         }
       }
@@ -362,8 +441,16 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
         const res = await opts.fetch(identity.url, {
           method: 'POST',
           signal: budget,
-          headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: CLIENT_INFO } }),
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: CLIENT_INFO },
+          }),
         });
         wwwAuthenticate = res.headers.get('www-authenticate');
         await res.body?.cancel().catch(() => {});
@@ -371,7 +458,12 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
         /* discovery still has the well-known paths */
       }
     }
-    const discovery = await discoverOAuth(opts.fetch, new URL(identity.url), parseWwwAuthenticate(wwwAuthenticate), budget);
+    const discovery = await discoverOAuth(
+      opts.fetch,
+      new URL(identity.url),
+      parseWwwAuthenticate(wwwAuthenticate),
+      budget,
+    );
     return {
       ...out,
       status: 'auth_required',
@@ -387,5 +479,10 @@ export async function probeEndpoint(rawUrl: string, opts: ProbeOptions): Promise
     };
   }
 
-  return { ...out, status: 'protocol_error', error: 'answered, but not as an MCP server', latencyMs: out.latencyMs ?? Date.now() - started };
+  return {
+    ...out,
+    status: 'protocol_error',
+    error: 'answered, but not as an MCP server',
+    latencyMs: out.latencyMs ?? Date.now() - started,
+  };
 }

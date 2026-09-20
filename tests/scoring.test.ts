@@ -132,14 +132,26 @@ describe('efficiency', () => {
 describe('composite health score', () => {
   it('uses all four weights when efficiency is present', () => {
     expect(
-      computeHealthScore({ maintenance: 80, adoption: 60, reliability: 40, efficiency: 50, quality: 90 }),
+      computeHealthScore({
+        maintenance: 80,
+        adoption: 60,
+        reliability: 40,
+        efficiency: 50,
+        quality: 90,
+      }),
     ).toBe(61); // 28 + 18 + 10 + 5 — quality is NOT part of health
   });
 
   it('redistributes efficiency weight when null', () => {
     // (0.35*80 + 0.30*60 + 0.25*40) / 0.90 = 56 / 0.9 = 62.2
     expect(
-      computeHealthScore({ maintenance: 80, adoption: 60, reliability: 40, efficiency: null, quality: 10 }),
+      computeHealthScore({
+        maintenance: 80,
+        adoption: 60,
+        reliability: 40,
+        efficiency: null,
+        quality: 10,
+      }),
     ).toBe(62); // quality does not affect health either way
   });
 });
@@ -171,17 +183,30 @@ describe('field evidence (§3.1 outcome flywheel)', () => {
     const bd = { maintenance: 80, adoption: 60, reliability: 40, efficiency: 50, quality: 90 };
     const none = computeHealthScore(bd);
     // One failed report is worth ~2 points, not a cliff.
-    const oneBad = computeHealthScore({ ...bd, field: computeFieldScore({ reports: 1, successes: 0 }) });
+    const oneBad = computeHealthScore({
+      ...bd,
+      field: computeFieldScore({ reports: 1, successes: 0 }),
+    });
     expect(none - oneBad).toBeLessThanOrEqual(2);
     // A hundred failures is worth real damage.
-    const manyBad = computeHealthScore({ ...bd, field: computeFieldScore({ reports: 100, successes: 0 }) });
+    const manyBad = computeHealthScore({
+      ...bd,
+      field: computeFieldScore({ reports: 100, successes: 0 }),
+    });
     expect(none - manyBad).toBeGreaterThan(4);
   });
 
   it('carries FIELD.weight out of 1.10 when present', () => {
     // (0.35*80 + 0.30*60 + 0.25*40 + 0.10*50 + 0.10*100) / 1.10 = 71/1.1 = 64.5
     expect(
-      computeHealthScore({ maintenance: 80, adoption: 60, reliability: 40, efficiency: 50, quality: 90, field: 100 }),
+      computeHealthScore({
+        maintenance: 80,
+        adoption: 60,
+        reliability: 40,
+        efficiency: 50,
+        quality: 90,
+        field: 100,
+      }),
     ).toBe(65);
   });
 

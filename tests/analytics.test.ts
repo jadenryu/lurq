@@ -43,7 +43,10 @@ describe('analytics', () => {
     expect(url).toBe('https://us.i.posthog.com/batch/');
     const body = JSON.parse(String(init.body));
     expect(body.api_key).toBe('phc_test');
-    expect(body.batch.map((e: { event: string }) => e.event)).toEqual(['api_key_created', 'tool_called']);
+    expect(body.batch.map((e: { event: string }) => e.event)).toEqual([
+      'api_key_created',
+      'tool_called',
+    ]);
     expect(body.batch[1].properties).toEqual({ tool: 'evaluate', ok: true, distinct_id: 'user_1' });
 
     await flush();

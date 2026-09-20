@@ -138,7 +138,9 @@ describe('tier C never answers runtime questions', () => {
       ...c1,
       version: '2.0.0',
       symbols: c1.symbols.map((s) =>
-        s.path === 'doThing' ? { ...s, signature: 'export declare function doThing(a: number): void' } : s,
+        s.path === 'doThing'
+          ? { ...s, signature: 'export declare function doThing(a: number): void' }
+          : s,
       ),
     };
     const d = diffSurfaces(c1, c2);

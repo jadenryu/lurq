@@ -70,10 +70,16 @@ export async function withSetupOnMissingKey(
 
 async function askToConnect(): Promise<boolean> {
   const interactive =
-    process.stdin.isTTY && process.stdout.isTTY && !process.env.CI && !process.argv.includes('--json');
+    process.stdin.isTTY &&
+    process.stdout.isTTY &&
+    !process.env.CI &&
+    !process.argv.includes('--json');
   if (!interactive) return false;
   const { confirm } = await import('@inquirer/prompts');
-  return confirm({ message: 'This machine has no lurq API key yet. Connect it now?', default: true });
+  return confirm({
+    message: 'This machine has no lurq API key yet. Connect it now?',
+    default: true,
+  });
 }
 
 export interface WizardOptions {
@@ -163,7 +169,9 @@ function installGlobally(): void {
   console.log(yellow('skipped'));
   const reason = (res.stderr || res.error?.message || '').trim().split('\n').pop();
   if (reason) console.log(dim(`  ${reason}`));
-  console.log(dim(`  Setup continues. Run \`npm install -g ${PACKAGE_NAME}\` later if you want it.`));
+  console.log(
+    dim(`  Setup continues. Run \`npm install -g ${PACKAGE_NAME}\` later if you want it.`),
+  );
 }
 
 export async function runSetup(opts: WizardOptions): Promise<void> {
@@ -282,8 +290,7 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
       apiKey = (
         await input({
           message: 'Paste your lurq API key',
-          validate: (v) =>
-            v.trim().startsWith('lurq_') ? true : 'Keys look like lurq_live_… ',
+          validate: (v) => (v.trim().startsWith('lurq_') ? true : 'Keys look like lurq_live_… '),
         })
       ).trim();
     }
@@ -291,7 +298,11 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
     process.stdout.write('  Validating key… ');
     const check = await validateKey(url, apiKey);
     console.log(
-      check === 'valid' ? green('ok') : check === 'invalid' ? yellow('rejected') : yellow('could not reach endpoint'),
+      check === 'valid'
+        ? green('ok')
+        : check === 'invalid'
+          ? yellow('rejected')
+          : yellow('could not reach endpoint'),
     );
     if (check !== 'valid') {
       const proceed = await confirm({
@@ -329,7 +340,10 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
         default: 'yes',
         choices: [
           {
-            name: others > 0 ? `Yes, set up all ${detected.length} detected agents` : `Yes, set up ${primary.label} for me`,
+            name:
+              others > 0
+                ? `Yes, set up all ${detected.length} detected agents`
+                : `Yes, set up ${primary.label} for me`,
             value: 'yes',
           },
           { name: 'No, let me choose which agent(s)', value: 'other' },
@@ -355,7 +369,10 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
         checked: s.detected,
       })),
     });
-    await finish(specs.filter((s) => ids.includes(s.id)), { url, apiKey });
+    await finish(
+      specs.filter((s) => ids.includes(s.id)),
+      { url, apiKey },
+    );
     return;
   }
 
@@ -383,9 +400,7 @@ export async function runSetup(opts: WizardOptions): Promise<void> {
         'Check the URL and your connection, then re-run.',
     );
   }
-  const selected = opts.agent
-    ? resolveAgents(opts.agent)
-    : agentSpecs().filter((s) => s.detected);
+  const selected = opts.agent ? resolveAgents(opts.agent) : agentSpecs().filter((s) => s.detected);
   await finish(selected, { url, apiKey });
 }
 
@@ -403,7 +418,9 @@ async function runAgentLink(opts: WizardOptions): Promise<void> {
     );
   }
   const selected = opts.agent ? resolveAgents(opts.agent) : agentSpecs().filter((s) => s.detected);
-  console.log('lurq needs a one-time sign-in to connect this machine. Open this link on this computer:\n');
+  console.log(
+    'lurq needs a one-time sign-in to connect this machine. Open this link on this computer:\n',
+  );
   console.log(`  ${link}\n`);
   console.log(
     `Signing in finishes setup by itself: the key is stored${
@@ -472,7 +489,9 @@ async function finish(
   // success and the very next thing they type does not exist.
   const { command } = lurqInvocation();
   console.log(
-    dim(`  \`${command} verify <package>\`, \`evaluate\`, \`compare\`, \`usage\` now work anywhere.`),
+    dim(
+      `  \`${command} verify <package>\`, \`evaluate\`, \`compare\`, \`usage\` now work anywhere.`,
+    ),
   );
 
   if (selected.length === 0) {

@@ -182,8 +182,6 @@ export function extractApiSurface(source: string, label = 'document'): ApiSurfac
     title: typeof info.title === 'string' ? info.title : null,
     version: typeof info.version === 'string' ? info.version : null,
     operations,
-    ...(operations.size === 0
-      ? { unreadableReason: `${label} declares no operations` }
-      : {}),
+    ...(operations.size === 0 ? { unreadableReason: `${label} declares no operations` } : {}),
   };
 }

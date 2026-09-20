@@ -39,7 +39,12 @@ function fakeDb() {
                 { name: 'left', version: '1.0.0' },
               ]
             : [
-                { name: 'lodash', latestVersion: '4.17.21', deprecated: false, advisories: [{}, {}] },
+                {
+                  name: 'lodash',
+                  latestVersion: '4.17.21',
+                  deprecated: false,
+                  advisories: [{}, {}],
+                },
                 { name: 'left', latestVersion: '1.0.0', deprecated: false, advisories: [] },
               ],
       }),
@@ -75,7 +80,10 @@ describe('computeDrift advisories', () => {
     query.mockResolvedValue({ affected: new Map(), complete: false });
 
     const drift = await computeDrift(fakeDb(), manifest);
-    expect(drift.deps.find((d) => d.name === 'lodash')).toMatchObject({ advisories: 2, advisoriesAt: 'package' });
+    expect(drift.deps.find((d) => d.name === 'lodash')).toMatchObject({
+      advisories: 2,
+      advisoriesAt: 'package',
+    });
     expect(drift.advisoriesExact).toBe(false);
   });
 });

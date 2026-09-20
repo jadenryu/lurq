@@ -113,7 +113,9 @@ export function classifyError(err: unknown, ctx: ErrorContext): Classified {
   }
 
   const httpCode =
-    err instanceof StreamableHTTPError || err instanceof SseError ? (err as { code?: number }).code : undefined;
+    err instanceof StreamableHTTPError || err instanceof SseError
+      ? (err as { code?: number }).code
+      : undefined;
   if (httpCode === 401 || httpCode === 403) {
     return {
       status: 'auth_required',
@@ -155,11 +157,16 @@ export function classifyError(err: unknown, ctx: ErrorContext): Classified {
   // proxy refusal) but not always with a code, and none of them are MCP faults.
   if (err instanceof TypeError && /fetch failed/i.test(message)) {
     const cause = (err as { cause?: unknown }).cause;
-    return { status: 'unreachable', error: cause ? `fetch failed: ${msg(cause).slice(0, 300)}` : message, hint: null };
+    return {
+      status: 'unreachable',
+      error: cause ? `fetch failed: ${msg(cause).slice(0, 300)}` : message,
+      hint: null,
+    };
   }
 
   const closed =
-    (err instanceof McpError && err.code === ErrorCode.ConnectionClosed) || /connection closed/i.test(message);
+    (err instanceof McpError && err.code === ErrorCode.ConnectionClosed) ||
+    /connection closed/i.test(message);
 
   if (closed && ctx.transport === 'stdio') {
     const missing = sniffMissingEnv(ctx.stderrTail);

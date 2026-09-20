@@ -19,7 +19,10 @@ function io(over: Partial<ExtractPassIo> = {}): ExtractPassIo {
 describe('recordExtractOutcomes', () => {
   it('counts a failed extraction against that version, and queues nothing for it', async () => {
     const deps = io();
-    const queued = await recordExtractOutcomes([{ name: 'no-types', version: '1.0.0', ok: false }], deps);
+    const queued = await recordExtractOutcomes(
+      [{ name: 'no-types', version: '1.0.0', ok: false }],
+      deps,
+    );
     expect(deps.recordMiss).toHaveBeenCalledWith('no-types', '1.0.0');
     expect(deps.enqueueSymbolSurface).not.toHaveBeenCalled();
     expect(queued).toBe(0);
@@ -35,7 +38,9 @@ describe('recordExtractOutcomes', () => {
 
   it('skips a success the symbol store already has', async () => {
     const deps = io({ hasSymbolSurface: vi.fn(async () => true) });
-    expect(await recordExtractOutcomes([{ name: 'zod', version: '4.0.0', ok: true }], deps)).toBe(0);
+    expect(await recordExtractOutcomes([{ name: 'zod', version: '4.0.0', ok: true }], deps)).toBe(
+      0,
+    );
     expect(deps.enqueueSymbolSurface).not.toHaveBeenCalled();
   });
 

@@ -7,7 +7,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 import { runMcpCi } from '../src/cli/mcpScan';
-import { MCP_SCAN_WORKFLOW_PATH, renderMcpScanWorkflow, secretNameFor } from '../src/github/mcpScanWorkflow';
+import {
+  MCP_SCAN_WORKFLOW_PATH,
+  renderMcpScanWorkflow,
+  secretNameFor,
+} from '../src/github/mcpScanWorkflow';
 import { cliSpec } from '../src/github/workflow';
 
 type Workflow = {
@@ -26,8 +30,13 @@ describe('renderMcpScanWorkflow', () => {
     expect(w.on.schedule[0]!.cron).toBe('23 6 * * *');
     expect(w.on.pull_request.paths).toContain('.mcp.json');
     const step = scanStep(w);
-    expect(step.run).toBe(`npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload --github-issue --fail-on high`);
-    expect(step.env).toEqual({ LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}', GITHUB_TOKEN: '${{ github.token }}' });
+    expect(step.run).toBe(
+      `npx -y ${cliSpec()} mcp-scan --project-only --trust-project --require-upload --github-issue --fail-on high`,
+    );
+    expect(step.env).toEqual({
+      LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}',
+      GITHUB_TOKEN: '${{ github.token }}',
+    });
   });
 
   it('stays read-only without the issue', () => {
@@ -38,7 +47,13 @@ describe('renderMcpScanWorkflow', () => {
   });
 
   it('maps each server credential from a repository secret, never inline', () => {
-    const step = scanStep(load(renderMcpScanWorkflow({ secrets: ['LINEAR_API_KEY', 'GITHUB_TOKEN', 'bad-name', 'LURQ_API_KEY'] })));
+    const step = scanStep(
+      load(
+        renderMcpScanWorkflow({
+          secrets: ['LINEAR_API_KEY', 'GITHUB_TOKEN', 'bad-name', 'LURQ_API_KEY'],
+        }),
+      ),
+    );
     expect(step.env).toEqual({
       LURQ_API_KEY: '${{ secrets.LURQ_API_KEY }}',
       // A server that reads GITHUB_TOKEN gets its own credential; GitHub reserves GITHUB_* secret names.
@@ -48,7 +63,10 @@ describe('renderMcpScanWorkflow', () => {
   });
 
   it('installs uv only when a server needs it', () => {
-    const uses = (yaml: string) => load(yaml).jobs.scan.steps.map((s) => s.uses).filter(Boolean);
+    const uses = (yaml: string) =>
+      load(yaml)
+        .jobs.scan.steps.map((s) => s.uses)
+        .filter(Boolean);
     expect(uses(renderMcpScanWorkflow())).not.toContain('astral-sh/setup-uv@v6');
     expect(uses(renderMcpScanWorkflow({ needsUv: true }))).toContain('astral-sh/setup-uv@v6');
   });
@@ -76,7 +94,11 @@ describe('lurq mcp-ci', () => {
       join(root, '.mcp.json'),
       JSON.stringify({
         mcpServers: {
-          linear: { type: 'http', url: 'https://mcp.linear.app/mcp', headers: { Authorization: 'Bearer ${LINEAR_API_KEY}' } },
+          linear: {
+            type: 'http',
+            url: 'https://mcp.linear.app/mcp',
+            headers: { Authorization: 'Bearer ${LINEAR_API_KEY}' },
+          },
           fetch: { command: 'uvx', args: ['mcp-server-fetch'] },
           gh: { command: 'npx', args: ['-y', 'gh-mcp'], env: { GITHUB_TOKEN: '${GITHUB_TOKEN}' } },
         },
@@ -86,13 +108,19 @@ describe('lurq mcp-ci', () => {
     const w = load(readFileSync(join(root, MCP_SCAN_WORKFLOW_PATH), 'utf8'));
     const step = scanStep(w);
     expect(step.run).toContain('--fail-on moderate');
-    expect(Object.keys(step.env!).sort()).toEqual(['GITHUB_TOKEN', 'LINEAR_API_KEY', 'LURQ_API_KEY']);
+    expect(Object.keys(step.env!).sort()).toEqual([
+      'GITHUB_TOKEN',
+      'LINEAR_API_KEY',
+      'LURQ_API_KEY',
+    ]);
     expect(w.jobs.scan.steps.some((s) => s.uses === 'astral-sh/setup-uv@v6')).toBe(true);
   });
 
   it('omits the issue with --no-issue', async () => {
     await runMcpCi(root, { issue: false });
-    expect(load(readFileSync(join(root, MCP_SCAN_WORKFLOW_PATH), 'utf8')).permissions).toEqual({ contents: 'read' });
+    expect(load(readFileSync(join(root, MCP_SCAN_WORKFLOW_PATH), 'utf8')).permissions).toEqual({
+      contents: 'read',
+    });
   });
 
   it('will not overwrite an existing workflow without --force', async () => {

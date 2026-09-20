@@ -143,7 +143,9 @@ function needsConfigFindings(report: ScanLike): Finding[] {
 export function scanFindings(report: ScanLike): Finding[] {
   const merged = sortFindings([
     // A per-server finding only knows its alias from the server it came from.
-    ...report.servers.flatMap((s) => (s.analysis?.findings ?? []).map((f) => ({ ...f, server: s.alias }))),
+    ...report.servers.flatMap((s) =>
+      (s.analysis?.findings ?? []).map((f) => ({ ...f, server: s.alias })),
+    ),
     ...report.findings,
   ]);
   // A server that never started produced no findings of its own, and the reason

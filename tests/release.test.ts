@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { releaseVerdict, formatReleaseCheck, type ReleaseCheck } from '../src/surface/release';
 
-const diff = (d: Partial<Record<'removed' | 'arityChanged' | 'typeOnlyRemoved' | 'added', number>>) => ({
+const diff = (
+  d: Partial<Record<'removed' | 'arityChanged' | 'typeOnlyRemoved' | 'added', number>>,
+) => ({
   removed: Array(d.removed ?? 0).fill(0),
   arityChanged: Array(d.arityChanged ?? 0).fill(0),
   typeOnlyRemoved: Array(d.typeOnlyRemoved ?? 0).fill(0),

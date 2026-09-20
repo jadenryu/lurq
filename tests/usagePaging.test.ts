@@ -71,7 +71,11 @@ describe('usage paging', () => {
     getOrExtractSurface.mockImplementation(async (_db, _n, v) =>
       v === '18.0.0' ? [...big, fn('zzzRemoved')] : big,
     );
-    const res = await handleUsage(db, { package: 'react', version: '19.0.0', knownVersion: '18.0.0' });
+    const res = await handleUsage(db, {
+      package: 'react',
+      version: '19.0.0',
+      knownVersion: '18.0.0',
+    });
     expect(res.delta?.removed.map((s) => s.name)).toEqual(['zzzRemoved']);
   });
 });
@@ -89,7 +93,9 @@ describe('usage shallow surfaces', () => {
   });
 
   it('does not flag a package whose only export is a default function', async () => {
-    getOrExtractSurface.mockResolvedValue([{ name: 'default', kind: 'function', signature: '(s: string) => string' }]);
+    getOrExtractSurface.mockResolvedValue([
+      { name: 'default', kind: 'function', signature: '(s: string) => string' },
+    ]);
     const res = await handleUsage(db, { package: 'left-pad', version: '1.3.0' });
     expect(res.shallow).toBeUndefined();
   });

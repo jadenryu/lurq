@@ -55,7 +55,10 @@ export interface PublicMcpServerSummary {
 }
 
 /** The summary for one registry server, or null when it has no page. */
-export async function publicMcpServerSummary(db: Database, name: string): Promise<PublicMcpServerSummary | null> {
+export async function publicMcpServerSummary(
+  db: Database,
+  name: string,
+): Promise<PublicMcpServerSummary | null> {
   const [server] = await db
     .select()
     .from(mcpRegistryServers)
@@ -85,7 +88,13 @@ export async function publicMcpServerSummary(db: Database, name: string): Promis
       transport: best.transport,
       status: best.lastStatus,
       authMode: best.auth?.mode ?? 'unknown',
-      oauth: best.auth?.oauth ? { cimd: best.auth.oauth.cimd, dcr: best.auth.oauth.dcr, pkceS256: best.auth.oauth.pkceS256 } : null,
+      oauth: best.auth?.oauth
+        ? {
+            cimd: best.auth.oauth.cimd,
+            dcr: best.auth.oauth.dcr,
+            pkceS256: best.auth.oauth.pkceS256,
+          }
+        : null,
       violations: best.violations ?? [],
       toolNames: contract ? contract.tools.map((t) => t.name) : null,
       lastProbedAt: best.lastProbedAt?.toISOString() ?? null,
@@ -104,28 +113,46 @@ export async function publicMcpServerSummary(db: Database, name: string): Promis
 }
 
 /** Every server that has a page, most recently probed first. */
-export async function listPublicMcpServers(db: Database): Promise<{ name: string; dataAsOf: string | null }[]> {
+export async function listPublicMcpServers(
+  db: Database,
+): Promise<{ name: string; dataAsOf: string | null }[]> {
   const latest = sql<Date | null>`max(${mcpRemoteEndpoints.lastProbedAt})`;
   const rows = await db
     .select({ name: mcpEndpointServers.serverName, dataAsOf: latest })
     .from(mcpEndpointServers)
     .innerJoin(mcpRemoteEndpoints, eq(mcpRemoteEndpoints.id, mcpEndpointServers.endpointId))
-    .where(and(isNull(mcpEndpointServers.removedAt), isNull(mcpRemoteEndpoints.removedAt), isNotNull(mcpRemoteEndpoints.lastStatus)))
+    .where(
+      and(
+        isNull(mcpEndpointServers.removedAt),
+        isNull(mcpRemoteEndpoints.removedAt),
+        isNotNull(mcpRemoteEndpoints.lastStatus),
+      ),
+    )
     .groupBy(mcpEndpointServers.serverName)
     .orderBy(desc(latest))
     .limit(PUBLIC_MCP_LIMIT);
   return rows
     .filter((r) => validRegistryName(r.name))
-    .map((r) => ({ name: r.name, dataAsOf: r.dataAsOf ? new Date(r.dataAsOf).toISOString() : null }));
+    .map((r) => ({
+      name: r.name,
+      dataAsOf: r.dataAsOf ? new Date(r.dataAsOf).toISOString() : null,
+    }));
 }
 
-export function registerPublicMcpServerRoutes(app: Express, db: Database, limiter: RequestHandler): void {
-  const cacheable = (res: Response) => res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+export function registerPublicMcpServerRoutes(
+  app: Express,
+  db: Database,
+  limiter: RequestHandler,
+): void {
+  const cacheable = (res: Response) =>
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
 
   app.get('/public/mcp-server', limiter, async (req: Request, res: Response) => {
     const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
     if (!validRegistryName(name)) {
-      res.status(400).json({ error: 'Give an official MCP registry name, e.g. io.github.acme/weather.' });
+      res
+        .status(400)
+        .json({ error: 'Give an official MCP registry name, e.g. io.github.acme/weather.' });
       return;
     }
     try {
@@ -137,7 +164,10 @@ export function registerPublicMcpServerRoutes(app: Express, db: Database, limite
       cacheable(res);
       res.json(summary);
     } catch (err) {
-      logger.error('public MCP server read failed:', err instanceof Error ? err.message : String(err));
+      logger.error(
+        'public MCP server read failed:',
+        err instanceof Error ? err.message : String(err),
+      );
       res.status(500).json({ error: 'Could not read that server.' });
     }
   });
@@ -148,7 +178,10 @@ export function registerPublicMcpServerRoutes(app: Express, db: Database, limite
       cacheable(res);
       res.json({ servers });
     } catch (err) {
-      logger.error('public MCP server list failed:', err instanceof Error ? err.message : String(err));
+      logger.error(
+        'public MCP server list failed:',
+        err instanceof Error ? err.message : String(err),
+      );
       res.status(500).json({ error: 'Could not list servers.' });
     }
   });

@@ -20,13 +20,29 @@ const exportsOf = (...names: string[]) => new Set(names);
 describe('require() across a switch to ESM', () => {
   // `const fetch = require('node-fetch'); fetch(url)` on node-fetch 3.
   it('blocks a direct call of what require returned, on every Node', () => {
-    const judged = judgeRequires('cjs', 'esm', [ref({ calls: [{ line: 4, args: 1 }, { line: 5, args: null }] })], {
-      fromExports: exportsOf('default'),
-      toExports: exportsOf('default'),
-      runtime: {},
-    });
+    const judged = judgeRequires(
+      'cjs',
+      'esm',
+      [
+        ref({
+          calls: [
+            { line: 4, args: 1 },
+            { line: 5, args: null },
+          ],
+        }),
+      ],
+      {
+        fromExports: exportsOf('default'),
+        toExports: exportsOf('default'),
+        runtime: {},
+      },
+    );
     expect(judged!.broken).toEqual([
-      { file: 'src/log.js', line: 4, why: 'require() now returns the module namespace, which cannot be called' },
+      {
+        file: 'src/log.js',
+        line: 4,
+        why: 'require() now returns the module namespace, which cannot be called',
+      },
     ]);
     expect(judged!.olderNode).toEqual([{ file: 'src/log.js', line: 1 }]);
   });
@@ -36,8 +52,16 @@ describe('require() across a switch to ESM', () => {
     const judged = judgeRequires(
       'cjs',
       'esm',
-      [ref({}), ref({ symbol: 'red', via: 'namespace', line: 3 }), ref({ symbol: 'chalkStderr', via: 'namespace', line: 6 })],
-      { fromExports: exportsOf('default'), toExports: exportsOf('default', 'chalkStderr'), runtime: {} },
+      [
+        ref({}),
+        ref({ symbol: 'red', via: 'namespace', line: 3 }),
+        ref({ symbol: 'chalkStderr', via: 'namespace', line: 6 }),
+      ],
+      {
+        fromExports: exportsOf('default'),
+        toExports: exportsOf('default', 'chalkStderr'),
+        runtime: {},
+      },
     );
     expect(judged!.broken.map((b) => b.line)).toEqual([3]);
   });
@@ -54,11 +78,16 @@ describe('require() across a switch to ESM', () => {
 
   // An unreadable surface would make every property look missing.
   it('skips the export judgement when a side could not be read', () => {
-    const judged = judgeRequires('cjs', 'esm', [ref({ symbol: 'red', via: 'namespace', line: 3 })], {
-      fromExports: exportsOf('default'),
-      toExports: null,
-      runtime: { engines: '>=22.12' },
-    });
+    const judged = judgeRequires(
+      'cjs',
+      'esm',
+      [ref({ symbol: 'red', via: 'namespace', line: 3 })],
+      {
+        fromExports: exportsOf('default'),
+        toExports: null,
+        runtime: { engines: '>=22.12' },
+      },
+    );
     expect(judged).toBeNull();
   });
 
@@ -75,22 +104,32 @@ describe('require() across a switch to ESM', () => {
   });
 
   it('blocks every require site when the exports map offers require nothing', () => {
-    const judged = judgeRequires('cjs', 'unexported', [ref({}), ref({ symbol: 'red', via: 'namespace', line: 3 })], {
-      fromExports: exportsOf('default'),
-      toExports: exportsOf('default'),
-      runtime: {},
-    });
+    const judged = judgeRequires(
+      'cjs',
+      'unexported',
+      [ref({}), ref({ symbol: 'red', via: 'namespace', line: 3 })],
+      {
+        fromExports: exportsOf('default'),
+        toExports: exportsOf('default'),
+        runtime: {},
+      },
+    );
     expect(judged!.broken.map((b) => b.line)).toEqual([1]);
   });
 
   // No Node version loads an async ES module through require(), so engines do not help.
   it('blocks every require() of an ES module that uses top-level await', () => {
-    const judged = judgeRequires('cjs', 'esm', [ref({ symbol: 'v4', via: 'destructured', line: 2 })], {
-      fromExports: exportsOf('v4'),
-      toExports: exportsOf('v4'),
-      runtime: { engines: '>=22.12' },
-      asyncModule: true,
-    });
+    const judged = judgeRequires(
+      'cjs',
+      'esm',
+      [ref({ symbol: 'v4', via: 'destructured', line: 2 })],
+      {
+        fromExports: exportsOf('v4'),
+        toExports: exportsOf('v4'),
+        runtime: { engines: '>=22.12' },
+        asyncModule: true,
+      },
+    );
     expect(judged).toEqual({
       from: 'cjs',
       to: 'esm',
@@ -132,11 +171,16 @@ describe('the scanner marks require() loads', () => {
         ].join('\n'),
       );
       const refs = scanReferences(dir);
-      const get = (pkg: string, sym: string) => refs.find((r) => r.package === pkg)!.symbols.get(sym)![0]!;
+      const get = (pkg: string, sym: string) =>
+        refs.find((r) => r.package === pkg)!.symbols.get(sym)![0]!;
       expect(get('chalk', 'default')).toMatchObject({ loader: 'require' });
-      expect(get('chalk', 'default').calls).toContainEqual(expect.objectContaining({ line: 2, args: 1 }));
+      expect(get('chalk', 'default').calls).toContainEqual(
+        expect.objectContaining({ line: 2, args: 1 }),
+      );
       expect(get('chalk', 'red')).toMatchObject({ via: 'namespace', loader: 'require' });
-      expect(get('node-fetch', 'default').calls).toContainEqual(expect.objectContaining({ line: 5, args: 1 }));
+      expect(get('node-fetch', 'default').calls).toContainEqual(
+        expect.objectContaining({ line: 5, args: 1 }),
+      );
       expect(get('uuid', 'v4')).toMatchObject({ via: 'destructured', loader: 'require' });
       expect(get('cookie', 'parse').loader).toBeUndefined();
     } finally {
@@ -150,20 +194,36 @@ describe('what the new version requires of the project', () => {
 
   it('reports a Node floor above what the project declares', () => {
     expect(
-      judgeRequirements(manifest({ engines: { node: '>=14' } }), manifest({ engines: { node: '>=20' } }), { engines: '>=18' }),
-    ).toEqual([{ kind: 'engines', name: 'node', needs: '>=20', has: '>=18 (package.json engines)' }]);
+      judgeRequirements(
+        manifest({ engines: { node: '>=14' } }),
+        manifest({ engines: { node: '>=20' } }),
+        { engines: '>=18' },
+      ),
+    ).toEqual([
+      { kind: 'engines', name: 'node', needs: '>=20', has: '>=18 (package.json engines)' },
+    ]);
   });
 
   it('does not blame the upgrade for a floor the old version already had', () => {
     expect(
-      judgeRequirements(manifest({ engines: { node: '>=20' } }), manifest({ engines: { node: '>=20.5' } }), { engines: '>=18' }),
+      judgeRequirements(
+        manifest({ engines: { node: '>=20' } }),
+        manifest({ engines: { node: '>=20.5' } }),
+        { engines: '>=18' },
+      ),
     ).toEqual([]);
   });
 
   // `.nvmrc` "20" is some Node 20. A floor inside that line is reachable.
   it('judges a pinned Node line as a line, not as its .0 floor', () => {
     const pinned = { nodeVersionFile: { name: '.nvmrc', value: '20' } };
-    expect(judgeRequirements(manifest(), manifest({ engines: { node: '^20.19.0 || >=22.12.0' } }), pinned)).toEqual([]);
+    expect(
+      judgeRequirements(
+        manifest(),
+        manifest({ engines: { node: '^20.19.0 || >=22.12.0' } }),
+        pinned,
+      ),
+    ).toEqual([]);
     expect(judgeRequirements(manifest(), manifest({ engines: { node: '>=22' } }), pinned)).toEqual([
       { kind: 'engines', name: 'node', needs: '>=22', has: '20 (.nvmrc)' },
     ]);
@@ -174,14 +234,22 @@ describe('what the new version requires of the project', () => {
     try {
       mkdirSync(join(dir, '.git'));
       mkdirSync(join(dir, 'node_modules/react'), { recursive: true });
-      writeFileSync(join(dir, 'node_modules/react/package.json'), JSON.stringify({ name: 'react', version: '18.3.1' }));
-      writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { react: '^18.2.0' } }));
+      writeFileSync(
+        join(dir, 'node_modules/react/package.json'),
+        JSON.stringify({ name: 'react', version: '18.3.1' }),
+      );
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { react: '^18.2.0' } }),
+      );
       const found = judgeRequirements(
         manifest({ peerDependencies: { react: '^18.0.0' } }),
         manifest({ peerDependencies: { react: '^19.0.0', 'react-dom': '^19.0.0' } }),
         { root: dir },
       );
-      expect(found).toEqual([{ kind: 'peer', name: 'react', needs: '^19.0.0', has: '18.3.1 (installed)' }]);
+      expect(found).toEqual([
+        { kind: 'peer', name: 'react', needs: '^19.0.0', has: '18.3.1 (installed)' },
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -191,7 +259,10 @@ describe('what the new version requires of the project', () => {
     const dir = mkdtempSync(join(tmpdir(), 'lurq-peers-'));
     try {
       mkdirSync(join(dir, '.git'));
-      writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { vue: '^2.7.0', sass: '^1.0.0' } }));
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ dependencies: { vue: '^2.7.0', sass: '^1.0.0' } }),
+      );
       const found = judgeRequirements(
         manifest(),
         manifest({
@@ -200,7 +271,9 @@ describe('what the new version requires of the project', () => {
         }),
         { root: dir },
       );
-      expect(found).toEqual([{ kind: 'peer', name: 'vue', needs: '^3.0.0', has: '^2.7.0 (package.json)' }]);
+      expect(found).toEqual([
+        { kind: 'peer', name: 'vue', needs: '^3.0.0', has: '^2.7.0 (package.json)' },
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -214,13 +287,25 @@ describe('side-effect loads', () => {
       mkdirSync(join(dir, 'src'), { recursive: true });
       writeFileSync(
         join(dir, 'src/boot.ts'),
-        [`import 'dotenv/config';`, `require('source-map-support/register');`, `import './local.css';`].join('\n'),
+        [
+          `import 'dotenv/config';`,
+          `require('source-map-support/register');`,
+          `import './local.css';`,
+        ].join('\n'),
       );
       const refs = scanReferences(dir);
       const get = (pkg: string) => refs.find((r) => r.package === pkg)!.symbols.get('default')![0]!;
-      expect(get('dotenv')).toMatchObject({ via: 'side-effect', specifier: 'dotenv/config', line: 1 });
+      expect(get('dotenv')).toMatchObject({
+        via: 'side-effect',
+        specifier: 'dotenv/config',
+        line: 1,
+      });
       expect(get('dotenv').loader).toBeUndefined();
-      expect(get('source-map-support')).toMatchObject({ via: 'side-effect', loader: 'require', line: 2 });
+      expect(get('source-map-support')).toMatchObject({
+        via: 'side-effect',
+        loader: 'require',
+        line: 2,
+      });
       expect(refs.map((r) => r.package)).not.toContain('./local.css');
     } finally {
       rmSync(dir, { recursive: true, force: true });

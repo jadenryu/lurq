@@ -8,7 +8,9 @@ import { costOf, reserveFor } from '../src/core/modelPricing';
 describe('costOf', () => {
   it('prices input and output at their separate rates', () => {
     // 1M input at $5 + 1M output at $25 on Opus 5.
-    expect(costOf('claude-opus-5', { input_tokens: 1_000_000, output_tokens: 1_000_000 })).toBeCloseTo(30, 6);
+    expect(
+      costOf('claude-opus-5', { input_tokens: 1_000_000, output_tokens: 1_000_000 }),
+    ).toBeCloseTo(30, 6);
   });
 
   it('bills a cached read at a tenth of the input rate', () => {

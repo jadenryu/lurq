@@ -18,7 +18,12 @@ function plan(overrides: Partial<PlanOutput> = {}): PlanOutput {
         need: 'state management',
         category: 'state' as never,
         layer: 'State',
-        recommended: { name: 'zustand', repoUrl: 'https://github.com/pmndrs/zustand', healthScore: 88, confidence: 'proven' } as never,
+        recommended: {
+          name: 'zustand',
+          repoUrl: 'https://github.com/pmndrs/zustand',
+          healthScore: 88,
+          confidence: 'proven',
+        } as never,
         alternatives: [{ name: 'jotai' } as never],
       },
     ],
@@ -38,7 +43,13 @@ describe('renderPlanHtml', () => {
     const html = renderPlanHtml(
       plan({
         slots: [
-          { need: 'obscure thing', category: null, layer: 'Other', recommended: null, alternatives: [] } as never,
+          {
+            need: 'obscure thing',
+            category: null,
+            layer: 'Other',
+            recommended: null,
+            alternatives: [],
+          } as never,
         ],
       }),
     );

@@ -58,7 +58,9 @@ async function getSeedCategory(db: Database, name: string): Promise<Category | n
 async function getCategoryMedianBundle(db: Database, category: Category): Promise<number | null> {
   const [row] = await db
     .select({
-      m: sql<number | null>`percentile_cont(0.5) within group (order by ${packages.bundleMinGzipKb})`,
+      m: sql<
+        number | null
+      >`percentile_cont(0.5) within group (order by ${packages.bundleMinGzipKb})`,
     })
     .from(packages)
     .where(and(eq(packages.category, category), isNotNull(packages.bundleMinGzipKb)));
@@ -244,7 +246,10 @@ export async function getOrFetchPackage(
     // ingest keeps running (not cancelled) and lands within a few more seconds.
     // ponytail: inline ingest isn't queue-bounded; single-package request rate
     // is the natural cap. Route through enqueueIngest if a flood ever appears.
-    const row = await withBudget(runIngest(db, name, opts.requestedByOwnerId ?? null), opts.blockMs);
+    const row = await withBudget(
+      runIngest(db, name, opts.requestedByOwnerId ?? null),
+      opts.blockMs,
+    );
     if (row) return { row, wasTracked: false, existsOnNpm: true };
     return { row: null, wasTracked: false, existsOnNpm: true, queued: true };
   }

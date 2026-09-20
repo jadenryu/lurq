@@ -23,15 +23,26 @@ describe('agentClient', () => {
 
 describe('initializeInfo', () => {
   it('reads the client name and version from an initialize, alone or in a batch', () => {
-    const init = { jsonrpc: '2.0', id: 1, method: 'initialize', params: { clientInfo: { name: 'claude-code', version: '2.1.0' } } };
+    const init = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'claude-code', version: '2.1.0' } },
+    };
     expect(initializeInfo(init)).toEqual({ name: 'claude-code', version: '2.1.0' });
-    expect(initializeInfo([{ method: 'ping' }, init])).toEqual({ name: 'claude-code', version: '2.1.0' });
+    expect(initializeInfo([{ method: 'ping' }, init])).toEqual({
+      name: 'claude-code',
+      version: '2.1.0',
+    });
   });
 
   it('is null for anything but an initialize, and clips what it keeps', () => {
     expect(initializeInfo({ method: 'tools/call' })).toBeNull();
     expect(initializeInfo(null)).toBeNull();
-    const long = initializeInfo({ method: 'initialize', params: { clientInfo: { name: 'x'.repeat(100) } } });
+    const long = initializeInfo({
+      method: 'initialize',
+      params: { clientInfo: { name: 'x'.repeat(100) } },
+    });
     expect(long).toEqual({ name: 'x'.repeat(64), version: null });
   });
 });

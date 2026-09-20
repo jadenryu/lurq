@@ -185,7 +185,9 @@ export async function backfillSurfaces(
   // diffable store had never seen it — which is exactly how graph coverage ended
   // up an order of magnitude below api_surfaces coverage while every pass
   // reported itself healthy.
-  const missing = await getPackagesMissingGraphSurface(db, limit, { byDownloads: opts.byDownloads });
+  const missing = await getPackagesMissingGraphSurface(db, limit, {
+    byDownloads: opts.byDownloads,
+  });
   for (const row of missing) {
     s.scanned++;
     await enqueueSurface(db, row.name, row.version).then(

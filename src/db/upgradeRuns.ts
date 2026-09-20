@@ -20,10 +20,7 @@ export const MAX_RUNS_PER_POST = 100;
  * that, re-running a failed workflow would double every figure the impact view
  * reports — the most likely way for these numbers to quietly become wrong.
  */
-export async function recordUpgradeRuns(
-  db: Database,
-  rows: NewUpgradeRunRow[],
-): Promise<number> {
+export async function recordUpgradeRuns(db: Database, rows: NewUpgradeRunRow[]): Promise<number> {
   if (rows.length === 0) return 0;
   await db
     .insert(upgradeRuns)

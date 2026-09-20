@@ -51,7 +51,8 @@ function cleanUrl(url: string | null): string | null {
 function pickLicense(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === 'string') return value;
-  if (typeof value === 'object' && 'type' in value) return String((value as { type: unknown }).type);
+  if (typeof value === 'object' && 'type' in value)
+    return String((value as { type: unknown }).type);
   return null;
 }
 
@@ -235,7 +236,9 @@ export async function fetchNpmCompatAtVersion(
     });
     const latest: string | null = data?.['dist-tags']?.latest ?? null;
     const wanted = version
-      ? (data?.versions?.[version] ? version : null)
+      ? data?.versions?.[version]
+        ? version
+        : null
       : latest && data?.versions?.[latest]
         ? latest
         : null;

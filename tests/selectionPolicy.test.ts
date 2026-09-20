@@ -15,7 +15,10 @@ function candidate(name: string, confidence: Confidence = 'proven'): Candidate {
     latestVersion: '1.0.0',
     weeklyDownloads: 1000,
     lastReleaseAt: null,
-    repoUrl: null, deprecated: false, archived: false, advisories: 0
+    repoUrl: null,
+    deprecated: false,
+    archived: false,
+    advisories: 0,
   };
 }
 
@@ -154,7 +157,11 @@ describe('check', () => {
 
   it('enforces the adoption floor', () => {
     const p = policy({ minWeeklyDownloads: 10_000 });
-    const facts = (weeklyDownloads: number) => ({ license: 'MIT', deprecated: false, weeklyDownloads });
+    const facts = (weeklyDownloads: number) => ({
+      license: 'MIT',
+      deprecated: false,
+      weeklyDownloads,
+    });
     expect(check(p, candidate('x'), facts(9_999))?.rule).toBe('adoption');
     // The floor is inclusive: "at least 10,000" is what the UI says it means.
     expect(check(p, candidate('x'), facts(10_000))).toBeNull();
@@ -217,7 +224,9 @@ describe('check', () => {
       blockDeprecated: true,
       licenses: ['MIT'],
     });
-    expect(check(p, candidate('x'), { license: 'AGPL-3.0', deprecated: true })?.rule).toBe('denied');
+    expect(check(p, candidate('x'), { license: 'AGPL-3.0', deprecated: true })?.rule).toBe(
+      'denied',
+    );
   });
 });
 
@@ -235,7 +244,11 @@ describe('applyPolicy', () => {
 
   it('returns an empty exclusion list rather than omitting it', () => {
     // Silence has to mean "nothing was refused", not "nothing was checked".
-    const { allowed, excluded } = applyPolicy(policy({ blockDeprecated: true }), [candidate('a')], new Map());
+    const { allowed, excluded } = applyPolicy(
+      policy({ blockDeprecated: true }),
+      [candidate('a')],
+      new Map(),
+    );
     expect(allowed).toHaveLength(1);
     expect(excluded).toEqual([]);
   });

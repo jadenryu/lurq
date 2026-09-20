@@ -5,7 +5,12 @@ import { join } from 'node:path';
 import { extractSurface, usesTopLevelAwait } from '../src/surface/extract';
 import { diffSurfaces } from '../src/surface/diff';
 import { runtimeSymbols, type ExtractedSurface } from '../src/surface/types';
-import { requireFormat, resolveEntry, resolvesInsidePackage, subpathWithdrawn } from '../src/surface/resolve';
+import {
+  requireFormat,
+  resolveEntry,
+  resolvesInsidePackage,
+  subpathWithdrawn,
+} from '../src/surface/resolve';
 
 let root: string;
 const pkgs: Record<string, string> = {};
@@ -83,18 +88,26 @@ beforeAll(() => {
     'b.js': `exports.fromB = 2; module.exports = require('./a.js');`,
   });
 
-  pkg('esbuild-reexport', {
-    'index.cjs': `
+  pkg(
+    'esbuild-reexport',
+    {
+      'index.cjs': `
       var index_exports = {};
       module.exports = __toCommonJS(index_exports);
       __reExport(index_exports, require("./part.cjs"), module.exports);
     `,
-    'part.cjs': `exports.fromPart = function (x) {};`,
-  }, { main: 'index.cjs' });
+      'part.cjs': `exports.fromPart = function (x) {};`,
+    },
+    { main: 'index.cjs' },
+  );
 
-  pkg('exports-map', {
-    'dist/main.js': `exports.viaExportsMap = 1;`,
-  }, { main: undefined, exports: { '.': { require: './dist/main.js', default: './dist/main.js' } } });
+  pkg(
+    'exports-map',
+    {
+      'dist/main.js': `exports.viaExportsMap = 1;`,
+    },
+    { main: undefined, exports: { '.': { require: './dist/main.js', default: './dist/main.js' } } },
+  );
 
   pkg('no-entry', {}, { main: './nope.js' });
 
@@ -175,15 +188,27 @@ beforeAll(() => {
       exports.nested = function (a) { return function () { return arguments; }; };
     `,
   });
-  pkg('optional-v1', { 'index.js': `exports.f = function (a, b = 1) {}; exports.g = function (a) {};` });
-  pkg('optional-v2', { 'index.js': `exports.f = function (a) {}; exports.g = function (a, b = 1) {};` });
+  pkg('optional-v1', {
+    'index.js': `exports.f = function (a, b = 1) {}; exports.g = function (a) {};`,
+  });
+  pkg('optional-v2', {
+    'index.js': `exports.f = function (a) {}; exports.g = function (a, b = 1) {};`,
+  });
 
   // What `require()` is handed, per Node.
   pkg('fmt-cjs', { 'index.js': `exports.a = 1;` });
   // Node's condition for an ES module require() can load.
-  pkg('fmt-module-sync', { 'index.mjs': `export const a = 1;` }, { exports: { 'module-sync': './index.mjs', import: './index.mjs' } });
+  pkg(
+    'fmt-module-sync',
+    { 'index.mjs': `export const a = 1;` },
+    { exports: { 'module-sync': './index.mjs', import: './index.mjs' } },
+  );
   pkg('fmt-type-module', { 'index.js': `export const a = 1;` }, { type: 'module' });
-  pkg('fmt-import-only', { 'index.mjs': `export const a = 1;` }, { exports: { '.': { import: './index.mjs' } } });
+  pkg(
+    'fmt-import-only',
+    { 'index.mjs': `export const a = 1;` },
+    { exports: { '.': { import: './index.mjs' } } },
+  );
   pkg(
     'fmt-dual',
     { 'index.mjs': `export const a = 1;`, 'index.cjs': `exports.a = 1;` },
@@ -212,12 +237,17 @@ beforeAll(() => {
   // Top-level await one import away from the entry, and await that is not top-level.
   pkg(
     'tla',
-    { 'index.js': `import './boot.js';\nexport const a = 1;`, 'boot.js': `const cfg = await Promise.resolve(1);\nexport default cfg;` },
+    {
+      'index.js': `import './boot.js';\nexport const a = 1;`,
+      'boot.js': `const cfg = await Promise.resolve(1);\nexport default cfg;`,
+    },
     { type: 'module' },
   );
   pkg(
     'no-tla',
-    { 'index.js': `export async function load() { return await Promise.resolve(1); }\nexport const each = async () => { for await (const x of []) {} };` },
+    {
+      'index.js': `export async function load() { return await Promise.resolve(1); }\nexport const each = async () => { for await (const x of []) {} };`,
+    },
     { type: 'module' },
   );
 
@@ -228,7 +258,10 @@ beforeAll(() => {
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-const paths = (s: ExtractedSurface) => runtimeSymbols(s).map((x) => x.path).sort();
+const paths = (s: ExtractedSurface) =>
+  runtimeSymbols(s)
+    .map((x) => x.path)
+    .sort();
 
 describe('tier-A extraction', () => {
   it('reads CommonJS exports with kinds and arity', () => {
@@ -282,10 +315,12 @@ describe('tier-A extraction', () => {
   it('classifies type-only exports and keeps them out of the runtime surface', () => {
     const s = extractSurface(pkgs['type-only']!);
     expect(paths(s)).toEqual(['real']);
-    expect(s.symbols.filter((x) => x.kind === 'type_only').map((x) => x.path).sort()).toEqual([
-      'Alias',
-      'Shape',
-    ]);
+    expect(
+      s.symbols
+        .filter((x) => x.kind === 'type_only')
+        .map((x) => x.path)
+        .sort(),
+    ).toEqual(['Alias', 'Shape']);
   });
 
   it('reports UNDECLARED rather than an empty surface when there is no entry', () => {
@@ -413,7 +448,10 @@ describe('surface diff', () => {
   it('reports removals, additions and arity changes', () => {
     const d = diffSurfaces(
       surface({ symbols: [sym('kept'), sym('gone'), sym('shrunk', { arity: 3 })] }),
-      surface({ version: '2.0.0', symbols: [sym('kept'), sym('new'), sym('shrunk', { arity: 1 })] }),
+      surface({
+        version: '2.0.0',
+        symbols: [sym('kept'), sym('new'), sym('shrunk', { arity: 1 })],
+      }),
     );
     expect(d.removed.map((s) => s.path)).toEqual(['gone']);
     expect(d.added.map((s) => s.path)).toEqual(['new']);
@@ -454,7 +492,6 @@ describe('surface diff', () => {
     );
     expect(d.removed).toEqual([]);
   });
-
 
   /**
    * The rename pattern that motivated candidates being the target's surface
@@ -534,11 +571,11 @@ describe('entry fallback for ESM-first packages', () => {
   it('falls through an empty require entry to the import condition', () => {
     const s = extractSurface(join(dir, 'esm-first'));
     expect(s.undeclaredReason).toBeUndefined();
-    expect(runtimeSymbols(s).map((x) => x.path).sort()).toEqual([
-      'VERSION',
-      'addBusinessDays',
-      'isSameMonth',
-    ]);
+    expect(
+      runtimeSymbols(s)
+        .map((x) => x.path)
+        .sort(),
+    ).toEqual(['VERSION', 'addBusinessDays', 'isSameMonth']);
     // And it says which entry it actually read, not which one it tried first.
     expect(s.entry).toBe('index.mjs');
   });
@@ -584,7 +621,8 @@ describe('renames the package proves', () => {
 });
 
 describe('argument ranges', () => {
-  const sym = (path: string) => extractSurface(pkgs['param-ranges']!).symbols.find((s) => s.path === path)!;
+  const sym = (path: string) =>
+    extractSurface(pkgs['param-ranges']!).symbols.find((s) => s.path === path)!;
 
   it('measures the most arguments a function reads', () => {
     expect([sym('optional').arity, sym('optional').maxArity]).toEqual([1, 2]);

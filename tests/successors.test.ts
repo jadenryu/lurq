@@ -75,7 +75,12 @@ describe('buildLearnedSuccessors', () => {
 });
 
 describe('rowToEvaluate replacedBy', () => {
-  const base = { id: 1, healthScore: 50, deprecated: false, archived: false } as Partial<PackageRow>;
+  const base = {
+    id: 1,
+    healthScore: 50,
+    deprecated: false,
+    archived: false,
+  } as Partial<PackageRow>;
 
   it('surfaces a successor when the package is superseded', () => {
     const out = rowToEvaluate({ ...base, name: 'request' } as PackageRow);

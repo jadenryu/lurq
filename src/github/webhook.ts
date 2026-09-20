@@ -55,7 +55,9 @@ function fullNames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((entry) =>
-      entry && typeof entry === 'object' && typeof (entry as { full_name?: unknown }).full_name === 'string'
+      entry &&
+      typeof entry === 'object' &&
+      typeof (entry as { full_name?: unknown }).full_name === 'string'
         ? (entry as { full_name: string }).full_name
         : null,
     )
@@ -78,10 +80,7 @@ function installationId(payload: Record<string, unknown>): number | null {
  * reversible and deleting the rows would throw away the user's autopilot policy
  * to save them a scan error that already reads correctly.
  */
-export function parseWebhook(
-  event: string | undefined,
-  payload: unknown,
-): WebhookAction {
+export function parseWebhook(event: string | undefined, payload: unknown): WebhookAction {
   if (!payload || typeof payload !== 'object') return { kind: 'ignored', reason: 'no payload' };
   const body = payload as Record<string, unknown>;
   const id = installationId(body);

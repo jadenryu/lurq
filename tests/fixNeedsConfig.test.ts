@@ -36,7 +36,9 @@ describe('a server that cannot start', () => {
     const task = scanFindings(report())[0]!.fix!.task!;
     expect(task.instruction).toMatch(/Ask the user/);
     // The failure this wards off is an agent inventing a plausible credential.
-    expect(task.instruction).toMatch(/never from a log, an example file, a previous scan, or a guess/);
+    expect(task.instruction).toMatch(
+      /never from a log, an example file, a previous scan, or a guess/,
+    );
   });
 
   it('verifies by probing again, since no file edit can prove it', () => {

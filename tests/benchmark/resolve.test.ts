@@ -2,13 +2,24 @@ import { describe, it, expect } from 'vitest';
 import { resolveProposal } from '../../src/benchmark/resolve';
 import { assessVerdict } from '../../src/security/verdict';
 import type { Database } from '../../src/db/client';
-import type { ExecOptions, ExecResult, Sandbox, SandboxResult, SandboxSetResult, SandboxVerifyOptions } from '../../src/sandbox/types';
+import type {
+  ExecOptions,
+  ExecResult,
+  Sandbox,
+  SandboxResult,
+  SandboxSetResult,
+  SandboxVerifyOptions,
+} from '../../src/sandbox/types';
 import type { NormalizedProposal, NormalizedSelection } from '../../src/benchmark/types';
 
 // Dummy Sandbox
 class DummySandbox implements Sandbox {
   name = 'dummy';
-  async verify(_pkg: string, _version: string | null, _opts?: SandboxVerifyOptions): Promise<SandboxResult> {
+  async verify(
+    _pkg: string,
+    _version: string | null,
+    _opts?: SandboxVerifyOptions,
+  ): Promise<SandboxResult> {
     return {
       driver: 'dummy',
       moduleSystem: 'esm',
@@ -27,7 +38,7 @@ class DummySandbox implements Sandbox {
       driver: 'dummy',
       moduleSystem: 'esm',
       installed: true,
-      loaded: packages.map(p => ({ name: p.name, loaded: true })),
+      loaded: packages.map((p) => ({ name: p.name, loaded: true })),
       durationMs: 10,
       error: null,
     };
@@ -53,7 +64,7 @@ vi.mock('node:child_process', () => ({
 describe('benchmark resolution pipeline', () => {
   it('resolves versions and preflights compat in dry-run', async () => {
     const sandbox = new DummySandbox();
-    
+
     const sel: NormalizedSelection = {
       needId: 'x',
       package: 'react',
@@ -74,7 +85,7 @@ describe('benchmark resolution pipeline', () => {
       developmentPackages: [],
     };
 
-    const res = await resolveProposal({} as Database, sandbox, prop, 'test-template:123', { 
+    const res = await resolveProposal({} as Database, sandbox, prop, 'test-template:123', {
       dryRun: true,
       verifyPackage: async (_db, _input) => ({
         exists: true,
@@ -101,8 +112,8 @@ describe('benchmark resolution pipeline', () => {
         pairs: [],
       }),
     });
-    
-    expect(res.packageValidity.existing).toBe(1); 
+
+    expect(res.packageValidity.existing).toBe(1);
     expect(res.resolution).toBeNull(); // no E2B in dry run
     expect(res.resolvedSelections[0]?.resolvedVersion).toBeNull(); // skipped in dry run
   });

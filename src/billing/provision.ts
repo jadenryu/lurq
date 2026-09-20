@@ -196,7 +196,9 @@ async function provisionOverage(
     transform_quantity: { divide_by: 1000, round: 'up' },
     metadata: { [MARKER]: `${tier}_overage` },
   });
-  notes.push(`overage price for ${tier}: created ${price.id} ($${centsPer1k / 100} per 1,000 calls)`);
+  notes.push(
+    `overage price for ${tier}: created ${price.id} ($${centsPer1k / 100} per 1,000 calls)`,
+  );
   return price.id;
 }
 

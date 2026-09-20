@@ -16,7 +16,13 @@
  */
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
-import { mcpChangeEvents, mcpDeployments, repoAlerts, repos, type RepoAlertRow } from '../db/schema';
+import {
+  mcpChangeEvents,
+  mcpDeployments,
+  repoAlerts,
+  repos,
+  type RepoAlertRow,
+} from '../db/schema';
 import type { SnapshotDiff } from '../mcpScan/analyze';
 import { loadPublicChanges, publicChangesForOwners } from '../db/publicMcpAlerts';
 import { parsePublicItemKey, publicUrgentItem } from './publicSources';
@@ -25,9 +31,15 @@ import type { DigestSummary, UrgentItem } from './render';
 export const URGENT_WINDOW_MS = 24 * 3_600_000;
 const DAY_MS = 86_400_000;
 
-const RANK: Record<UrgentItem['kind'], number> = { mcp_rug_pull: 0, mcp_privilege: 1, mcp_public_change: 2, breaking_release: 3 };
+const RANK: Record<UrgentItem['kind'], number> = {
+  mcp_rug_pull: 0,
+  mcp_privilege: 1,
+  mcp_public_change: 2,
+  breaking_release: 3,
+};
 
-export const sortUrgent = (items: UrgentItem[]) => [...items].sort((a, b) => RANK[a.kind] - RANK[b.kind]);
+export const sortUrgent = (items: UrgentItem[]) =>
+  [...items].sort((a, b) => RANK[a.kind] - RANK[b.kind]);
 
 function alertItem(a: RepoAlertRow, webUrl: string): UrgentItem {
   return {
@@ -69,7 +81,11 @@ export function eventItem(e: EventRow, webUrl: string): UrgentItem | null {
       key: `mcp:${e.id}`,
       kind: 'mcp_rug_pull',
       title: `${e.alias}: ${rug.slice(0, 3).join(', ')} now ${rug.length === 1 ? 'instructs' : 'instruct'} your agent`,
-      detail: `A tool description changed after this server was scanned, and the new text tells the model what to do. Review it before your agent uses the server again. ${e.summary}`.slice(0, 600),
+      detail:
+        `A tool description changed after this server was scanned, and the new text tells the model what to do. Review it before your agent uses the server again. ${e.summary}`.slice(
+          0,
+          600,
+        ),
       url,
     };
   }
@@ -79,7 +95,10 @@ export function eventItem(e: EventRow, webUrl: string): UrgentItem | null {
       key: `mcp:${e.id}`,
       kind: 'mcp_privilege',
       title: `${e.alias}: ${widened[0]!.tool} can now do more than you approved`,
-      detail: widened.map((f) => `${f.tool}.${f.hint} ${f.from} → ${f.to}`).join('; ').slice(0, 600),
+      detail: widened
+        .map((f) => `${f.tool}.${f.hint} ${f.from} → ${f.to}`)
+        .join('; ')
+        .slice(0, 600),
       url,
     };
   }
@@ -99,7 +118,13 @@ export async function urgentCandidates(
     db
       .select()
       .from(repoAlerts)
-      .where(and(eq(repoAlerts.inRange, true), gte(repoAlerts.createdAt, since), ownerId ? eq(repoAlerts.ownerId, ownerId) : undefined))
+      .where(
+        and(
+          eq(repoAlerts.inRange, true),
+          gte(repoAlerts.createdAt, since),
+          ownerId ? eq(repoAlerts.ownerId, ownerId) : undefined,
+        ),
+      )
       .limit(5000),
     db
       .select({
@@ -173,20 +198,36 @@ export function agentNotice(items: UrgentItem[], max = 3): string | null {
 }
 
 /** One account's open urgent changes, as the notice for its agents. */
-export async function agentAlertNotice(db: Database, ownerId: string, now: Date, webUrl: string): Promise<string | null> {
+export async function agentAlertNotice(
+  db: Database,
+  ownerId: string,
+  now: Date,
+  webUrl: string,
+): Promise<string | null> {
   const byOwner = await urgentCandidates(db, now, webUrl, ownerId, AGENT_WINDOW_MS);
   return agentNotice(byOwner.get(ownerId) ?? []);
 }
 
 /** Rebuild items from their keys, for retrying a delivery. Missing rows are dropped. */
-export async function loadUrgentItems(db: Database, keys: string[], webUrl: string): Promise<UrgentItem[]> {
+export async function loadUrgentItems(
+  db: Database,
+  keys: string[],
+  webUrl: string,
+): Promise<UrgentItem[]> {
   const ids = (prefix: string) =>
-    keys.filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length))).filter(Number.isInteger);
+    keys
+      .filter((k) => k.startsWith(prefix))
+      .map((k) => Number(k.slice(prefix.length)))
+      .filter(Number.isInteger);
   const alertIds = ids('alert:');
   const eventIds = ids('mcp:');
-  const publicPairs = keys.map(parsePublicItemKey).filter((p): p is NonNullable<typeof p> => p !== null);
+  const publicPairs = keys
+    .map(parsePublicItemKey)
+    .filter((p): p is NonNullable<typeof p> => p !== null);
   const [alerts, events, publicChanges] = await Promise.all([
-    alertIds.length ? db.select().from(repoAlerts).where(inArray(repoAlerts.id, alertIds)) : Promise.resolve([]),
+    alertIds.length
+      ? db.select().from(repoAlerts).where(inArray(repoAlerts.id, alertIds))
+      : Promise.resolve([]),
     eventIds.length
       ? db
           .select({
@@ -211,39 +252,59 @@ export async function loadUrgentItems(db: Database, keys: string[], webUrl: stri
 }
 
 /** The week's summary for one account, or null when it watches nothing. */
-export async function buildDigest(db: Database, ownerId: string, now: Date, webUrl: string): Promise<DigestSummary | null> {
+export async function buildDigest(
+  db: Database,
+  ownerId: string,
+  now: Date,
+  webUrl: string,
+): Promise<DigestSummary | null> {
   const since = new Date(now.getTime() - 7 * DAY_MS);
-  const [deployments, [repoCount], events, eventTotal, alerts, alertTotal, publicChanges] = await Promise.all([
-    db
-      .select({ id: mcpDeployments.id, alias: mcpDeployments.alias, lastStatus: mcpDeployments.lastStatus, lastScannedAt: mcpDeployments.lastScannedAt })
-      .from(mcpDeployments)
-      .where(eq(mcpDeployments.ownerId, ownerId)),
-    db.select({ n: sql<number>`count(*)::int` }).from(repos).where(eq(repos.ownerId, ownerId)),
-    db
-      .select({ id: mcpChangeEvents.id, deploymentId: mcpChangeEvents.deploymentId, severity: mcpChangeEvents.severity, summary: mcpChangeEvents.summary, alias: mcpDeployments.alias })
-      .from(mcpChangeEvents)
-      .innerJoin(mcpDeployments, eq(mcpDeployments.id, mcpChangeEvents.deploymentId))
-      .where(and(eq(mcpChangeEvents.ownerId, ownerId), gte(mcpChangeEvents.createdAt, since)))
-      .orderBy(desc(mcpChangeEvents.createdAt))
-      .limit(8),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(mcpChangeEvents)
-      .where(and(eq(mcpChangeEvents.ownerId, ownerId), gte(mcpChangeEvents.createdAt, since))),
-    db
-      .select()
-      .from(repoAlerts)
-      .where(and(eq(repoAlerts.ownerId, ownerId), gte(repoAlerts.createdAt, since)))
-      .orderBy(desc(repoAlerts.inRange), desc(repoAlerts.createdAt))
-      .limit(8),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(repoAlerts)
-      .where(and(eq(repoAlerts.ownerId, ownerId), gte(repoAlerts.createdAt, since))),
-    // ponytail: unacknowledged public changes only; the per-account ack is the one
-    // record of "seen". Add an acked-this-week query if the digest should replay them.
-    publicChangesForOwners(db, since, { ownerId, limit: 50 }),
-  ]);
+  const [deployments, [repoCount], events, eventTotal, alerts, alertTotal, publicChanges] =
+    await Promise.all([
+      db
+        .select({
+          id: mcpDeployments.id,
+          alias: mcpDeployments.alias,
+          lastStatus: mcpDeployments.lastStatus,
+          lastScannedAt: mcpDeployments.lastScannedAt,
+        })
+        .from(mcpDeployments)
+        .where(eq(mcpDeployments.ownerId, ownerId)),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(repos)
+        .where(eq(repos.ownerId, ownerId)),
+      db
+        .select({
+          id: mcpChangeEvents.id,
+          deploymentId: mcpChangeEvents.deploymentId,
+          severity: mcpChangeEvents.severity,
+          summary: mcpChangeEvents.summary,
+          alias: mcpDeployments.alias,
+        })
+        .from(mcpChangeEvents)
+        .innerJoin(mcpDeployments, eq(mcpDeployments.id, mcpChangeEvents.deploymentId))
+        .where(and(eq(mcpChangeEvents.ownerId, ownerId), gte(mcpChangeEvents.createdAt, since)))
+        .orderBy(desc(mcpChangeEvents.createdAt))
+        .limit(8),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(mcpChangeEvents)
+        .where(and(eq(mcpChangeEvents.ownerId, ownerId), gte(mcpChangeEvents.createdAt, since))),
+      db
+        .select()
+        .from(repoAlerts)
+        .where(and(eq(repoAlerts.ownerId, ownerId), gte(repoAlerts.createdAt, since)))
+        .orderBy(desc(repoAlerts.inRange), desc(repoAlerts.createdAt))
+        .limit(8),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(repoAlerts)
+        .where(and(eq(repoAlerts.ownerId, ownerId), gte(repoAlerts.createdAt, since))),
+      // ponytail: unacknowledged public changes only; the per-account ack is the one
+      // record of "seen". Add an acked-this-week query if the digest should replay them.
+      publicChangesForOwners(db, since, { ownerId, limit: 50 }),
+    ]);
 
   const watchedRepos = repoCount?.n ?? 0;
   // Every way an account can have news, and each condition was added by a
@@ -262,8 +323,18 @@ export async function buildDigest(db: Database, ownerId: string, now: Date, webU
 
   // Account-scan changes first (newest first), then public ones (newest first).
   const mcpChanges = [
-    ...events.map((e) => ({ severity: e.severity, alias: e.alias, summary: e.summary, url: `${webUrl}/dashboard/mcp/${e.deploymentId}` })),
-    ...publicChanges.map((c) => ({ severity: c.severity, alias: c.label, summary: c.summary, url: `${webUrl}/dashboard/mcp/public/${c.endpointId}` })),
+    ...events.map((e) => ({
+      severity: e.severity,
+      alias: e.alias,
+      summary: e.summary,
+      url: `${webUrl}/dashboard/mcp/${e.deploymentId}`,
+    })),
+    ...publicChanges.map((c) => ({
+      severity: c.severity,
+      alias: c.label,
+      summary: c.summary,
+      url: `${webUrl}/dashboard/mcp/public/${c.endpointId}`,
+    })),
   ];
 
   const staleBefore = new Date(now.getTime() - 7 * DAY_MS);
@@ -272,16 +343,26 @@ export async function buildDigest(db: Database, ownerId: string, now: Date, webU
     watched: { servers: deployments.length, repos: watchedRepos },
     mcpChanges: mcpChanges.slice(0, 8),
     mcpChangeTotal: (eventTotal[0]?.n ?? 0) + publicChanges.length,
-    alerts: alerts.map((a) => ({ ...alertItem(a, webUrl), title: `${a.packageName} ${a.toVersion} in ${a.repoFullName}` })),
+    alerts: alerts.map((a) => ({
+      ...alertItem(a, webUrl),
+      title: `${a.packageName} ${a.toVersion} in ${a.repoFullName}`,
+    })),
     alertTotal: alertTotal[0]?.n ?? 0,
     unreadable: deployments
       .filter((d) => d.lastStatus !== 'ok' && d.lastStatus !== 'partial')
       .slice(0, 8)
-      .map((d) => ({ alias: d.alias, status: d.lastStatus, url: `${webUrl}/dashboard/mcp/${d.id}` })),
+      .map((d) => ({
+        alias: d.alias,
+        status: d.lastStatus,
+        url: `${webUrl}/dashboard/mcp/${d.id}`,
+      })),
     stale: deployments
       .filter((d) => d.lastScannedAt < staleBefore)
       .slice(0, 8)
-      .map((d) => ({ alias: d.alias, days: Math.floor((now.getTime() - d.lastScannedAt.getTime()) / DAY_MS), url: `${webUrl}/dashboard/mcp/${d.id}` })),
+      .map((d) => ({
+        alias: d.alias,
+        days: Math.floor((now.getTime() - d.lastScannedAt.getTime()) / DAY_MS),
+        url: `${webUrl}/dashboard/mcp/${d.id}`,
+      })),
   };
 }
-

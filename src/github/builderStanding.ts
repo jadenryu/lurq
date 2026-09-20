@@ -28,7 +28,13 @@ export interface BuilderMetrics {
   advisories: number;
 }
 
-export type StandingMetricId = 'repos' | 'active90' | 'stars' | 'behindShare' | 'majorShare' | 'advisoryRate';
+export type StandingMetricId =
+  | 'repos'
+  | 'active90'
+  | 'stars'
+  | 'behindShare'
+  | 'majorShare'
+  | 'advisoryRate';
 
 export interface StandingMetric {
   id: StandingMetricId;
@@ -71,17 +77,29 @@ export function builderMetrics(profile: BuilderProfile): BuilderMetrics {
 
 const share = (part: number, whole: number) => (whole > 0 ? Math.min(1, part / whole) : null);
 
-const METRICS: { id: StandingMetricId; better: 'higher' | 'lower'; read: (m: BuilderMetrics) => number | null }[] = [
+const METRICS: {
+  id: StandingMetricId;
+  better: 'higher' | 'lower';
+  read: (m: BuilderMetrics) => number | null;
+}[] = [
   { id: 'repos', better: 'higher', read: (m) => m.repos },
   { id: 'active90', better: 'higher', read: (m) => m.active90 },
   { id: 'stars', better: 'higher', read: (m) => m.stars },
   { id: 'behindShare', better: 'lower', read: (m) => share(m.depsBehind, m.depsTracked) },
   { id: 'majorShare', better: 'lower', read: (m) => share(m.depsMajor, m.depsTracked) },
-  { id: 'advisoryRate', better: 'lower', read: (m) => (m.depsTracked > 0 ? (100 * m.advisories) / m.depsTracked : null) },
+  {
+    id: 'advisoryRate',
+    better: 'lower',
+    read: (m) => (m.depsTracked > 0 ? (100 * m.advisories) / m.depsTracked : null),
+  },
 ];
 
 /** Rank `subject` against `others`, which must not include the subject itself. */
-export function standing(subject: BuilderMetrics, others: BuilderMetrics[], minimum = MIN_POPULATION): BuilderStanding {
+export function standing(
+  subject: BuilderMetrics,
+  others: BuilderMetrics[],
+  minimum = MIN_POPULATION,
+): BuilderStanding {
   const metrics: StandingMetric[] = [];
   for (const def of METRICS) {
     const value = def.read(subject);

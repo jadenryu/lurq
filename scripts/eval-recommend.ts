@@ -25,16 +25,31 @@ interface Case {
 }
 
 const CASES: Case[] = [
-  { need: 'an orm for postgres', expect: ['prisma', 'drizzle-orm', 'typeorm', 'kysely', 'sequelize', 'knex'] },
+  {
+    need: 'an orm for postgres',
+    expect: ['prisma', 'drizzle-orm', 'typeorm', 'kysely', 'sequelize', 'knex'],
+  },
   { need: 'a date library', expect: ['date-fns', 'dayjs', 'luxon', 'temporal'] },
   { need: 'a form library for react', expect: ['react-hook-form', 'formik', 'react-final-form'] },
-  { need: 'a ui component library for react', expect: ['@mui/material', 'antd', '@chakra-ui', 'react-aria', '@radix-ui', '@carbon/react'] },
-  { need: 'a validation library for typescript', expect: ['zod', 'yup', 'joi', 'valibot', 'ajv', 'superstruct'] },
+  {
+    need: 'a ui component library for react',
+    expect: ['@mui/material', 'antd', '@chakra-ui', 'react-aria', '@radix-ui', '@carbon/react'],
+  },
+  {
+    need: 'a validation library for typescript',
+    expect: ['zod', 'yup', 'joi', 'valibot', 'ajv', 'superstruct'],
+  },
   { need: 'an http client', expect: ['axios', 'got', 'ky', 'node-fetch', 'undici'] },
   { need: 'a testing framework', expect: ['vitest', 'jest', 'mocha', 'ava', 'jasmine'] },
-  { need: 'a state management library for react', expect: ['zustand', 'redux', 'jotai', 'mobx', 'recoil', 'valtio'] },
+  {
+    need: 'a state management library for react',
+    expect: ['zustand', 'redux', 'jotai', 'mobx', 'recoil', 'valtio'],
+  },
   { need: 'a bundler', expect: ['vite', 'esbuild', 'rollup', 'webpack', 'parcel', 'rspack'] },
-  { need: 'a css in js styling library', expect: ['styled-components', 'emotion', 'tailwind', 'stitches', 'vanilla-extract'] },
+  {
+    need: 'a css in js styling library',
+    expect: ['styled-components', 'emotion', 'tailwind', 'stitches', 'vanilla-extract'],
+  },
 ];
 
 function hitRank(names: string[], expect: string[]): number | null {
@@ -82,7 +97,9 @@ async function main() {
   // Mean rank over hits only: a run that finds fewer answers but ranks them
   // first must not look better than one that finds more.
   const meanRank = hits ? (rankSum / hits).toFixed(2) : 'n/a';
-  console.log(`\n  recall@5: ${hits}/${CASES.length} (${pct}%)   mean rank of first hit: ${meanRank}\n`);
+  console.log(
+    `\n  recall@5: ${hits}/${CASES.length} (${pct}%)   mean rank of first hit: ${meanRank}\n`,
+  );
 }
 
 main().catch((err) => {

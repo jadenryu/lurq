@@ -105,7 +105,9 @@ export async function dispatchUpgradeWorkflow(repo: RepoRow): Promise<DispatchOu
  * is every armed repo on every release, and a hundred identical warnings is how
  * a log stops being read.
  */
-export async function dispatchForAlerts(repos: RepoRow[]): Promise<Record<DispatchOutcome, number>> {
+export async function dispatchForAlerts(
+  repos: RepoRow[],
+): Promise<Record<DispatchOutcome, number>> {
   const tally: Record<DispatchOutcome, number> = {
     dispatched: 0,
     'not-armed': 0,

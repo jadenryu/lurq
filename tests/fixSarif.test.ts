@@ -30,12 +30,16 @@ const finding = (over: Partial<Finding> = {}): Finding => ({
 
 /** The single run every assertion reads. */
 const run = (findings: Finding[]) =>
-  (toSarif(findings, opts) as {
-    runs: {
-      tool: { driver: { rules: { id: string; shortDescription: { text: string } }[]; version: string } };
-      results: Record<string, never>[];
-    }[];
-  }).runs[0]!;
+  (
+    toSarif(findings, opts) as {
+      runs: {
+        tool: {
+          driver: { rules: { id: string; shortDescription: { text: string } }[]; version: string };
+        };
+        results: Record<string, never>[];
+      }[];
+    }
+  ).runs[0]!;
 
 describe('the envelope', () => {
   it('declares SARIF 2.1.0 and attributes the run to a tool version', () => {
@@ -73,13 +77,24 @@ describe('rules', () => {
 });
 
 describe('a deterministic finding', () => {
-  const r = () => run([finding({ fix: { summary: 'rename parse to parseCookie', edits: [edit()] } })]).results[0]! as unknown as {
-    level: string;
-    partialFingerprints: { lurqCode: string };
-    properties: { fixable: boolean };
-    locations: { physicalLocation: { artifactLocation: { uri: string }; region: Record<string, number> } }[];
-    fixes: { artifactChanges: { replacements: { deletedRegion: Record<string, number>; insertedContent: { text: string } }[] }[] }[];
-  };
+  const r = () =>
+    run([finding({ fix: { summary: 'rename parse to parseCookie', edits: [edit()] } })])
+      .results[0]! as unknown as {
+      level: string;
+      partialFingerprints: { lurqCode: string };
+      properties: { fixable: boolean };
+      locations: {
+        physicalLocation: { artifactLocation: { uri: string }; region: Record<string, number> };
+      }[];
+      fixes: {
+        artifactChanges: {
+          replacements: {
+            deletedRegion: Record<string, number>;
+            insertedContent: { text: string };
+          }[];
+        }[];
+      }[];
+    };
 
   it('points at the identifier, in 1-based line and column', () => {
     const region = r().locations[0]!.physicalLocation.region;
@@ -109,12 +124,18 @@ describe('a brief', () => {
     severity: 'warning',
     fix: {
       summary: 'replace parse',
-      task: { instruction: 'Rewrite each use', files: ['src/a.ts', 'src/b.ts'], evidence: ['parseCookie: function'] },
+      task: {
+        instruction: 'Rewrite each use',
+        files: ['src/a.ts', 'src/b.ts'],
+        evidence: ['parseCookie: function'],
+      },
     },
   });
 
   it('becomes one result per file it names, so each is its own alert', () => {
-    const results = run([brief]).results as unknown as { locations: { physicalLocation: { artifactLocation: { uri: string } } }[] }[];
+    const results = run([brief]).results as unknown as {
+      locations: { physicalLocation: { artifactLocation: { uri: string } } }[];
+    }[];
     expect(results.map((x) => x.locations[0]!.physicalLocation.artifactLocation.uri)).toEqual([
       'src/a.ts',
       'src/b.ts',
@@ -136,7 +157,10 @@ describe('a brief', () => {
 
 describe('degenerate findings', () => {
   it('reports a finding with no file rather than dropping it', () => {
-    const results = run([finding({ severity: 'info' })]).results as unknown as { level: string; locations?: unknown }[];
+    const results = run([finding({ severity: 'info' })]).results as unknown as {
+      level: string;
+      locations?: unknown;
+    }[];
     expect(results).toHaveLength(1);
     expect(results[0]!.locations).toBeUndefined();
     expect(results[0]!.level).toBe('note');

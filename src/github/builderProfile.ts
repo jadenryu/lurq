@@ -18,7 +18,8 @@
  * MANIFEST_TRIES raw.githubusercontent reads, and STACK_REPOS drift queries.
  */
 import type { Database } from '../db/client';
-import {GitHubUnavailableError,
+import {
+  GitHubUnavailableError,
   readGitHub,
   rootManifestRead,
   scanManifest,
@@ -214,7 +215,9 @@ export function nextPageUrl(link: string | null): string | null {
  * and "no such profile" would be false. A later page failing keeps what was read
  * and marks the list capped.
  */
-export async function listRepos(login: string): Promise<{ repos: GhRepo[]; capped: boolean } | null> {
+export async function listRepos(
+  login: string,
+): Promise<{ repos: GhRepo[]; capped: boolean } | null> {
   let url: string | null =
     `https://api.github.com/users/${login}/repos?sort=pushed&direction=desc&per_page=100&type=owner`;
   const repos: GhRepo[] = [];
@@ -237,11 +240,18 @@ export async function listRepos(login: string): Promise<{ repos: GhRepo[]; cappe
  * scanned alongside GitHub's `myrepo`, and every one of its dependencies counted
  * twice. The typed name takes GitHub's spelling when the list has it.
  */
-export function manifestTries(ranked: string[], featured: string | undefined, max: number): string[] {
+export function manifestTries(
+  ranked: string[],
+  featured: string | undefined,
+  max: number,
+): string[] {
   const spelled = new Map(ranked.map((name) => [name.toLowerCase(), name]));
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const name of [...(featured ? [spelled.get(featured.toLowerCase()) ?? featured] : []), ...ranked]) {
+  for (const name of [
+    ...(featured ? [spelled.get(featured.toLowerCase()) ?? featured] : []),
+    ...ranked,
+  ]) {
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -302,10 +312,14 @@ export async function builderProfile(
       tries.map((name, i) => ({ name, manifest: reads[i]!.data })),
       {
         read: (repo, path) =>
-          readGitHub<unknown>(`https://raw.githubusercontent.com/${canonical}/${repo}/HEAD/${path}`, {
-            headers: { Accept: 'application/json' },
-          }),
-        surface: async (server) => (await import('../mcp/mcpHandlers')).handleMcpSurface(db, { server }),
+          readGitHub<unknown>(
+            `https://raw.githubusercontent.com/${canonical}/${repo}/HEAD/${path}`,
+            {
+              headers: { Accept: 'application/json' },
+            },
+          ),
+        surface: async (server) =>
+          (await import('../mcp/mcpHandlers')).handleMcpSurface(db, { server }),
       },
     ),
   ]);

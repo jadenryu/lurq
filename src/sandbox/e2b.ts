@@ -214,7 +214,9 @@ export class E2BSandbox implements SandboxDriver {
       } finally {
         await sandbox.kill().catch(() => {});
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return { nodeVersion, npmVersion };
   }
 }

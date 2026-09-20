@@ -23,7 +23,8 @@ const router = (async (url: string) => {
       versions: { '18.3.1': {} },
     });
   }
-  if (url.includes('api.npmjs.org/downloads/point')) return makeResponse(200, { downloads: 1_000_000 });
+  if (url.includes('api.npmjs.org/downloads/point'))
+    return makeResponse(200, { downloads: 1_000_000 });
   if (url.includes('api.npmjs.org/downloads/range')) return makeResponse(200, { downloads: [] });
   if (url.includes('api.github.com/graphql')) return makeResponse(404, { message: 'no' });
   if (url.includes('api.deps.dev/v3/projects')) {

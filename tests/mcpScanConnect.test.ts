@@ -55,9 +55,14 @@ describe('stdio', () => {
     expect(s.tools.map((t) => t.name).sort()).toEqual(['delete_file', 'search']);
     expect(s.tools.find((t) => t.name === 'search')!.annotations).toEqual({ readOnlyHint: true });
     expect(s.prompts).toEqual([
-      expect.objectContaining({ name: 'summarize', arguments: [expect.objectContaining({ name: 'text', required: true })] }),
+      expect.objectContaining({
+        name: 'summarize',
+        arguments: [expect.objectContaining({ name: 'text', required: true })],
+      }),
     ]);
-    expect(s.resourceTemplates).toEqual([expect.objectContaining({ name: 'doc', uriTemplate: 'doc://{id}' })]);
+    expect(s.resourceTemplates).toEqual([
+      expect.objectContaining({ name: 'doc', uriTemplate: 'doc://{id}' }),
+    ]);
     expect(s.capabilities).toMatchObject({ tools: true, prompts: true, resources: true });
     expect(s.issues).toEqual([]);
   });
@@ -76,13 +81,19 @@ describe('stdio', () => {
     expect(r.status).toBe('needs_config');
     expect(r.error).toMatch(/API_TOKEN/);
     expect(r.hint).toMatch(/API_TOKEN/);
-    const fixed = await scanServer(spec({ env: { FIXTURE_REQUIRE: 'API_TOKEN', API_TOKEN: 'x' } }), fast);
+    const fixed = await scanServer(
+      spec({ env: { FIXTURE_REQUIRE: 'API_TOKEN', API_TOKEN: 'x' } }),
+      fast,
+    );
     expect(fixed.status).toBe('ok');
   });
 
   it('times out a server that never answers, within the deadline', async () => {
     const started = Date.now();
-    const r = await scanServer(spec({ env: { FIXTURE_HANG: '1' } }), { ...fast, connectTimeoutMs: 1_500 });
+    const r = await scanServer(spec({ env: { FIXTURE_HANG: '1' } }), {
+      ...fast,
+      connectTimeoutMs: 1_500,
+    });
     expect(r.status).toBe('timeout');
     expect(Date.now() - started).toBeLessThan(12_000);
   });
@@ -113,7 +124,9 @@ describe('stdio', () => {
       'x-lurq-omitted': expect.stringMatching(/deeper than/),
     });
     // A string "yes" is not a boolean; only the well-typed hint survives.
-    expect(s.tools.find((t) => t.name === 'second')!.annotations).toEqual({ destructiveHint: false });
+    expect(s.tools.find((t) => t.name === 'second')!.annotations).toEqual({
+      destructiveHint: false,
+    });
     const kinds = s.issues.map((i) => `${i.list}:${i.kind}`).sort();
     expect(kinds).toEqual(
       expect.arrayContaining([
@@ -131,7 +144,9 @@ describe('stdio', () => {
 describe('servers that must not be launched', () => {
   it('skips untrusted, disabled and unconfigured servers without spawning', async () => {
     const never = { command: 'lurq-definitely-not-a-command' };
-    const untrusted = await scanServer(spec({ ...never, trusted: false, trustReason: 'not approved' }));
+    const untrusted = await scanServer(
+      spec({ ...never, trusted: false, trustReason: 'not approved' }),
+    );
     expect(untrusted).toMatchObject({ status: 'untrusted', hint: 'not approved' });
     const disabled = await scanServer(spec({ ...never, disabled: true }));
     expect(disabled.status).toBe('disabled');
@@ -156,10 +171,17 @@ describe('streamable HTTP', () => {
         return;
       }
       const server = new McpServer({ name: 'fixture-http', version: '2.0.0' });
-      server.registerTool('ping', { description: 'Ping', inputSchema: { msg: z.string() } }, async () => ({
-        content: [],
-      }));
-      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+      server.registerTool(
+        'ping',
+        { description: 'Ping', inputSchema: { msg: z.string() } },
+        async () => ({
+          content: [],
+        }),
+      );
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
       res.on('close', () => {
         void transport.close();
         void server.close();
@@ -173,11 +195,22 @@ describe('streamable HTTP', () => {
   afterAll(() => new Promise<void>((resolve) => http.close(() => resolve())));
 
   const remote = (over: Partial<ServerSpec>) =>
-    spec({ transport: 'http', command: null, args: [], registry: 'remote', kind: 'remote', ...over });
+    spec({
+      transport: 'http',
+      command: null,
+      args: [],
+      registry: 'remote',
+      kind: 'remote',
+      ...over,
+    });
 
   it('reads a remote server with the headers from the config', async () => {
     const r = await scanServer(
-      remote({ url: `${base}/mcp`, headers: { Authorization: `Bearer ${TOKEN}` }, secrets: [TOKEN] }),
+      remote({
+        url: `${base}/mcp`,
+        headers: { Authorization: `Bearer ${TOKEN}` },
+        secrets: [TOKEN],
+      }),
       fast,
     );
     expect(r).toMatchObject({ status: 'ok', transportUsed: 'http' });
@@ -185,7 +218,10 @@ describe('streamable HTTP', () => {
   });
 
   it('reports a rejected credential as auth_required', async () => {
-    const r = await scanServer(remote({ url: `${base}/mcp`, headers: { Authorization: 'Bearer wrong-token-123' } }), fast);
+    const r = await scanServer(
+      remote({ url: `${base}/mcp`, headers: { Authorization: 'Bearer wrong-token-123' } }),
+      fast,
+    );
     expect(r.status).toBe('auth_required');
     expect(r.hint).toBeTruthy();
   });
@@ -218,7 +254,11 @@ describe('scanServers', () => {
   it('scans concurrently and reports each result as it lands', async () => {
     const seen: string[] = [];
     const results = await scanServers(
-      [spec({ alias: 'a' }), spec({ alias: 'b', disabled: true }), spec({ alias: 'c', env: { FIXTURE_NOISE: '1' } })],
+      [
+        spec({ alias: 'a' }),
+        spec({ alias: 'b', disabled: true }),
+        spec({ alias: 'c', env: { FIXTURE_NOISE: '1' } }),
+      ],
       { ...fast, concurrency: 2, onResult: (s) => seen.push(s.alias) },
     );
     expect(results.map((r) => [r.alias, r.status])).toEqual([
@@ -231,7 +271,10 @@ describe('scanServers', () => {
 
   it('stops launching once cancelled', async () => {
     const ctl = new AbortController();
-    const pending = scanServer(spec({ env: { FIXTURE_HANG: '1' } }), { ...fast, signal: ctl.signal });
+    const pending = scanServer(spec({ env: { FIXTURE_HANG: '1' } }), {
+      ...fast,
+      signal: ctl.signal,
+    });
     setTimeout(() => ctl.abort(), 300);
     expect((await pending).status).toBe('cancelled');
   });

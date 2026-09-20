@@ -14,7 +14,10 @@ import { declaredNames, envFindings, envReadsIn } from '../src/fix/env';
 
 describe('envReadsIn', () => {
   it('finds both spellings of a read, with line numbers', () => {
-    const reads = envReadsIn('src/a.ts', `const a = process.env.STRIPE_KEY;\nconst b = process.env['SENTRY_DSN'];\n`);
+    const reads = envReadsIn(
+      'src/a.ts',
+      `const a = process.env.STRIPE_KEY;\nconst b = process.env['SENTRY_DSN'];\n`,
+    );
     expect(reads).toEqual([
       { name: 'STRIPE_KEY', file: 'src/a.ts', line: 1 },
       { name: 'SENTRY_DSN', file: 'src/a.ts', line: 2 },
@@ -35,7 +38,9 @@ describe('envReadsIn', () => {
   });
 
   it('is not fooled by something else called env', () => {
-    expect(envReadsIn('src/a.ts', `const v = config.env.TOKEN;\nconst w = proc.env.TOKEN;\n`)).toEqual([]);
+    expect(
+      envReadsIn('src/a.ts', `const v = config.env.TOKEN;\nconst w = proc.env.TOKEN;\n`),
+    ).toEqual([]);
   });
 
   it('reads every occurrence, so the evidence can cite them all', () => {
@@ -65,7 +70,10 @@ describe('declaredNames', () => {
   it('counts a commented declaration, which is how optional vars are documented', () => {
     root = mkdtempSync(join(tmpdir(), 'lurq-env-'));
     try {
-      write('.env.example', '# Optional. Defaults to memory.\n# REDIS_URL=redis://localhost:6379\n');
+      write(
+        '.env.example',
+        '# Optional. Defaults to memory.\n# REDIS_URL=redis://localhost:6379\n',
+      );
       expect([...declaredNames(root)]).toEqual(['REDIS_URL']);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -147,7 +155,9 @@ describe('envFindings', () => {
   it('sends the agent to the user for a value, and forbids inventing one', () => {
     const task = plan(`process.env.STRIPE_KEY;\n`).findings[0]!.fix!.task!;
     expect(task.instruction).toMatch(/Add it to \.env\.example/);
-    expect(task.instruction).toMatch(/never from a log, an example file, a previous run, or a guess/);
+    expect(task.instruction).toMatch(
+      /never from a log, an example file, a previous run, or a guess/,
+    );
     expect(task.files).toEqual(['src/a.ts']);
   });
 
@@ -221,7 +231,9 @@ describe('precision', () => {
     const { findings } = envFindings('/repo', {
       files: ['/repo/src/a.ts', '/repo/src/b.ts'],
       read: (f) =>
-        f.endsWith('a.ts') ? `const x = process.env.TOKEN ?? 'dev';\n` : `const y = process.env.TOKEN;\n`,
+        f.endsWith('a.ts')
+          ? `const x = process.env.TOKEN ?? 'dev';\n`
+          : `const y = process.env.TOKEN;\n`,
       declared: new Set(),
     });
     expect(findings).toHaveLength(1);

@@ -1,11 +1,7 @@
 /** Read/write helpers for sandbox verification results (`verification_runs`). */
 import { desc, eq } from 'drizzle-orm';
 import type { Database } from './client';
-import {
-  verificationRuns,
-  type NewVerificationRunRow,
-  type VerificationRunRow,
-} from './schema';
+import { verificationRuns, type NewVerificationRunRow, type VerificationRunRow } from './schema';
 
 export async function storeVerificationRun(
   db: Database,

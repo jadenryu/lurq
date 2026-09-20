@@ -7,7 +7,10 @@ function scripted(statuses: number[]): { fetchImpl: typeof fetch; calls: () => n
   let n = 0;
   const fetchImpl = (async () => {
     const status = statuses[Math.min(n++, statuses.length - 1)]!;
-    const body = status === 200 ? { version: '1.0.0', dist: { tarball: 'https://t/x.tgz', integrity: 'sha512-abc' } } : {};
+    const body =
+      status === 200
+        ? { version: '1.0.0', dist: { tarball: 'https://t/x.tgz', integrity: 'sha512-abc' } }
+        : {};
     return new Response(JSON.stringify(body), { status, headers: { 'retry-after': '0' } });
   }) as typeof fetch;
   return { fetchImpl, calls: () => n };
@@ -43,7 +46,11 @@ describe('tarball integrity', () => {
   });
 
   it('refuses anything else', () => {
-    expect(() => verifyIntegrity(Buffer.from('tampered'), { integrity: sha512 }, 'x@1')).toThrow(/integrity mismatch/);
-    expect(() => verifyIntegrity(Buffer.from('tampered'), { shasum: sha1 }, 'x@1')).toThrow(/shasum mismatch/);
+    expect(() => verifyIntegrity(Buffer.from('tampered'), { integrity: sha512 }, 'x@1')).toThrow(
+      /integrity mismatch/,
+    );
+    expect(() => verifyIntegrity(Buffer.from('tampered'), { shasum: sha1 }, 'x@1')).toThrow(
+      /shasum mismatch/,
+    );
   });
 });

@@ -80,10 +80,12 @@ export async function fetchWeeklyDownloads(
   fetchImpl?: typeof fetch,
 ): Promise<number | null> {
   try {
-    const { data } = await httpGetJson<any>(
-      `https://${HOST}/downloads/point/last-week/${name}`,
-      { host: HOST, ttlMs: CACHE_TTL.npmDownloads, retries: 5, fetchImpl },
-    );
+    const { data } = await httpGetJson<any>(`https://${HOST}/downloads/point/last-week/${name}`, {
+      host: HOST,
+      ttlMs: CACHE_TTL.npmDownloads,
+      retries: 5,
+      fetchImpl,
+    });
     return parseWeeklyDownloads(data);
   } catch (err) {
     if (err instanceof HttpError && err.status === 404) return null;

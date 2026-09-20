@@ -12,14 +12,25 @@ import { renderMcpScanWorkflow } from '../src/github/mcpScanWorkflow';
 
 interface Workflow {
   permissions: Record<string, string>;
-  jobs: { scan: { steps: { name?: string; uses?: string; if?: string; run?: string; with?: Record<string, string> }[] } };
+  jobs: {
+    scan: {
+      steps: {
+        name?: string;
+        uses?: string;
+        if?: string;
+        run?: string;
+        with?: Record<string, string>;
+      }[];
+    };
+  };
 }
 
 const wf = (opts: Parameters<typeof renderMcpScanWorkflow>[0] = {}) =>
   parse(renderMcpScanWorkflow(opts)) as Workflow;
 
 const steps = (w: Workflow) => w.jobs.scan.steps;
-const upload = (w: Workflow) => steps(w).find((s) => s.uses?.startsWith('github/codeql-action/upload-sarif'));
+const upload = (w: Workflow) =>
+  steps(w).find((s) => s.uses?.startsWith('github/codeql-action/upload-sarif'));
 const scan = (w: Workflow) => steps(w).find((s) => s.run?.includes('mcp-scan'))!;
 
 describe('without --sarif', () => {

@@ -11,7 +11,13 @@
 import type { Database } from '../db/client';
 import { listAccountDeployments, type AccountDeployment } from '../db/mcpScans';
 import type { McpFinding } from '../mcpScan/analyze';
-import { SEVERITY_RANK, type AuditItem, type AuditReport, type Finding, type InventoryMcpServer } from './types';
+import {
+  SEVERITY_RANK,
+  type AuditItem,
+  type AuditReport,
+  type Finding,
+  type InventoryMcpServer,
+} from './types';
 
 /** A scan older than this still answers, with its age called out. */
 export const STALE_AFTER_DAYS = 14;
@@ -27,14 +33,20 @@ const DAY_MS = 86_400_000;
  * only), by alias for everything else. A server configured under two
  * fingerprints yields the most recently scanned one.
  */
-export function matchDeployment(s: InventoryMcpServer, deployments: AccountDeployment[]): AccountDeployment | null {
+export function matchDeployment(
+  s: InventoryMcpServer,
+  deployments: AccountDeployment[],
+): AccountDeployment | null {
   const host = s.endpoint?.toLowerCase();
   const candidates = deployments.filter((d) => {
     if (s.packageName) return d.serverKey === `npm:${s.packageName}`;
-    if (s.kind === 'remote' && host) return d.serverKey === `remote:${host}` || d.serverKey.startsWith(`remote:${host}/`);
+    if (s.kind === 'remote' && host)
+      return d.serverKey === `remote:${host}` || d.serverKey.startsWith(`remote:${host}/`);
     return d.alias === s.alias;
   });
-  return candidates.sort((a, b) => b.lastScannedAt.getTime() - a.lastScannedAt.getTime())[0] ?? null;
+  return (
+    candidates.sort((a, b) => b.lastScannedAt.getTime() - a.lastScannedAt.getTime())[0] ?? null
+  );
 }
 
 const toolFinding = (f: McpFinding): Finding => ({
@@ -67,7 +79,9 @@ function enrich(item: AuditItem, d: AccountDeployment, now: Date): void {
     item.status = 'answered';
     delete item.skipReason;
     // The "lurq cannot read this kind of server" note no longer applies.
-    item.findings = item.findings.filter((f) => !(f.kind === 'contract-drift' && f.severity === 'info'));
+    item.findings = item.findings.filter(
+      (f) => !(f.kind === 'contract-drift' && f.severity === 'info'),
+    );
   }
 
   if (age > STALE_AFTER_DAYS) {

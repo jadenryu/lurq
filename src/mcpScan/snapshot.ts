@@ -79,7 +79,11 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 function text(v: unknown, max: number, issues: SnapshotIssue[], list: ListName, where: string) {
   if (typeof v !== 'string') return undefined;
   if (v.length <= max) return v;
-  issues.push({ list, kind: 'oversized', detail: `${where}: ${v.length} chars, kept the first ${max}` });
+  issues.push({
+    list,
+    kind: 'oversized',
+    detail: `${where}: ${v.length} chars, kept the first ${max}`,
+  });
   return v.slice(0, max);
 }
 
@@ -112,7 +116,11 @@ function schema(v: unknown, issues: SnapshotIssue[], list: ListName, where: stri
   if (v === undefined || v === null) return undefined;
   const depth = depthOf(v, LIMITS.schemaDepth);
   if (depth > LIMITS.schemaDepth) {
-    issues.push({ list, kind: 'oversized', detail: `${where}: nested deeper than ${LIMITS.schemaDepth} levels` });
+    issues.push({
+      list,
+      kind: 'oversized',
+      detail: `${where}: nested deeper than ${LIMITS.schemaDepth} levels`,
+    });
     return { 'x-lurq-omitted': `schema deeper than ${LIMITS.schemaDepth} levels` };
   }
   const bytes = JSON.stringify(v).length;
@@ -157,7 +165,11 @@ function each<T extends { name: string }>(
     }
     const name = entry.name.trim();
     if (name.length > LIMITS.name) {
-      issues.push({ list, kind: 'malformed', detail: `a name is ${name.length} chars (limit ${LIMITS.name})` });
+      issues.push({
+        list,
+        kind: 'malformed',
+        detail: `a name is ${name.length} chars (limit ${LIMITS.name})`,
+      });
       continue;
     }
     if (seen.has(name)) {
@@ -167,7 +179,11 @@ function each<T extends { name: string }>(
       continue;
     }
     if (seen.size >= cap) {
-      issues.push({ list, kind: 'truncated', detail: `more than ${cap} entries; the rest were not recorded` });
+      issues.push({
+        list,
+        kind: 'truncated',
+        detail: `more than ${cap} entries; the rest were not recorded`,
+      });
       return false;
     }
     const built = build(entry, name);
@@ -176,7 +192,11 @@ function each<T extends { name: string }>(
   return true;
 }
 
-export function addTools(raw: unknown[], seen: Map<string, McpTool>, issues: SnapshotIssue[]): boolean {
+export function addTools(
+  raw: unknown[],
+  seen: Map<string, McpTool>,
+  issues: SnapshotIssue[],
+): boolean {
   return each(raw, 'tools', seen, issues, LIMITS.tools, (e, name) => {
     const tool: McpTool = { name };
     const title = text(e.title, LIMITS.name, issues, 'tools', `${name}.title`);
@@ -193,7 +213,11 @@ export function addTools(raw: unknown[], seen: Map<string, McpTool>, issues: Sna
   });
 }
 
-export function addPrompts(raw: unknown[], seen: Map<string, PromptInfo>, issues: SnapshotIssue[]): boolean {
+export function addPrompts(
+  raw: unknown[],
+  seen: Map<string, PromptInfo>,
+  issues: SnapshotIssue[],
+): boolean {
   return each(raw, 'prompts', seen, issues, LIMITS.prompts, (e, name) => {
     const args = Array.isArray(e.arguments) ? e.arguments : [];
     const prompt: PromptInfo = {
@@ -227,12 +251,22 @@ export function addTemplates(
 ): boolean {
   return each(raw, 'resourceTemplates', seen, issues, LIMITS.resourceTemplates, (e, name) => {
     if (typeof e.uriTemplate !== 'string') {
-      issues.push({ list: 'resourceTemplates', kind: 'malformed', detail: `"${name}" has no uriTemplate` });
+      issues.push({
+        list: 'resourceTemplates',
+        kind: 'malformed',
+        detail: `"${name}" has no uriTemplate`,
+      });
       return null;
     }
     const t: ResourceTemplateInfo = { name, uriTemplate: e.uriTemplate.slice(0, 2048) };
     const title = text(e.title, LIMITS.name, issues, 'resourceTemplates', `${name}.title`);
-    const description = text(e.description, LIMITS.text, issues, 'resourceTemplates', `${name}.description`);
+    const description = text(
+      e.description,
+      LIMITS.text,
+      issues,
+      'resourceTemplates',
+      `${name}.description`,
+    );
     if (title !== undefined) t.title = title;
     if (description !== undefined) t.description = description;
     if (typeof e.mimeType === 'string') t.mimeType = e.mimeType.slice(0, 200);
@@ -249,7 +283,11 @@ const byName = <T extends { name: string }>(xs: T[]) =>
 export function canonicalJson(value: unknown): string {
   return JSON.stringify(value, (_k, v) =>
     v && typeof v === 'object' && !Array.isArray(v)
-      ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Record<string, unknown>)[k]]))
+      ? Object.fromEntries(
+          Object.keys(v)
+            .sort()
+            .map((k) => [k, (v as Record<string, unknown>)[k]]),
+        )
       : v,
   );
 }

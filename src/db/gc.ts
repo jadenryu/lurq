@@ -78,26 +78,53 @@ export async function gcReport(
   }
 
   const notCurated = notInArray(seedPackages.name, opts.curatedSeeds);
-  const staleQueue = and(inArray(discoveryQueue.status, ['rejected', 'failed']), lt(discoveryQueue.discoveredAt, cutoff));
+  const staleQueue = and(
+    inArray(discoveryQueue.status, ['rejected', 'failed']),
+    lt(discoveryQueue.discoveredAt, cutoff),
+  );
   const staleRuns = and(ne(syncRuns.status, 'running'), lt(syncRuns.startedAt, cutoff));
 
   const count = (n: { n: number }[]) => Number(n[0]?.n ?? 0);
   const [seeds, queue, runs] = await Promise.all([
-    db.select({ n: sql<number>`count(*)::int` }).from(seedPackages).where(notCurated),
-    db.select({ n: sql<number>`count(*)::int` }).from(discoveryQueue).where(staleQueue),
-    db.select({ n: sql<number>`count(*)::int` }).from(syncRuns).where(staleRuns),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(seedPackages)
+      .where(notCurated),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(discoveryQueue)
+      .where(staleQueue),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(syncRuns)
+      .where(staleRuns),
   ]);
 
   const categories: GcCategory[] = [
-    { key: 'seed_packages', description: 'seed entries not in the curated seed file', rows: count(seeds) },
-    { key: 'discovery_queue', description: `rejected or failed candidates older than ${keepDays}d`, rows: count(queue) },
-    { key: 'sync_runs', description: `finished sync runs older than ${keepDays}d`, rows: count(runs) },
+    {
+      key: 'seed_packages',
+      description: 'seed entries not in the curated seed file',
+      rows: count(seeds),
+    },
+    {
+      key: 'discovery_queue',
+      description: `rejected or failed candidates older than ${keepDays}d`,
+      rows: count(queue),
+    },
+    {
+      key: 'sync_runs',
+      description: `finished sync runs older than ${keepDays}d`,
+      rows: count(runs),
+    },
   ];
 
   const sizes = await db.execute(sql`
     select relname as table, n_live_tup::bigint as rows, pg_total_relation_size(relid)::bigint as bytes
     from pg_stat_user_tables
-    where relname in (${sql.join(GROWTH_TABLES.map((t) => sql`${t}`), sql`, `)})
+    where relname in (${sql.join(
+      GROWTH_TABLES.map((t) => sql`${t}`),
+      sql`, `,
+    )})
     order by pg_total_relation_size(relid) desc
   `);
   const sizeRows = ((sizes as { rows?: unknown[] }).rows ?? (sizes as unknown as unknown[])) as {
@@ -105,7 +132,11 @@ export async function gcReport(
     rows: string | number;
     bytes: string | number;
   }[];
-  const tables = sizeRows.map((r) => ({ table: r.table, rows: Number(r.rows), bytes: Number(r.bytes) }));
+  const tables = sizeRows.map((r) => ({
+    table: r.table,
+    rows: Number(r.rows),
+    bytes: Number(r.bytes),
+  }));
 
   const report: GcReport = { keepDays, categories, tables, applied };
   if (!applied || categories.every((c) => c.rows === 0)) return report;

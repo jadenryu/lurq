@@ -75,12 +75,13 @@ export function optimizeStack(
 
   // Incumbent: top pick of every slot. Only a *feasible* stack bounds the search.
   let bestSelection = new Array<number>(n).fill(0);
-  let bestRegret = conflictsFor(
-    slots.map((c) => c[0]).filter((m): m is CompatMember => Boolean(m)),
-    sandboxConflicts,
-  ).length === 0
-    ? 0
-    : Infinity;
+  let bestRegret =
+    conflictsFor(
+      slots.map((c) => c[0]).filter((m): m is CompatMember => Boolean(m)),
+      sandboxConflicts,
+    ).length === 0
+      ? 0
+      : Infinity;
 
   const chosen = new Array<number>(n).fill(0);
   const dfs = (slot: number, regret: number): void => {

@@ -24,8 +24,14 @@ export type NotificationKind = 'urgent' | 'digest' | 'channel';
 const newToken = () => randomBytes(32).toString('base64url');
 
 /** The account's preferences, created with the defaults on first read. */
-export async function getOrCreatePreferences(db: Database, ownerId: string): Promise<NotificationPreferencesRow> {
-  await db.insert(notificationPreferences).values({ ownerId, unsubscribeToken: newToken() }).onConflictDoNothing();
+export async function getOrCreatePreferences(
+  db: Database,
+  ownerId: string,
+): Promise<NotificationPreferencesRow> {
+  await db
+    .insert(notificationPreferences)
+    .values({ ownerId, unsubscribeToken: newToken() })
+    .onConflictDoNothing();
   const [row] = await db
     .select()
     .from(notificationPreferences)
@@ -50,17 +56,27 @@ export async function setPreferences(
 }
 
 /** Turn one kind off by token. False when no account holds the token. */
-export async function unsubscribeByToken(db: Database, token: string, kind: 'urgent' | 'digest'): Promise<boolean> {
+export async function unsubscribeByToken(
+  db: Database,
+  token: string,
+  kind: 'urgent' | 'digest',
+): Promise<boolean> {
   const rows = await db
     .update(notificationPreferences)
-    .set({ ...(kind === 'urgent' ? { urgentEmail: false } : { weeklyDigest: false }), updatedAt: new Date() })
+    .set({
+      ...(kind === 'urgent' ? { urgentEmail: false } : { weeklyDigest: false }),
+      updatedAt: new Date(),
+    })
     .where(eq(notificationPreferences.unsubscribeToken, token))
     .returning({ ownerId: notificationPreferences.ownerId });
   return rows.length > 0;
 }
 
 export async function digestSubscribers(db: Database): Promise<NotificationPreferencesRow[]> {
-  return db.select().from(notificationPreferences).where(eq(notificationPreferences.weeklyDigest, true));
+  return db
+    .select()
+    .from(notificationPreferences)
+    .where(eq(notificationPreferences.weeklyDigest, true));
 }
 
 export async function markDigestSent(db: Database, ownerId: string, at: Date): Promise<void> {
@@ -76,7 +92,12 @@ export async function markDigestSent(db: Database, ownerId: string, at: Date): P
  */
 export async function createDelivery(
   db: Database,
-  input: { ownerId: string; kind: NotificationKind; idempotencyKey: string; channelId?: number | null },
+  input: {
+    ownerId: string;
+    kind: NotificationKind;
+    idempotencyKey: string;
+    channelId?: number | null;
+  },
 ): Promise<{ row: NotificationDeliveryRow; created: boolean }> {
   const inserted = await db
     .insert(notificationDeliveries)
@@ -93,7 +114,12 @@ export async function createDelivery(
 }
 
 /** Claim items for a delivery. Returns only the keys this call won. */
-export async function claimItems(db: Database, ownerId: string, deliveryId: number, keys: string[]): Promise<string[]> {
+export async function claimItems(
+  db: Database,
+  ownerId: string,
+  deliveryId: number,
+  keys: string[],
+): Promise<string[]> {
   if (!keys.length) return [];
   const rows = await db
     .insert(notificationItems)
@@ -128,13 +154,20 @@ export async function itemKeysFor(db: Database, deliveryId: number): Promise<str
 export async function updateDelivery(
   db: Database,
   id: number,
-  patch: Partial<Pick<NotificationDeliveryRow, 'status' | 'attempts' | 'error' | 'providerId' | 'sentAt'>>,
+  patch: Partial<
+    Pick<NotificationDeliveryRow, 'status' | 'attempts' | 'error' | 'providerId' | 'sentAt'>
+  >,
 ): Promise<void> {
   await db.update(notificationDeliveries).set(patch).where(eq(notificationDeliveries.id, id));
 }
 
 /** Emails of a kind sent (or in flight) to an owner since a moment. */
-export async function countDeliveries(db: Database, ownerId: string, kind: NotificationKind, since: Date): Promise<number> {
+export async function countDeliveries(
+  db: Database,
+  ownerId: string,
+  kind: NotificationKind,
+  since: Date,
+): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(notificationDeliveries)
@@ -177,14 +210,27 @@ type NewChannel = typeof notificationChannels.$inferInsert;
 type ChannelPatch = Partial<
   Pick<
     NotificationChannelRow,
-    'label' | 'minSeverity' | 'enabled' | 'consecutiveFailures' | 'disabledReason' | 'lastDeliveredAt' | 'lastError'
+    | 'label'
+    | 'minSeverity'
+    | 'enabled'
+    | 'consecutiveFailures'
+    | 'disabledReason'
+    | 'lastDeliveredAt'
+    | 'lastError'
   >
 >;
 
 const liveChannel = (ownerId: string, id: number) =>
-  and(eq(notificationChannels.ownerId, ownerId), eq(notificationChannels.id, id), isNull(notificationChannels.deletedAt));
+  and(
+    eq(notificationChannels.ownerId, ownerId),
+    eq(notificationChannels.id, id),
+    isNull(notificationChannels.deletedAt),
+  );
 
-export async function listChannels(db: Database, ownerId: string): Promise<NotificationChannelRow[]> {
+export async function listChannels(
+  db: Database,
+  ownerId: string,
+): Promise<NotificationChannelRow[]> {
   return db
     .select()
     .from(notificationChannels)
@@ -192,17 +238,33 @@ export async function listChannels(db: Database, ownerId: string): Promise<Notif
     .orderBy(notificationChannels.id);
 }
 
-export async function getChannel(db: Database, ownerId: string, id: number): Promise<NotificationChannelRow | null> {
-  const [row] = await db.select().from(notificationChannels).where(liveChannel(ownerId, id)).limit(1);
+export async function getChannel(
+  db: Database,
+  ownerId: string,
+  id: number,
+): Promise<NotificationChannelRow | null> {
+  const [row] = await db
+    .select()
+    .from(notificationChannels)
+    .where(liveChannel(ownerId, id))
+    .limit(1);
   return row ?? null;
 }
 
-export async function insertChannel(db: Database, row: NewChannel): Promise<NotificationChannelRow> {
+export async function insertChannel(
+  db: Database,
+  row: NewChannel,
+): Promise<NotificationChannelRow> {
   const [created] = await db.insert(notificationChannels).values(row).returning();
   return created!;
 }
 
-export async function updateChannel(db: Database, ownerId: string, id: number, patch: ChannelPatch): Promise<NotificationChannelRow | null> {
+export async function updateChannel(
+  db: Database,
+  ownerId: string,
+  id: number,
+  patch: ChannelPatch,
+): Promise<NotificationChannelRow | null> {
   const [row] = await db
     .update(notificationChannels)
     .set({ ...patch, updatedAt: new Date() })
@@ -215,7 +277,13 @@ export async function updateChannel(db: Database, ownerId: string, id: number, p
 export async function removeChannel(db: Database, ownerId: string, id: number): Promise<boolean> {
   const rows = await db
     .update(notificationChannels)
-    .set({ deletedAt: new Date(), enabled: false, urlCiphertext: '', signingSecretCiphertext: null, updatedAt: new Date() })
+    .set({
+      deletedAt: new Date(),
+      enabled: false,
+      urlCiphertext: '',
+      signingSecretCiphertext: null,
+      updatedAt: new Date(),
+    })
     .where(liveChannel(ownerId, id))
     .returning({ id: notificationChannels.id });
   return rows.length > 0;
@@ -230,7 +298,10 @@ export async function activeChannels(db: Database): Promise<NotificationChannelR
     .limit(10_000);
 }
 
-export async function channelById(db: Database, id: number): Promise<NotificationChannelRow | null> {
+export async function channelById(
+  db: Database,
+  id: number,
+): Promise<NotificationChannelRow | null> {
   const [row] = await db
     .select()
     .from(notificationChannels)

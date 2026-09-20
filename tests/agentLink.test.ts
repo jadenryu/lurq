@@ -49,15 +49,24 @@ describe('startAgentLink', () => {
     stdout.write(`${LINK_PREFIX}https://lurq.run/dashboard/cli?port=4567&nonce=abc\n`);
 
     await expect(pending).resolves.toBe('https://lurq.run/dashboard/cli?port=4567&nonce=abc');
-    const [, args, options] = spawnImpl.mock.calls[0] as unknown as [string, string[], { detached: boolean }];
-    expect(args).toEqual(expect.arrayContaining(['setup', '--wait-for-signin', '--agent', 'cursor', '--no-open']));
+    const [, args, options] = spawnImpl.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { detached: boolean },
+    ];
+    expect(args).toEqual(
+      expect.arrayContaining(['setup', '--wait-for-signin', '--agent', 'cursor', '--no-open']),
+    );
     expect(options.detached).toBe(true);
     expect(child.unref).toHaveBeenCalled();
   });
 
   it('returns null when the copy exits before printing a link', async () => {
     const { child } = fakeChild();
-    const pending = startAgentLink({}, vi.fn(() => child));
+    const pending = startAgentLink(
+      {},
+      vi.fn(() => child),
+    );
     child.emit('exit', 1);
     await expect(pending).resolves.toBeNull();
   });

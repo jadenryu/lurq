@@ -108,7 +108,11 @@ export async function resolveTarball(
 }
 
 /** One version's registry document, or null when it is not published. */
-async function registryVersion(name: string, version: string | null, fetchImpl: typeof fetch): Promise<unknown> {
+async function registryVersion(
+  name: string,
+  version: string | null,
+  fetchImpl: typeof fetch,
+): Promise<unknown> {
   const spec = version ?? 'latest';
   const url = `https://registry.npmjs.org/${encodeNpmName(name)}/${encodeURIComponent(spec)}`;
   const res = await fetchWithRetry(fetchImpl, url, { headers: { accept: 'application/json' } });

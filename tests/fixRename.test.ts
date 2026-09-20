@@ -23,12 +23,31 @@ const write = (rel: string, src: string) => {
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'lurq-rename-'));
-  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fx', dependencies: { cookie: '^1.0.0' } }), 'utf8');
-  write('src/bare.ts', `import { parse } from 'cookie';\n\nexport const read = (h: string) => parse(h);\nexport const both = (h: string) => parse(h, {});\n`);
-  write('src/aliased.ts', `import { parse as readCookie } from 'cookie';\n\nexport const read = (h: string) => readCookie(h);\n`);
-  write('src/shadowed.ts', `import { parse } from 'cookie';\n\nexport function wrap(h: string) {\n  const parse = (s: string) => s;\n  return parse(h);\n}\nexport const read = (h: string) => parse(h);\n`);
-  write('src/subpath.ts', `import { parse } from 'cookie/lib';\n\nexport const read = (h: string) => parse(h);\n`);
-  write('src/ns.ts', `import * as cookie from 'cookie';\n\nexport const read = (h: string) => cookie.parse(h);\n`);
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({ name: 'fx', dependencies: { cookie: '^1.0.0' } }),
+    'utf8',
+  );
+  write(
+    'src/bare.ts',
+    `import { parse } from 'cookie';\n\nexport const read = (h: string) => parse(h);\nexport const both = (h: string) => parse(h, {});\n`,
+  );
+  write(
+    'src/aliased.ts',
+    `import { parse as readCookie } from 'cookie';\n\nexport const read = (h: string) => readCookie(h);\n`,
+  );
+  write(
+    'src/shadowed.ts',
+    `import { parse } from 'cookie';\n\nexport function wrap(h: string) {\n  const parse = (s: string) => s;\n  return parse(h);\n}\nexport const read = (h: string) => parse(h);\n`,
+  );
+  write(
+    'src/subpath.ts',
+    `import { parse } from 'cookie/lib';\n\nexport const read = (h: string) => parse(h);\n`,
+  );
+  write(
+    'src/ns.ts',
+    `import * as cookie from 'cookie';\n\nexport const read = (h: string) => cookie.parse(h);\n`,
+  );
   const scanned = scanReferences(root).find((p) => p.package === 'cookie');
   refs = [...(scanned?.symbols.values() ?? [])].flat();
 });
@@ -36,9 +55,12 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 const source = (file: string) => readFileSync(join(root, file), 'utf8');
-const refsIn = (...files: string[]) => refs.filter((r) => files.includes(r.file) && r.symbol === 'parse');
+const refsIn = (...files: string[]) =>
+  refs.filter((r) => files.includes(r.file) && r.symbol === 'parse');
 
-function breaking(over: Partial<BreakingFinding> & { symbolsRemoved: BreakingFinding['symbolsRemoved'] }): BreakingFinding {
+function breaking(
+  over: Partial<BreakingFinding> & { symbolsRemoved: BreakingFinding['symbolsRemoved'] },
+): BreakingFinding {
   return {
     package: 'cookie',
     fromVersion: '0.6.0',
@@ -62,10 +84,16 @@ function applied(finding: Finding): Record<string, string> {
 
 describe('a proven single-candidate rename', () => {
   it('rewrites a bare import and every use of it', () => {
-    const { findings, refused } = plan([{ symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/bare.ts') }]);
+    const { findings, refused } = plan([
+      { symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/bare.ts') },
+    ]);
     expect(refused).toEqual([]);
     expect(findings).toHaveLength(1);
-    expect(findings[0]).toMatchObject({ domain: 'package', code: 'renamed-export:cookie:parse', severity: 'blocking' });
+    expect(findings[0]).toMatchObject({
+      domain: 'package',
+      code: 'renamed-export:cookie:parse',
+      severity: 'blocking',
+    });
     expect(findings[0]!.fix!.verify).toEqual(['typecheck', 'tests']);
 
     const out = applied(findings[0]!)['src/bare.ts']!;
@@ -76,21 +104,27 @@ describe('a proven single-candidate rename', () => {
   });
 
   it('rewrites only the import of an aliased one, because the local name still reads correctly', () => {
-    const { findings } = plan([{ symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/aliased.ts') }]);
+    const { findings } = plan([
+      { symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/aliased.ts') },
+    ]);
     const out = applied(findings[0]!)['src/aliased.ts']!;
     expect(out).toContain("import { parseCookie as readCookie } from 'cookie';");
     expect(out).toContain('=> readCookie(h);');
   });
 
   it('carries evidence naming the proof, not a similarity guess', () => {
-    const { findings } = plan([{ symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/bare.ts') }]);
+    const { findings } = plan([
+      { symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/bare.ts') },
+    ]);
     expect(findings[0]!.evidence).toMatch(/exported from one declaration/);
   });
 });
 
 describe('what it refuses', () => {
   it('refuses a file where the local name is declared twice', () => {
-    const { findings, refused } = plan([{ symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/shadowed.ts') }]);
+    const { findings, refused } = plan([
+      { symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/shadowed.ts') },
+    ]);
     expect(refused[0]!.reason).toMatch(/declared more than once/);
     expect(findings[0]!.fix!.edits).toBeUndefined();
     expect(findings[0]!.fix!.task!.instruction).toMatch(/Rename parse to parseCookie/);
@@ -104,14 +138,20 @@ describe('what it refuses', () => {
   });
 
   it('leaves a subpath import alone, since a subpath has its own surface', () => {
-    const { findings, refused } = plan([{ symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/subpath.ts') }]);
+    const { findings, refused } = plan([
+      { symbol: 'parse', renamedTo: ['parseCookie'], refs: refsIn('src/subpath.ts') },
+    ]);
     expect(refused[0]!.reason).toMatch(/nothing in this project references it at the package root/);
     expect(findings[0]!.fix!.edits).toBeUndefined();
   });
 
   it('turns more than one surviving name into an agent task, never an edit', () => {
     const { findings, refused } = plan([
-      { symbol: 'parse', renamedTo: ['parseCookie', 'parseSetCookie'], refs: refsIn('src/bare.ts') },
+      {
+        symbol: 'parse',
+        renamedTo: ['parseCookie', 'parseSetCookie'],
+        refs: refsIn('src/bare.ts'),
+      },
     ]);
     expect(refused[0]!.reason).toMatch(/more than one surviving name/);
     const fix = findings[0]!.fix!;
@@ -122,7 +162,11 @@ describe('what it refuses', () => {
 
   it('rewrites the files it can and briefs only the one it cannot', () => {
     const { findings, refused } = plan([
-      { symbol: 'parse', renamedTo: ['parseCookie'], refs: [...refsIn('src/bare.ts'), ...refsIn('src/shadowed.ts')] },
+      {
+        symbol: 'parse',
+        renamedTo: ['parseCookie'],
+        refs: [...refsIn('src/bare.ts'), ...refsIn('src/shadowed.ts')],
+      },
     ]);
     expect(findings).toHaveLength(2);
 
@@ -138,7 +182,11 @@ describe('what it refuses', () => {
   });
 
   it('refuses a reference with no recorded position', () => {
-    const stripped: SymbolReference[] = refsIn('src/bare.ts').map((r) => ({ ...r, nameStart: undefined, nameEnd: undefined }));
+    const stripped: SymbolReference[] = refsIn('src/bare.ts').map((r) => ({
+      ...r,
+      nameStart: undefined,
+      nameEnd: undefined,
+    }));
     const { refused } = plan([{ symbol: 'parse', renamedTo: ['parseCookie'], refs: stripped }]);
     expect(refused[0]!.reason).toMatch(/no recorded position/);
   });

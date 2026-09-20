@@ -8,7 +8,7 @@ export class OpenAIParticipant implements Participant {
 
   constructor(
     public readonly id: string,
-    public readonly model: string
+    public readonly model: string,
   ) {}
 
   async run(_db: Database, benchCase: BenchmarkCase): Promise<StackProposal> {
@@ -24,13 +24,13 @@ export class OpenAIParticipant implements Participant {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`,
+        Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
         model: this.model,
         messages: [{ role: 'user', content: prompt }],
         temperature: 1, // 0 is deprecated for new models like sol
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
       }),
     });
 
@@ -39,7 +39,7 @@ export class OpenAIParticipant implements Participant {
       throw new Error(`OpenAI API error ${res.status}: ${text}`);
     }
 
-    const data = await res.json() as any;
+    const data = (await res.json()) as any;
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
       throw new Error('OpenAI returned no content');
@@ -53,7 +53,9 @@ export class OpenAIParticipant implements Participant {
       }
       return parsed as StackProposal;
     } catch (err) {
-      throw new Error(`Failed to parse OpenAI JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${content}`);
+      throw new Error(
+        `Failed to parse OpenAI JSON response: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${content}`,
+      );
     }
   }
 }

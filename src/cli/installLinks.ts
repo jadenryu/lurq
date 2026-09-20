@@ -13,7 +13,10 @@ import { DEFAULT_ENDPOINT } from '../core/constants';
 
 export const KEY_PLACEHOLDER = '<your-lurq-api-key>';
 
-const headers = (agent: string) => ({ Authorization: `Bearer ${KEY_PLACEHOLDER}`, 'X-Lurq-Client': agent });
+const headers = (agent: string) => ({
+  Authorization: `Bearer ${KEY_PLACEHOLDER}`,
+  'X-Lurq-Client': agent,
+});
 
 /**
  * Cursor: base64 of the server entry itself, not wrapped in its name
@@ -21,7 +24,9 @@ const headers = (agent: string) => ({ Authorization: `Bearer ${KEY_PLACEHOLDER}`
  * Cursor: `url` + `headers`, no `type`.
  */
 export function cursorInstallLink(): string {
-  const config = Buffer.from(JSON.stringify({ url: DEFAULT_ENDPOINT, headers: headers('cursor') })).toString('base64');
+  const config = Buffer.from(
+    JSON.stringify({ url: DEFAULT_ENDPOINT, headers: headers('cursor') }),
+  ).toString('base64');
   return `cursor://anysphere.cursor-deeplink/mcp/install?name=lurq&config=${encodeURIComponent(config)}`;
 }
 

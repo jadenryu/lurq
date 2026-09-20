@@ -112,7 +112,10 @@ describe('reference scanner', () => {
       );
       const refs = scanReferences(dir);
       const calls = (pkg: string, sym: string) =>
-        refs.find((r) => r.package === pkg)!.symbols.get(sym)!.flatMap((r) => r.calls ?? []);
+        refs
+          .find((r) => r.package === pkg)!
+          .symbols.get(sym)!
+          .flatMap((r) => r.calls ?? []);
       expect(calls('cookie', 'parse').slice(0, 4)).toEqual([
         expect.objectContaining({ line: 4, args: 1 }),
         expect.objectContaining({ line: 5, args: 2 }),
@@ -137,9 +140,15 @@ describe('reference scanner', () => {
       mkdirSync(join(dir, 'src'), { recursive: true });
       writeFileSync(
         join(dir, 'src/s.ts'),
-        [`import { parse } from 'cookie';`, `parse('a');`, `function local(parse: (s: string) => void) { parse('b', 1); }`].join('\n'),
+        [
+          `import { parse } from 'cookie';`,
+          `parse('a');`,
+          `function local(parse: (s: string) => void) { parse('b', 1); }`,
+        ].join('\n'),
       );
-      const ref = scanReferences(dir).find((r) => r.package === 'cookie')!.symbols.get('parse')![0]!;
+      const ref = scanReferences(dir)
+        .find((r) => r.package === 'cookie')!
+        .symbols.get('parse')![0]!;
       expect(ref.calls).toEqual([
         { line: 2, args: null },
         { line: 3, args: null },
@@ -176,16 +185,26 @@ describe('reference scanner', () => {
         ].join('\n'),
       );
       const refs = scanReferences(dir);
-      const get = (pkg: string, sym: string) => refs.find((r) => r.package === pkg)?.symbols.get(sym) ?? [];
+      const get = (pkg: string, sym: string) =>
+        refs.find((r) => r.package === pkg)?.symbols.get(sym) ?? [];
 
       expect(get('cookie', 'parse')[0]).toMatchObject({ via: 'named', line: 2 });
       expect(get('cookie', 'serialize')[0]!.via).toBe('named');
       expect(get('cookie', 'Options')[0]!.via).toBe('type-only');
       expect(get('cookie-eq', 'parse')[0]).toMatchObject({ via: 'namespace', line: 14 });
-      expect(get('qs', 'stringify')[0]).toMatchObject({ via: 'namespace', calls: [{ line: 4, args: 2 }] });
+      expect(get('qs', 'stringify')[0]).toMatchObject({
+        via: 'namespace',
+        calls: [{ line: 4, args: 2 }],
+      });
       expect(get('pino', 'destination')[0]!.via).toBe('namespace');
-      expect(get('date-fns', 'format')[0]).toMatchObject({ via: 'destructured', calls: [{ line: 9, args: 2 }] });
-      expect(get('semver', 'valid')[0]).toMatchObject({ via: 'namespace', calls: [{ line: 13, args: 1 }] });
+      expect(get('date-fns', 'format')[0]).toMatchObject({
+        via: 'destructured',
+        calls: [{ line: 9, args: 2 }],
+      });
+      expect(get('semver', 'valid')[0]).toMatchObject({
+        via: 'namespace',
+        calls: [{ line: 13, args: 1 }],
+      });
       expect(get('semver', 'clean')[0]!.via).toBe('namespace');
       // An un-awaited import() is a promise, not the module.
       expect(refs.some((r) => r.package === 'not-awaited')).toBe(false);
@@ -206,7 +225,10 @@ describe('reference scanner', () => {
 
   it('refuses a version range before touching the registry', async () => {
     const refs = scanReferences(root).find((r) => r.package === 'fast-glob');
-    const res = await checkUpgradeOne({ package: 'fast-glob', fromVersion: '^3.2.0', toVersion: '3.3.3' }, refs);
+    const res = await checkUpgradeOne(
+      { package: 'fast-glob', fromVersion: '^3.2.0', toVersion: '3.3.3' },
+      refs,
+    );
     expect(res).toEqual({ unverified: 'expected exact versions, got ^3.2.0..3.3.3' });
   });
 
@@ -387,7 +409,8 @@ describe('arity changes judged at the call site', () => {
               file: 'src/session.ts',
               line: 12,
               code: 2353,
-              message: "Object literal may only specify known properties, and 'decode' does not exist in type 'ParseOptions'.",
+              message:
+                "Object literal may only specify known properties, and 'decode' does not exist in type 'ParseOptions'.",
             },
           ],
         },
@@ -396,7 +419,11 @@ describe('arity changes judged at the call site', () => {
       unverified: [],
       types: [
         { package: 'cookie', checked: true, files: 3 },
-        { package: 'left-pad', checked: false, reason: 'the new version ships no type definitions of its own' },
+        {
+          package: 'left-pad',
+          checked: false,
+          reason: 'the new version ships no type definitions of its own',
+        },
       ],
     });
     expect(out).toContain('src/session.ts:12  TS2353');
@@ -417,15 +444,34 @@ describe('arity changes judged at the call site', () => {
           arityChanged: [],
           newExports: [],
           entriesRemoved: [
-            { specifier: 'chalk/source/util', refs: [{ symbol: 'x', via: 'named' as const, specifier: 'chalk/source/util', file: 'src/a.js', line: 2 }] },
+            {
+              specifier: 'chalk/source/util',
+              refs: [
+                {
+                  symbol: 'x',
+                  via: 'named' as const,
+                  specifier: 'chalk/source/util',
+                  file: 'src/a.js',
+                  line: 2,
+                },
+              ],
+            },
           ],
           moduleFormat: {
             from: 'cjs',
             to: 'esm',
-            broken: [{ file: 'src/log.js', line: 3, why: '`red` is not an export of the ES module, so it reads as undefined' }],
+            broken: [
+              {
+                file: 'src/log.js',
+                line: 3,
+                why: '`red` is not an export of the ES module, so it reads as undefined',
+              },
+            ],
             olderNode: [{ file: 'src/log.js', line: 1 }],
           },
-          requirements: [{ kind: 'engines', name: 'node', needs: '>=18', has: '>=14 (package.json engines)' }],
+          requirements: [
+            { kind: 'engines', name: 'node', needs: '>=18', has: '>=14 (package.json engines)' },
+          ],
         },
       ],
       ok: [],
@@ -500,7 +546,11 @@ describe('namespace-member claims', () => {
       false,
     );
     expect(
-      isNamespaceMemberClaim(ref({ via: 'default-member', parent: undefined }), new Set(['z']), new Set(['z'])),
+      isNamespaceMemberClaim(
+        ref({ via: 'default-member', parent: undefined }),
+        new Set(['z']),
+        new Set(['z']),
+      ),
     ).toBe(false);
   });
 });
@@ -515,7 +565,18 @@ describe('upgrade report formatting', () => {
         toVersion: '3.4.0',
         severity: 'blocking',
         symbolsRemoved: [
-          { symbol: 'escapePath', refs: [{ symbol: 'escapePath', via: 'named' as const, specifier: 'fast-glob', file: 'src/util/paths.ts', line: 14 }] },
+          {
+            symbol: 'escapePath',
+            refs: [
+              {
+                symbol: 'escapePath',
+                via: 'named' as const,
+                specifier: 'fast-glob',
+                file: 'src/util/paths.ts',
+                line: 14,
+              },
+            ],
+          },
         ],
         arityChanged: [],
         newExports: [
@@ -529,7 +590,22 @@ describe('upgrade report formatting', () => {
         toVersion: '8.21.0',
         severity: 'warning',
         symbolsRemoved: [],
-        arityChanged: [{ symbol: 'child', from: 1, to: 2, refs: [{ symbol: 'child', via: 'named' as const, specifier: 'pino', file: 'src/log.ts', line: 31 }] }],
+        arityChanged: [
+          {
+            symbol: 'child',
+            from: 1,
+            to: 2,
+            refs: [
+              {
+                symbol: 'child',
+                via: 'named' as const,
+                specifier: 'pino',
+                file: 'src/log.ts',
+                line: 31,
+              },
+            ],
+          },
+        ],
         newExports: [{ symbol: 'multistream', kind: 'function' as const, arity: 2 }],
       },
     ],
@@ -581,7 +657,15 @@ describe('upgrade report formatting', () => {
             {
               symbol: 'parse',
               renamedTo: ['parseCookie'],
-              refs: [{ symbol: 'parse', via: 'named' as const, specifier: 'cookie', file: 'src/session.ts', line: 239 }],
+              refs: [
+                {
+                  symbol: 'parse',
+                  via: 'named' as const,
+                  specifier: 'cookie',
+                  file: 'src/session.ts',
+                  line: 239,
+                },
+              ],
             },
           ],
           arityChanged: [],

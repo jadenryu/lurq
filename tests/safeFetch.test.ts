@@ -87,8 +87,11 @@ describe('createSafeFetch against a local server', () => {
     publicHttpsOnly(url);
   };
   const localLookup = ((host: string, options: { all?: boolean }, cb: (...a: unknown[]) => void) =>
-    options?.all ? cb(null, [{ address: '127.0.0.1', family: 4 }]) : cb(null, '127.0.0.1', 4)) as never;
-  const fetchLocal = (over = {}) => createSafeFetch({ policy: onlyTestServer, lookup: localLookup, ...over });
+    options?.all
+      ? cb(null, [{ address: '127.0.0.1', family: 4 }])
+      : cb(null, '127.0.0.1', 4)) as never;
+  const fetchLocal = (over = {}) =>
+    createSafeFetch({ policy: onlyTestServer, lookup: localLookup, ...over });
 
   it('returns a real Response with the body intact', async () => {
     const res = await fetchLocal()(`${base}/ok`);
@@ -117,7 +120,9 @@ describe('createSafeFetch against a local server', () => {
   });
 
   it('stops after the redirect limit', async () => {
-    await expect(fetchLocal({ maxRedirects: 2 })(`${base}/loop`)).rejects.toThrow(/more than 2 redirects/);
+    await expect(fetchLocal({ maxRedirects: 2 })(`${base}/loop`)).rejects.toThrow(
+      /more than 2 redirects/,
+    );
   });
 
   it('errors instead of buffering a body past the cap', async () => {
@@ -127,7 +132,12 @@ describe('createSafeFetch against a local server', () => {
 
   it('refuses at connect time when DNS answers with a private address', async () => {
     const rebinding = ((host: string, options: { all?: boolean }, cb: (...a: unknown[]) => void) =>
-      cb(Object.assign(new Error(`${host} resolves to a private network address`), { code: 'EPRIVATE' }), [])) as never;
+      cb(
+        Object.assign(new Error(`${host} resolves to a private network address`), {
+          code: 'EPRIVATE',
+        }),
+        [],
+      )) as never;
     const f = createSafeFetch({ policy: () => {}, lookup: rebinding });
     await expect(f('https://looks-public.example.com/')).rejects.toThrow();
   });

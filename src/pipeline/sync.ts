@@ -105,7 +105,9 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
 
   try {
     const targets = await resolveTargets(handle.db, opts, config.LURQ_SYNC_REFRESH_CAP);
-    logger.info(`Syncing ${targets.length} package(s) with concurrency ${config.LURQ_SYNC_CONCURRENCY}…`);
+    logger.info(
+      `Syncing ${targets.length} package(s) with concurrency ${config.LURQ_SYNC_CONCURRENCY}…`,
+    );
 
     // One read that serves two purposes. It carries the stored summary and
     // vector, so a package still sitting at its latest version costs no LLM call
@@ -115,7 +117,10 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
     // here, before the upsert loop overwrites those versions.
     const embProvider = createEmbeddingProvider();
     logger.info(`Embedding provider: ${embProvider.kind}`);
-    const stored = await reusableFieldsFor(handle.db, targets.map((t) => t.name));
+    const stored = await reusableFieldsFor(
+      handle.db,
+      targets.map((t) => t.name),
+    );
     // `--full` is the escape hatch: it already bypasses the HTTP cache, so it
     // has to bypass this gate too or it would no longer mean "regenerate".
     const forceRegen = opts.full === true;
@@ -222,9 +227,7 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
       : [];
     const mintedByName = new Map(needEmbedding.map((c, i) => [c.target.name, minted[i] ?? null]));
     // Re-indexed against `ok`, because the upsert loop below reads embeddings[i].
-    const embeddings = ok.map(
-      (c) => c.reusedEmbedding ?? mintedByName.get(c.target.name) ?? null,
-    );
+    const embeddings = ok.map((c) => c.reusedEmbedding ?? mintedByName.get(c.target.name) ?? null);
     logger.info(
       `Summaries: ${reused} reused, ${ok.length - reused} generated. Embeddings: ${needEmbedding.length} minted.`,
     );
@@ -317,7 +320,9 @@ export async function runSync(opts: SyncOptions = {}): Promise<SyncSummary> {
       status,
     });
 
-    logger.info(`Sync ${status}: ${updated}/${targets.length} updated, ${allErrors.length} source errors.`);
+    logger.info(
+      `Sync ${status}: ${updated}/${targets.length} updated, ${allErrors.length} source errors.`,
+    );
     // The index changed — drop cached reads so the next query sees fresh scores.
     if (updated > 0) await invalidateCache();
     return { seen: targets.length, updated, errors: allErrors.length, status };

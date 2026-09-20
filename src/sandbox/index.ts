@@ -36,21 +36,25 @@ export const localSandboxAllowed = (env: NodeJS.ProcessEnv = process.env): boole
  * without mutating the environment, and so the pipeline can ask the question
  * BEFORE it claims any work — a config mistake must not consume queue attempts.
  */
-export function isolationGate(opts: { hasE2BKey: boolean; allowLocal: boolean }):
-  | { ok: true; driver: 'e2b' | 'local' }
-  | { ok: false; reason: string } {
+export function isolationGate(opts: {
+  hasE2BKey: boolean;
+  allowLocal: boolean;
+}): { ok: true; driver: 'e2b' | 'local' } | { ok: false; reason: string } {
   if (opts.hasE2BKey) return { ok: true, driver: 'e2b' };
   if (opts.allowLocal) return { ok: true, driver: 'local' };
   return {
     ok: false,
     reason:
-      'no VM isolation available: E2B_API_KEY is not set, so this would install and import an untrusted package in this process\'s own container. Set E2B_API_KEY, or set LURQ_ALLOW_LOCAL_SANDBOX=1 to accept local execution deliberately.',
+      "no VM isolation available: E2B_API_KEY is not set, so this would install and import an untrusted package in this process's own container. Set E2B_API_KEY, or set LURQ_ALLOW_LOCAL_SANDBOX=1 to accept local execution deliberately.",
   };
 }
 
 /** True when an isolated driver is configured. Cheap; no SDK load. */
 export const isolationAvailable = (env?: NodeJS.ProcessEnv): boolean =>
-  isolationGate({ hasE2BKey: Boolean(getConfig().E2B_API_KEY), allowLocal: localSandboxAllowed(env) }).ok;
+  isolationGate({
+    hasE2BKey: Boolean(getConfig().E2B_API_KEY),
+    allowLocal: localSandboxAllowed(env),
+  }).ok;
 
 export async function getSandbox(opts: { isolated?: boolean } = {}): Promise<Sandbox> {
   const hasE2BKey = Boolean(getConfig().E2B_API_KEY);

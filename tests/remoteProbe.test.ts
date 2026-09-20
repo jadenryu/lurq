@@ -25,8 +25,15 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-const json = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) =>
-  res.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify(body));
+const json = (
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+) =>
+  res
+    .writeHead(status, { 'content-type': 'application/json', ...headers })
+    .end(JSON.stringify(body));
 
 const TOOL = (name: string, extra: Record<string, unknown> = {}) => ({
   name,
@@ -47,9 +54,13 @@ async function legacyMcp(req: IncomingMessage, res: ServerResponse, body: string
       },
     });
     const mcp = new McpServer({ name: 'legacy-fixture', version: '9.9.9' });
-    mcp.registerTool('echo', { description: 'Echo text back', inputSchema: { text: z.string() } }, async ({ text }) => ({
-      content: [{ type: 'text', text }],
-    }));
+    mcp.registerTool(
+      'echo',
+      { description: 'Echo text back', inputSchema: { text: z.string() } },
+      async ({ text }) => ({
+        content: [{ type: 'text', text }],
+      }),
+    );
     await mcp.connect(transport);
   }
   await transport.handleRequest(req, res, body ? JSON.parse(body) : undefined);
@@ -70,21 +81,33 @@ beforeAll(async () => {
             resultType: 'complete',
             tools: page2 ? [TOOL('second')] : [TOOL('first'), { description: 'no name' }],
             ...(page2 ? {} : { nextCursor: 'p2' }),
-            _meta: { 'io.modelcontextprotocol/serverInfo': { name: 'stateless-fixture', version: '2.0.0' } },
+            _meta: {
+              'io.modelcontextprotocol/serverInfo': { name: 'stateless-fixture', version: '2.0.0' },
+            },
           },
         });
       }
       case url === '/sse-reply':
         res.writeHead(200, { 'content-type': 'text/event-stream' });
-        return res.end(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { tools: [TOOL('streamed')] } })}\n\n`);
+        return res.end(
+          `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { tools: [TOOL('streamed')] } })}\n\n`,
+        );
       case url === '/legacy':
         return legacyMcp(req, res, body);
       case url === '/secure':
-        return json(res, 401, { error: 'unauthorized' }, {
-          'www-authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/secure", scope="read"`,
-        });
+        return json(
+          res,
+          401,
+          { error: 'unauthorized' },
+          {
+            'www-authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/secure", scope="read"`,
+          },
+        );
       case url === '/.well-known/oauth-protected-resource/secure':
-        return json(res, 200, { resource: `${base}/secure`, authorization_servers: [`${base}/as`] });
+        return json(res, 200, {
+          resource: `${base}/secure`,
+          authorization_servers: [`${base}/as`],
+        });
       case url === '/.well-known/oauth-authorization-server/as':
         return json(res, 200, {
           issuer: `${base}/as`,
@@ -116,7 +139,8 @@ const onlyTestServer: UrlPolicy = (url) => {
 const localLookup = ((_h: string, o: { all?: boolean }, cb: (...a: unknown[]) => void) =>
   o?.all ? cb(null, [{ address: '127.0.0.1', family: 4 }]) : cb(null, '127.0.0.1', 4)) as never;
 const fetch = () => createSafeFetch({ policy: onlyTestServer, lookup: localLookup });
-const probe = (path: string) => probeEndpoint(`${base}${path}`, { fetch: fetch(), budgetMs: 15_000, requestTimeoutMs: 5_000 });
+const probe = (path: string) =>
+  probeEndpoint(`${base}${path}`, { fetch: fetch(), budgetMs: 15_000, requestTimeoutMs: 5_000 });
 
 describe('probeEndpoint', () => {
   it('reads a stateless server across pages, keeping good tools and skipping malformed ones', async () => {
@@ -143,7 +167,13 @@ describe('probeEndpoint', () => {
 
   it('falls back to the initialize handshake for a session-based server', async () => {
     const r = await probe('/legacy');
-    expect(r).toMatchObject({ status: 'open', protocolMode: 'initialize', transport: 'streamable-http', serverName: 'legacy-fixture', serverVersion: '9.9.9' });
+    expect(r).toMatchObject({
+      status: 'open',
+      protocolMode: 'initialize',
+      transport: 'streamable-http',
+      serverName: 'legacy-fixture',
+      serverVersion: '9.9.9',
+    });
     expect(r.snapshot!.tools.map((t) => t.name)).toEqual(['echo']);
   });
 
@@ -151,7 +181,13 @@ describe('probeEndpoint', () => {
     const r = await probe('/secure');
     expect(r).toMatchObject({ status: 'auth_required', httpStatus: 401, snapshot: null });
     expect(r.auth).toMatchObject({ mode: 'oauth', challengeStatus: 401 });
-    expect(r.auth.oauth).toMatchObject({ issuer: `${base}/as`, cimd: true, dcr: true, pkceS256: true, challengeScope: 'read' });
+    expect(r.auth.oauth).toMatchObject({
+      issuer: `${base}/as`,
+      cimd: true,
+      dcr: true,
+      pkceS256: true,
+      challengeScope: 'read',
+    });
     expect(r.violations).toEqual([]);
   });
 
@@ -171,7 +207,10 @@ describe('probeEndpoint', () => {
   });
 
   it('refuses what policy forbids, and names templated URLs without connecting', async () => {
-    const strict = await probeEndpoint(`${base}/stateless`, { fetch: createSafeFetch(), budgetMs: 5_000 });
+    const strict = await probeEndpoint(`${base}/stateless`, {
+      fetch: createSafeFetch(),
+      budgetMs: 5_000,
+    });
     expect(strict.status).toBe('blocked');
     const templated = await probeEndpoint('https://{tenant}.example.com/mcp', { fetch: fetch() });
     expect(templated.status).toBe('templated');
@@ -181,13 +220,26 @@ describe('probeEndpoint', () => {
 
 describe('classifyNetworkError', () => {
   it('maps transport failures to statuses in our own words', () => {
-    expect(classifyNetworkError(Object.assign(new Error('x'), { code: 'ENOTFOUND' })).status).toBe('dns_failed');
-    expect(classifyNetworkError(Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }))).toEqual({
+    expect(classifyNetworkError(Object.assign(new Error('x'), { code: 'ENOTFOUND' })).status).toBe(
+      'dns_failed',
+    );
+    expect(
+      classifyNetworkError(
+        Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }),
+      ),
+    ).toEqual({
       status: 'unreachable',
       error: 'connection failed (ECONNREFUSED)',
     });
-    expect(classifyNetworkError(Object.assign(new Error('x'), { name: 'TimeoutError' })).status).toBe('timeout');
-    expect(classifyNetworkError(Object.assign(new Error('x'), { cause: { code: 'EPRIVATE' } })).status).toBe('blocked');
-    expect(classifyNetworkError(Object.assign(new Error('x'), { cause: { code: 'CERT_HAS_EXPIRED' } })).status).toBe('unreachable');
+    expect(
+      classifyNetworkError(Object.assign(new Error('x'), { name: 'TimeoutError' })).status,
+    ).toBe('timeout');
+    expect(
+      classifyNetworkError(Object.assign(new Error('x'), { cause: { code: 'EPRIVATE' } })).status,
+    ).toBe('blocked');
+    expect(
+      classifyNetworkError(Object.assign(new Error('x'), { cause: { code: 'CERT_HAS_EXPIRED' } }))
+        .status,
+    ).toBe('unreachable');
   });
 });

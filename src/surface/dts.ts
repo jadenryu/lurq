@@ -76,7 +76,6 @@ export function resolveTypesEntry(
   return null;
 }
 
-
 /**
  * Resolve an internal specifier to a declaration file.
  *
@@ -89,8 +88,13 @@ function resolveDts(fromFile: string, spec: string, pkgDir: string): string | nu
   const raw = resolvePath(baseDir, spec);
   if (raw !== root && !raw.startsWith(root + sep)) return null;
   const stripped = raw.replace(/\.(c|m)?js$/, '');
-  for (const c of [`${stripped}.d.ts`, `${stripped}.d.mts`, `${stripped}.d.cts`,
-                   join(stripped, 'index.d.ts'), raw]) {
+  for (const c of [
+    `${stripped}.d.ts`,
+    `${stripped}.d.mts`,
+    `${stripped}.d.cts`,
+    join(stripped, 'index.d.ts'),
+    raw,
+  ]) {
     if (existsSync(c) && c.endsWith('.ts')) return c;
   }
   return null;

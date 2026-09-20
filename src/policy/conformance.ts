@@ -211,10 +211,7 @@ function bySeverity(a: RepoConformance, z: RepoConformance): number {
  * Scoped by `ownerId` like every other repo read — the policy and the repos it
  * judges belong to the same account, and there is deliberately no unscoped form.
  */
-export async function repoConformance(
-  db: Database,
-  ownerId: string,
-): Promise<ConformanceReport> {
+export async function repoConformance(db: Database, ownerId: string): Promise<ConformanceReport> {
   const policy = await getEnforcedPolicy(db, ownerId);
   // No rules means no work: skip the repo and package reads entirely rather than
   // computing an empty answer expensively.

@@ -71,7 +71,6 @@ export const exactVersion = z
   .max(256)
   .refine((v) => semver.valid(v) !== null, 'Must be an exact semver version, e.g. "19.0.0"');
 
-
 /** Wrap any result object as a compact MCP text response. `compact` strips
  *  null/empty fields so the agent's context only carries signal (§12.4). */
 function json(obj: unknown) {
@@ -238,7 +237,8 @@ export function buildMcpServer(
     async (args) => {
       const result = await run('verify', () => handleVerify(db, args, ctx.ownerId ?? null));
       // A package worth installing is a package about to be coded against, from memory.
-      const usable = result.exists && result.verdict.level !== 'invalid' && result.verdict.level !== 'high';
+      const usable =
+        result.exists && result.verdict.level !== 'invalid' && result.verdict.level !== 'high';
       const next = `Before writing code against ${args.package}, call usage with it (and knownVersion if you remember one): its API may have moved since your training.`;
       return reply(usable ? { ...result, next } : result);
     },
@@ -355,7 +355,9 @@ export function buildMcpServer(
                   .trim()
                   .min(1)
                   .max(300)
-                  .describe('npm package name of the MCP server, or any label when `tools` is given'),
+                  .describe(
+                    'npm package name of the MCP server, or any label when `tools` is given',
+                  ),
                 version: z.string().max(100).nullable().optional(),
                 tools: z
                   .array(
@@ -366,7 +368,9 @@ export function buildMcpServer(
                   )
                   .max(2000)
                   .optional()
-                  .describe('The tool list as the agent received it; names and annotations are enough'),
+                  .describe(
+                    'The tool list as the agent received it; names and annotations are enough',
+                  ),
               })
               .refine((s) => s.tools !== undefined || npmName.safeParse(s.server).success, {
                 message: 'server must be an npm package name unless tools are given',
@@ -437,15 +441,29 @@ export function buildMcpServer(
           .trim()
           .min(1)
           .max(2048)
-          .describe('Endpoint URL (https://…), official registry name (io.github.acme/weather), or npm package name'),
-        client: z.enum(CLIENT_IDS).optional().describe('One client to check, e.g. claude-code, cursor, chatgpt; omit for every client'),
+          .describe(
+            'Endpoint URL (https://…), official registry name (io.github.acme/weather), or npm package name',
+          ),
+        client: z
+          .enum(CLIENT_IDS)
+          .optional()
+          .describe(
+            'One client to check, e.g. claude-code, cursor, chatgpt; omit for every client',
+          ),
       },
     },
     async (args) =>
       reply(
         await run('connect_check', async () => {
-          const [{ handleConnectCheck }, { sharedSafeFetch }] = await Promise.all([import('../connect/check'), import('../core/safeFetch')]);
-          return handleConnectCheck(db, { server: args.server, client: args.client ?? null }, { liveProbe: { fetch: sharedSafeFetch() } });
+          const [{ handleConnectCheck }, { sharedSafeFetch }] = await Promise.all([
+            import('../connect/check'),
+            import('../core/safeFetch'),
+          ]);
+          return handleConnectCheck(
+            db,
+            { server: args.server, client: args.client ?? null },
+            { liveProbe: { fetch: sharedSafeFetch() } },
+          );
         }),
       ),
   );
@@ -459,14 +477,16 @@ export function buildMcpServer(
       {
         title: 'What needs fixing in this project',
         description:
-          "The upkeep plan for the project you are editing, read from its own files. Returns findings across domains: environment variables the code reads that no .env file declares, and — when you pass `upgrade` — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Each finding carries either exact edits (a rename the package proves, byte ranges you can apply) or a brief with the facts you cannot look up: the exports the target version actually ships, with their kinds and arities. A domain that could not run says so; a skipped domain is never the same as a clean one. Needs no API key. Use it before editing a project you have just opened, or after an upgrade to see what it broke.",
+          'The upkeep plan for the project you are editing, read from its own files. Returns findings across domains: environment variables the code reads that no .env file declares, and — when you pass `upgrade` — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Each finding carries either exact edits (a rename the package proves, byte ranges you can apply) or a brief with the facts you cannot look up: the exports the target version actually ships, with their kinds and arities. A domain that could not run says so; a skipped domain is never the same as a clean one. Needs no API key. Use it before editing a project you have just opened, or after an upgrade to see what it broke.',
         annotations: READ_LIVE,
         inputSchema: {
           dir: z
             .string()
             .max(4096)
             .optional()
-            .describe('Project root. Defaults to the working directory this server was started in.'),
+            .describe(
+              'Project root. Defaults to the working directory this server was started in.',
+            ),
           upgrade: z
             .array(
               z.object({
@@ -611,7 +631,9 @@ export function buildMcpServer(
   // refuses if one already exists.
   server.server.registerCapabilities({ resources: {}, prompts: {} });
   server.server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: [] }));
-  server.server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates: [] }));
+  server.server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({
+    resourceTemplates: [],
+  }));
   server.server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts: [] }));
 
   return server;

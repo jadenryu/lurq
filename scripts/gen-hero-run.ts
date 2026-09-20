@@ -86,9 +86,7 @@ async function main(): Promise<void> {
   const grade = (result as { overall?: string }).overall;
   const checked = (result as { checked?: unknown[] }).checked ?? [];
   if (!grade || checked.length === 0) {
-    throw new Error(
-      `lurq compat returned no members (overall=${String(grade)}). Nothing written.`,
-    );
+    throw new Error(`lurq compat returned no members (overall=${String(grade)}). Nothing written.`);
   }
 
   const pairs = (result as { pairs?: unknown[] }).pairs ?? [];

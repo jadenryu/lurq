@@ -58,9 +58,7 @@ export function buildAttribution(
   // An SBOM whose only edges come from the document root gives every package the
   // same non-informative parent. Detect that and report it as unavailable rather
   // than attributing every transitive to a repo node nobody can upgrade.
-  const informative = edges.some(
-    (edge) => nameOf.has(edge.parent) && nameOf.has(edge.child),
-  );
+  const informative = edges.some((edge) => nameOf.has(edge.parent) && nameOf.has(edge.child));
   if (!informative) return { available: false, parentsOf: new Map() };
 
   const parentsOf = new Map<string, string[]>();

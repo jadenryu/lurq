@@ -19,7 +19,7 @@ describe('selfHostHint', () => {
 
   it('leaves unrelated errors alone', () => {
     expect(selfHostHint(notFound('left-pad'))).toBeNull();
-    expect(selfHostHint(new Error('Cannot find package \'postgres\''))).toBeNull();
+    expect(selfHostHint(new Error("Cannot find package 'postgres'"))).toBeNull();
   });
 });
 

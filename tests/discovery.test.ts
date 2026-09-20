@@ -9,7 +9,10 @@ import { DISCOVERY } from '../src/scoring/weights';
 import type { DiscoveryCandidate } from '../src/db/discovery';
 
 describe('selectCandidates (§2B dedupe + known-filter)', () => {
-  const c = (name: string, via: DiscoveryCandidate['via'] = 'category-search'): DiscoveryCandidate => ({
+  const c = (
+    name: string,
+    via: DiscoveryCandidate['via'] = 'category-search',
+  ): DiscoveryCandidate => ({
     name,
     via,
   });

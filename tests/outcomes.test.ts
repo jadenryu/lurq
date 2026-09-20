@@ -22,7 +22,12 @@ describe('handleReportOutcome', () => {
     const { db, inserted } = fakeDb();
     const res = await handleReportOutcome(
       db,
-      { package: 'drizzle-orm', accepted: true, buildSignal: 'tests_passed', need: 'a typesafe ORM' },
+      {
+        package: 'drizzle-orm',
+        accepted: true,
+        buildSignal: 'tests_passed',
+        need: 'a typesafe ORM',
+      },
       'org_abc123',
     );
     expect(res).toEqual({ recorded: true });
@@ -68,7 +73,7 @@ describe('getOutcomesByOwner', () => {
     return { db, calls };
   }
 
-  it('returns the owner\'s outcomes and defaults the limit to 50', async () => {
+  it("returns the owner's outcomes and defaults the limit to 50", async () => {
     const rows = [{ id: 1, ownerId: 'user_abc' } as RecommendationOutcomeRow];
     const { db, calls } = fakeSelectDb(rows);
     const result = await getOutcomesByOwner(db, 'user_abc');

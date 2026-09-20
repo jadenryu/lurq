@@ -38,9 +38,7 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 
 /** Every repo the user granted the installation access to. */
-export async function listInstallationRepos(
-  installationId: number,
-): Promise<InstallationRepo[]> {
+export async function listInstallationRepos(installationId: number): Promise<InstallationRepo[]> {
   const out: InstallationRepo[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const data = await installationGet<ReposResponse>(
@@ -153,7 +151,12 @@ export async function fetchManifests(
     // `last_scan_error` set on a perfectly healthy repo, and the dashboard shows
     // that next to fresh numbers as though something were currently broken.
     if (err instanceof HttpError && err.status === 409) {
-      return { manifests: [], installCommand: detectInstallCommand([]), partial: false, empty: true };
+      return {
+        manifests: [],
+        installCommand: detectInstallCommand([]),
+        partial: false,
+        empty: true,
+      };
     }
     throw err;
   }

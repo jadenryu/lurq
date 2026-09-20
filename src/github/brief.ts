@@ -182,7 +182,8 @@ async function planSequence(
   if (path.length === 0) {
     return {
       hops: [],
-      sequenceNote: 'Intermediate releases are missing from the index, so the hop sequence could not be planned.',
+      sequenceNote:
+        'Intermediate releases are missing from the index, so the hop sequence could not be planned.',
     };
   }
 
@@ -221,7 +222,10 @@ export async function briefRepo(
   // One version query for the whole brief rather than one per upgrade: hop
   // planning needs each package's release timeline, and 25 round trips on a
   // page load is the kind of cost that only shows up under real accounts.
-  const versions = await loadVersions(db, selected.map((d) => d.name));
+  const versions = await loadVersions(
+    db,
+    selected.map((d) => d.name),
+  );
 
   const upgrades: UpgradeBrief[] = [];
   for (const dep of selected) {

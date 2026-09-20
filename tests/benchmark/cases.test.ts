@@ -75,10 +75,7 @@ describe('loadCases', () => {
         suite: 'test',
         schemaVersion: 1,
         runtime: { node: '20', packageManager: 'npm', sandboxTemplate: 'test' },
-        cases: [
-          makeCase({ id: 'dup' }),
-          makeCase({ id: 'dup' }),
-        ],
+        cases: [makeCase({ id: 'dup' }), makeCase({ id: 'dup' })],
       }),
     ).toThrow(SuiteValidationError);
     expect(() =>
@@ -86,10 +83,7 @@ describe('loadCases', () => {
         suite: 'test',
         schemaVersion: 1,
         runtime: { node: '20', packageManager: 'npm', sandboxTemplate: 'test' },
-        cases: [
-          makeCase({ id: 'dup' }),
-          makeCase({ id: 'dup' }),
-        ],
+        cases: [makeCase({ id: 'dup' }), makeCase({ id: 'dup' })],
       }),
     ).toThrow(/[Dd]uplicate case id/);
   });
@@ -213,8 +207,16 @@ function validateRaw(raw: unknown): void {
     writeFileSync(filePath, JSON.stringify(raw));
     loadCases(suiteName);
   } finally {
-    try { rmSync(filePath); } catch { /* ok */ }
-    try { rmSync(dir, { recursive: true }); } catch { /* ok */ }
+    try {
+      rmSync(filePath);
+    } catch {
+      /* ok */
+    }
+    try {
+      rmSync(dir, { recursive: true });
+    } catch {
+      /* ok */
+    }
   }
 }
 
@@ -224,9 +226,7 @@ function makeCase(overrides: Record<string, unknown> = {}): Record<string, unkno
     title: 'Test Case',
     document: 'Build something.',
     topology: 'single-app',
-    needs: [
-      { id: 'web', need: 'React framework', category: 'framework', required: true },
-    ],
+    needs: [{ id: 'web', need: 'React framework', category: 'framework', required: true }],
     acceptance: { minimumCovered: 1, constraints: [] },
     ...overrides,
   };

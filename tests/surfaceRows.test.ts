@@ -36,7 +36,10 @@ describe('stored symbol rows', () => {
       'shipped_js_ast',
     );
     const byPath = new Map(surface.symbols.map((s) => [s.path, s]));
-    expect(byPath.get('counted')).toMatchObject({ maxArity: 2, sourceRef: { file: 'dist/index.js', line: 1, offset: 42 } });
+    expect(byPath.get('counted')).toMatchObject({
+      maxArity: 2,
+      sourceRef: { file: 'dist/index.js', line: 1, offset: 42 },
+    });
     expect(byPath.get('unbounded')!.maxArity).toBeNull();
     expect(byPath.get('unmeasured')).not.toHaveProperty('maxArity');
     expect(byPath.get('unmeasured')!.sourceRef).not.toHaveProperty('offset');
@@ -52,7 +55,12 @@ describe('stored symbol rows', () => {
       ],
       'shipped_js_ast',
     );
-    const to = rowsToSurface('cookie', '2.0.1', [row({ path: 'parseCookie', sourceOffset: 900 })], 'shipped_js_ast');
+    const to = rowsToSurface(
+      'cookie',
+      '2.0.1',
+      [row({ path: 'parseCookie', sourceOffset: 900 })],
+      'shipped_js_ast',
+    );
     expect(diffSurfaces(from, to).renamed).toEqual([{ path: 'parse', to: ['parseCookie'] }]);
   });
 

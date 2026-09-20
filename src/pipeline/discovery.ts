@@ -79,10 +79,7 @@ export function passesGate(preScore: number | null): boolean {
  * §1 quality model but with only manifest signals — no downloads, no GitHub —
  * so the gate is adoption-independent by construction.
  */
-async function preScorePackage(
-  name: string,
-  fetchImpl?: typeof fetch,
-): Promise<number | null> {
+async function preScorePackage(name: string, fetchImpl?: typeof fetch): Promise<number | null> {
   try {
     const registry = await fetchNpmRegistry(name, fetchImpl);
     const signals: RawPackageSignals = {
@@ -118,9 +115,10 @@ async function preScorePackage(
  * scans ~0 packages; a version bump or new ingest re-arms exactly one. Each
  * scanned seed is marked so the next cycle skips it.
  */
-async function graphChannel(
-  db: Database,
-): Promise<{ candidates: DiscoveryCandidate[]; scannedSeeds: { name: string; version: string }[] }> {
+async function graphChannel(db: Database): Promise<{
+  candidates: DiscoveryCandidate[];
+  scannedSeeds: { name: string; version: string }[];
+}> {
   const tracked = await db
     .select({ name: packages.name, version: packages.latestVersion })
     .from(packages)
@@ -249,10 +247,7 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
   const handle = createDb({ max: 6 });
   try {
     logger.info('Discovery: gathering candidates from graph + search channels…');
-    const [graph, search] = await Promise.all([
-      graphChannel(handle.db),
-      searchChannel(handle.db),
-    ]);
+    const [graph, search] = await Promise.all([graphChannel(handle.db), searchChannel(handle.db)]);
     const known = await getKnownNames(handle.db);
     const fresh = selectCandidates([...graph.candidates, ...search], known);
     const enqueued = await enqueueCandidates(handle.db, fresh);
@@ -306,7 +301,9 @@ export async function runDiscovery(opts: DiscoverOptions = {}): Promise<Discover
     if (!opts.dryRun) {
       for (const cand of toIngest) {
         try {
-          await syncOnePackage(handle.db, cand.name, { requestedByOwnerId: cand.requestedByOwnerId });
+          await syncOnePackage(handle.db, cand.name, {
+            requestedByOwnerId: cand.requestedByOwnerId,
+          });
           await setDiscoveryStatus(handle.db, cand.name, { status: 'ingested' });
           ingested++;
         } catch (err) {

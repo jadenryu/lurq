@@ -118,7 +118,7 @@ export async function buildCases(
     ) ranked
     where rn <= ${perCategory}
   `);
-  const list = ((rows as unknown as { rows?: any[] }).rows ?? (rows as unknown as any[])) ?? [];
+  const list = (rows as unknown as { rows?: any[] }).rows ?? (rows as unknown as any[]) ?? [];
 
   const cases: RetrievalCase[] = [];
   for (const r of list) {
@@ -157,18 +157,23 @@ async function phraseAsNeed(name: string, summary: string): Promise<string | nul
       // than re-rolling the query set and calling the difference a result.
       ttlMs: 90 * 24 * 60 * 60 * 1000,
       cacheKey: `need-phrase ${config.SUMMARY_MODEL} ${name}`,
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${config.SUMMARY_API_KEY}` },
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${config.SUMMARY_API_KEY}`,
+      },
       body: JSON.stringify({
         model: config.SUMMARY_MODEL,
         temperature: 0,
         max_tokens: 40,
-        messages: [{
-          role: 'user',
-          content:
-            `Rewrite this package description as the short need a developer would type when looking for it ` +
-            `(under 12 words, no package names, plain language). ` +
-            `Never mention "${name}" or any other package name.\n\nDescription: ${summary}`,
-        }],
+        messages: [
+          {
+            role: 'user',
+            content:
+              `Rewrite this package description as the short need a developer would type when looking for it ` +
+              `(under 12 words, no package names, plain language). ` +
+              `Never mention "${name}" or any other package name.\n\nDescription: ${summary}`,
+          },
+        ],
       }),
     });
     const text = data?.choices?.[0]?.message?.content?.trim().replace(/^["']|["']$/g, '');
@@ -177,7 +182,9 @@ async function phraseAsNeed(name: string, summary: string): Promise<string | nul
     if (text.toLowerCase().includes(name.toLowerCase())) return null;
     return text;
   } catch (err) {
-    logger.warn(`retrieval-eval: phrasing failed for ${name} (${err instanceof Error ? err.message : String(err)})`);
+    logger.warn(
+      `retrieval-eval: phrasing failed for ${name} (${err instanceof Error ? err.message : String(err)})`,
+    );
     return null;
   }
 }
@@ -237,7 +244,13 @@ export async function runCases(
       await recommend(db, { need: c.query, category: c.category, limit }).catch(() => [])
     ).map((r) => r.name);
     const idx = returned.indexOf(c.target);
-    out.push({ target: c.target, category: c.category, query: c.query, rank: idx >= 0 ? idx + 1 : null, returned });
+    out.push({
+      target: c.target,
+      category: c.category,
+      query: c.query,
+      rank: idx >= 0 ? idx + 1 : null,
+      returned,
+    });
     opts.onProgress?.(++n);
   }
   return out;
@@ -245,7 +258,8 @@ export async function runCases(
 
 export function computeMetrics(results: RetrievalResult[]): RetrievalMetrics {
   const n = results.length || 1;
-  const hitsWithin = (k: number) => results.filter((r) => r.rank !== null && r.rank <= k).length / n;
+  const hitsWithin = (k: number) =>
+    results.filter((r) => r.rank !== null && r.rank <= k).length / n;
   const byCategory: Record<string, { cases: number; recallAt25: number }> = {};
   for (const r of results) {
     const b = (byCategory[r.category] ??= { cases: 0, recallAt25: 0 });

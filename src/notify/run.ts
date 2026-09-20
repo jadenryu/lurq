@@ -99,11 +99,19 @@ async function deliver(
     to = await deps.lookupEmail(delivery.ownerId);
   } catch (err) {
     const retryable = !(err instanceof SendError) || err.retryable;
-    await updateDelivery(db, delivery.id, { status: 'failed', attempts: retryable ? attempts : MAX_ATTEMPTS, error: 'could not read the account email' });
+    await updateDelivery(db, delivery.id, {
+      status: 'failed',
+      attempts: retryable ? attempts : MAX_ATTEMPTS,
+      error: 'could not read the account email',
+    });
     return 'failed';
   }
   if (!to) {
-    await updateDelivery(db, delivery.id, { status: 'skipped', attempts, error: 'no verified primary email' });
+    await updateDelivery(db, delivery.id, {
+      status: 'skipped',
+      attempts,
+      error: 'no verified primary email',
+    });
     return 'skipped';
   }
 
@@ -119,7 +127,13 @@ async function deliver(
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
     });
-    await updateDelivery(db, delivery.id, { status: 'sent', attempts, providerId: id || null, sentAt: new Date(), error: null });
+    await updateDelivery(db, delivery.id, {
+      status: 'sent',
+      attempts,
+      providerId: id || null,
+      sentAt: new Date(),
+      error: null,
+    });
     return 'sent';
   } catch (err) {
     const retryable = !(err instanceof SendError) || err.retryable;
@@ -144,12 +158,26 @@ export async function runNotifications(deps: NotifyDeps): Promise<NotifySummary>
   const { db, webUrl } = deps;
   const now = deps.now ?? new Date();
   const cap = deps.maxUrgentPerDay ?? MAX_URGENT_PER_DAY;
-  const s: NotifySummary = { urgentSent: 0, digestSent: 0, retried: 0, skipped: 0, failed: 0, deferred: 0 };
+  const s: NotifySummary = {
+    urgentSent: 0,
+    digestSent: 0,
+    retried: 0,
+    skipped: 0,
+    failed: 0,
+    deferred: 0,
+  };
 
   // 1. Retries first, so a transient outage clears before new mail queues up.
-  for (const d of await retryableDeliveries(db, new Date(now.getTime() - RETRY_WINDOW_MS), MAX_ATTEMPTS)) {
+  for (const d of await retryableDeliveries(
+    db,
+    new Date(now.getTime() - RETRY_WINDOW_MS),
+    MAX_ATTEMPTS,
+  )) {
     const prefs = await getOrCreatePreferences(db, d.ownerId);
-    if ((d.kind === 'urgent' && !prefs.urgentEmail) || (d.kind === 'digest' && !prefs.weeklyDigest)) {
+    if (
+      (d.kind === 'urgent' && !prefs.urgentEmail) ||
+      (d.kind === 'digest' && !prefs.weeklyDigest)
+    ) {
       await updateDelivery(db, d.id, { status: 'skipped', error: 'turned off before a retry' });
       s.skipped++;
       continue;
@@ -192,14 +220,36 @@ export async function runNotifications(deps: NotifyDeps): Promise<NotifySummary>
     }
 
     const batch = fresh.slice(0, MAX_ITEMS_PER_EMAIL);
-    const keyHash = createHash('sha256').update(batch.map((i) => i.key).sort().join('|')).digest('hex').slice(0, 24);
-    const { row, created } = await createDelivery(db, { ownerId, kind: 'urgent', idempotencyKey: `urgent:${ownerId}:${keyHash}` });
+    const keyHash = createHash('sha256')
+      .update(
+        batch
+          .map((i) => i.key)
+          .sort()
+          .join('|'),
+      )
+      .digest('hex')
+      .slice(0, 24);
+    const { row, created } = await createDelivery(db, {
+      ownerId,
+      kind: 'urgent',
+      idempotencyKey: `urgent:${ownerId}:${keyHash}`,
+    });
     if (!created) continue;
 
-    const won = new Set(await claimItems(db, ownerId, row.id, batch.map((i) => i.key)));
+    const won = new Set(
+      await claimItems(
+        db,
+        ownerId,
+        row.id,
+        batch.map((i) => i.key),
+      ),
+    );
     const items: UrgentItem[] = batch.filter((i) => won.has(i.key));
     if (!items.length) {
-      await updateDelivery(db, row.id, { status: 'skipped', error: 'every item was claimed by another run' });
+      await updateDelivery(db, row.id, {
+        status: 'skipped',
+        error: 'every item was claimed by another run',
+      });
       s.skipped++;
       continue;
     }
@@ -211,7 +261,11 @@ export async function runNotifications(deps: NotifyDeps): Promise<NotifySummary>
     const week = isoWeek(now);
     for (const prefs of await digestSubscribers(db)) {
       if (prefs.lastDigestAt && now.getTime() - prefs.lastDigestAt.getTime() < 5 * DAY_MS) continue;
-      const { row, created } = await createDelivery(db, { ownerId: prefs.ownerId, kind: 'digest', idempotencyKey: `digest:${prefs.ownerId}:${week}` });
+      const { row, created } = await createDelivery(db, {
+        ownerId: prefs.ownerId,
+        kind: 'digest',
+        idempotencyKey: `digest:${prefs.ownerId}:${week}`,
+      });
       if (!created) continue;
       const summary = await buildDigest(db, prefs.ownerId, now, webUrl);
       if (!summary) {

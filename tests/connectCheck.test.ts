@@ -75,44 +75,121 @@ describe.skipIf(!TEST_DB)('handleConnectCheck against Postgres', () => {
     db = handle.db;
     close = handle.close;
 
-    const entry = (n: string, remotes: { type: string; url: string; headers?: { name: string; isRequired?: boolean; isSecret?: boolean }[] }[]) => ({
-      name: n, version: '1.0.0', title: null, description: null, websiteUrl: null, repositoryUrl: null, remotes,
-      packages: [], status: 'active', isLatest: true, publishedAt: null, updatedAt: new Date('2026-09-01T00:00:00Z'),
+    const entry = (
+      n: string,
+      remotes: {
+        type: string;
+        url: string;
+        headers?: { name: string; isRequired?: boolean; isSecret?: boolean }[];
+      }[],
+    ) => ({
+      name: n,
+      version: '1.0.0',
+      title: null,
+      description: null,
+      websiteUrl: null,
+      repositoryUrl: null,
+      remotes,
+      packages: [],
+      status: 'active',
+      isLatest: true,
+      publishedAt: null,
+      updatedAt: new Date('2026-09-01T00:00:00Z'),
     });
     await store.storeRegistryEntries(db, [
-      entry(name, [{ type: 'streamable-http', url: oauthUrl }, { type: 'streamable-http', url: openUrl }]),
-      entry(keyName, [{ type: 'streamable-http', url: keyUrl, headers: [{ name: 'X-API-Key', isRequired: true, isSecret: true }] }]),
+      entry(name, [
+        { type: 'streamable-http', url: oauthUrl },
+        { type: 'streamable-http', url: openUrl },
+      ]),
+      entry(keyName, [
+        {
+          type: 'streamable-http',
+          url: keyUrl,
+          headers: [{ name: 'X-API-Key', isRequired: true, isSecret: true }],
+        },
+      ]),
     ]);
 
-    const snap = { ...emptySnapshot(), tools: [
-      { name: 'forecast', inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] } },
-      { name: 'alerts', inputSchema: { type: 'object', properties: {} } },
-    ] };
+    const snap = {
+      ...emptySnapshot(),
+      tools: [
+        {
+          name: 'forecast',
+          inputSchema: {
+            type: 'object',
+            properties: { city: { type: 'string' } },
+            required: ['city'],
+          },
+        },
+        { name: 'alerts', inputSchema: { type: 'object', properties: {} } },
+      ],
+    };
     const row = contractRow(snap);
     const record = async (url: string, result: ProbeResult, contract = false) => {
       const ep = (await store.getEndpointByUrl(db, url))!;
       await store.recordEndpointProbe(db, {
-        endpointId: ep.id, result, contentHash: contract ? row.contentHash : null, authHash: result.auth.mode === 'unknown' ? null : `a-${result.auth.mode}`,
-        contract: contract ? row : null, changes: [], consecutiveFailures: 0, nextProbeAt: new Date(Date.now() + 86_400_000),
+        endpointId: ep.id,
+        result,
+        contentHash: contract ? row.contentHash : null,
+        authHash: result.auth.mode === 'unknown' ? null : `a-${result.auth.mode}`,
+        contract: contract ? row : null,
+        changes: [],
+        consecutiveFailures: 0,
+        nextProbeAt: new Date(Date.now() + 86_400_000),
       });
     };
     await record(openUrl, probe({ snapshot: snap }), true);
-    await record(oauthUrl, probe({
-      status: 'auth_required', httpStatus: 401, protocolMode: null,
-      auth: { mode: 'oauth', challengeStatus: 401, declaredHeaders: [], oauth: {
-        resourceMetadataUrl: `${oauthUrl}/.well-known`, resourceMetadataVia: 'www_authenticate', resource: oauthUrl, authorizationServers: [`https://id.${host}`],
-        scopesSupported: null, challengeScope: null, issuer: `https://id.${host}`, asMetadataUrl: null, cimd: true, dcr: true, pkceS256: false, issParameter: null,
-      } },
-      violations: [{ code: 'pkce_s256_not_advertised', detail: 'no S256' }],
-    }));
-    await record(keyUrl, probe({ status: 'auth_required', httpStatus: 401, protocolMode: null, auth: { mode: 'static', challengeStatus: 401, oauth: null, declaredHeaders: [] }, violations: [{ code: 'challenge_without_resource_metadata', detail: 'no discovery' }] }));
+    await record(
+      oauthUrl,
+      probe({
+        status: 'auth_required',
+        httpStatus: 401,
+        protocolMode: null,
+        auth: {
+          mode: 'oauth',
+          challengeStatus: 401,
+          declaredHeaders: [],
+          oauth: {
+            resourceMetadataUrl: `${oauthUrl}/.well-known`,
+            resourceMetadataVia: 'www_authenticate',
+            resource: oauthUrl,
+            authorizationServers: [`https://id.${host}`],
+            scopesSupported: null,
+            challengeScope: null,
+            issuer: `https://id.${host}`,
+            asMetadataUrl: null,
+            cimd: true,
+            dcr: true,
+            pkceS256: false,
+            issParameter: null,
+          },
+        },
+        violations: [{ code: 'pkce_s256_not_advertised', detail: 'no S256' }],
+      }),
+    );
+    await record(
+      keyUrl,
+      probe({
+        status: 'auth_required',
+        httpStatus: 401,
+        protocolMode: null,
+        auth: { mode: 'static', challengeStatus: 401, oauth: null, declaredHeaders: [] },
+        violations: [{ code: 'challenge_without_resource_metadata', detail: 'no discovery' }],
+      }),
+    );
 
     local = createServer((req, res) => {
       let body = '';
       req.on('data', (c) => (body += c));
       req.on('end', () => {
         const rpc = JSON.parse(body || '{}') as { id?: number };
-        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { tools: [{ name: 'ping', inputSchema: { type: 'object' } }] } }));
+        res.writeHead(200, { 'content-type': 'application/json' }).end(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: rpc.id,
+            result: { tools: [{ name: 'ping', inputSchema: { type: 'object' } }] },
+          }),
+        );
       });
     });
     await new Promise<void>((r) => local.listen(0, '127.0.0.1', r));
@@ -126,25 +203,36 @@ describe.skipIf(!TEST_DB)('handleConnectCheck against Postgres', () => {
     await db.execute(sql`delete from mcp_endpoint_observations where endpoint_id in ${ids}`);
     await db.execute(sql`delete from mcp_endpoint_servers where endpoint_id in ${ids}`);
     await db.execute(sql`delete from mcp_remote_endpoints where host like ${`%.${host}`}`);
-    await db.execute(sql`delete from mcp_registry_servers where name like ${`io.test.connect-${run}/%`}`);
+    await db.execute(
+      sql`delete from mcp_registry_servers where name like ${`io.test.connect-${run}/%`}`,
+    );
     await close();
     await new Promise<void>((r) => local.close(() => r()));
   });
 
   it('resolves a registry name to its best endpoint and answers for every client', async () => {
     const r = await check.handleConnectCheck(db, { server: name });
-    expect(r).toMatchObject({ resolvedAs: 'registry', server: { registryName: name, url: openUrl }, evidence: { source: 'probe', status: 'open', toolCount: 2 } });
+    expect(r).toMatchObject({
+      resolvedAs: 'registry',
+      server: { registryName: name, url: openUrl },
+      evidence: { source: 'probe', status: 'open', toolCount: 2 },
+    });
     expect(r.clients.length).toBeGreaterThanOrEqual(21);
     const cc = r.clients.find((c) => c.client === 'claude-code')!;
     expect(cc).toMatchObject({ verdict: 'works', via: 'remote' });
-    expect(JSON.parse(cc.config.find((x) => x.kind === 'json')!.text)).toEqual({ mcpServers: { weather: { type: 'http', url: openUrl } } });
+    expect(JSON.parse(cc.config.find((x) => x.kind === 'json')!.text)).toEqual({
+      mcpServers: { weather: { type: 'http', url: openUrl } },
+    });
     expect(Object.values(r.summary).reduce((a, b) => a + b, 0)).toBe(r.clients.length);
     expect(r.coverageNote).toMatch(/credential-free probe/);
   });
 
   it('blocks ChatGPT on a missing PKCE advertisement while Claude Code still works', async () => {
     const r = await check.handleConnectCheck(db, { server: oauthUrl });
-    expect(r).toMatchObject({ resolvedAs: 'endpoint', evidence: { status: 'auth_required', auth: { mode: 'oauth', pkceS256: false } } });
+    expect(r).toMatchObject({
+      resolvedAs: 'endpoint',
+      evidence: { status: 'auth_required', auth: { mode: 'oauth', pkceS256: false } },
+    });
     const chatgpt = r.clients.find((c) => c.client === 'chatgpt')!;
     expect(chatgpt.verdict).toBe('blocked');
     expect(chatgpt.blockers.map((b) => b.code)).toContain('pkce_required');
@@ -168,10 +256,20 @@ describe.skipIf(!TEST_DB)('handleConnectCheck against Postgres', () => {
     const url = `${localBase}/private-${run}`;
     const fetch = createSafeFetch({
       policy: (u) => (u.origin === localBase ? undefined : publicHttpsOnly(u)),
-      lookup: ((_h: string, o: { all?: boolean }, cb: (...a: unknown[]) => void) => (o?.all ? cb(null, [{ address: '127.0.0.1', family: 4 }]) : cb(null, '127.0.0.1', 4))) as never,
+      lookup: ((_h: string, o: { all?: boolean }, cb: (...a: unknown[]) => void) =>
+        o?.all
+          ? cb(null, [{ address: '127.0.0.1', family: 4 }])
+          : cb(null, '127.0.0.1', 4)) as never,
     });
-    const r = await check.handleConnectCheck(db, { server: url, client: 'claude-code' }, { liveProbe: { fetch } });
-    expect(r).toMatchObject({ resolvedAs: 'url', evidence: { source: 'live_probe', status: 'open', toolCount: 1 } });
+    const r = await check.handleConnectCheck(
+      db,
+      { server: url, client: 'claude-code' },
+      { liveProbe: { fetch } },
+    );
+    expect(r).toMatchObject({
+      resolvedAs: 'url',
+      evidence: { source: 'live_probe', status: 'open', toolCount: 1 },
+    });
     expect(r.clients[0]!.verdict).toBe('works');
     const { getEndpointByUrl } = await import('../src/db/remoteEndpoints');
     expect(await getEndpointByUrl(db, url)).toBeNull();

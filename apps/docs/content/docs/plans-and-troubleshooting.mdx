@@ -8,23 +8,23 @@ description: What each plan allows, the exact errors lurq returns, and what to d
 Every hosted tool call counts against your account's monthly allowance. The
 calls reset when the calendar month turns.
 
-| Plan | Price | Hosted calls / month | Burst ceiling |
-| --- | --- | --- | --- |
-| **Free** | $0, no card | 1,000 | 60 / minute |
-| **Pro** | $15 / month | 10,000 | 120 / minute |
-| **Team** | $25 / seat / month, 3 seats minimum | 15,000 per seat, pooled | 300 / minute |
-| **Business** | from $1,000 / month, on application | uncapped | 600 / minute |
+| Plan         | Price                               | Hosted calls / month    | Burst ceiling |
+| ------------ | ----------------------------------- | ----------------------- | ------------- |
+| **Free**     | $0, no card                         | 1,000                   | 60 / minute   |
+| **Pro**      | $15 / month                         | 10,000                  | 120 / minute  |
+| **Team**     | $25 / seat / month, 3 seats minimum | 15,000 per seat, pooled | 300 / minute  |
+| **Business** | from $1,000 / month, on application | uncapped                | 600 / minute  |
 
 Yearly billing is 20% off. Upgrade, or change seats, on
 [Dashboard → Billing](https://www.lurq.run/dashboard/billing).
 
 A few things are tied to the plan rather than to call volume:
 
-| | Free | Pro | Team | Business |
-| --- | --- | --- | --- | --- |
-| Policy decision log (`lurq policy log`) | 7 days | 90 days | 1 year | 1 year |
-| `policy:write` keys for CI (`lurq policy push`) | — | — | yes | yes |
-| Slack, Discord, Teams and webhook [alerts](/alerts) | — | — | yes | yes |
+|                                                     | Free   | Pro     | Team   | Business |
+| --------------------------------------------------- | ------ | ------- | ------ | -------- |
+| Policy decision log (`lurq policy log`)             | 7 days | 90 days | 1 year | 1 year   |
+| `policy:write` keys for CI (`lurq policy push`)     | —      | —       | yes    | yes      |
+| Slack, Discord, Teams and webhook [alerts](/alerts) | —      | —       | yes    | yes      |
 
 ### When the month's calls run out
 

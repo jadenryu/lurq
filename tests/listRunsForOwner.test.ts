@@ -58,9 +58,21 @@ describe.skipIf(!TEST_DB)('listRunsForOwner against Postgres', () => {
 
   it('returns runs from every repository, newest first', async () => {
     await store.recordUpgradeRuns(db, [
-      row({ repoFullName: `acme-${run}/web`, packageName: 'cookie', createdAt: new Date('2026-01-01T00:00:00Z') }),
-      row({ repoFullName: `acme-${run}/api`, packageName: 'express', createdAt: new Date('2026-03-01T00:00:00Z') }),
-      row({ repoFullName: `acme-${run}/cli`, packageName: 'zod', createdAt: new Date('2026-02-01T00:00:00Z') }),
+      row({
+        repoFullName: `acme-${run}/web`,
+        packageName: 'cookie',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      }),
+      row({
+        repoFullName: `acme-${run}/api`,
+        packageName: 'express',
+        createdAt: new Date('2026-03-01T00:00:00Z'),
+      }),
+      row({
+        repoFullName: `acme-${run}/cli`,
+        packageName: 'zod',
+        createdAt: new Date('2026-02-01T00:00:00Z'),
+      }),
     ]);
 
     const runs = await store.listRunsForOwner(db, owner);
@@ -99,7 +111,10 @@ describe.skipIf(!TEST_DB)('listRunsForOwner against Postgres', () => {
 
   it('never reaches across owners', async () => {
     await store.recordUpgradeRuns(db, [
-      { ...row({ repoFullName: `acme-${run}/shared`, packageName: 'theirs' }), ownerId: otherOwner },
+      {
+        ...row({ repoFullName: `acme-${run}/shared`, packageName: 'theirs' }),
+        ownerId: otherOwner,
+      },
     ]);
 
     const mine = await store.listRunsForOwner(db, owner);

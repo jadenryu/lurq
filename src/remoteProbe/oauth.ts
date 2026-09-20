@@ -39,7 +39,11 @@ export function parseWwwAuthenticate(header: string | null): Challenge | null {
   return { scheme: m[1]!.toLowerCase(), params };
 }
 
-async function readJson(fetch: SafeFetch, url: string, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
+async function readJson(
+  fetch: SafeFetch,
+  url: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(url, { headers: { accept: 'application/json' }, signal });
     if (res.status !== 200) {
@@ -49,7 +53,9 @@ async function readJson(fetch: SafeFetch, url: string, signal?: AbortSignal): Pr
     const text = await res.text();
     if (text.length > MAX_DOC_BYTES) return null;
     const body = JSON.parse(text) as unknown;
-    return body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+    return body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }
@@ -59,7 +65,10 @@ const strings = (v: unknown): string[] | null =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : null;
 
 /** Protected resource metadata candidates, in the order the spec requires clients to try. */
-export function resourceMetadataCandidates(endpoint: URL, headerValue: string | null): { url: string; via: OAuthProfile['resourceMetadataVia'] }[] {
+export function resourceMetadataCandidates(
+  endpoint: URL,
+  headerValue: string | null,
+): { url: string; via: OAuthProfile['resourceMetadataVia'] }[] {
   const out: { url: string; via: OAuthProfile['resourceMetadataVia'] }[] = [];
   if (headerValue) {
     try {
@@ -69,8 +78,15 @@ export function resourceMetadataCandidates(endpoint: URL, headerValue: string | 
     }
   }
   const path = endpoint.pathname.replace(/\/+$/, '');
-  if (path) out.push({ url: `${endpoint.origin}/.well-known/oauth-protected-resource${path}`, via: 'well_known_path' });
-  out.push({ url: `${endpoint.origin}/.well-known/oauth-protected-resource`, via: 'well_known_root' });
+  if (path)
+    out.push({
+      url: `${endpoint.origin}/.well-known/oauth-protected-resource${path}`,
+      via: 'well_known_path',
+    });
+  out.push({
+    url: `${endpoint.origin}/.well-known/oauth-protected-resource`,
+    via: 'well_known_root',
+  });
   return out;
 }
 
@@ -84,7 +100,10 @@ export function authServerMetadataCandidates(issuer: string): string[] {
   }
   const path = u.pathname.replace(/\/+$/, '');
   if (!path) {
-    return [`${u.origin}/.well-known/oauth-authorization-server`, `${u.origin}/.well-known/openid-configuration`];
+    return [
+      `${u.origin}/.well-known/oauth-authorization-server`,
+      `${u.origin}/.well-known/openid-configuration`,
+    ];
   }
   return [
     `${u.origin}/.well-known/oauth-authorization-server${path}`,
@@ -148,13 +167,20 @@ export async function discoverOAuth(
 
   if (!prm || !found) {
     if (sawInvalid) {
-      violations.push({ code: 'resource_metadata_invalid', detail: 'protected resource metadata lists no authorization_servers' });
+      violations.push({
+        code: 'resource_metadata_invalid',
+        detail: 'protected resource metadata lists no authorization_servers',
+      });
     } else if (headerValue) {
-      violations.push({ code: 'resource_metadata_unreachable', detail: 'the resource_metadata URL in WWW-Authenticate did not return a metadata document' });
+      violations.push({
+        code: 'resource_metadata_unreachable',
+        detail: 'the resource_metadata URL in WWW-Authenticate did not return a metadata document',
+      });
     } else {
       violations.push({
         code: 'challenge_without_resource_metadata',
-        detail: 'refused without credentials but publishes no OAuth protected resource metadata; a key or token must be configured by hand',
+        detail:
+          'refused without credentials but publishes no OAuth protected resource metadata; a key or token must be configured by hand',
       });
     }
     return { oauth: null, violations };
@@ -163,7 +189,10 @@ export async function discoverOAuth(
   const authorizationServers = strings(prm.authorization_servers)!;
   const resource = typeof prm.resource === 'string' ? prm.resource : null;
   if (prm.resource !== undefined && resource === null) {
-    violations.push({ code: 'resource_metadata_invalid', detail: '`resource` in protected resource metadata is not a string' });
+    violations.push({
+      code: 'resource_metadata_invalid',
+      detail: '`resource` in protected resource metadata is not a string',
+    });
   } else if (resource && !resourceCovers(resource, endpoint)) {
     violations.push({
       code: 'resource_mismatch',
@@ -193,9 +222,13 @@ export async function discoverOAuth(
     profile.issuer = asm.issuer;
     profile.asMetadataUrl = candidate;
     profile.cimd = asm.client_id_metadata_document_supported === true;
-    profile.dcr = typeof asm.registration_endpoint === 'string' && asm.registration_endpoint.length > 0;
+    profile.dcr =
+      typeof asm.registration_endpoint === 'string' && asm.registration_endpoint.length > 0;
     profile.pkceS256 = strings(asm.code_challenge_methods_supported)?.includes('S256') ?? false;
-    profile.issParameter = typeof asm.authorization_response_iss_parameter_supported === 'boolean' ? asm.authorization_response_iss_parameter_supported : null;
+    profile.issParameter =
+      typeof asm.authorization_response_iss_parameter_supported === 'boolean'
+        ? asm.authorization_response_iss_parameter_supported
+        : null;
 
     if (asm.issuer !== issuer) {
       violations.push({
@@ -207,17 +240,25 @@ export async function discoverOAuth(
       });
     }
     if (!profile.pkceS256) {
-      violations.push({ code: 'pkce_s256_not_advertised', detail: 'code_challenge_methods_supported does not include S256; compliant clients refuse to proceed' });
+      violations.push({
+        code: 'pkce_s256_not_advertised',
+        detail:
+          'code_challenge_methods_supported does not include S256; compliant clients refuse to proceed',
+      });
     }
     if (!profile.cimd && !profile.dcr) {
       violations.push({
         code: 'no_client_registration',
-        detail: 'neither Client ID Metadata Documents nor Dynamic Client Registration is offered; only clients where the user can enter a pre-registered client id can sign in',
+        detail:
+          'neither Client ID Metadata Documents nor Dynamic Client Registration is offered; only clients where the user can enter a pre-registered client id can sign in',
       });
     }
     return { oauth: profile, violations };
   }
 
-  violations.push({ code: 'as_metadata_unreachable', detail: `no authorization server metadata found for ${issuer.slice(0, 200)}` });
+  violations.push({
+    code: 'as_metadata_unreachable',
+    detail: `no authorization server metadata found for ${issuer.slice(0, 200)}`,
+  });
   return { oauth: profile, violations };
 }

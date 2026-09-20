@@ -177,7 +177,8 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
       addCommand: null,
       deeplink: null,
     },
-    availability: 'Custom connectors on Free (one), Pro, Max, Team and Enterprise; on Team/Enterprise only Owners add them.',
+    availability:
+      'Custom connectors on Free (one), Pro, Max, Team and Enterprise; on Team/Enterprise only Owners add them.',
     verifiedAt: '2026-09-15',
     sources: [
       {
@@ -277,7 +278,8 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
       addCommand: null,
       deeplink: null,
     },
-    availability: 'Free (one custom connector), Pro, Max, Team and Enterprise; on Team/Enterprise only Owners add connectors.',
+    availability:
+      'Free (one custom connector), Pro, Max, Team and Enterprise; on Team/Enterprise only Owners add connectors.',
     verifiedAt: '2026-09-15',
     sources: [
       {
@@ -799,7 +801,10 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
       cimd: 'unknown',
       preRegistered: 'yes',
       staticHeaders: 'yes',
-      redirectUris: ['https://www.cursor.com/agents/mcp/oauth/callback', 'http://localhost:8787/callback'],
+      redirectUris: [
+        'https://www.cursor.com/agents/mcp/oauth/callback',
+        'http://localhost:8787/callback',
+      ],
       note: null,
     },
     toolNaming: {
@@ -926,7 +931,8 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
       addCommand: 'code --add-mcp \'{"name":"{name}","type":"http","url":"{url}"}\'',
       deeplink: 'vscode:mcp/install?{config}',
     },
-    availability: "Copilot Business/Enterprise orgs must enable the 'MCP servers in Copilot' policy, which is off by default.",
+    availability:
+      "Copilot Business/Enterprise orgs must enable the 'MCP servers in Copilot' policy, which is off by default.",
     verifiedAt: '2026-09-15',
     sources: [
       {
@@ -1383,7 +1389,8 @@ export const CLIENT_PROFILES: readonly ClientProfile[] = [
       addCommand: null,
       deeplink: null,
     },
-    availability: 'Enterprise remote config can restrict servers to an allowlist and block personal remote servers.',
+    availability:
+      'Enterprise remote config can restrict servers to an allowlist and block personal remote servers.',
     verifiedAt: '2026-09-15',
     sources: [
       {

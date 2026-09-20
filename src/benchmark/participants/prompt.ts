@@ -2,7 +2,7 @@ import type { BenchmarkCase } from '../types';
 
 export function formatPrompt(benchCase: BenchmarkCase): string {
   const needsText = benchCase.needs
-    .map(n => `- ID: "${n.id}"\n  Requirement: ${n.need}\n  Required: ${n.required}`)
+    .map((n) => `- ID: "${n.id}"\n  Requirement: ${n.need}\n  Required: ${n.required}`)
     .join('\n\n');
 
   const constraints = benchCase.acceptance.constraints;

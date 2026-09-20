@@ -58,10 +58,12 @@ try {
   const t0 = Date.now();
   await db.execute(TRUTH);
   await db.execute(sql`create index on witness_truth (xa, xv, ya, yv)`);
-  const [truth] = (await db.execute(
-    sql`select count(*)::int n from witness_truth`,
-  )) as unknown as { n: number }[];
-  logger.info(`Recounted ${truth!.n} pairs from closures in ${((Date.now() - t0) / 1000).toFixed(1)}s.`);
+  const [truth] = (await db.execute(sql`select count(*)::int n from witness_truth`)) as unknown as {
+    n: number;
+  }[];
+  logger.info(
+    `Recounted ${truth!.n} pairs from closures in ${((Date.now() - t0) / 1000).toFixed(1)}s.`,
+  );
 
   // What the recount cannot speak for: edges with no closure behind them (the
   // Tier-2 resolve-only checker, §4C). Left untouched, and reported — never
@@ -74,7 +76,12 @@ try {
     from compat_edges e
     left join witness_truth t
       on e.package_a = t.xa and e.version_a = t.xv and e.package_b = t.ya and e.version_b = t.yv
-  `)) as unknown as { total: number; recountable: number; no_closure: number; will_change: number }[];
+  `)) as unknown as {
+    total: number;
+    recountable: number;
+    no_closure: number;
+    will_change: number;
+  }[];
   logger.info(
     `Edges: ${scope!.total} total, ${scope!.recountable} recountable, ` +
       `${scope!.no_closure} with no closure (left alone), ${scope!.will_change} would change.`,

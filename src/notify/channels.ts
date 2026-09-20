@@ -30,7 +30,12 @@ export interface Formatted {
   headers: Record<string, string>;
 }
 
-export const ITEM_CAP: Record<ChannelKind, number> = { slack: 20, discord: 10, teams: 10, webhook: 50 };
+export const ITEM_CAP: Record<ChannelKind, number> = {
+  slack: 20,
+  discord: 10,
+  teams: 10,
+  webhook: 50,
+};
 
 const SLACK_EMOJI: Record<Severity, string> = {
   critical: ':rotating_light:',
@@ -39,14 +44,21 @@ const SLACK_EMOJI: Record<Severity, string> = {
   low: ':white_circle:',
   info: ':white_circle:',
 };
-const DISCORD_COLOR: Record<Severity, number> = { critical: 0xdc2626, high: 0xf97316, moderate: 0xeab308, low: 0x71717a, info: 0x71717a };
+const DISCORD_COLOR: Record<Severity, number> = {
+  critical: 0xdc2626,
+  high: 0xf97316,
+  moderate: 0xeab308,
+  low: 0x71717a,
+  info: 0x71717a,
+};
 const SOURCE_LABEL = { mcp: 'MCP server', release: 'breaking release' } as const;
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim();
 
 /** Slack mrkdwn: only &, <, > are special, and `<` is how `<!channel>` would sneak in. */
-export const slackEsc = (s: string) => oneLine(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export const slackEsc = (s: string) =>
+  oneLine(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Discord and Teams markdown: neutralise formatting, links and mentions. */
 export const mdEsc = (s: string) =>
@@ -74,17 +86,28 @@ export function signPayload(secret: string, timestamp: number, payload: string):
  * Verify a lurq webhook signature. Exported so the docs example and a
  * receiver's test can use the exact same check.
  */
-export function verifySignature(secret: string, header: string, payload: string, nowSeconds: number, toleranceSeconds = 300): boolean {
-  const parts = Object.fromEntries(header.split(',').map((p) => p.split('=', 2) as [string, string]));
+export function verifySignature(
+  secret: string,
+  header: string,
+  payload: string,
+  nowSeconds: number,
+  toleranceSeconds = 300,
+): boolean {
+  const parts = Object.fromEntries(
+    header.split(',').map((p) => p.split('=', 2) as [string, string]),
+  );
   const t = Number(parts.t);
-  if (!Number.isInteger(t) || !parts.v1 || Math.abs(nowSeconds - t) > toleranceSeconds) return false;
+  if (!Number.isInteger(t) || !parts.v1 || Math.abs(nowSeconds - t) > toleranceSeconds)
+    return false;
   const expected = Buffer.from(signPayload(secret, t, payload).split('v1=')[1]!, 'hex');
   const given = Buffer.from(parts.v1, 'hex');
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
 function slack(items: ChannelItem[], more: number, o: FormatOptions): Formatted {
-  const blocks: unknown[] = [{ type: 'header', text: { type: 'plain_text', text: clip(header(items, more), 150) } }];
+  const blocks: unknown[] = [
+    { type: 'header', text: { type: 'plain_text', text: clip(header(items, more), 150) } },
+  ];
   for (const i of items) {
     blocks.push({
       type: 'section',
@@ -94,7 +117,11 @@ function slack(items: ChannelItem[], more: number, o: FormatOptions): Formatted 
       },
     });
   }
-  if (more) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `and ${more} more in <${o.dashboardUrl}|the dashboard>` }] });
+  if (more)
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `and ${more} more in <${o.dashboardUrl}|the dashboard>` }],
+    });
   return { payload: JSON.stringify({ text: header(items, more), blocks }), headers: {} };
 }
 
@@ -104,7 +131,10 @@ function discord(items: ChannelItem[], more: number, o: FormatOptions): Formatte
     payload: JSON.stringify({
       username: 'lurq',
       allowed_mentions: { parse: [] },
-      content: clip(`${header(items, more)}${more ? ` (${more} more in the dashboard: ${o.dashboardUrl})` : ''}`, 2000),
+      content: clip(
+        `${header(items, more)}${more ? ` (${more} more in the dashboard: ${o.dashboardUrl})` : ''}`,
+        2000,
+      ),
       embeds: items.map((i) => ({
         title: clip(mdEsc(i.title), 200),
         url: i.url,
@@ -132,12 +162,38 @@ function teams(items: ChannelItem[], more: number, o: FormatOptions): Formatted 
             type: 'AdaptiveCard',
             version: '1.4',
             body: [
-              { type: 'TextBlock', text: header(shown, hidden), weight: 'Bolder', size: 'Medium', wrap: true },
+              {
+                type: 'TextBlock',
+                text: header(shown, hidden),
+                weight: 'Bolder',
+                size: 'Medium',
+                wrap: true,
+              },
               ...shown.flatMap((i) => [
-                { type: 'TextBlock', text: `**${i.severity}** · [${clip(mdEsc(i.title), 150)}](${i.url})`, wrap: true, spacing: 'Medium' },
-                { type: 'TextBlock', text: clip(mdEsc(i.detail), 400), wrap: true, isSubtle: true, spacing: 'None' },
+                {
+                  type: 'TextBlock',
+                  text: `**${i.severity}** · [${clip(mdEsc(i.title), 150)}](${i.url})`,
+                  wrap: true,
+                  spacing: 'Medium',
+                },
+                {
+                  type: 'TextBlock',
+                  text: clip(mdEsc(i.detail), 400),
+                  wrap: true,
+                  isSubtle: true,
+                  spacing: 'None',
+                },
               ]),
-              ...(hidden ? [{ type: 'TextBlock', text: `and ${hidden} more in [the dashboard](${o.dashboardUrl})`, wrap: true, isSubtle: true }] : []),
+              ...(hidden
+                ? [
+                    {
+                      type: 'TextBlock',
+                      text: `and ${hidden} more in [the dashboard](${o.dashboardUrl})`,
+                      wrap: true,
+                      isSubtle: true,
+                    },
+                  ]
+                : []),
             ],
           },
         },
@@ -160,18 +216,39 @@ function webhook(items: ChannelItem[], more: number, o: FormatOptions): Formatte
     sentAt: o.now.toISOString(),
     dashboardUrl: o.dashboardUrl,
     more,
-    items: items.map(({ key, severity, source, title, detail, url }) => ({ key, severity, source, title, detail, url })),
+    items: items.map(({ key, severity, source, title, detail, url }) => ({
+      key,
+      severity,
+      source,
+      title,
+      detail,
+      url,
+    })),
   });
   const headers: Record<string, string> = { 'X-Lurq-Delivery': o.deliveryId };
-  if (o.signingSecret) headers['X-Lurq-Signature'] = signPayload(o.signingSecret, Math.floor(o.now.getTime() / 1000), payload);
+  if (o.signingSecret)
+    headers['X-Lurq-Signature'] = signPayload(
+      o.signingSecret,
+      Math.floor(o.now.getTime() / 1000),
+      payload,
+    );
   return { payload, headers };
 }
 
 const FORMATTERS = { slack, discord, teams, webhook } as const;
 
 /** Format up to the platform's cap; `more` is how many were left for later. */
-export function formatChannel(kind: ChannelKind, items: ChannelItem[], more: number, o: FormatOptions): Formatted {
-  return FORMATTERS[kind](items.slice(0, ITEM_CAP[kind]), more + Math.max(0, items.length - ITEM_CAP[kind]), o);
+export function formatChannel(
+  kind: ChannelKind,
+  items: ChannelItem[],
+  more: number,
+  o: FormatOptions,
+): Formatted {
+  return FORMATTERS[kind](
+    items.slice(0, ITEM_CAP[kind]),
+    more + Math.max(0, items.length - ITEM_CAP[kind]),
+    o,
+  );
 }
 
 /** The message sent when a channel is added or tested. */

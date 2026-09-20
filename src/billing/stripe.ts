@@ -131,7 +131,8 @@ const CANCEL_PATH: Record<CheckoutOrigin, string> = {
   pricing: '/#pricing',
 };
 
-export const isCheckoutOrigin = (v: unknown): v is CheckoutOrigin => v === 'dashboard' || v === 'pricing';
+export const isCheckoutOrigin = (v: unknown): v is CheckoutOrigin =>
+  v === 'dashboard' || v === 'pricing';
 
 /** Where Stripe sends the browser after paying, and after backing out. */
 export function checkoutReturnUrls(webUrl: string, from: CheckoutOrigin = 'pricing') {

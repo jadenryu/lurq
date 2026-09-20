@@ -17,7 +17,12 @@ function write(rel: string, body: string): void {
 function version(dir: string, dts: string | null): string {
   write(
     `${dir}/package.json`,
-    JSON.stringify({ name: 'cookie', version: '1.0.0', main: 'index.js', ...(dts === null ? {} : { types: 'index.d.ts' }) }),
+    JSON.stringify({
+      name: 'cookie',
+      version: '1.0.0',
+      main: 'index.js',
+      ...(dts === null ? {} : { types: 'index.d.ts' }),
+    }),
   );
   write(`${dir}/index.js`, 'exports.parse = function (str, options) {};');
   if (dts !== null) write(`${dir}/index.d.ts`, dts);
@@ -64,12 +69,24 @@ beforeAll(() => {
     `export interface Options { decode?: (s: string) => string }
      export declare function parse(str: string, options?: Options): Record<string, string | undefined>;`,
   );
-  write('hop/tsconfig.json', JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }));
-  write('hop/src/cookies.ts', `import { parse } from 'cookie';\nexport const read = (header: string) => parse(header);`);
-  write('hop/src/session.ts', `import { read } from './cookies';\nexport const id: string = read('id=1')['id'];`);
+  write(
+    'hop/tsconfig.json',
+    JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }),
+  );
+  write(
+    'hop/src/cookies.ts',
+    `import { parse } from 'cookie';\nexport const read = (header: string) => parse(header);`,
+  );
+  write(
+    'hop/src/session.ts',
+    `import { read } from './cookies';\nexport const id: string = read('id=1')['id'];`,
+  );
 
   // No node_modules anywhere: the check has to work on a fresh checkout.
-  write('project/tsconfig.json', JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }));
+  write(
+    'project/tsconfig.json',
+    JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }),
+  );
   write(
     'project/src/session.ts',
     [
@@ -82,8 +99,14 @@ beforeAll(() => {
   write('project/scripts/outside.ts', `import { parse } from 'cookie';\nparse('a');`);
 
   // Vite's layout: the root tsconfig includes nothing and defers to references.
-  write('vite/tsconfig.json', JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }] }));
-  write('vite/tsconfig.app.json', JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }));
+  write(
+    'vite/tsconfig.json',
+    JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }] }),
+  );
+  write(
+    'vite/tsconfig.app.json',
+    JSON.stringify({ compilerOptions: COMPILER_OPTIONS, include: ['src'] }),
+  );
   write('vite/src/main.ts', `import { parse } from 'cookie';\nexport const jar = parse('a=b');`);
 });
 
@@ -117,7 +140,10 @@ describe('type check across an upgrade', () => {
   // Types from @types/* do not move with the upgrade; comparing them says nothing.
   it('declines when the new version ships no type definitions', () => {
     const check = typeChecker(ts, join(root, 'project'))('cookie', v1, untyped, ['src/session.ts']);
-    expect(check).toEqual({ checked: false, reason: 'the new version ships no type definitions of its own' });
+    expect(check).toEqual({
+      checked: false,
+      reason: 'the new version ships no type definitions of its own',
+    });
   });
 
   // Half-parsed declarations become `any`, and `any` hides errors. Unchecked, not clean.
@@ -129,7 +155,10 @@ describe('type check across an upgrade', () => {
 
   it('declines for files no tsconfig includes', () => {
     const check = typeChecker(ts, join(root, 'project'))('cookie', v1, v2, ['scripts/outside.ts']);
-    expect(check).toEqual({ checked: false, reason: 'no tsconfig.json includes the files that import it' });
+    expect(check).toEqual({
+      checked: false,
+      reason: 'no tsconfig.json includes the files that import it',
+    });
   });
 
   it('follows a solution-style tsconfig to the project that includes the file', () => {
@@ -147,8 +176,13 @@ describe('type check across an upgrade', () => {
   });
 
   it('stops once the budget is spent', () => {
-    const check = typeChecker(ts, join(root, 'project'), { budgetMs: -1 })('cookie', v1, v2, ['src/session.ts']);
-    expect(check).toEqual({ checked: false, reason: 'type check budget used up by earlier packages' });
+    const check = typeChecker(ts, join(root, 'project'), { budgetMs: -1 })('cookie', v1, v2, [
+      'src/session.ts',
+    ]);
+    expect(check).toEqual({
+      checked: false,
+      reason: 'type check budget used up by earlier packages',
+    });
   });
 });
 
@@ -181,7 +215,12 @@ describe('type check environments that are not a clean npm install', () => {
       'index.d.ts': `export interface Opts { foo: string }\nexport declare function make(o: Opts): Opts;\n`,
     });
     const to = at(temp(), {
-      'package.json': JSON.stringify({ name: 'lib', version: '1.1.0', types: 'index.d.ts', dependencies: { '@lib/core': '1.1.0' } }),
+      'package.json': JSON.stringify({
+        name: 'lib',
+        version: '1.1.0',
+        types: 'index.d.ts',
+        dependencies: { '@lib/core': '1.1.0' },
+      }),
       'index.d.ts': `import type { CoreOpts } from '@lib/core';\nexport interface Opts extends CoreOpts {}\nexport declare function make(o: Opts): Opts;\n`,
     });
     expect(typeChecker(ts, project)('lib', from, to, ['src/a.ts'])).toEqual({
@@ -192,9 +231,14 @@ describe('type check environments that are not a clean npm install', () => {
 
   // The zod + @hookform/resolvers shape: a peer-dependent adapter links to pnpm's
   // store copy. Leaving that copy on the old version split one type in two.
-  it('swaps pnpm\'s store copy too, so a peer adapter sees the same version', () => {
+  it("swaps pnpm's store copy too, so a peer adapter sees the same version", () => {
     const lib = (version: string) => ({
-      'package.json': JSON.stringify({ name: 'schema', version, types: 'index.d.ts', main: 'index.js' }),
+      'package.json': JSON.stringify({
+        name: 'schema',
+        version,
+        types: 'index.d.ts',
+        main: 'index.js',
+      }),
       'index.d.ts': `export declare class Schema { private _cached; parse(x: unknown): unknown; }\nexport declare function object(): Schema;\n`,
       'index.js': 'exports.object = () => ({})',
     });
@@ -202,17 +246,33 @@ describe('type check environments that are not a clean npm install', () => {
     const store = join(root, 'node_modules/.pnpm');
     at(join(store, 'schema@1.0.0/node_modules/schema'), lib('1.0.0'));
     at(join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/adapter'), {
-      'package.json': JSON.stringify({ name: 'adapter', version: '1.0.0', types: 'index.d.ts', peerDependencies: { schema: '*' } }),
+      'package.json': JSON.stringify({
+        name: 'adapter',
+        version: '1.0.0',
+        types: 'index.d.ts',
+        peerDependencies: { schema: '*' },
+      }),
       'index.d.ts': `import { Schema } from 'schema';\nexport declare function resolver(s: Schema): void;\n`,
     });
-    symlinkSync(join(store, 'schema@1.0.0/node_modules/schema'), join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/schema'));
+    symlinkSync(
+      join(store, 'schema@1.0.0/node_modules/schema'),
+      join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/schema'),
+    );
     symlinkSync(join(store, 'schema@1.0.0/node_modules/schema'), join(root, 'node_modules/schema'));
-    symlinkSync(join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/adapter'), join(root, 'node_modules/adapter'));
+    symlinkSync(
+      join(store, 'adapter@1.0.0_schema@1.0.0/node_modules/adapter'),
+      join(root, 'node_modules/adapter'),
+    );
     at(root, {
       'tsconfig.json': tsconfig,
       'src/form.ts': `import { object } from 'schema';\nimport { resolver } from 'adapter';\nresolver(object());\n`,
     });
-    const check = typeChecker(ts, root)('schema', at(temp(), lib('1.0.0')), at(temp(), lib('1.0.1')), ['src/form.ts']);
+    const check = typeChecker(ts, root)(
+      'schema',
+      at(temp(), lib('1.0.0')),
+      at(temp(), lib('1.0.1')),
+      ['src/form.ts'],
+    );
     expect(check).toEqual({ checked: true, files: 1, introduced: [] });
   });
 });

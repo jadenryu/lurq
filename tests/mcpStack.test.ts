@@ -154,7 +154,11 @@ describe('tools read live by the caller', () => {
     spy.mockClear();
     const r = await checkMcpStack(dbWith({}), [
       { server: 'github (remote)', version: null, tools: [{ name: 'search' }] },
-      { server: 'linear', version: null, tools: [{ name: 'search', annotations: { readOnlyHint: true } }] },
+      {
+        server: 'linear',
+        version: null,
+        tools: [{ name: 'search', annotations: { readOnlyHint: true } }],
+      },
     ]);
     expect(spy).not.toHaveBeenCalled();
     expect(r.overall).toBe('conflict');
@@ -164,7 +168,10 @@ describe('tools read live by the caller', () => {
 
   it('mixes inline and indexed members in one stack', async () => {
     stubSurfaces({ a: [tool('fetch')] });
-    const r = await checkMcpStack(dbWith({}), [ref('a'), { server: 'b', version: null, tools: [] }]);
+    const r = await checkMcpStack(dbWith({}), [
+      ref('a'),
+      { server: 'b', version: null, tools: [] },
+    ]);
     expect(r.overall).toBe('compatible');
     expect(r.totalTools).toBe(1);
   });

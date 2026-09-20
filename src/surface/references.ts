@@ -276,7 +276,12 @@ function isValueUse(id: ts.Identifier): boolean {
   const p = id.parent;
   if (!p) return false;
   if (ts.isImportSpecifier(p) || ts.isImportClause(p) || ts.isNamespaceImport(p)) return false;
-  if (ts.isImportEqualsDeclaration(p) || ts.isLabeledStatement(p) || ts.isBreakOrContinueStatement(p)) return false;
+  if (
+    ts.isImportEqualsDeclaration(p) ||
+    ts.isLabeledStatement(p) ||
+    ts.isBreakOrContinueStatement(p)
+  )
+    return false;
   if (ts.isPropertyAccessExpression(p) && p.name === id) return false;
   if (ts.isQualifiedName(p) && p.right === id) return false;
   if (ts.isBindingElement(p) && (p.name === id || p.propertyName === id)) return false;
@@ -326,7 +331,8 @@ function isTypePosition(node: ts.Node): boolean {
 function bindsName(id: ts.Identifier): boolean {
   const p = id.parent;
   if (!p) return false;
-  if (ts.isImportClause(p) || ts.isNamespaceImport(p) || ts.isImportEqualsDeclaration(p)) return true;
+  if (ts.isImportClause(p) || ts.isNamespaceImport(p) || ts.isImportEqualsDeclaration(p))
+    return true;
   if (
     ts.isImportSpecifier(p) ||
     ts.isBindingElement(p) ||
@@ -377,7 +383,11 @@ function valueUses(
     const uses = out.get(name);
     // A name declared twice in one file cannot have its uses attributed to the
     // import: the counts are unusable, and a patcher must not rewrite them.
-    if (count > 1 && uses) out.set(name, uses.map((u) => ({ line: u.line, args: null })));
+    if (count > 1 && uses)
+      out.set(
+        name,
+        uses.map((u) => ({ line: u.line, args: null })),
+      );
   }
   return out;
 }
@@ -522,14 +532,18 @@ export function scanReferences(
         const pkg = packageOfSpecifier(node.moduleSpecifier.text);
         if (pkg) {
           const clause = node.importClause;
-          if (!clause) record(pkg, 'default', 'side-effect', node.moduleSpecifier.text, rel, lineOf(node));
+          if (!clause)
+            record(pkg, 'default', 'side-effect', node.moduleSpecifier.text, rel, lineOf(node));
           if (clause?.name) {
             record(pkg, 'default', 'default', node.moduleSpecifier.text, rel, lineOf(clause.name));
             defaultBindings.set(clause.name.text, { pkg, spec: node.moduleSpecifier.text });
           }
           if (clause?.namedBindings) {
             if (ts.isNamespaceImport(clause.namedBindings)) {
-              nsBindings.set(clause.namedBindings.name.text, { pkg, spec: node.moduleSpecifier.text });
+              nsBindings.set(clause.namedBindings.name.text, {
+                pkg,
+                spec: node.moduleSpecifier.text,
+              });
             } else {
               for (const el of clause.namedBindings.elements) {
                 const local = el.name.text;
@@ -583,7 +597,8 @@ export function scanReferences(
           for (const el of node.exportClause.elements) {
             const exported = el.propertyName?.text ?? el.name.text;
             const line = lineOf(el);
-            if (node.isTypeOnly || el.isTypeOnly) record(pkg, exported, 'type-only', spec, rel, line);
+            if (node.isTypeOnly || el.isTypeOnly)
+              record(pkg, exported, 'type-only', spec, rel, line);
             else record(pkg, exported, 'named', spec, rel, line, undefined, { line, args: null });
           }
         }
@@ -618,12 +633,22 @@ export function scanReferences(
           for (const el of node.name.elements) {
             const name = el.propertyName ?? el.name;
             if (!ts.isIdentifier(name)) continue;
-            const ref = record(ns.pkg, name.text, 'namespace', ns.spec, rel, lineOf(el), undefined, undefined, {
-              local: ts.isIdentifier(el.name) ? el.name.text : name.text,
-              aliased: el.propertyName !== undefined,
-              nameStart: name.getStart(sf),
-              nameEnd: name.getEnd(),
-            });
+            const ref = record(
+              ns.pkg,
+              name.text,
+              'namespace',
+              ns.spec,
+              rel,
+              lineOf(el),
+              undefined,
+              undefined,
+              {
+                local: ts.isIdentifier(el.name) ? el.name.text : name.text,
+                aliased: el.propertyName !== undefined,
+                nameStart: name.getStart(sf),
+                nameEnd: name.getEnd(),
+              },
+            );
             if (ns.loader) ref.loader = ns.loader;
             if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
           }
@@ -642,7 +667,11 @@ export function scanReferences(
             // In CJS the binding IS module.exports, so member reads are export
             // claims — unless module.exports is a bare value, which the scorer
             // detects from the surface shape rather than guessing here.
-            nsBindings.set(node.name.text, { pkg, spec, ...(viaRequire ? { loader: 'require' as const } : {}) });
+            nsBindings.set(node.name.text, {
+              pkg,
+              spec,
+              ...(viaRequire ? { loader: 'require' as const } : {}),
+            });
             const ref = record(pkg, 'default', 'default', spec, rel, lineOf(node.name));
             if (viaRequire) ref.loader = 'require';
             // Followed so a direct call of what `require` returned is visible:
@@ -652,12 +681,22 @@ export function scanReferences(
             for (const el of node.name.elements) {
               const name = el.propertyName ?? el.name;
               if (!ts.isIdentifier(name)) continue;
-              const ref = record(pkg, name.text, 'destructured', spec, rel, lineOf(el), undefined, undefined, {
-                local: ts.isIdentifier(el.name) ? el.name.text : name.text,
-                aliased: el.propertyName !== undefined,
-                nameStart: name.getStart(sf),
-                nameEnd: name.getEnd(),
-              });
+              const ref = record(
+                pkg,
+                name.text,
+                'destructured',
+                spec,
+                rel,
+                lineOf(el),
+                undefined,
+                undefined,
+                {
+                  local: ts.isIdentifier(el.name) ? el.name.text : name.text,
+                  aliased: el.propertyName !== undefined,
+                  nameStart: name.getStart(sf),
+                  nameEnd: name.getEnd(),
+                },
+              );
               if (viaRequire) ref.loader = 'require';
               if (ts.isIdentifier(el.name)) follow(el.name.text, ref);
             }
@@ -680,7 +719,16 @@ export function scanReferences(
         const load = loadedModule(node.expression);
         const pkg = load ? packageOfSpecifier(load.spec) : null;
         if (load && pkg) {
-          const ref = record(pkg, node.name.text, 'namespace', load.spec, rel, lineOf(node), undefined, callSiteOf(sf, node));
+          const ref = record(
+            pkg,
+            node.name.text,
+            'namespace',
+            load.spec,
+            rel,
+            lineOf(node),
+            undefined,
+            callSiteOf(sf, node),
+          );
           if (load.loader === 'require') ref.loader = 'require';
         }
       }
@@ -693,10 +741,28 @@ export function scanReferences(
         const named = namedBindings.get(local);
         const call = callSiteOf(sf, node);
         if (ns) {
-          const ref = record(ns.pkg, node.name.text, 'namespace', ns.spec, rel, lineOf(node), undefined, call);
+          const ref = record(
+            ns.pkg,
+            node.name.text,
+            'namespace',
+            ns.spec,
+            rel,
+            lineOf(node),
+            undefined,
+            call,
+          );
           if (ns.loader) ref.loader = ns.loader;
         } else if (def) {
-          record(def.pkg, node.name.text, 'default-member', def.spec, rel, lineOf(node), undefined, call);
+          record(
+            def.pkg,
+            node.name.text,
+            'default-member',
+            def.spec,
+            rel,
+            lineOf(node),
+            undefined,
+            call,
+          );
         } else if (named) {
           record(
             named.pkg,

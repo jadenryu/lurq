@@ -59,7 +59,12 @@ interface Region {
 const regionOf = (text: string, edit: Edit): Region => {
   const start = positionAt(text, edit.start);
   const end = positionAt(text, edit.end);
-  return { startLine: start.line, startColumn: start.column, endLine: end.line, endColumn: end.column };
+  return {
+    startLine: start.line,
+    startColumn: start.column,
+    endLine: end.line,
+    endColumn: end.column,
+  };
 };
 
 /** Which files a finding concerns, and the edits in each. */

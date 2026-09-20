@@ -327,9 +327,16 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('surface-backfill')
-    .description('give the existing catalog version depth, so surface diffs have something to compare')
-    .option('--limit <n>', 'packages to sample per gap this run (default 500)', (v) => parseInt(v, 10))
-    .option('--by-downloads', 'queue the most-installed packages first instead of sampling at random')
+    .description(
+      'give the existing catalog version depth, so surface diffs have something to compare',
+    )
+    .option('--limit <n>', 'packages to sample per gap this run (default 500)', (v) =>
+      parseInt(v, 10),
+    )
+    .option(
+      '--by-downloads',
+      'queue the most-installed packages first instead of sampling at random',
+    )
     .action(async (opts: { limit?: number; byDownloads?: boolean }) => {
       const { requireConfig } = await import('../core/config');
       requireConfig(['DATABASE_URL']);
@@ -349,7 +356,9 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('stats')
-    .description('accounts and tool calls across every user (signups-with-a-key, active, calls by tool)')
+    .description(
+      'accounts and tool calls across every user (signups-with-a-key, active, calls by tool)',
+    )
     .option('--days <n>', 'trailing window in days (default 30)', (v) => parseInt(v, 10))
     .option('--json', 'print raw JSON')
     .action(async (opts: { days?: number; json?: boolean }) => {
@@ -378,7 +387,9 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('registry-sync')
-    .description('sync the official MCP registry: versions, remote endpoints and the headers they declare (incremental)')
+    .description(
+      'sync the official MCP registry: versions, remote endpoints and the headers they declare (incremental)',
+    )
     .option('--full', 'ignore the watermark and read every version')
     .option('--max-pages <n>', 'stop after n pages', (v) => parseInt(v, 10))
     .option('--json', 'print raw JSON')
@@ -394,7 +405,9 @@ export function registerOperatorCommands(program: Command): void {
           console.log(JSON.stringify(s, null, 2));
           return;
         }
-        console.log(`registry ${s.since ? `since ${s.since}` : '(full read)'}: ${s.pages} page(s), ${s.versions} version(s), ${s.rejected} rejected`);
+        console.log(
+          `registry ${s.since ? `since ${s.since}` : '(full read)'}: ${s.pages} page(s), ${s.versions} version(s), ${s.rejected} rejected`,
+        );
         console.log(
           `endpoints: ${s.endpointsLinked} linked, ${s.linksRemoved} link(s) removed, ${s.endpointsRemoved} endpoint(s) removed · watermark ${s.watermark ?? '—'}`,
         );
@@ -405,40 +418,59 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('remote-probe')
-    .description('probe due remote MCP endpoints without credentials: contract, sign-in path, spec violations')
+    .description(
+      'probe due remote MCP endpoints without credentials: contract, sign-in path, spec violations',
+    )
     .option('--limit <n>', 'endpoints to probe (default 200)', (v) => parseInt(v, 10))
     .option('--concurrency <n>', 'lanes in flight (default 16)', (v) => parseInt(v, 10))
     .option('--per-host <n>', 'requests in flight per host (default 2)', (v) => parseInt(v, 10))
     .option('--url <url>', 'probe this one endpoint now, whatever its schedule')
     .option('--json', 'print raw JSON')
-    .action(async (opts: { limit?: number; concurrency?: number; perHost?: number; url?: string; json?: boolean }) => {
-      const { requireConfig } = await import('../core/config');
-      requireConfig(['DATABASE_URL']);
-      const { createDb } = await import('../db/client');
-      const { drainRemoteProbes } = await import('../remoteProbe/drain');
-      const { getEndpointByUrl } = await import('../db/remoteEndpoints');
-      const { db, close } = createDb({ max: 6 });
-      try {
-        let onlyIds: number[] | undefined;
-        if (opts.url) {
-          const row = await getEndpointByUrl(db, opts.url);
-          if (!row) {
-            console.log(`no endpoint with that URL; run registry-sync first, or check the URL`);
+    .action(
+      async (opts: {
+        limit?: number;
+        concurrency?: number;
+        perHost?: number;
+        url?: string;
+        json?: boolean;
+      }) => {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { createDb } = await import('../db/client');
+        const { drainRemoteProbes } = await import('../remoteProbe/drain');
+        const { getEndpointByUrl } = await import('../db/remoteEndpoints');
+        const { db, close } = createDb({ max: 6 });
+        try {
+          let onlyIds: number[] | undefined;
+          if (opts.url) {
+            const row = await getEndpointByUrl(db, opts.url);
+            if (!row) {
+              console.log(`no endpoint with that URL; run registry-sync first, or check the URL`);
+              return;
+            }
+            onlyIds = [row.id];
+          }
+          const s = await drainRemoteProbes(db, {
+            limit: opts.limit,
+            concurrency: opts.concurrency,
+            perHost: opts.perHost,
+            onlyIds,
+            force: Boolean(opts.url),
+          });
+          if (opts.json) {
+            console.log(JSON.stringify(s, null, 2));
             return;
           }
-          onlyIds = [row.id];
+          console.log(
+            `claimed ${s.claimed} · probed ${s.probed} · ${s.changes} change(s) · ${s.failed} failed`,
+          );
+          for (const [status, n] of Object.entries(s.byStatus).sort((a, b) => b[1] - a[1]))
+            console.log(`  ${status.padEnd(16)} ${n}`);
+        } finally {
+          await close();
         }
-        const s = await drainRemoteProbes(db, { limit: opts.limit, concurrency: opts.concurrency, perHost: opts.perHost, onlyIds, force: Boolean(opts.url) });
-        if (opts.json) {
-          console.log(JSON.stringify(s, null, 2));
-          return;
-        }
-        console.log(`claimed ${s.claimed} · probed ${s.probed} · ${s.changes} change(s) · ${s.failed} failed`);
-        for (const [status, n] of Object.entries(s.byStatus).sort((a, b) => b[1] - a[1])) console.log(`  ${status.padEnd(16)} ${n}`);
-      } finally {
-        await close();
-      }
-    });
+      },
+    );
 
   program
     .command('remote-stats')
@@ -458,7 +490,10 @@ export function registerOperatorCommands(program: Command): void {
         }
         const total = rows.reduce((a, r) => a + r.count, 0);
         console.log(`${total} live remote endpoint(s)`);
-        for (const r of rows) console.log(`  ${r.status.padEnd(16)} ${String(r.count).padStart(6)}  ${((100 * r.count) / Math.max(total, 1)).toFixed(1)}%`);
+        for (const r of rows)
+          console.log(
+            `  ${r.status.padEnd(16)} ${String(r.count).padStart(6)}  ${((100 * r.count) / Math.max(total, 1)).toFixed(1)}%`,
+          );
       } finally {
         await close();
       }
@@ -475,7 +510,9 @@ export function registerOperatorCommands(program: Command): void {
       const { optOutHost } = await import('../db/remoteEndpoints');
       const { db, close } = createDb({ max: 2 });
       try {
-        console.log(`${await optOutHost(db, host)} endpoint(s) on ${host.trim().toLowerCase()} opted out`);
+        console.log(
+          `${await optOutHost(db, host)} endpoint(s) on ${host.trim().toLowerCase()} opted out`,
+        );
       } finally {
         await close();
       }
@@ -510,8 +547,10 @@ export function registerOperatorCommands(program: Command): void {
   program
     .command('gc')
     .description('report prunable bookkeeping rows and table growth (DRY RUN unless --apply)')
-    .option('--keep-days <n>', 'age past which queue and sync-run rows are prunable (default 180)', (v) =>
-      parseInt(v, 10),
+    .option(
+      '--keep-days <n>',
+      'age past which queue and sync-run rows are prunable (default 180)',
+      (v) => parseInt(v, 10),
     )
     .option('--apply', 'actually delete the prunable rows. Without this, nothing is removed.')
     .action(async (opts: { keepDays?: number; apply?: boolean }) => {
@@ -525,10 +564,13 @@ export function registerOperatorCommands(program: Command): void {
         const curatedSeeds = loadSeedFile().map((s) => s.name);
         const r = await gcReport(db, { curatedSeeds, keepDays: opts.keepDays, apply: opts.apply });
         console.log('prunable:');
-        for (const c of r.categories) console.log(`  ${c.key.padEnd(16)} ${String(c.rows).padStart(8)}  ${c.description}`);
+        for (const c of r.categories)
+          console.log(`  ${c.key.padEnd(16)} ${String(c.rows).padStart(8)}  ${c.description}`);
         console.log('largest tables (reported only, never pruned here):');
         for (const t of r.tables) {
-          console.log(`  ${t.table.padEnd(18)} ${String(t.rows).padStart(10)} rows  ${(t.bytes / 1024 / 1024).toFixed(1).padStart(8)} MB`);
+          console.log(
+            `  ${t.table.padEnd(18)} ${String(t.rows).padStart(10)} rows  ${(t.bytes / 1024 / 1024).toFixed(1).padStart(8)} MB`,
+          );
         }
         console.log(
           r.applied
@@ -673,9 +715,14 @@ export function registerOperatorCommands(program: Command): void {
 
   program
     .command('notify-preview')
-    .description('render account email and channel alerts from sample data, to preview and edit the templates in src/notify')
+    .description(
+      'render account email and channel alerts from sample data, to preview and edit the templates in src/notify',
+    )
     .option('--out <dir>', 'where to write the files', 'notify-preview')
-    .option('--send-to <email>', 'also send both emails to this address through Resend (needs RESEND_API_KEY)')
+    .option(
+      '--send-to <email>',
+      'also send both emails to this address through Resend (needs RESEND_API_KEY)',
+    )
     .option('--no-open', 'do not open the urgent email in a browser')
     .action(async (opts: { out?: string; sendTo?: string; open?: boolean }) => {
       const { runNotifyPreview } = await import('../notify/preview');
@@ -779,83 +826,124 @@ export function registerOperatorCommands(program: Command): void {
     .option('--cases <path>', 'freeze/replay the case set (built and written if absent)')
     .option('--json <path>', 'write per-case results for a later paired comparison')
     .option('--compare <path>', 'paired McNemar test against a previous --json run')
-    .action(async (opts: { perCategory?: number; limit?: number; cases?: string; json?: string; compare?: string }) => {
-      const { requireConfig } = await import('../core/config');
-      requireConfig(['DATABASE_URL']);
-      const { createDb } = await import('../db/client');
-      const { buildCases, runCases, computeMetrics, pairedPValue, saveCases, loadCases, assertSameCases } =
-        await import('../benchmark/retrieval');
-      const { db, close } = createDb();
-      try {
-        const { existsSync } = await import('node:fs');
-        let cases;
-        if (opts.cases && existsSync(opts.cases)) {
-          cases = loadCases(opts.cases);
-          console.log(`replaying ${cases.length} frozen cases from ${opts.cases}`);
-        } else {
-          cases = await buildCases(db, { perCategory: opts.perCategory });
-          if (opts.cases) { saveCases(opts.cases, cases); console.log(`froze ${cases.length} cases to ${opts.cases}`); }
-          console.log(`built ${cases.length} cases across ${new Set(cases.map((c) => c.category)).size} categories`);
+    .action(
+      async (opts: {
+        perCategory?: number;
+        limit?: number;
+        cases?: string;
+        json?: string;
+        compare?: string;
+      }) => {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { createDb } = await import('../db/client');
+        const {
+          buildCases,
+          runCases,
+          computeMetrics,
+          pairedPValue,
+          saveCases,
+          loadCases,
+          assertSameCases,
+        } = await import('../benchmark/retrieval');
+        const { db, close } = createDb();
+        try {
+          const { existsSync } = await import('node:fs');
+          let cases;
+          if (opts.cases && existsSync(opts.cases)) {
+            cases = loadCases(opts.cases);
+            console.log(`replaying ${cases.length} frozen cases from ${opts.cases}`);
+          } else {
+            cases = await buildCases(db, { perCategory: opts.perCategory });
+            if (opts.cases) {
+              saveCases(opts.cases, cases);
+              console.log(`froze ${cases.length} cases to ${opts.cases}`);
+            }
+            console.log(
+              `built ${cases.length} cases across ${new Set(cases.map((c) => c.category)).size} categories`,
+            );
+          }
+          const results = await runCases(db, cases, {
+            limit: opts.limit,
+            onProgress: (n) => {
+              if (n % 25 === 0) process.stderr.write(`  ${n}/${cases.length}\r`);
+            },
+          });
+          const m = computeMetrics(results);
+          console.log(
+            `\ncases ${m.cases} · recall@1 ${(100 * m.recallAt1).toFixed(1)}% · recall@5 ${(100 * m.recallAt5).toFixed(1)}%` +
+              ` · recall@25 ${(100 * m.recallAt25).toFixed(1)}% · MRR ${m.mrr.toFixed(3)}`,
+          );
+          const worst = Object.entries(m.byCategory)
+            .sort((a, b) => a[1].recallAt25 - b[1].recallAt25)
+            .slice(0, 6);
+          console.log('\nweakest categories (recall@25):');
+          for (const [cat, b] of worst)
+            console.log(
+              `  ${cat.padEnd(24)} ${(100 * b.recallAt25).toFixed(0)}%  (${b.cases} cases)`,
+            );
+          const { writeFileSync, readFileSync } = await import('node:fs');
+          if (opts.json) {
+            writeFileSync(opts.json, JSON.stringify(results, null, 2));
+            console.log(`\nwrote ${opts.json}`);
+          }
+          if (opts.compare) {
+            const before = JSON.parse(readFileSync(opts.compare, 'utf8'));
+            assertSameCases(before, results);
+            const p = pairedPValue(before, results);
+            console.log(
+              `\npaired vs ${opts.compare}: McNemar exact p = ${p.toFixed(4)}${p < 0.05 ? ' (significant)' : ' (NOT significant)'}`,
+            );
+          }
+        } finally {
+          await close();
         }
-        const results = await runCases(db, cases, {
-          limit: opts.limit,
-          onProgress: (n) => { if (n % 25 === 0) process.stderr.write(`  ${n}/${cases.length}\r`); },
-        });
-        const m = computeMetrics(results);
-        console.log(
-          `\ncases ${m.cases} · recall@1 ${(100 * m.recallAt1).toFixed(1)}% · recall@5 ${(100 * m.recallAt5).toFixed(1)}%` +
-            ` · recall@25 ${(100 * m.recallAt25).toFixed(1)}% · MRR ${m.mrr.toFixed(3)}`,
-        );
-        const worst = Object.entries(m.byCategory).sort((a, b) => a[1].recallAt25 - b[1].recallAt25).slice(0, 6);
-        console.log('\nweakest categories (recall@25):');
-        for (const [cat, b] of worst) console.log(`  ${cat.padEnd(24)} ${(100 * b.recallAt25).toFixed(0)}%  (${b.cases} cases)`);
-        const { writeFileSync, readFileSync } = await import('node:fs');
-        if (opts.json) { writeFileSync(opts.json, JSON.stringify(results, null, 2)); console.log(`\nwrote ${opts.json}`); }
-        if (opts.compare) {
-          const before = JSON.parse(readFileSync(opts.compare, 'utf8'));
-          assertSameCases(before, results);
-          const p = pairedPValue(before, results);
-          console.log(`\npaired vs ${opts.compare}: McNemar exact p = ${p.toFixed(4)}${p < 0.05 ? ' (significant)' : ' (NOT significant)'}`);
-        }
-      } finally {
-        await close();
-      }
-    });
+      },
+    );
 
   program
     .command('dependents-backfill')
     .description('fill direct/indirect dependent counts from deps.dev (resumable)')
     .option('--limit <n>', 'rows to attempt this run (default 2000)', (v) => parseInt(v, 10))
     .option('--stratify', 'take the top rows per category instead of globally')
-    .option('--per-category <n>', 'rows per category when stratifying (default 90)', (v) => parseInt(v, 10))
+    .option('--per-category <n>', 'rows per category when stratifying (default 90)', (v) =>
+      parseInt(v, 10),
+    )
     .option('--concurrency <n>', 'parallel deps.dev requests (default 6)', (v) => parseInt(v, 10))
-    .action(async (opts: { limit?: number; stratify?: boolean; perCategory?: number; concurrency?: number }) => {
-      const { requireConfig } = await import('../core/config');
-      requireConfig(['DATABASE_URL']);
-      const { createDb } = await import('../db/client');
-      const { backfillDependents } = await import('../pipeline/dependents');
-      const { db, close } = createDb();
-      try {
-        let last = 0;
-        const s = await backfillDependents(db, {
-          limit: opts.limit,
-          stratify: opts.stratify,
-          perCategory: opts.perCategory,
-          concurrency: opts.concurrency,
-          onProgress: (done, total) => {
-            if (done - last >= 100 || done === total) {
-              last = done;
-              process.stderr.write(`  ${done}/${total}\r`);
-            }
-          },
-        });
-        console.log(
-          `\nattempted ${s.attempted} · filled ${s.filled} · no-data ${s.missing} · skipped ${s.skipped}`,
-        );
-      } finally {
-        await close();
-      }
-    });
+    .action(
+      async (opts: {
+        limit?: number;
+        stratify?: boolean;
+        perCategory?: number;
+        concurrency?: number;
+      }) => {
+        const { requireConfig } = await import('../core/config');
+        requireConfig(['DATABASE_URL']);
+        const { createDb } = await import('../db/client');
+        const { backfillDependents } = await import('../pipeline/dependents');
+        const { db, close } = createDb();
+        try {
+          let last = 0;
+          const s = await backfillDependents(db, {
+            limit: opts.limit,
+            stratify: opts.stratify,
+            perCategory: opts.perCategory,
+            concurrency: opts.concurrency,
+            onProgress: (done, total) => {
+              if (done - last >= 100 || done === total) {
+                last = done;
+                process.stderr.write(`  ${done}/${total}\r`);
+              }
+            },
+          });
+          console.log(
+            `\nattempted ${s.attempted} · filled ${s.filled} · no-data ${s.missing} · skipped ${s.skipped}`,
+          );
+        } finally {
+          await close();
+        }
+      },
+    );
 
   program
     .command('compat-backfill')

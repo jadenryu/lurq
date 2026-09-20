@@ -7,12 +7,7 @@
  * negative costs more trust than a hundred `unknown`s.
  */
 import type { Database } from '../db/client';
-import {
-  recordObservation,
-  upsertClaim,
-  upsertEntity,
-  upsertEnvironment,
-} from '../db/graph';
+import { recordObservation, upsertClaim, upsertEntity, upsertEnvironment } from '../db/graph';
 import { getSandbox } from '../sandbox/index';
 import type { Sandbox } from '../sandbox/types';
 import { mcpServerOracle } from './oracles/mcpServer';

@@ -136,14 +136,17 @@ export function serverPackage(manifest: unknown, serverJson: unknown): string | 
   }
   if (serverJson && typeof serverJson === 'object') {
     const pkg = ((serverJson as RegistryServer).packages ?? []).find(
-      (p) => p.registryType === 'npm' && typeof p.identifier === 'string' && p.identifier.length > 0,
+      (p) =>
+        p.registryType === 'npm' && typeof p.identifier === 'string' && p.identifier.length > 0,
     );
     if (pkg?.identifier) return pkg.identifier;
   }
   return null;
 }
 
-const unprobed = (base: Pick<ProfileMcpServer, 'alias' | 'kind' | 'packageName' | 'endpoint'>): ProfileMcpServer => ({
+const unprobed = (
+  base: Pick<ProfileMcpServer, 'alias' | 'kind' | 'packageName' | 'endpoint'>,
+): ProfileMcpServer => ({
   ...base,
   status: 'not-probed',
   tools: 0,
@@ -195,7 +198,9 @@ export async function profileMcp(
   const reads = await Promise.all(
     repos.map(async (repo) => ({
       repo,
-      files: await Promise.all(wanted.map(async (path) => ({ path, read: await deps.read(repo.name, path) }))),
+      files: await Promise.all(
+        wanted.map(async (path) => ({ path, read: await deps.read(repo.name, path) })),
+      ),
     })),
   );
 
@@ -241,10 +246,19 @@ export async function profileMcp(
         return true;
       });
       const surfaces = await Promise.all(
-        servers.map((s) => (s.kind === 'npm-stdio' && s.packageName ? surfaceOf(s.packageName) : Promise.resolve(null))),
+        servers.map((s) =>
+          s.kind === 'npm-stdio' && s.packageName
+            ? surfaceOf(s.packageName)
+            : Promise.resolve(null),
+        ),
       );
       const views = servers.map((s, i) => {
-        const base = { alias: s.alias, kind: s.kind, packageName: s.packageName, endpoint: s.endpoint };
+        const base = {
+          alias: s.alias,
+          kind: s.kind,
+          packageName: s.packageName,
+          endpoint: s.endpoint,
+        };
         return surfaces[i] ? fromSurface(base, surfaces[i]) : unprobed(base);
       });
       const inputs: StackMemberInput[] = servers.map((s, i) => ({

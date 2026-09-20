@@ -4,7 +4,9 @@ import type { RepoRow } from '../src/db/schema';
 
 describe('newMajorRelease', () => {
   it('fires only when the major moves', () => {
-    expect(newMajorRelease({ latestVersion: '18.4.1' }, { latestVersion: '19.0.0' })).toBe('19.0.0');
+    expect(newMajorRelease({ latestVersion: '18.4.1' }, { latestVersion: '19.0.0' })).toBe(
+      '19.0.0',
+    );
     expect(newMajorRelease({ latestVersion: '18.4.1' }, { latestVersion: '18.5.0' })).toBeNull();
   });
 
@@ -44,7 +46,12 @@ function repo(deps: Record<string, string>, extra: Partial<RepoRow> = {}): RepoR
 describe('draftAlert', () => {
   it('marks a caret range as out of range — the repo is now a major behind', () => {
     const alert = draftAlert(repo({ stripe: '^18.0.0' }), 'stripe', '19.0.0');
-    expect(alert).toMatchObject({ repoId: 7, packageName: 'stripe', range: '^18.0.0', inRange: false });
+    expect(alert).toMatchObject({
+      repoId: 7,
+      packageName: 'stripe',
+      range: '^18.0.0',
+      inRange: false,
+    });
   });
 
   it('marks an open range as in range — the next clean install takes the major', () => {

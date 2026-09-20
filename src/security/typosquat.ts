@@ -45,11 +45,7 @@ export function editDistance(a: string, b: string): number {
     cur[0] = i;
     for (let j = 1; j <= n; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let val = Math.min(
-        (prev[j] ?? 0) + 1,
-        (cur[j - 1] ?? 0) + 1,
-        (prev[j - 1] ?? 0) + cost,
-      );
+      let val = Math.min((prev[j] ?? 0) + 1, (cur[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + cost);
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
         val = Math.min(val, (prevPrev[j - 2] ?? 0) + 1);
       }

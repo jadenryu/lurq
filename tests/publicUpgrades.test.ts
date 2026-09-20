@@ -44,8 +44,15 @@ describe('majorPairs', () => {
   });
 
   it('bridges a major that was never published, and keeps only the newest jumps', () => {
-    const pairs = majorPairs([l(1, '1.9.0'), l(2, '2.4.0'), l(4, '4.0.0'), l(5, '5.1.0'), l(6, '6.0.0')], 3);
-    expect(pairs.map((p) => `${p.fromMajor}-to-${p.toMajor}`)).toEqual(['2-to-4', '4-to-5', '5-to-6']);
+    const pairs = majorPairs(
+      [l(1, '1.9.0'), l(2, '2.4.0'), l(4, '4.0.0'), l(5, '5.1.0'), l(6, '6.0.0')],
+      3,
+    );
+    expect(pairs.map((p) => `${p.fromMajor}-to-${p.toMajor}`)).toEqual([
+      '2-to-4',
+      '4-to-5',
+      '5-to-6',
+    ]);
   });
 
   it('is ready only when both sides are stored, and empty for a single major', () => {
@@ -76,7 +83,9 @@ describe('upgradeVerdict', () => {
     const none = { removed: [], renamed: [], arityChanged: [], typeOnlyRemoved: [] };
     expect(upgradeVerdict({ ...none, inconclusive: 'no surface' })).toBe('unknown');
     expect(upgradeVerdict({ ...none, renamed: [1] })).toBe('removes-exports');
-    expect(upgradeVerdict({ ...none, arityChanged: [1], typeOnlyRemoved: [1] })).toBe('arity-changed');
+    expect(upgradeVerdict({ ...none, arityChanged: [1], typeOnlyRemoved: [1] })).toBe(
+      'arity-changed',
+    );
     expect(upgradeVerdict({ ...none, typeOnlyRemoved: [1] })).toBe('types-only');
     expect(upgradeVerdict(none)).toBe('clean');
   });
@@ -100,7 +109,12 @@ describe('toPublicUpgrade', () => {
     );
     expect(u.removed).toEqual([{ path: 'gone', kind: 'class' }]);
     expect(u.renamed).toEqual([{ path: 'oldName', to: ['newName'] }]);
-    expect(u).toMatchObject({ status: 'ready', verdict: 'removes-exports', added: 3, truncated: false });
+    expect(u).toMatchObject({
+      status: 'ready',
+      verdict: 'removes-exports',
+      added: 3,
+      truncated: false,
+    });
     expect(u.observedAt).toBe('2026-09-01T00:00:00.000Z');
   });
 
@@ -113,10 +127,17 @@ describe('toPublicUpgrade', () => {
   });
 
   it('keeps an inconclusive diff unknown rather than clean', () => {
-    expect(toPublicUpgrade('pkg', pair, diff({ inconclusive: 'cross-tier' })).verdict).toBe('unknown');
+    expect(toPublicUpgrade('pkg', pair, diff({ inconclusive: 'cross-tier' })).verdict).toBe(
+      'unknown',
+    );
   });
 
   it('answers a pending pair as unknown with empty lists', () => {
-    expect(pendingUpgrade('pkg', pair)).toMatchObject({ status: 'pending', verdict: 'unknown', removed: [], added: 0 });
+    expect(pendingUpgrade('pkg', pair)).toMatchObject({
+      status: 'pending',
+      verdict: 'unknown',
+      removed: [],
+      added: 0,
+    });
   });
 });

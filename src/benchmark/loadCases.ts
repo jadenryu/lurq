@@ -82,7 +82,9 @@ function validateSuite(raw: unknown): BenchmarkSuite {
         throw new SuiteValidationError(`Schema v2 case at index ${i} must have a non-empty "id".`);
       }
       if (c.expectedResult !== 'pass' && c.expectedResult !== 'fail') {
-        throw new SuiteValidationError(`Schema v2 case "${c.id}" expectedResult must be "pass" or "fail".`);
+        throw new SuiteValidationError(
+          `Schema v2 case "${c.id}" expectedResult must be "pass" or "fail".`,
+        );
       }
       if (!Array.isArray(c.stack)) {
         throw new SuiteValidationError(`Schema v2 case "${c.id}" must have a "stack" array.`);

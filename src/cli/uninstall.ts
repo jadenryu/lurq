@@ -103,7 +103,8 @@ function instructionsRemoval(spec: AgentSpec): Removal | null {
     return {
       label: `${spec.label} instructions block`,
       path: target.path,
-      apply: () => rewriteOrRemove(target.path, removeMarkedBlock(readFileSync(target.path, 'utf8'))),
+      apply: () =>
+        rewriteOrRemove(target.path, removeMarkedBlock(readFileSync(target.path, 'utf8'))),
     };
   }
 
@@ -150,7 +151,9 @@ export function planUninstall(
       try {
         add(hooksRemoval(hookAgent));
       } catch (err) {
-        problems.push(`${hooksLabel(hookAgent)}: ${err instanceof Error ? err.message : String(err)}`);
+        problems.push(
+          `${hooksLabel(hookAgent)}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }
@@ -184,7 +187,9 @@ export async function runUninstall(opts: { agent?: string; yes?: boolean }): Pro
 
   for (const p of problems) console.log(`${yellow('!')} ${p}`);
   if (removals.length === 0) {
-    console.log(`Nothing to remove: lurq is not set up ${global ? 'on this machine' : `for ${specs[0]!.label}`}.`);
+    console.log(
+      `Nothing to remove: lurq is not set up ${global ? 'on this machine' : `for ${specs[0]!.label}`}.`,
+    );
     if (problems.length) process.exitCode = 1;
     return;
   }

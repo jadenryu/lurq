@@ -64,8 +64,10 @@ export type UrlPolicy = (url: URL) => void;
 
 /** The production policy: public https only. */
 export const publicHttpsOnly: UrlPolicy = (url) => {
-  if (url.protocol !== 'https:') throw new UnsafeUrlError(`only https URLs can be checked (got ${url.protocol})`);
-  if (url.username || url.password) throw new UnsafeUrlError('URLs with embedded credentials are refused');
+  if (url.protocol !== 'https:')
+    throw new UnsafeUrlError(`only https URLs can be checked (got ${url.protocol})`);
+  if (url.username || url.password)
+    throw new UnsafeUrlError('URLs with embedded credentials are refused');
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (!host || host === 'localhost' || LOCAL_SUFFIXES.some((s) => host.endsWith(s))) {
     throw new UnsafeUrlError(`${host || 'that host'} is not reachable on the public internet`);
@@ -152,7 +154,10 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): SafeFetch {
         if (hop >= maxRedirects) throw new UnsafeUrlError(`more than ${maxRedirects} redirects`);
         url = parse(new URL(location, url));
         // Fetch spec: 303 always becomes GET; 301/302 turn a POST into GET.
-        if (res.status === 303 || ((res.status === 301 || res.status === 302) && method === 'POST')) {
+        if (
+          res.status === 303 ||
+          ((res.status === 301 || res.status === 302) && method === 'POST')
+        ) {
           method = 'GET';
           body = null;
           headers.delete('content-type');
@@ -163,7 +168,11 @@ export function createSafeFetch(opts: SafeFetchOptions = {}): SafeFetch {
       // `Response.url` is how callers learn where a redirect chain ended; a
       // constructed Response has none, so it is set explicitly.
       const final = res.body
-        ? new Response(capped(res.body, maxBytes), { status: res.status, statusText: res.statusText, headers: res.headers })
+        ? new Response(capped(res.body, maxBytes), {
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers,
+          })
         : res;
       if (final !== res || !res.url) Object.defineProperty(final, 'url', { value: url.toString() });
       return final;

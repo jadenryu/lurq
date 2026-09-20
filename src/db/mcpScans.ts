@@ -31,8 +31,15 @@ export async function putContract(db: Database, row: NewContract): Promise<void>
   await db.insert(mcpContracts).values(row).onConflictDoNothing();
 }
 
-export async function getContract(db: Database, contentHash: string): Promise<McpContractRow | null> {
-  const [row] = await db.select().from(mcpContracts).where(eq(mcpContracts.contentHash, contentHash)).limit(1);
+export async function getContract(
+  db: Database,
+  contentHash: string,
+): Promise<McpContractRow | null> {
+  const [row] = await db
+    .select()
+    .from(mcpContracts)
+    .where(eq(mcpContracts.contentHash, contentHash))
+    .limit(1);
   return row ?? null;
 }
 
@@ -125,7 +132,11 @@ export async function recordScan(
         lastScannedAt: now,
       })
       .onConflictDoNothing({
-        target: [mcpDeployments.ownerId, mcpDeployments.serverKey, mcpDeployments.configFingerprint],
+        target: [
+          mcpDeployments.ownerId,
+          mcpDeployments.serverKey,
+          mcpDeployments.configFingerprint,
+        ],
       })
       .returning({ id: mcpDeployments.id });
     const isFirst = inserted.length > 0;
@@ -177,7 +188,11 @@ export async function recordScan(
 
     let change: ChangeKind = isFirst ? 'first' : 'unchanged';
     let event: ScanRecordResult['event'] = null;
-    const moved = !isFirst && input.contentHash && dep.lastContentHash && input.contentHash !== dep.lastContentHash;
+    const moved =
+      !isFirst &&
+      input.contentHash &&
+      dep.lastContentHash &&
+      input.contentHash !== dep.lastContentHash;
 
     if (moved) {
       const [previous] = await tx
@@ -203,8 +218,18 @@ export async function recordScan(
             createdAt: now,
           })
           .onConflictDoUpdate({
-            target: [mcpChangeEvents.deploymentId, mcpChangeEvents.fromHash, mcpChangeEvents.toHash],
-            set: { createdAt: now, acknowledgedAt: null, severity: d.severity, summary: d.summary.slice(0, 1000), diff: d },
+            target: [
+              mcpChangeEvents.deploymentId,
+              mcpChangeEvents.fromHash,
+              mcpChangeEvents.toHash,
+            ],
+            set: {
+              createdAt: now,
+              acknowledgedAt: null,
+              severity: d.severity,
+              summary: d.summary.slice(0, 1000),
+              diff: d,
+            },
           });
         change = 'changed';
         event = { at: now, severity: d.severity, summary: d.summary, rugPull: d.rugPull };
@@ -226,7 +251,9 @@ export async function recordScan(
         ...(input.serverVersion !== null ? { serverVersion: input.serverVersion } : {}),
         // A failed scan keeps the last contract that was read: "the server was
         // unreachable today" must not erase what it exposed yesterday.
-        ...(input.contentHash ? { lastContentHash: input.contentHash, worstSeverity: input.worstSeverity } : {}),
+        ...(input.contentHash
+          ? { lastContentHash: input.contentHash, worstSeverity: input.worstSeverity }
+          : {}),
         ...(moved || isFirst ? { lastChangedAt: now } : {}),
       })
       .where(eq(mcpDeployments.id, dep.id));
@@ -238,7 +265,13 @@ export async function recordScan(
 /** Record a public-server report. Returns how many distinct accounts agree. */
 export async function reportPublic(
   db: Database,
-  row: { registry: string; packageName: string; version: string; contentHash: string; ownerId: string },
+  row: {
+    registry: string;
+    packageName: string;
+    version: string;
+    contentHash: string;
+    ownerId: string;
+  },
 ): Promise<number> {
   await db.insert(mcpPublicReports).values(row).onConflictDoNothing();
   const [agree] = await db
@@ -271,7 +304,10 @@ const RANK: Record<Severity, number> = { critical: 0, high: 1, moderate: 2, low:
 
 export async function listDeployments(db: Database, ownerId: string): Promise<DeploymentSummary[]> {
   const rows = await db
-    .select({ d: mcpDeployments, c: { toolCount: mcpContracts.toolCount, analysis: mcpContracts.analysis } })
+    .select({
+      d: mcpDeployments,
+      c: { toolCount: mcpContracts.toolCount, analysis: mcpContracts.analysis },
+    })
     .from(mcpDeployments)
     .leftJoin(mcpContracts, eq(mcpContracts.contentHash, mcpDeployments.lastContentHash))
     .where(eq(mcpDeployments.ownerId, ownerId))
@@ -331,7 +367,9 @@ export async function getDeploymentDetail(
     .limit(1);
   if (!deployment) return null;
   const [contract, observations, events] = await Promise.all([
-    deployment.lastContentHash ? getContract(db, deployment.lastContentHash) : Promise.resolve(null),
+    deployment.lastContentHash
+      ? getContract(db, deployment.lastContentHash)
+      : Promise.resolve(null),
     db
       .select()
       .from(mcpObservations)
@@ -354,11 +392,18 @@ export async function listChangeEvents(
   opts: { limit?: number; openOnly?: boolean } = {},
 ): Promise<(McpChangeEventRow & { alias: string; serverKey: string })[]> {
   const rows = await db
-    .select({ e: mcpChangeEvents, alias: mcpDeployments.alias, serverKey: mcpDeployments.serverKey })
+    .select({
+      e: mcpChangeEvents,
+      alias: mcpDeployments.alias,
+      serverKey: mcpDeployments.serverKey,
+    })
     .from(mcpChangeEvents)
     .innerJoin(mcpDeployments, eq(mcpDeployments.id, mcpChangeEvents.deploymentId))
     .where(
-      and(eq(mcpChangeEvents.ownerId, ownerId), opts.openOnly ? isNull(mcpChangeEvents.acknowledgedAt) : undefined),
+      and(
+        eq(mcpChangeEvents.ownerId, ownerId),
+        opts.openOnly ? isNull(mcpChangeEvents.acknowledgedAt) : undefined,
+      ),
     )
     .orderBy(desc(mcpChangeEvents.createdAt))
     .limit(Math.min(opts.limit ?? 50, 200));
@@ -366,7 +411,11 @@ export async function listChangeEvents(
 }
 
 /** Acknowledge one event. False when it does not exist for this owner. */
-export async function acknowledgeEvent(db: Database, ownerId: string, eventId: number): Promise<boolean> {
+export async function acknowledgeEvent(
+  db: Database,
+  ownerId: string,
+  eventId: number,
+): Promise<boolean> {
   const rows = await db
     .update(mcpChangeEvents)
     .set({ acknowledgedAt: new Date() })
@@ -392,9 +441,14 @@ export interface AccountDeployment {
  * for answering `audit` from the account's own scans. Two queries: the summary
  * (which already counts open changes) and the analyses by content hash.
  */
-export async function listAccountDeployments(db: Database, ownerId: string): Promise<AccountDeployment[]> {
+export async function listAccountDeployments(
+  db: Database,
+  ownerId: string,
+): Promise<AccountDeployment[]> {
   const summaries = await listDeployments(db, ownerId);
-  const hashes = [...new Set(summaries.map((s) => s.lastContentHash).filter((h): h is string => !!h))];
+  const hashes = [
+    ...new Set(summaries.map((s) => s.lastContentHash).filter((h): h is string => !!h)),
+  ];
   const analyses = hashes.length
     ? await db
         .select({ hash: mcpContracts.contentHash, analysis: mcpContracts.analysis })

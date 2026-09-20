@@ -139,7 +139,10 @@ describe('dispatchForAlerts', () => {
     // A malformed policy makes `shouldDispatch` throw, which happens before the
     // per-call try. This runs off an ingest, so one bad row must not stop every
     // other repo from hearing about the release.
-    const broken = { ...repo({ enabled: true }, { id: 1 }), policy: undefined } as unknown as RepoRow;
+    const broken = {
+      ...repo({ enabled: true }, { id: 1 }),
+      policy: undefined,
+    } as unknown as RepoRow;
     const tally = await dispatchForAlerts([broken, repo({ enabled: true }, { id: 2 })]);
     expect(tally.failed).toBe(1);
     expect(tally.dispatched).toBe(1);

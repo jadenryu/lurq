@@ -217,7 +217,11 @@ export function renameFindings(breaking: BreakingFinding, opts: RenameOptions): 
     }
 
     if (to.length > 1) {
-      refused.push({ symbol: removed.symbol, to, reason: 'more than one surviving name; a choice, not a rewrite' });
+      refused.push({
+        symbol: removed.symbol,
+        to,
+        reason: 'more than one surviving name; a choice, not a rewrite',
+      });
       findings.push({
         domain: 'package',
         code,
@@ -245,7 +249,11 @@ export function renameFindings(breaking: BreakingFinding, opts: RenameOptions): 
       evidence: [`${target} exists at ${breaking.toVersion ?? 'the target version'}`, ...extra],
     });
 
-    const { edits: collected, files: editedFiles, refusedFiles } = editsFor(removed.refs, target, opts.packageName);
+    const {
+      edits: collected,
+      files: editedFiles,
+      refusedFiles,
+    } = editsFor(removed.refs, target, opts.packageName);
     const edits = dedupe(collected);
 
     // The two halves are independent: a project can have most of its files
@@ -260,12 +268,17 @@ export function renameFindings(breaking: BreakingFinding, opts: RenameOptions): 
         detail: `${removed.symbol} was renamed to ${target} in ${version}: ${edits.length} occurrence(s) in ${editedFiles.length} file(s)`,
         file: editedFiles[0],
         evidence: `${proof}, and ${target} still exists`,
-        fix: { summary: `rename ${removed.symbol} to ${target}`, edits, verify: ['typecheck', 'tests'] },
+        fix: {
+          summary: `rename ${removed.symbol} to ${target}`,
+          edits,
+          verify: ['typecheck', 'tests'],
+        },
       });
     }
 
     if (refusedFiles.length > 0) {
-      for (const r of refusedFiles) refused.push({ symbol: removed.symbol, to, file: r.file, reason: r.reason });
+      for (const r of refusedFiles)
+        refused.push({ symbol: removed.symbol, to, file: r.file, reason: r.reason });
       findings.push({
         domain: 'package',
         code: `${code}:manual`,

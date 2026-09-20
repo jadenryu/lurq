@@ -80,7 +80,11 @@ describe('the SARIF a scan produces', () => {
     const doc = toSarif(scanFindings(report()), { version: '1.0.0', read: () => null }) as {
       runs: {
         tool: { driver: { rules: { id: string }[] } };
-        results: { ruleId: string; partialFingerprints: { lurqCode: string }; properties: { fixable: boolean } }[];
+        results: {
+          ruleId: string;
+          partialFingerprints: { lurqCode: string };
+          properties: { fixable: boolean };
+        }[];
       }[];
     };
     const run = doc.runs[0]!;

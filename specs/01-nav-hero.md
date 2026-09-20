@@ -24,7 +24,7 @@ Not the content — the rhythm. Folio gets from nav to product panel in ~900px. 
 lines when it should be two, and the lead runs four lines when it should run two.
 
 This spec is mostly a tightening pass plus two replacements. Specific spacing values are
-given in §5 and they are not suggestions — the compactness *is* the fix.
+given in §5 and they are not suggestions — the compactness _is_ the fix.
 
 ---
 
@@ -154,14 +154,14 @@ poll, `--declared` before first response, `--conflict` on failure. Never fake it
 
 `max-width: 1080px`, centred. **These spacing values replace whatever is there now.**
 
-| From        | To          | Gap  |
-| ----------- | ----------- | ---- |
-| nav bottom  | eyebrow     | 76px |
-| eyebrow     | headline    | 26px |
-| headline    | lead        | 22px |
-| lead        | CTAs        | 30px |
-| CTAs        | note line   | 14px |
-| note line   | check panel | 52px |
+| From       | To          | Gap  |
+| ---------- | ----------- | ---- |
+| nav bottom | eyebrow     | 76px |
+| eyebrow    | headline    | 26px |
+| headline   | lead        | 22px |
+| lead       | CTAs        | 30px |
+| CTAs       | note line   | 14px |
+| note line  | check panel | 52px |
 
 Corner registration marks: keep, 13px, `--edge`, inset 24px, hidden below 620px.
 
@@ -289,20 +289,20 @@ or the word "trusted".
 
 ## 8 · Motion
 
-| t      | element                                                                                                                      |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| 0ms    | nav                                                                                                                          |
-| 200ms  | eyebrow                                                                                                                      |
-| 320ms  | headline line 1                                                                                                              |
-| 430ms  | headline line 2                                                                                                              |
-| 600ms  | lead                                                                                                                         |
-| 730ms  | CTAs                                                                                                                         |
-| 830ms  | note line                                                                                                                    |
-| 950ms  | check panel rises 24px, fades in                                                                                             |
-| 1300ms | package rows stagger in, 60ms apart                                                                                          |
+| t      | element                                                                                                                                       |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0ms    | nav                                                                                                                                           |
+| 200ms  | eyebrow                                                                                                                                       |
+| 320ms  | headline line 1                                                                                                                               |
+| 430ms  | headline line 2                                                                                                                               |
+| 600ms  | lead                                                                                                                                          |
+| 730ms  | CTAs                                                                                                                                          |
+| 830ms  | note line                                                                                                                                     |
+| 950ms  | check panel rises 24px, fades in                                                                                                              |
+| 1300ms | package rows stagger in, 60ms apart                                                                                                           |
 | 1650ms | scan: a 2px `--mark` line at 30% opacity travels top to bottom of the rows over 800ms. Each row's status chip resolves as the line passes it. |
-| 2500ms | conflict sub-rows expand, height auto, 260ms each, 120ms apart                                                               |
-| 2900ms | IDE strip                                                                                                                    |
+| 2500ms | conflict sub-rows expand, height auto, 260ms each, 120ms apart                                                                                |
+| 2900ms | IDE strip                                                                                                                                     |
 
 Then everything stops. The status dot's heartbeat is the only remaining motion.
 

@@ -77,7 +77,14 @@ describe('repoBrief', () => {
     const out = repoBrief({
       ...repo,
       transitiveRisks: [
-        { name: 'har-validator', version: '5.1.5', latest: null, advisories: 0, deprecated: true, pulledInBy: [] },
+        {
+          name: 'har-validator',
+          version: '5.1.5',
+          latest: null,
+          advisories: 0,
+          deprecated: true,
+          pulledInBy: [],
+        },
       ],
     });
     expect(out).toContain('no attributed parent');
@@ -101,7 +108,13 @@ describe('workspaceBrief', () => {
       ],
     },
     alerts: [],
-    repos: [{ fullName: 'acme/checkout-web', lastScanAt: '2026-09-11T10:00:00.000Z', lastScanError: null }],
+    repos: [
+      {
+        fullName: 'acme/checkout-web',
+        lastScanAt: '2026-09-11T10:00:00.000Z',
+        lastScanError: null,
+      },
+    ],
     policy: null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
@@ -134,8 +147,22 @@ describe('workspaceBrief', () => {
     const out = workspaceBrief({
       ...base,
       alerts: [
-        { packageName: 'chalk', repoFullName: 'a/b', range: '*', fromVersion: '4.1.2', toVersion: '5.0.0', inRange: true },
-        { packageName: 'express', repoFullName: 'a/b', range: '^4', fromVersion: '4.18.2', toVersion: '5.0.0', inRange: false },
+        {
+          packageName: 'chalk',
+          repoFullName: 'a/b',
+          range: '*',
+          fromVersion: '4.1.2',
+          toVersion: '5.0.0',
+          inRange: true,
+        },
+        {
+          packageName: 'express',
+          repoFullName: 'a/b',
+          range: '^4',
+          fromVersion: '4.18.2',
+          toVersion: '5.0.0',
+          inRange: false,
+        },
       ],
     });
     expect(out).toContain('the next clean install takes them');
@@ -145,19 +172,43 @@ describe('workspaceBrief', () => {
 
 describe('auditBrief', () => {
   const events = [
-    { id: 'a', kind: 'scan' as const, at: '2026-09-11T10:00:00.000Z', summary: 'scan failed', detail: null, tone: 'bad' as const },
-    { id: 'b', kind: 'key' as const, at: '2026-09-10T10:00:00.000Z', summary: 'key created', detail: null, tone: 'neutral' as const },
+    {
+      id: 'a',
+      kind: 'scan' as const,
+      at: '2026-09-11T10:00:00.000Z',
+      summary: 'scan failed',
+      detail: null,
+      tone: 'bad' as const,
+    },
+    {
+      id: 'b',
+      kind: 'key' as const,
+      at: '2026-09-10T10:00:00.000Z',
+      summary: 'key created',
+      detail: null,
+      tone: 'neutral' as const,
+    },
   ];
 
   it('states the filter it was taken under', () => {
-    const out = auditBrief(events, { range: 'last 7d', kind: 'scan', severity: 'any severity', query: 'acme' });
+    const out = auditBrief(events, {
+      range: 'last 7d',
+      kind: 'scan',
+      severity: 'any severity',
+      query: 'acme',
+    });
     expect(out).toContain('last 7d');
     expect(out).toContain('"acme"');
     expect(out).toContain('not included');
   });
 
   it('puts what needs attention above everything else', () => {
-    const out = auditBrief(events, { range: 'all time', kind: 'all', severity: 'any severity', query: '' });
+    const out = auditBrief(events, {
+      range: 'all time',
+      kind: 'all',
+      severity: 'any severity',
+      query: '',
+    });
     expect(out.indexOf('Needs attention')).toBeLessThan(out.indexOf('Everything else'));
   });
 });

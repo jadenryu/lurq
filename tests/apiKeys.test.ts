@@ -86,7 +86,7 @@ describe('lookupActiveKey caching', () => {
 });
 
 describe('listKeysForOwner', () => {
-  it('selects only the given owner\'s keys, newest first', async () => {
+  it("selects only the given owner's keys, newest first", async () => {
     let whereArg: unknown;
     const rows = [{ id: 2, ownerId: 'user_abc' } as ApiKeyRow];
     const db = {
@@ -154,7 +154,13 @@ describe('findKeyForOwner', () => {
   }
 
   const key = (over: Partial<ApiKeyRow>) =>
-    ({ id: 1, prefix: 'lurq_live_ab12cd', ownerId: 'user_abc', revokedAt: null, ...over }) as ApiKeyRow;
+    ({
+      id: 1,
+      prefix: 'lurq_live_ab12cd',
+      ownerId: 'user_abc',
+      revokedAt: null,
+      ...over,
+    }) as ApiKeyRow;
 
   it('returns the key when the prefix belongs to the given owner', async () => {
     const row = key({});
@@ -167,13 +173,19 @@ describe('findKeyForOwner', () => {
 
   it('returns null when the prefix belongs to a different owner', async () => {
     const db = fakeDb([key({ ownerId: 'user_other' })]);
-    const result = await findKeyForOwner(db, { prefixOrId: 'lurq_live_ab12cd', ownerId: 'user_abc' });
+    const result = await findKeyForOwner(db, {
+      prefixOrId: 'lurq_live_ab12cd',
+      ownerId: 'user_abc',
+    });
     expect(result).toBeNull();
   });
 
   it('returns null when no active key matches the prefix at all', async () => {
     const db = fakeDb([]);
-    const result = await findKeyForOwner(db, { prefixOrId: 'lurq_live_missing', ownerId: 'user_abc' });
+    const result = await findKeyForOwner(db, {
+      prefixOrId: 'lurq_live_missing',
+      ownerId: 'user_abc',
+    });
     expect(result).toBeNull();
   });
 
@@ -203,7 +215,16 @@ describe('revocation evicts the cached key', () => {
    */
   function revocableDb() {
     const state = { revoked: false, selects: 0 };
-    const row = { id: 7, keyHash: 'h', prefix: 'lurq_live_x', label: null, tier: 'free', ownerId: 'u1', scopes: [], revokedAt: null } as unknown as ApiKeyRow;
+    const row = {
+      id: 7,
+      keyHash: 'h',
+      prefix: 'lurq_live_x',
+      label: null,
+      tier: 'free',
+      ownerId: 'u1',
+      scopes: [],
+      revokedAt: null,
+    } as unknown as ApiKeyRow;
     const selectChain = () => {
       state.selects += 1;
       const rows = async () => (state.revoked ? [] : [row]);
@@ -218,7 +239,9 @@ describe('revocation evicts the cached key', () => {
           where: () => {
             if (v.revokedAt) state.revoked = true;
             const done = Promise.resolve();
-            return Object.assign(done, { returning: async () => (v.revokedAt ? [{ id: row.id }] : []) });
+            return Object.assign(done, {
+              returning: async () => (v.revokedAt ? [{ id: row.id }] : []),
+            });
           },
         }),
       }),

@@ -25,8 +25,7 @@ export function parseRepoPolicy(input: unknown): RepoPolicy | null {
   if (typeof raw.autoMerge !== 'boolean') return null;
   if (raw.scope !== 'security' && raw.scope !== 'blocking' && raw.scope !== 'all') return null;
   const checks = parseChecks(raw.checks);
-  const mode =
-    raw.mode === 'comment' || raw.mode === 'fix' || raw.mode === 'pr' ? raw.mode : null;
+  const mode = raw.mode === 'comment' || raw.mode === 'fix' || raw.mode === 'pr' ? raw.mode : null;
   // Spread rather than assigned: an absent optional must stay absent. Writing
   // `mode: undefined` puts the key in the JSON column, and `policy.mode ?? 'pr'`
   // then reads a stored null where it expects nothing.

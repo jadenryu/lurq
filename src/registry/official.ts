@@ -176,7 +176,13 @@ export async function* listRegistry(opts: ListOptions = {}): AsyncGenerator<Regi
 
     const { data } = await httpGetJson<{ servers?: unknown[]; metadata?: { nextCursor?: string } }>(
       `${base}/servers?${q.toString()}`,
-      { host: REGISTRY_HOST, ttlMs: 0, timeoutMs: 30_000, retries: opts.retries ?? 3, fetchImpl: opts.fetchImpl },
+      {
+        host: REGISTRY_HOST,
+        ttlMs: 0,
+        timeoutMs: 30_000,
+        retries: opts.retries ?? 3,
+        fetchImpl: opts.fetchImpl,
+      },
     );
 
     const raw = Array.isArray(data?.servers) ? data.servers : [];
@@ -187,7 +193,10 @@ export async function* listRegistry(opts: ListOptions = {}): AsyncGenerator<Regi
       if (e) entries.push(e);
       else rejected++;
     }
-    const next = typeof data?.metadata?.nextCursor === 'string' && data.metadata.nextCursor ? data.metadata.nextCursor : null;
+    const next =
+      typeof data?.metadata?.nextCursor === 'string' && data.metadata.nextCursor
+        ? data.metadata.nextCursor
+        : null;
     yield { entries, rejected, nextCursor: next };
     // A cursor that does not advance would loop forever on the same page.
     if (!next || next === cursor) return;

@@ -14,7 +14,9 @@ describe('checkoutReturnUrls', () => {
   });
 
   it('returns a landing page checkout, or one that did not say, to pricing', () => {
-    expect(checkoutReturnUrls('https://lurq.run', 'pricing').cancel).toBe('https://lurq.run/#pricing');
+    expect(checkoutReturnUrls('https://lurq.run', 'pricing').cancel).toBe(
+      'https://lurq.run/#pricing',
+    );
     expect(checkoutReturnUrls('https://lurq.run').cancel).toBe('https://lurq.run/#pricing');
   });
 

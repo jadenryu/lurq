@@ -111,16 +111,26 @@ export function judgeRequires(
   };
 
   if (to === 'unexported') {
-    for (const r of requireSites) add(r.file, r.line, 'the exports map no longer offers anything to require()');
+    for (const r of requireSites)
+      add(r.file, r.line, 'the exports map no longer offers anything to require()');
   } else if (ctx.asyncModule) {
     for (const r of requireSites) {
-      add(r.file, r.line, 'the ES module uses top-level await, so require() throws ERR_REQUIRE_ASYNC_MODULE on every Node');
+      add(
+        r.file,
+        r.line,
+        'the ES module uses top-level await, so require() throws ERR_REQUIRE_ASYNC_MODULE on every Node',
+      );
     }
   } else {
     for (const r of required) {
       if (r.via === 'default') {
         for (const c of r.calls ?? []) {
-          if (c.args !== null) add(r.file, c.line, 'require() now returns the module namespace, which cannot be called');
+          if (c.args !== null)
+            add(
+              r.file,
+              c.line,
+              'require() now returns the module namespace, which cannot be called',
+            );
         }
       } else if (
         (r.via === 'namespace' || r.via === 'destructured') &&
@@ -132,14 +142,22 @@ export function judgeRequires(
         // A property of the old CommonJS value, not an export of it, and not an
         // export of the ES module either. A name the old version did export and
         // the new one dropped is already reported as a removed symbol.
-        add(r.file, r.line, `\`${r.symbol}\` is not an export of the ES module, so it reads as undefined`);
+        add(
+          r.file,
+          r.line,
+          `\`${r.symbol}\` is not an export of the ES module, so it reads as undefined`,
+        );
       }
     }
   }
 
   const olderNode =
     to === 'esm' && !ctx.asyncModule && !requireEsmGuaranteed(ctx.runtime)
-      ? [...new Map(requireSites.map((r) => [`${r.file}:${r.line}`, { file: r.file, line: r.line }])).values()]
+      ? [
+          ...new Map(
+            requireSites.map((r) => [`${r.file}:${r.line}`, { file: r.file, line: r.line }]),
+          ).values(),
+        ]
       : [];
 
   if (!broken.size && !olderNode.length) return null;
@@ -183,7 +201,11 @@ export function judgeRequirements(
   return [...engineRequirements(from, to, runtime), ...peerRequirements(from, to, runtime)];
 }
 
-function engineRequirements(from: PackageManifest | null, to: PackageManifest, runtime: RepoRuntime): Requirement[] {
+function engineRequirements(
+  from: PackageManifest | null,
+  to: PackageManifest,
+  runtime: RepoRuntime,
+): Requirement[] {
   const needs = to.engines?.node;
   const before = from?.engines?.node;
   if (!needs || !semver.validRange(needs) || needs === before) return [];
@@ -193,7 +215,8 @@ function engineRequirements(from: PackageManifest | null, to: PackageManifest, r
   const declared = runtime.engines;
   if (declared && semver.validRange(declared) && subsetOf(declared, needs) === false) {
     const alreadyOut = before && semver.validRange(before) && subsetOf(declared, before) === false;
-    if (!alreadyOut) out.push({ kind: 'engines', name: 'node', needs, has: `${declared} (package.json engines)` });
+    if (!alreadyOut)
+      out.push({ kind: 'engines', name: 'node', needs, has: `${declared} (package.json engines)` });
   }
 
   // The pinned Node, judged as the compat check judges it: `20` is some Node
@@ -203,7 +226,15 @@ function engineRequirements(from: PackageManifest | null, to: PackageManifest, r
     const conflicts = (range: string | undefined) =>
       Boolean(range) &&
       resolveRuntimeEngineConflicts(
-        [{ name: to.name ?? 'package', version: null, peerDependencies: null, peerDependenciesMeta: null, engines: { node: range! } }],
+        [
+          {
+            name: to.name ?? 'package',
+            version: null,
+            peerDependencies: null,
+            peerDependenciesMeta: null,
+            engines: { node: range! },
+          },
+        ],
         pinned.value,
       ).length > 0;
     if (conflicts(needs) && !conflicts(before)) {
@@ -213,7 +244,11 @@ function engineRequirements(from: PackageManifest | null, to: PackageManifest, r
   return out;
 }
 
-function peerRequirements(from: PackageManifest | null, to: PackageManifest, runtime: RepoRuntime): Requirement[] {
+function peerRequirements(
+  from: PackageManifest | null,
+  to: PackageManifest,
+  runtime: RepoRuntime,
+): Requirement[] {
   if (!runtime.root) return [];
   const out: Requirement[] = [];
   for (const [peer, needs] of Object.entries(to.peerDependencies ?? {})) {
@@ -225,7 +260,9 @@ function peerRequirements(from: PackageManifest | null, to: PackageManifest, run
     if (!has) continue;
     const fits = (range: string) => {
       try {
-        return has.exact ? semver.satisfies(has.version, range) : semver.intersects(has.version, range);
+        return has.exact
+          ? semver.satisfies(has.version, range)
+          : semver.intersects(has.version, range);
       } catch {
         return true;
       }
@@ -249,7 +286,9 @@ function projectVersionOf(
 ): { version: string; exact: boolean; source: string } | null {
   for (let dir = resolve(root); ; dir = dirname(dir)) {
     try {
-      const { version } = JSON.parse(readFileSync(join(dir, 'node_modules', name, 'package.json'), 'utf8')) as {
+      const { version } = JSON.parse(
+        readFileSync(join(dir, 'node_modules', name, 'package.json'), 'utf8'),
+      ) as {
         version?: string;
       };
       if (version && semver.valid(version)) return { version, exact: true, source: 'installed' };
@@ -264,7 +303,8 @@ function projectVersionOf(
       devDependencies?: Record<string, string>;
     };
     const declared = manifest.dependencies?.[name] ?? manifest.devDependencies?.[name];
-    if (declared && semver.validRange(declared)) return { version: declared, exact: false, source: 'package.json' };
+    if (declared && semver.validRange(declared))
+      return { version: declared, exact: false, source: 'package.json' };
   } catch {
     // No manifest to read.
   }

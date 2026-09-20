@@ -8,8 +8,8 @@ command installs the CLI and wires up both your terminal and every coding agent
 on the machine.
 
 <Callout type="info">
-  The package ships on npm as **`lurqrun`** (the bare name `lurq` is taken). The
-  command you invoke is still `lurq` once installed.
+  The package ships on npm as **`lurqrun`** (the bare name `lurq` is taken). The command you invoke
+  is still `lurq` once installed.
 </Callout>
 
 ## 1. Install and set up
@@ -44,8 +44,8 @@ This is a per-machine step, not a per-project one. There is nothing to add to a
 repo and nothing to re-run when you start a new project.
 
 <Callout type="info">
-  `lurq setup` re-runs the same wizard later, after installing a new editor or to
-  swap in a different key. `lurq install` and `lurq login` are aliases for it.
+  `lurq setup` re-runs the same wizard later, after installing a new editor or to swap in a
+  different key. `lurq install` and `lurq login` are aliases for it.
 </Callout>
 
 ## 2. Use it from the terminal
@@ -118,7 +118,13 @@ The plugin connects the hosted MCP server and adds the lurq skill. Run
 
 ### Cursor and VS Code
 
-<a href="cursor://anysphere.cursor-deeplink/mcp/install?name=lurq&config=eyJ1cmwiOiJodHRwczovL2FwaS5sdXJxLnJ1bi9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiJCZWFyZXIgPHlvdXItbHVycS1hcGkta2V5PiIsIlgtTHVycS1DbGllbnQiOiJjdXJzb3IifX0%3D">Add lurq to Cursor</a> · <a href="vscode:mcp/install?%7B%22name%22%3A%22lurq%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapi.lurq.run%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20%3Cyour-lurq-api-key%3E%22%2C%22X-Lurq-Client%22%3A%22copilot%22%7D%7D">Install lurq in VS Code</a>
+<a href="cursor://anysphere.cursor-deeplink/mcp/install?name=lurq&config=eyJ1cmwiOiJodHRwczovL2FwaS5sdXJxLnJ1bi9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiJCZWFyZXIgPHlvdXItbHVycS1hcGkta2V5PiIsIlgtTHVycS1DbGllbnQiOiJjdXJzb3IifX0%3D">
+  Add lurq to Cursor
+</a>
+·
+<a href="vscode:mcp/install?%7B%22name%22%3A%22lurq%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapi.lurq.run%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20%3Cyour-lurq-api-key%3E%22%2C%22X-Lurq-Client%22%3A%22copilot%22%7D%7D">
+  Install lurq in VS Code
+</a>
 
 Each opens the editor with the lurq server filled in. Replace
 `<your-lurq-api-key>` in the new entry with a key from
@@ -132,16 +138,16 @@ is already there. The shape differs per agent, and the wrong field name is the
 most common reason a hand-written entry silently fails. Every entry points at
 `https://api.lurq.run/mcp` and sends `Authorization: Bearer <your-key>`.
 
-| Agent | `--agent` | MCP config file | Entry |
-| --- | --- | --- | --- |
-| Claude Code | `claude-code` | `~/.claude.json` | `mcpServers.lurq`: `{ "type": "http", "url", "headers" }` |
-| Cursor | `cursor` | `~/.cursor/mcp.json` | `mcpServers.lurq`: `{ "url", "headers" }` |
-| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` | `mcpServers.lurq`: `{ "serverUrl", "headers" }` |
-| VS Code / Copilot | `copilot` | `<VS Code user dir>/mcp.json` | `servers.lurq`: `{ "type": "http", "url", "headers" }` |
-| Codex CLI | `codex` | `~/.codex/config.toml` | `[mcp_servers.lurq]` with `url` and `http_headers` |
-| Gemini CLI | `gemini-cli` | `~/.gemini/settings.json` | `mcpServers.lurq`: `{ "httpUrl", "headers" }` |
-| Antigravity | `antigravity` | `~/.gemini/config/mcp_config.json` | `mcpServers.lurq`: `{ "serverUrl", "headers" }` |
-| Kiro | `kiro` | `~/.kiro/settings/mcp.json` | `mcpServers.lurq`: `{ "url", "headers" }` |
+| Agent             | `--agent`     | MCP config file                       | Entry                                                     |
+| ----------------- | ------------- | ------------------------------------- | --------------------------------------------------------- |
+| Claude Code       | `claude-code` | `~/.claude.json`                      | `mcpServers.lurq`: `{ "type": "http", "url", "headers" }` |
+| Cursor            | `cursor`      | `~/.cursor/mcp.json`                  | `mcpServers.lurq`: `{ "url", "headers" }`                 |
+| Windsurf          | `windsurf`    | `~/.codeium/windsurf/mcp_config.json` | `mcpServers.lurq`: `{ "serverUrl", "headers" }`           |
+| VS Code / Copilot | `copilot`     | `<VS Code user dir>/mcp.json`         | `servers.lurq`: `{ "type": "http", "url", "headers" }`    |
+| Codex CLI         | `codex`       | `~/.codex/config.toml`                | `[mcp_servers.lurq]` with `url` and `http_headers`        |
+| Gemini CLI        | `gemini-cli`  | `~/.gemini/settings.json`             | `mcpServers.lurq`: `{ "httpUrl", "headers" }`             |
+| Antigravity       | `antigravity` | `~/.gemini/config/mcp_config.json`    | `mcpServers.lurq`: `{ "serverUrl", "headers" }`           |
+| Kiro              | `kiro`        | `~/.kiro/settings/mcp.json`           | `mcpServers.lurq`: `{ "url", "headers" }`                 |
 
 The VS Code user directory is `~/Library/Application Support/Code/User` on macOS,
 `%APPDATA%\Code\User` on Windows, and `~/.config/Code/User` on Linux (or
@@ -149,13 +155,13 @@ The VS Code user directory is `~/Library/Application Support/Code/User` on macOS
 
 Standing instructions, written alongside the MCP entry:
 
-| Agent | Instructions |
-| --- | --- |
-| Claude Code | `~/.claude/skills/lurq/SKILL.md`, the full guide as a skill |
-| Kiro | `~/.kiro/steering/lurq.md`, the full guide as a steering file |
-| Windsurf | a marked block in `~/.codeium/windsurf/memories/global_rules.md` |
-| Codex CLI | a marked block in `~/.codex/AGENTS.md` |
-| Gemini CLI, Antigravity | a marked block in `~/.gemini/GEMINI.md` |
+| Agent                     | Instructions                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| Claude Code               | `~/.claude/skills/lurq/SKILL.md`, the full guide as a skill                                     |
+| Kiro                      | `~/.kiro/steering/lurq.md`, the full guide as a steering file                                   |
+| Windsurf                  | a marked block in `~/.codeium/windsurf/memories/global_rules.md`                                |
+| Codex CLI                 | a marked block in `~/.codex/AGENTS.md`                                                          |
+| Gemini CLI, Antigravity   | a marked block in `~/.gemini/GEMINI.md`                                                         |
 | Cursor, VS Code / Copilot | none: neither has a machine-wide instructions file, so the tool descriptions carry the guidance |
 
 Every install also copies the full guide to `~/.lurq/skill-instructions.md`, as
@@ -268,8 +274,8 @@ Details are in the [privacy policy](https://www.lurq.run/privacy).
 ## Uninstall
 
 <Callout type="info">
-  `lurq uninstall` ships with the next `lurqrun` release. On an older version,
-  use the manual steps below.
+  `lurq uninstall` ships with the next `lurqrun` release. On an older version, use the manual steps
+  below.
 </Callout>
 
 ```bash

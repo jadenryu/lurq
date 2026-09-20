@@ -20,7 +20,10 @@ vi.mock('../src/sandbox/index', async (orig) => ({
 
 describe('isolationGate', () => {
   it('uses the VM driver when a key is configured', () => {
-    expect(isolationGate({ hasE2BKey: true, allowLocal: false })).toEqual({ ok: true, driver: 'e2b' });
+    expect(isolationGate({ hasE2BKey: true, allowLocal: false })).toEqual({
+      ok: true,
+      driver: 'e2b',
+    });
   });
 
   it('refuses when there is no isolation, rather than quietly running locally', () => {
@@ -33,11 +36,17 @@ describe('isolationGate', () => {
   });
 
   it('allows local execution only when it was asked for explicitly', () => {
-    expect(isolationGate({ hasE2BKey: false, allowLocal: true })).toEqual({ ok: true, driver: 'local' });
+    expect(isolationGate({ hasE2BKey: false, allowLocal: true })).toEqual({
+      ok: true,
+      driver: 'local',
+    });
   });
 
   it('prefers the VM driver even when local is permitted', () => {
-    expect(isolationGate({ hasE2BKey: true, allowLocal: true }).ok && isolationGate({ hasE2BKey: true, allowLocal: true })).toMatchObject({
+    expect(
+      isolationGate({ hasE2BKey: true, allowLocal: true }).ok &&
+        isolationGate({ hasE2BKey: true, allowLocal: true }),
+    ).toMatchObject({
       driver: 'e2b',
     });
   });

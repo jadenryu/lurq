@@ -38,7 +38,10 @@ export interface RegistrySyncSummary {
   watermark: string | null;
 }
 
-export async function syncRegistry(db: Database, opts: RegistrySyncOptions = {}): Promise<RegistrySyncSummary> {
+export async function syncRegistry(
+  db: Database,
+  opts: RegistrySyncOptions = {},
+): Promise<RegistrySyncSummary> {
   const cursorId = opts.cursorId ?? REGISTRY_CURSOR_ID;
   const since = opts.full ? null : await getWatchCursor(db, cursorId);
   const summary: RegistrySyncSummary = {
@@ -66,7 +69,8 @@ export async function syncRegistry(db: Database, opts: RegistrySyncOptions = {})
     summary.endpointsLinked += s.endpointsLinked;
     summary.linksRemoved += s.linksRemoved;
     summary.endpointsRemoved += s.endpointsRemoved;
-    for (const e of page.entries) if (e.updatedAt && (!newest || e.updatedAt > newest)) newest = e.updatedAt;
+    for (const e of page.entries)
+      if (e.updatedAt && (!newest || e.updatedAt > newest)) newest = e.updatedAt;
   }
 
   if (newest && newest.toISOString() !== since) {

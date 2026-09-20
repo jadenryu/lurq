@@ -75,9 +75,7 @@ describe('DEFAULT_REPO_POLICY', () => {
     // get the same answer as a newly connected one. If these two ever diverge,
     // the permissive default is not actually reaching old policies.
     const { checks: _checks, ...withoutChecks } = DEFAULT_REPO_POLICY;
-    expect(permits(withoutChecks as RepoPolicy, 'env')).toBe(
-      permits(DEFAULT_REPO_POLICY, 'env'),
-    );
+    expect(permits(withoutChecks as RepoPolicy, 'env')).toBe(permits(DEFAULT_REPO_POLICY, 'env'));
   });
 
   it('holds every check to the condition that makes on-by-default honest', () => {
