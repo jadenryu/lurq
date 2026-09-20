@@ -1,45 +1,65 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check, ChevronRight } from "lucide-react";
 import { Chip, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
 import { repoMode, type RepoPolicy } from "@/lib/lurq-issuer";
-import { cn } from "@/lib/utils";
 
 /**
- * How far an armed repo goes. `comment` is not here: that is `enabled: false`,
- * and offering it twice would let the two controls disagree.
+ * What autopilot is set to, as one question instead of two.
  *
- * `fix` is listed first because it is the one that cannot fail for want of a
- * credential, and it is what a newly armed repo gets.
+ * This used to be an on/off toggle plus a mode picker, which asked the reader to
+ * hold two facts to know one thing — and named the second one badly: both modes
+ * open a pull request, so "pr mode" did not distinguish them. The axis that
+ * actually varies is who writes the change, so that is the axis on screen.
+ *
+ * `off` is the same state the server calls `comment`, and `repoMode()` is the
+ * single reading of it. Listing it here rather than keeping a separate boolean
+ * is what stops the two controls disagreeing about whether a repo is armed.
  */
-const MODES: { id: "fix" | "pr"; label: string; blurb: string }[] = [
+const MODES: { id: "comment" | "fix" | "pr"; label: string; note: string; blurb: string }[] = [
+  {
+    id: "comment",
+    label: "off",
+    note: "watch only",
+    blurb: "lurq keeps reading this repository and reporting drift. It opens nothing.",
+  },
   {
     id: "fix",
-    label: "provable changes only",
+    label: "provable fixes",
+    note: "no API key",
     blurb:
-      "Opens a pull request containing only what the package itself proves: renamed call sites, and the range bump in every manifest. No model, and no API key to add.",
+      "Opens a pull request containing only what the package itself proves: renamed call sites, and the range bump in every manifest. No model involved.",
   },
   {
     id: "pr",
-    label: "provable changes, then the agent",
+    label: "provable fixes, then the agent",
+    note: "needs a key",
     blurb:
-      "Everything above, then an agent migrates what a rule cannot. Needs ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in the repository's secrets, or the run fails.",
+      "Everything in provable fixes, then an agent migrates what a rule cannot. Needs ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in the repository's secrets, or the run fails.",
   },
 ];
+
+/** The one place the three states are named, so header, chip and options agree. */
+const STATE: Record<"comment" | "fix" | "pr", string> = {
+  comment: "off",
+  fix: "provable fixes",
+  pr: "fixes + agent",
+};
 
 const SCOPES: { id: RepoPolicy["scope"]; label: string; blurb: string }[] = [
   {
     id: "security",
-    label: "security only",
+    label: "security",
     blurb: "Only dependencies with a published advisory.",
   },
   {
     id: "blocking",
     label: "security + breaking",
     blurb:
-      "Advisories, plus upgrades whose API surface drops a symbol this repo references, the ones that fail at runtime, not in review.",
+      "Advisories, plus upgrades whose API surface drops a symbol this repo references — the ones that fail at runtime, not in review.",
   },
   {
     id: "all",
@@ -48,7 +68,20 @@ const SCOPES: { id: RepoPolicy["scope"]; label: string; blurb: string }[] = [
   },
 ];
 
-function Row({
+/**
+ * A setting: what it is and what it is set to, on one line.
+ *
+ * The rationale sits behind the caret rather than under the label. Every control
+ * in this panel had a paragraph beside it explaining its blast radius, which is
+ * the right information and the wrong altitude — five of them stacked is a page
+ * nobody reads, so the consequence nobody reads is the one that matters.
+ *
+ * Native `<details>`, not a state hook: it is a disclosure widget, the platform
+ * ships one, and this way it works before hydration and prints open. The control
+ * stays outside `<summary>` so clicking it changes the setting instead of
+ * toggling the text.
+ */
+function Setting({
   label,
   description,
   children,
@@ -58,51 +91,51 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-t border-border pt-4 first:border-0 first:pt-0">
-      <div className="min-w-0 max-w-lg">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
-      </div>
-      <div className="shrink-0">{children}</div>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-edge py-3 first:border-0">
+      <details className="group min-w-0 flex-1">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] text-ink [&::-webkit-details-marker]:hidden">
+          {label}
+          <ChevronRight
+            aria-hidden
+            className="size-3.5 shrink-0 text-ink-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          />
+        </summary>
+        <p className="mt-1.5 max-w-prose pr-4 text-[12.5px] leading-relaxed text-ink-2">
+          {description}
+        </p>
+      </details>
+      {/* `max-w-full` matters: `shrink-0` alone sizes this to the control's
+          max-content, so the scope chips ran off the panel at phone width
+          instead of wrapping onto a second line. */}
+      <div className="max-w-full shrink-0">{children}</div>
     </div>
   );
 }
 
-/**
- * The permission grant, made legible.
- *
- * This panel is the one place a user decides how much autonomy lurq has over
- * their repository, so every control states its blast radius in plain language
- * next to itself. Auto-merge in particular is the only setting that lets lurq
- * touch a default branch, and it says so, a toggle whose consequence you have
- * to infer is not consent.
- */
-/**
- * `!== false`, the same reading as the server's `permits()` — and it must stay
- * the same reading.
- *
- * A read-only check is on unless someone turns it off, so absent and `true` are
- * the same state and only an explicit `false` is off. Spelling this `=== true`
- * here while the server says `!== false` would render the toggle OFF for every
- * repo connected before checks existed, while the workflow generator treated it
- * as ON — a switch that disagrees with what it controls.
- */
+/** `!== false`, the same reading as the server's `permits()`: absent means on. */
 const envOn = (p: RepoPolicy) => p.checks?.env !== false;
 
-// The derivation lives in lib/lurq-issuer.ts, beside the type, so this panel
-// and the repos list cannot disagree about what a repo is set to. A policy
-// reading `comment` matches neither option below, which is right: the choice
-// does not apply until the repo is armed.
+/** Off is `enabled: false`; arming writes `mode` explicitly so it cannot resolve to the agent by omission. */
+const withMode = (p: RepoPolicy, id: "comment" | "fix" | "pr"): RepoPolicy =>
+  id === "comment" ? { ...p, enabled: false } : { ...p, enabled: true, mode: id };
+
+const same = (a: RepoPolicy, b: RepoPolicy) =>
+  a.enabled === b.enabled &&
+  a.scope === b.scope &&
+  a.autoMerge === b.autoMerge &&
+  repoMode(a) === repoMode(b) &&
+  envOn(a) === envOn(b);
 
 export function RepoPolicyPanel({
   endpoint,
   method = "PATCH",
-  title = "autopilot policy",
+  title = "autopilot",
   intro,
   extra,
   body,
   saveLabel,
   alwaysSavable = false,
+  collapsible = false,
   onSaved,
   policy: initial,
   demo,
@@ -117,7 +150,7 @@ export function RepoPolicyPanel({
   extra?: React.ReactNode;
   /** Extra fields merged into the request body alongside `policy`. */
   body?: Record<string, unknown>;
-  /** Label on the save button, when "save policy" understates what it does. */
+  /** Label on the save button, when "save" understates what it does. */
   saveLabel?: string;
   /**
    * Allow a save that changed nothing on screen.
@@ -127,23 +160,43 @@ export function RepoPolicyPanel({
    * repositories still changes eleven of them.
    */
   alwaysSavable?: boolean;
+  /**
+   * Start closed, with the header as the disclosure trigger.
+   *
+   * For the account default: a once-per-account decision that shares a page
+   * with the things that change daily. Closed it is still a complete answer to
+   * the question it is asked most often — what new repositories are set to —
+   * because the header carries the saved state either way.
+   */
+  collapsible?: boolean;
   /** Called after a save succeeds, for a caller that owns surrounding state. */
   onSaved?: () => void;
   policy: RepoPolicy;
   demo: boolean;
 }) {
   const router = useRouter();
+  /** Radio `name` must be unique per panel: the repos page renders one and a
+      dialog can render another, and a shared name makes them one group. */
+  const group = useId();
   const [policy, setPolicy] = useState<RepoPolicy>(initial);
+  /**
+   * What the server last confirmed, which is not the same thing as what the
+   * controls show.
+   *
+   * The header chip reads from this, so "armed" means saved-and-armed. Reading
+   * it off the live controls is what made turning autopilot on unverifiable:
+   * the badge flipped on click, said the same thing before and after saving,
+   * and left nothing on screen that distinguished intent from state.
+   */
+  const [saved, setSaved] = useState<RepoPolicy>(initial);
+  const [justSaved, setJustSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  const dirty =
-    policy.enabled !== initial.enabled ||
-    policy.scope !== initial.scope ||
-    policy.autoMerge !== initial.autoMerge ||
-    policy.mode !== initial.mode ||
-    envOn(policy) !== envOn(initial);
+  const dirty = !same(policy, saved);
+  const mode = repoMode(policy);
+  const savedMode = repoMode(saved);
 
   async function save() {
     setSaving(true);
@@ -155,170 +208,199 @@ export function RepoPolicyPanel({
     });
     setSaving(false);
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(body?.error ?? "Could not save.");
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(payload?.error ?? "Could not save.");
       return;
     }
+    setSaved(policy);
+    setJustSaved(true);
     onSaved?.();
     startTransition(() => router.refresh());
   }
 
-  return (
-    // Anchor target: the repos list links straight here, since the chip there
-    // states this setting without being able to change it.
-    <Panel id="autopilot" className="scroll-mt-24">
-      <PanelHeader
-        title={title}
-        trailing={
-          <Chip tone={policy.enabled ? "accent" : "neutral"} dot>
-            {policy.enabled ? "armed" : "off"}
+  /** Any edit clears the receipt: a tick left over from the last save would be claiming this one is stored too. */
+  const edit = (next: (p: RepoPolicy) => RepoPolicy) => {
+    setJustSaved(false);
+    setPolicy(next);
+  };
+
+  const header = (
+    <PanelHeader
+      title={title}
+      trailing={
+        <span className="flex items-center gap-2">
+          {/* Saved state, not the state of the controls — see `saved` above. */}
+          <Chip tone={saved.enabled ? "accent" : "neutral"} dot>
+            {STATE[savedMode]}
           </Chip>
-        }
-      />
+          {collapsible && (
+            <ChevronRight
+              aria-hidden
+              className="size-4 shrink-0 text-ink-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+            />
+          )}
+        </span>
+      }
+    />
+  );
 
-      {intro && <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{intro}</p>}
+  const content = (
+    <div className="space-y-4">
+      {intro && <p className="text-[12.5px] leading-relaxed text-ink-2">{intro}</p>}
 
-      <div className="mt-5 space-y-4">
-        <Row
-          label="Let lurq open upgrade pull requests"
-          description="Runs in your own GitHub Actions on a schedule. lurq supplies the symbol-level migration brief; the agent edits, runs your test suite, and opens a pull request. Your source never leaves your CI. Each run reads this setting when it starts, so a change here governs the next one — except for a workflow file committed before that was true, which pins its own mode until you re-copy it."
+      <div>
+        {/* Real radios, visually hidden and driven through `peer-*`. A group of
+            buttons wearing `role="radio"` looks identical and is not the same
+            control: arrow-key navigation, the single tab stop and the group
+            announcement all come from the platform, and hand-rolling them is
+            how a settings page ends up keyboard-hostile. */}
+        <fieldset className="grid gap-1.5" disabled={demo}>
+          <legend className="sr-only">How far autopilot goes</legend>
+          {MODES.map((option) => (
+            <label
+              key={option.id}
+              className="flex cursor-pointer items-center gap-2.5 rounded-[var(--radius-control)] border border-edge px-3 py-2 transition-colors has-[:checked]:border-edge-lit has-[:checked]:bg-surface-2 has-[:disabled]:cursor-default has-[:disabled]:opacity-60 hover:bg-muted/40 has-[:checked]:hover:bg-surface-2 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-signal"
+            >
+              <input
+                type="radio"
+                name={group}
+                value={option.id}
+                checked={mode === option.id}
+                onChange={() => edit((p) => withMode(p, option.id))}
+                className="peer sr-only"
+              />
+              {/* `peer-checked:` selects siblings of the input, so the inner dot
+                  — a descendant of a sibling — has to be reached through it. */}
+              <span
+                aria-hidden
+                className="grid size-3.5 shrink-0 place-items-center rounded-full border border-edge-lit peer-checked:border-signal peer-checked:[&>span]:opacity-100"
+              >
+                <span className="size-[7px] rounded-full bg-signal opacity-0" />
+              </span>
+              <span className="min-w-0 flex-1 text-[13px] text-ink">{option.label}</span>
+              <span className="shrink-0 text-[11.5px] text-ink-3">{option.note}</span>
+            </label>
+          ))}
+        </fieldset>
+        {/* One line, for the option in hand — not three paragraphs for three
+            options the reader has already chosen between. */}
+        <p className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
+          {MODES.find((m) => m.id === mode)?.blurb}
+        </p>
+      </div>
+
+      <div>
+        {/* Off, this question does not apply: a live-looking control that
+            governs nothing is the thing this panel is written to avoid. */}
+        <Setting
+          label="Which upgrades it may attempt"
+          description={SCOPES.find((s) => s.id === policy.scope)?.blurb ?? ""}
         >
-          <Button
-            variant={policy.enabled ? "default" : "outline"}
-            size="sm"
-            disabled={demo}
-            // Arming writes `mode` explicitly rather than leaving it absent. An
-            // absent mode still resolves to the agent for repos that predate
-            // the field, but a repo armed from here should default to the half
-            // that cannot fail for want of a credential.
-            onClick={() =>
-              setPolicy((p) =>
-                p.enabled
-                  ? { ...p, enabled: false }
-                  : { ...p, enabled: true, mode: p.mode ?? "fix" },
-              )
-            }
-          >
-            {policy.enabled ? "enabled" : "disabled"}
-          </Button>
-        </Row>
+          <fieldset className="flex flex-wrap gap-1" disabled={demo || mode === "comment"}>
+            <legend className="sr-only">Which upgrades autopilot may attempt</legend>
+            {SCOPES.map((scope) => (
+              <label
+                key={scope.id}
+                className="cursor-pointer rounded-[var(--radius-control)] border border-edge px-2.5 py-1.5 font-mono text-[11.5px] lowercase text-ink-2 transition-colors has-[:checked]:border-edge-lit has-[:checked]:bg-surface-2 has-[:checked]:text-ink has-[:disabled]:cursor-default has-[:disabled]:opacity-60 hover:bg-muted/40 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-signal"
+              >
+                <input
+                  type="radio"
+                  name={`${group}-scope`}
+                  value={scope.id}
+                  checked={policy.scope === scope.id}
+                  onChange={() => edit((p) => ({ ...p, scope: scope.id }))}
+                  className="sr-only"
+                />
+                {scope.label}
+              </label>
+            ))}
+          </fieldset>
+        </Setting>
 
-        {/* Only while armed: off, the question does not apply, and a control
-            that reads as live while it governs nothing is the thing this panel
-            is written to avoid. */}
-        {policy.enabled && (
-          <div className="border-t border-border pt-4">
-            <p className="text-sm font-medium">How far it goes</p>
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              {MODES.map((option) => {
-                const active = repoMode(policy) === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    disabled={demo}
-                    aria-pressed={active}
-                    onClick={() => setPolicy((p) => ({ ...p, mode: option.id }))}
-                    className={cn(
-                      "rounded-[var(--radius-control)] border p-3 text-left transition-colors disabled:opacity-60",
-                      active
-                        ? "border-signal/50 bg-secondary"
-                        : "border-border hover:bg-muted/40",
-                    )}
-                  >
-                    <span className="font-mono text-xs lowercase tracking-wide">
-                      {option.label}
-                    </span>
-                    <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground">
-                      {option.blurb}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="border-t border-border pt-4">
-          <p className="text-sm font-medium">Which upgrades it may attempt</p>
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
-            {SCOPES.map((scope) => {
-              const active = policy.scope === scope.id;
-              return (
-                <button
-                  key={scope.id}
-                  type="button"
-                  disabled={demo}
-                  aria-pressed={active}
-                  onClick={() => setPolicy((p) => ({ ...p, scope: scope.id }))}
-                  className={cn(
-                    "rounded-[var(--radius-control)] border p-3 text-left transition-colors disabled:opacity-60",
-                    active
-                      ? "border-signal/50 bg-secondary"
-                      : "border-border hover:bg-muted/40",
-                  )}
-                >
-                  <span className="font-mono text-xs lowercase tracking-wide">{scope.label}</span>
-                  <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground">
-                    {scope.blurb}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <Row
+        <Setting
           label="Merge automatically when your CI passes"
           description="Off by default, and the only setting that lets lurq change your default branch. With it off, every change waits for a human on a pull request."
         >
           <Button
             variant={policy.autoMerge ? "default" : "outline"}
             size="sm"
-            disabled={demo || !policy.enabled}
-            onClick={() => setPolicy((p) => ({ ...p, autoMerge: !p.autoMerge }))}
+            disabled={demo || mode === "comment"}
+            onClick={() => edit((p) => ({ ...p, autoMerge: !p.autoMerge }))}
           >
             {policy.autoMerge ? "on" : "off"}
           </Button>
-        </Row>
+        </Setting>
 
-        <Row
+        <Setting
           label="Check for undeclared environment variables"
           description="Adds a read-only step to the generated workflow: variables your code reads that none of your .env files declare. It needs no API key, never writes anything, and does not fail your build."
         >
-          {/* Not disabled on `!policy.enabled`, unlike auto-merge: this check
-              writes nothing, so it is useful precisely on a repo that has not
-              armed the agent — and gating it there would leave those repos
-              unable to turn it on at all. */}
+          {/* Not gated on the mode, unlike auto-merge: this check writes
+              nothing, so it is useful precisely on a repo that has not armed
+              the agent — and gating it there would leave those repos unable to
+              turn it on at all. */}
           <Button
             variant={envOn(policy) ? "default" : "outline"}
             size="sm"
             disabled={demo}
-            onClick={() =>
-              setPolicy((p) => ({ ...p, checks: { ...p.checks, env: !envOn(p) } }))
-            }
+            onClick={() => edit((p) => ({ ...p, checks: { ...p.checks, env: !envOn(p) } }))}
           >
             {envOn(policy) ? "on" : "off"}
           </Button>
-        </Row>
+        </Setting>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-edge pt-4">
         {extra && <div className="mr-auto">{extra}</div>}
         {error && <span className="font-mono text-xs text-bad">{error}</span>}
+        {/* The receipt. A save that refreshes the page and says nothing is
+            indistinguishable from a click that missed. */}
+        {justSaved && !dirty && !error && (
+          <span className="flex items-center gap-1.5 text-[12.5px] text-ink-2">
+            <Check aria-hidden className="size-3.5 text-ok" />
+            saved
+          </span>
+        )}
         {dirty && !demo && (
-          <Button variant="ghost" size="sm" onClick={() => setPolicy(initial)}>
-            reset
-          </Button>
+          <>
+            <span className="text-[12.5px] text-ink-3">unsaved</span>
+            <Button variant="ghost" size="sm" onClick={() => edit(() => saved)}>
+              reset
+            </Button>
+          </>
         )}
         <Button
           size="sm"
           disabled={demo || saving || (!dirty && !alwaysSavable)}
           onClick={() => void save()}
         >
-          {saving ? "saving…" : (saveLabel ?? "save policy")}
+          {saving ? "saving…" : (saveLabel ?? "save")}
         </Button>
       </div>
+    </div>
+  );
+
+  // Anchor target: the repos list links straight here, since the chip there
+  // states this setting without being able to change it.
+  return collapsible ? (
+    /* Not `Panel` here: its padding is what would leave a bare strip under the
+       header while closed. The details element IS the panel, the header sits
+       flush against its own bottom rule, and the padding belongs to content
+       that only exists when the panel is open. */
+    <details
+      id="autopilot"
+      style={{ "--panel-px": "1.125rem" } as React.CSSProperties}
+      className="group scroll-mt-24 overflow-hidden rounded-[var(--radius-panel)] border border-edge bg-surface"
+    >
+      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden [&>div]:m-0">
+        {header}
+      </summary>
+      <div className="p-[var(--panel-px)]">{content}</div>
+    </details>
+  ) : (
+    <Panel id="autopilot" className="scroll-mt-24">
+      {header}
+      {content}
     </Panel>
   );
 }

@@ -191,10 +191,25 @@ export function EmptyState({
  * Page-level failures don't use this: they render the new-user state instead, so
  * nobody's first visit is an error message (see lib/dashboard-data).
  */
-export function InlineError({ children }: { children: ReactNode }) {
+export function InlineError({
+  children,
+  tone = "bad",
+}: {
+  children: ReactNode;
+  /**
+   * `info` for a note that is not a failure.
+   *
+   * The accent rule is what makes this read as "something went wrong", and it
+   * was carrying messages that say the opposite — "Repositories connected" got
+   * the same red bar as "Could not reach the repository service". A note with
+   * no failure in it gets no rule, which leaves the box as what it is: a line
+   * of page copy set apart from the panels around it.
+   */
+  tone?: "bad" | "info";
+}) {
   return (
     <div className="relative overflow-hidden rounded-[var(--radius-control)] border border-edge bg-surface-2 px-4 py-3">
-      <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-bad" />
+      {tone === "bad" && <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-bad" />}
       <p className="text-sm text-ink-2">{children}</p>
     </div>
   );

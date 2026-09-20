@@ -21,12 +21,21 @@ import { installUrl } from "@/lib/github-connect";
 
 const IMPACT_DAYS = 30;
 
-/** Redirect statuses set by /api/github/callback. */
-const CONNECT_MESSAGES: Record<string, string> = {
-  ok: "Repositories connected. The first scan is running now, drift appears as it finishes.",
-  empty: "The app installed, but no repositories were shared with it.",
-  invalid: "That connection link was not valid. Start the install from this page.",
-  failed: "GitHub connected, but lurq could not read the installation. Try again.",
+/** Redirect statuses set by /api/github/callback. `ok` is not a failure and must not read as one. */
+const CONNECT_MESSAGES: Record<string, { text: string; tone: "bad" | "info" }> = {
+  ok: {
+    text: "Repositories connected. The first scan is running now, drift appears as it finishes.",
+    tone: "info",
+  },
+  empty: { text: "The app installed, but no repositories were shared with it.", tone: "info" },
+  invalid: {
+    text: "That connection link was not valid. Start the install from this page.",
+    tone: "bad",
+  },
+  failed: {
+    text: "GitHub connected, but lurq could not read the installation. Try again.",
+    tone: "bad",
+  },
 };
 
 export default async function ReposPage({
@@ -126,10 +135,10 @@ export default async function ReposPage({
       />
 
       <PageBody>
-        {message && <InlineError>{message}</InlineError>}
+        {message && <InlineError tone={message.tone}>{message.text}</InlineError>}
 
         {scanned && !alreadyTracked && url && (
-          <InlineError>
+          <InlineError tone="info">
             You scanned <span className="font-mono">{scanned}</span> from the landing page. That
             read the root manifest only. Connect it here and lurq reads every manifest in the
             repository, keeps watching, and tells you when an upgrade would break something.
@@ -215,10 +224,15 @@ export default async function ReposPage({
             )}
             {/* scroll-mt so the drift meter's link lands the list below the
                 header rather than tucked under it. */}
-            <AccountAutopilotPanel policy={autopilotDefault} demo={demo} />
             <div id="repos" className="scroll-mt-24">
               <ReposPanel repos={data.repos} demo={demo} installUrl={url} />
             </div>
+            {/* Last, and closed. This page answers "what needs me" first —
+                alerts, then impact, then the repositories themselves. A
+                settings panel sitting between the drift numbers and the table
+                they belong to is what made arriving here from a breaking
+                release feel like being dropped into a configuration screen. */}
+            <AccountAutopilotPanel policy={autopilotDefault} demo={demo} />
           </>
         )}
       </PageBody>
