@@ -161,8 +161,12 @@ export function GettingStarted({
                 <a href={installUrl} className={buttonVariants({ size: "sm", variant: "outline" })}>
                   Connect GitHub
                 </a>
+                {/* The rest of setup is one paste, so say so here rather than
+                    let someone discover it four pages in. The control itself
+                    lives on the repo page because it needs that repo's own
+                    workflow file, which this list does not carry. */}
                 <span className="font-mono text-xs text-ink-3">
-                  see what your repos are behind on, no install needed
+                  then copy the setup to your agent — it does the rest
                 </span>
               </div>
             )}

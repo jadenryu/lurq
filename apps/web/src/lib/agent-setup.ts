@@ -12,11 +12,15 @@
  *
  * TWO RULES, both about not making things worse:
  *
- *   · The API key is NEVER embedded. This text gets pasted into a chat log, a
- *     transcript, sometimes a screenshot. `create-key-dialog` already tells
- *     people not to paste a policy-writing key into an agent; a prompt that
- *     bakes any key in would undo that advice at the one moment they are most
- *     likely to follow it. The brief asks the agent to ask.
+ *   · A key is embedded ONLY when one was minted for this copy, and the brief
+ *     then says outright that it is live. It started as "never embed", and that
+ *     is still the default every caller gets; onboarding mints one because the
+ *     alternative was a dashboard visit in the middle of an agent flow, which
+ *     is the friction this exists to remove. What makes it defensible is that
+ *     the key is SCOPE-LESS — `KEY_SCOPES` holds only `policy:write`, so a key
+ *     without it cannot rewrite the rules agents are held to — and that it is
+ *     labelled and revocable. `create-key-dialog`'s warning is about
+ *     policy-writing keys specifically, and this is not one.
  *   · It never instructs the agent to commit on the user's behalf without
  *     saying so. Committing this file is what grants write access, so the brief
  *     tells the agent to show the diff and stop.
@@ -34,6 +38,19 @@ export interface AgentSetupInput {
   mode: "comment" | "fix" | "pr";
   /** Where to create an API key. Passed in so the URL is not spelled twice. */
   keysUrl: string;
+  /**
+   * A freshly minted, scope-less lurq key to carry inline.
+   *
+   * ABSENT BY DEFAULT, and the brief then tells the agent to ask — which is
+   * what every caller did before onboarding started minting one. When present
+   * the prompt says outright that it carries a live credential, because the
+   * text lands in a chat transcript and the reader has to know that.
+   *
+   * Scope-less on purpose: `KEY_SCOPES` has exactly one entry, `policy:write`,
+   * and a key without it cannot rewrite the rules agents are held to. That is
+   * what makes embedding one defensible at all.
+   */
+  apiKey?: string;
 }
 
 /**
@@ -49,19 +66,35 @@ export function agentSetupPrompt({
   workflow,
   mode,
   keysUrl,
+  apiKey,
 }: AgentSetupInput): string {
   const needsAgentCredential = mode === "pr";
+
+  // Two shapes for step 1. With a minted key the human does nothing; without
+  // one the brief asks, which is what it always did and what the per-repo panel
+  // still uses when nothing was minted.
+  const keyStep = apiKey
+    ? [
+        `1. Set lurq's API key as a repository secret. The value is at the end of this message, under LURQ_API_KEY. It is a LIVE credential for my lurq account — do not echo it, do not write it into a file, and do not commit it. If it ever leaks, I revoke it at ${keysUrl}.`,
+        "",
+        `2. Set it with the value read from stdin rather than passed as an argument, so it does not land in my shell history:`,
+        `   gh secret set LURQ_API_KEY --repo ${repoFullName}`,
+        `   Paste the key when it asks for the value.`,
+      ]
+    : [
+        `1. Ask me for a lurq API key and do not guess or reuse one from another project. I create it at ${keysUrl}. Never print it back to me, never write it into a file, and never put it in a commit.`,
+        "",
+        `2. Set it as a repository secret:`,
+        `   gh secret set LURQ_API_KEY --repo ${repoFullName}`,
+        `   That command reads the value from stdin, so it never lands in my shell history.`,
+      ];
 
   const lines = [
     `Set up lurq's dependency autopilot on ${repoFullName}. lurq tells us which upgrades break code this repo actually references, then this workflow acts on it in our own GitHub Actions.`,
     "",
     "Do these in order. Stop and ask me if a step needs something you do not have.",
     "",
-    `1. Ask me for a lurq API key and do not guess or reuse one from another project. I create it at ${keysUrl}. Never print it back to me, never write it into a file, and never put it in a commit.`,
-    "",
-    `2. Set it as a repository secret:`,
-    `   gh secret set LURQ_API_KEY --repo ${repoFullName}`,
-    `   That command reads the value from stdin, so it never lands in my shell history.`,
+    ...keyStep,
     "",
     `3. Create ${workflowPath} with exactly the content at the end of this message. Do not reformat it, do not "improve" the cron, and do not change the permissions block — that block is the whole trust boundary and it is deliberately minimal.`,
     "",
@@ -95,6 +128,13 @@ export function agentSetupPrompt({
     `--- ${workflowPath} ---`,
     workflow.trimEnd(),
   );
+
+  // Last, and labelled, so it is obvious what this block is and easy to strip
+  // before pasting the rest anywhere. Putting it at the top would bury the
+  // instructions under a secret.
+  if (apiKey) {
+    lines.push("", "--- LURQ_API_KEY (live credential, step 2) ---", apiKey);
+  }
 
   return lines.join("\n");
 }
