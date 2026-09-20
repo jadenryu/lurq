@@ -8,6 +8,8 @@ import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { CopyButton } from "@/components/dashboard/copy-button";
+import { CopyAgentSetup } from "@/components/dashboard/copy-agent-setup";
+import { SITE_ORIGIN } from "@/lib/site";
 import {
   loadAlerts,
   loadConformance,
@@ -101,6 +103,21 @@ export default async function ReposPage({
         demo={demo}
         action={
           <div className="flex items-center gap-2">
+            {/* First, and the primary button: setting the autopilot up by hand
+                is a key, an app install, a file committed per repo and two
+                secrets per repo. This hands the whole list to an agent that
+                has a shell, which is the only way it collapses to one paste. */}
+            {data.repos.length > 0 && (
+              <CopyAgentSetup
+                label="Set up every repository"
+                account={{
+                  repos: data.repos.map((r) => r.fullName),
+                  // Absolute, via SITE_ORIGIN: an agent cannot follow a
+                  // relative path to the page that revokes the key it carries.
+                  keysUrl: `${SITE_ORIGIN}/dashboard/keys`,
+                }}
+              />
+            )}
             {/* The whole workspace as a brief. The last mile of this product is
                 an agent editing a manifest, and until now that mile was a human
                 reading a table and retyping it into a chat window. */}
