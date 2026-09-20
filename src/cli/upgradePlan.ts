@@ -189,3 +189,43 @@ export function formatUpgradePlan(plan: UpgradePlanResult): string {
 
   return out.join('\n');
 }
+
+/**
+ * The one-line version, for a reader who did not ask.
+ *
+ * `formatUpgradePlan` is the report someone opens when they came looking. This
+ * is the sentence for first contact — the end of setup, the top of an agent
+ * session — where the job is not to inform but to convert: a tool that explains
+ * itself is a demo, and a tool that counts what is already wrong in *this*
+ * checkout is a problem the reader now owns. Forty lines at a moment nobody
+ * asked for them get scrolled past; one number does not.
+ *
+ * Counts, never claims. `removes public exports` is a fact about the packages;
+ * whether this repo calls them is the reference scan (`check-upgrade`), and
+ * saying so here would be the overclaim that costs the gate its credibility.
+ *
+ * Null when there is nothing to say. A current project gets silence rather than
+ * a congratulation, for the same reason: this line has to mean something every
+ * time it appears.
+ */
+export function planHeadline(plan: UpgradePlanResult): string | null {
+  // `upgrades` is capped at the brief cap and the rest land in `omitted`; they
+  // are drifted too, and a headline that counted only the briefed ones would
+  // understate the repo on exactly the largest repos.
+  const behind = plan.upgrades.length + plan.omitted;
+  if (behind === 0) return null;
+
+  const advisories = plan.upgrades.filter((u) => u.advisories > 0).length;
+  const removes = plan.upgrades.filter((u) => u.verdict === 'removes-exports').length;
+  const parts = [`${behind} of ${plan.deps} dependencies behind`];
+  if (advisories) parts.push(`${advisories} with a security advisory`);
+  if (removes) parts.push(`${removes} removing public exports`);
+
+  // Never let a partial scan read as a complete one — the same rule the full
+  // report follows, in the space of one clause.
+  const unassessed = plan.omitted + plan.pending + plan.untracked;
+  return (
+    `${parts.join(', ')}.` +
+    (unassessed ? ` ${unassessed} not assessed for breakage.` : '')
+  );
+}
