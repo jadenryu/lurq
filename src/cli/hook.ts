@@ -464,15 +464,47 @@ const brief = (agent: HookAgent) =>
   `lurq is connected to this session: package installs${agent === 'cursor' ? '' : ' and package.json dependency edits'} are verified automatically. ` +
   'Call lurq usage before writing code against a package API you know from training, and compare or evaluate when choosing a package.';
 
+/**
+ * What this project is already behind on, for the agent about to edit it.
+ *
+ * The brief above tells an agent how to reach for lurq. This tells it there is
+ * a reason to: drift is the one thing lurq knows that the model cannot, and an
+ * agent that opens a session already holding the number will raise it without
+ * being asked, which is the whole upkeep loop.
+ *
+ * Once per session per directory, and bounded: session start blocks the user,
+ * so a slow monorepo scan returns nothing rather than holding up the prompt.
+ */
+const SCAN_TIMEOUT_MS = 5_000;
+
+async function sessionDrift(input: Record<string, any>): Promise<string | null> {
+  const cwd = input.cwd;
+  if (typeof cwd !== 'string' || !isJsProject(cwd)) return null;
+  if (unseen(input.session_id, [`scan:${cwd}`]).length === 0) return null;
+  try {
+    const { buildUpgradePlan, planHeadline } = await import('./upgradePlan');
+    const headline = planHeadline(await buildUpgradePlan(cwd, { timeoutMs: SCAN_TIMEOUT_MS }));
+    return headline && `lurq scanned this project's manifests: ${headline}`;
+  } catch {
+    return null; // Offline, unkeyed, no manifest: the session starts as if this were not here.
+  }
+}
+
 async function sessionStart(input: Record<string, any>, agent: HookAgent): Promise<Outcome | null> {
   const { apiKey, getAlerts } = await import('./remote');
   apiKey(); // No key, no lurq tools: say nothing rather than advertise ones that will fail.
+  // Both are network reads and neither needs the other, so the session waits
+  // once rather than twice.
   // The agent rides along so session starts can be told apart by agent, named the way setup names it.
-  const alerts = await getAlerts({
-    timeoutMs: 3_000,
-    agent: agent === 'claude' ? 'claude-code' : agent,
-  }).catch(() => null);
-  const text = [isJsProject(input.cwd) ? brief(agent) : null, alerts].filter(Boolean).join('\n\n');
+  const [alerts, drift] = await Promise.all([
+    getAlerts({ timeoutMs: 3_000, agent: agent === 'claude' ? 'claude-code' : agent }).catch(
+      () => null,
+    ),
+    sessionDrift(input),
+  ]);
+  const text = [isJsProject(input.cwd) ? brief(agent) : null, drift, alerts]
+    .filter(Boolean)
+    .join('\n\n');
   return text ? { context: text } : null;
 }
 
