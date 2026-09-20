@@ -764,56 +764,36 @@ const STANDING: Record<StandingMetricId, { label: string; show: (v: number) => s
  * Percentile ranks against the other builders lurq has a saved scan of.
  *
  * The API only ranks a metric with enough builders behind it, so an empty list
- * means "not enough scans yet", and that is what this says instead of showing
- * a percentile of a handful of people.
+ * means "not enough scans yet" and the whole panel is omitted, rather than
+ * showing a percentile of a handful of people or the size of the pool.
  */
 function Standing({ standing }: { standing: BuilderStanding }) {
-  const ranked = standing.metrics.length > 0;
+  if (standing.metrics.length === 0) return null;
   return (
     <Panel>
-      <PanelHeader
-        title="how you compare"
-        trailing={
-          ranked ? (
-            <span className="text-[11.5px] text-ink-3">
-              vs {plural(standing.population, "builder")} scanned on lurq
-            </span>
-          ) : null
-        }
-      />
-      {ranked ? (
-        <ul className="space-y-3">
-          {standing.metrics.map((m) => {
-            const row = STANDING[m.id];
-            return (
-              <li
-                key={m.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1"
-                title={`Ranked against ${plural(m.population, "builder")}; ties count half.`}
-              >
-                <span className="w-full text-[13px] text-ink sm:w-48 sm:shrink-0">
-                  {row.label}
-                  {m.better === "lower" && <span className="ml-1.5 text-[11px] text-ink-3">lower is better</span>}
-                </span>
-                <span className="w-14 shrink-0 font-mono text-[12px] tabular-nums text-ink-2 sm:text-right">
-                  {row.show(m.value)}
-                </span>
-                <div className="relative h-1.5 min-w-20 flex-1 overflow-hidden rounded-full bg-muted/40">
-                  <div className="absolute inset-y-0 left-0 rounded-full bg-ink-3" style={{ width: `${m.percentile}%` }} />
-                </div>
-                <span className="w-28 shrink-0 text-right text-[12px] text-ink-2">
-                  ahead of <span className="font-mono tabular-nums text-ink">{m.percentile}%</span>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="text-[13px] leading-relaxed text-ink-2">
-          Percentiles appear once {standing.minimum} builders have been scanned on lurq.{" "}
-          {plural(standing.population, "builder")} so far.
-        </p>
-      )}
+      <PanelHeader title="how you compare" />
+      <ul className="space-y-3">
+        {standing.metrics.map((m) => {
+          const row = STANDING[m.id];
+          return (
+            <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1" title="Ties count half.">
+              <span className="w-full text-[13px] text-ink sm:w-48 sm:shrink-0">
+                {row.label}
+                {m.better === "lower" && <span className="ml-1.5 text-[11px] text-ink-3">lower is better</span>}
+              </span>
+              <span className="w-14 shrink-0 font-mono text-[12px] tabular-nums text-ink-2 sm:text-right">
+                {row.show(m.value)}
+              </span>
+              <div className="relative h-1.5 min-w-20 flex-1 overflow-hidden rounded-full bg-muted/40">
+                <div className="absolute inset-y-0 left-0 rounded-full bg-ink-3" style={{ width: `${m.percentile}%` }} />
+              </div>
+              <span className="w-28 shrink-0 text-right text-[12px] text-ink-2">
+                ahead of <span className="font-mono tabular-nums text-ink">{m.percentile}%</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </Panel>
   );
 }
