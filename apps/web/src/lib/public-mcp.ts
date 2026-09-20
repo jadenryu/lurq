@@ -11,7 +11,7 @@
  */
 import type { CompatVerdict, PublicEndpointStatus } from "./lurq-issuer";
 
-export const MCP_SERVER_REVALIDATE = 86_400;
+export const MCP_SERVER_REVALIDATE = 604_800;
 
 export interface PublicMcpEndpoint {
   url: string;

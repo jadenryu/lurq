@@ -23,15 +23,17 @@ import { UpgradePage, upgradeMetadata } from "./upgrade-page";
  * lets their agent ask lurq directly next time. The full breakdown stays behind
  * the API (src/mcp/publicPackages.ts says why).
  *
- * Rendered on first request and revalidated daily; nothing is prebuilt, so a
- * deploy does not fan out five thousand API calls.
+ * Rendered on first request and revalidated weekly; nothing is prebuilt, so a
+ * deploy does not fan out five thousand API calls. Weekly, not daily: Vercel bills
+ * ISR writes in 8 KB units, and 5,000 pages x HTML + RSC payload x 365 was the
+ * single largest line on the plan.
  *
  * The same route serves /npm/<name>/<from>-to-<to>, the upgrade pages
  * (upgrade-page.tsx): a catch-all cannot have a sibling segment route, and
  * parseNpmPath decides which one a path is.
  */
 
-export const revalidate = 86400;
+export const revalidate = 604800;
 
 export async function generateStaticParams() {
   return [];

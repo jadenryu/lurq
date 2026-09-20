@@ -19,10 +19,12 @@ import {
  * on their behalf: which clients it works in, why the others fail, and how it
  * signs clients in — then the one line that lets their agent ask lurq live with
  * `connect_check`, which also hands back the config to paste. Rendered on first
- * request and revalidated daily; nothing is prebuilt.
+ * request and revalidated weekly; nothing is prebuilt. Weekly, not daily: this is
+ * 18,000 pages, and Vercel bills ISR writes in 8 KB units — a daily crawl of this
+ * route alone outran the whole plan allowance.
  */
 
-export const revalidate = 86400;
+export const revalidate = 604800;
 
 export async function generateStaticParams() {
   return [];
