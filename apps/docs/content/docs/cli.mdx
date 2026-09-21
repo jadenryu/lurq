@@ -380,18 +380,25 @@ the Anthropic credential when the mode needs one.
 # in a checkout, with `gh` signed in
 lurq autopilot init
 
-# spell out the repository and how far it may go
-lurq autopilot init --repo owner/name --mode pr
+# any number of repositories at once — no clone needed
+lurq autopilot init --repo owner/api owner/web owner/worker
 
-# fix mode needs no model and still opens pull requests — it is the default
-lurq autopilot init --mode fix
+# review first: a pull request in each instead of a commit
+lurq autopilot init --repo owner/api owner/web --pr
+
+# fix (the default) needs no model; pr also runs an agent and sets its credential
+lurq autopilot init --mode pr
 ```
 
-It **never commits and never pushes.** Committing
-`.github/workflows/lurq-upgrade.yml` is what grants write access to the
-repository, so it writes the file and stops; you read the diff and commit it.
-Secrets go to `gh` on stdin, never in arguments, so they stay out of `ps` and
-your shell history.
+For each repository it sets `LURQ_API_KEY`, commits
+`.github/workflows/lurq-upgrade.yml` to the default branch through the GitHub
+API, and starts the first run. A protected default branch gets a pull request
+instead. Every write is made by **your** `gh` login, never by lurq's GitHub App,
+which stays read-only. The token needs the `workflow` scope
+(`gh auth refresh -s workflow`); the command checks before touching anything. An
+already-committed workflow is left alone unless you pass `--force`. Secrets go to
+`gh` on stdin, never in arguments, so they stay out of `ps` and your shell
+history.
 
 In `pr` mode it runs `claude setup-token` and sets
 `CLAUDE_CODE_OAUTH_TOKEN` for you. That token **expires one year after

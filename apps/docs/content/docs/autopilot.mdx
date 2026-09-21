@@ -3,18 +3,31 @@ title: Keeping a repo current
 description: A scheduled job in your own GitHub Actions that names what an upgrade breaks in your code, applies what can be proven, and opens the pull request.
 ---
 
-The autopilot is a workflow file **you** commit. lurq supplies the evidence — what
-you are behind on, and which of the symbols an upgrade removes your code actually
-references — and your own runner does the work.
+The autopilot is a workflow in **your** GitHub Actions. lurq supplies the
+evidence — what you are behind on, and which of the symbols an upgrade removes
+your code actually references — and your own runner does the work.
+
+## Set up (about two minutes)
+
+1. **Sign in and get a key:** `npx lurqrun setup`
+2. **Connect repositories:** install the GitHub app from
+   [Repositories](https://www.lurq.run/dashboard/repos) and pick the repos.
+3. **Turn it on everywhere, in one command:**
 
 ```bash
-# The file is rendered per repo, with your package manager and your policy baked in.
-# Get it from the dashboard: Repositories → your repo → workflow → Create on GitHub
+# gh must be signed in, with the workflow scope: gh auth refresh -s workflow
+npx lurqrun autopilot init --repo owner/api owner/web owner/worker
 ```
 
-lurq does not commit it for you. Its GitHub app cannot write a byte to your
-repository, so the thing granting write access is a commit you made and can
-revert.
+That sets the `LURQ_API_KEY` secret, commits the workflow and starts the first
+run in every repository you name, with no clone and no merge per repo. A
+protected default branch gets a pull request instead; `--pr` asks for one
+everywhere. The dashboard's **Copy setup command** fills in every armed repository
+that has not run yet.
+
+Every one of those writes is made by your own `gh` login. lurq's GitHub app cannot
+write a byte to your repository, so what grants write access is a commit you
+made and can revert.
 
 ## Three modes
 

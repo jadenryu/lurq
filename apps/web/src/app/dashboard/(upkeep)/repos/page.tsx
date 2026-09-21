@@ -186,17 +186,28 @@ export default async function ReposPage({
               <EmptyState
                 title={`${stalled.length === 1 ? "One repository is" : `${stalled.length} repositories are`} armed, but nothing is running`}
                 action={
-                  <Link
-                    href={`/dashboard/repos/${stalled[0]!.id}`}
-                    className={buttonVariants({ variant: "outline", size: "sm" })}
-                  >
-                    Finish setup on {stalled[0]!.fullName}
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* One command for every stalled repo: secret, workflow and
+                        first run, committed with the user's own gh auth. */}
+                    <CopyButton
+                      label={`Copy setup command${stalled.length > 1 ? ` (${stalled.length} repos)` : ""}`}
+                      copiedLabel="Copied"
+                      text={`npx lurqrun autopilot init --repo ${stalled.map((r) => r.fullName).join(" ")}`}
+                    />
+                    <Link
+                      href={`/dashboard/repos/${stalled[0]!.id}`}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
+                    >
+                      Set up {stalled[0]!.fullName} by hand
+                    </Link>
+                  </div>
                 }
               >
-                Turning autopilot on saves the policy — it cannot start anything by itself. The
-                workflow has to be committed to each repository, and the first scheduled run is up
-                to a week after that, so start the first one yourself.
+                Turning autopilot on saves the policy — the workflow that acts on it still has to be
+                in each repository. Run the copied command in a terminal signed in to{" "}
+                <code className="font-mono text-xs">gh</code>: it adds the secret, commits the
+                workflow and starts the first run in every one of them, opening a pull request
+                instead wherever the default branch is protected.
               </EmptyState>
             )}
 
