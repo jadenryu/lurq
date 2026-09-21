@@ -16,6 +16,9 @@ import {
   loadRepoPolicyDefault,
   loadSelectionPolicy,
 } from "@/lib/dashboard-data";
+import Link from "next/link";
+import { repoMode } from "@/lib/lurq-issuer";
+import { buttonVariants } from "@/components/ui/button";
 import { workspaceBrief } from "@/lib/llm-export";
 import { installUrl } from "@/lib/github-connect";
 
@@ -80,6 +83,15 @@ export default async function ReposPage({
     scanned !== null && data.repos.some((r) => r.fullName.toLowerCase() === scanned.toLowerCase());
 
   const url = owner ? installUrl(owner.ownerId) : null;
+
+  /**
+   * Armed, and no run has ever reported in.
+   *
+   * `upkeep === null` is "never heard from", which for an armed repo means the
+   * workflow is almost certainly not committed — lurq cannot commit it and
+   * arming alone starts nothing.
+   */
+  const stalled = data.repos.filter((r) => repoMode(r.policy) !== "comment" && !r.upkeep);
 
   // Totals across every connected repo. These are the numbers that answer "what
   // is lurq doing for me", so they lead the page rather than sitting under the table.
@@ -164,6 +176,29 @@ export default async function ReposPage({
                 done for me lately"; this answers "what needs me right now", and
                 it renders nothing when the answer is nothing. */}
             <AlertsPanel alerts={alerts} />
+
+            {/* The state the whole feature dies in, said at the level someone
+                is actually looking at. "I turned autopilot on and nothing
+                happened" is this: the policy saved, the workflow was never
+                committed, and the only place that said so was a caption inside
+                a table cell and an empty state on another tab. */}
+            {stalled.length > 0 && (
+              <EmptyState
+                title={`${stalled.length === 1 ? "One repository is" : `${stalled.length} repositories are`} armed, but nothing is running`}
+                action={
+                  <Link
+                    href={`/dashboard/repos/${stalled[0]!.id}`}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    Finish setup on {stalled[0]!.fullName}
+                  </Link>
+                }
+              >
+                Turning autopilot on saves the policy — it cannot start anything by itself. The
+                workflow has to be committed to each repository, and the first scheduled run is up
+                to a week after that, so start the first one yourself.
+              </EmptyState>
+            )}
 
             {impact.analysed > 0 && (
               <div>

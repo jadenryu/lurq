@@ -50,7 +50,8 @@ export function RepoNextStep({
       <p className="text-[13px] leading-relaxed text-ink-2">
         Autopilot is armed, but no workflow has reported a run. Until{" "}
         <code className="font-mono text-xs text-ink">{setup.workflowPath}</code> is committed to{" "}
-        <span className="font-mono text-xs text-ink">{repo.fullName}</span>, nothing will open.
+        <span className="font-mono text-xs text-ink">{repo.fullName}</span>, nothing will open —
+        and once it is, the first scheduled run is up to a week away, so start one yourself.
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {/* First, and the only one that carries a key: the agent does every
