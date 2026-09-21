@@ -58,8 +58,8 @@ export function RepoNextStep({
             step, including the secret, without anything passing through a
             clipboard the user has to reason about. */}
         <CopyAgentSetup setup={setup} />
-        {/* The same job as the brief, for someone who would rather type it than
-            hand it to an agent. It writes the file and stops; it never commits. */}
+        {/* The same job without an agent: sets the secret, commits the workflow
+            with the user's own gh auth (a PR on a protected branch), starts a run. */}
         <CopyButton
           label="Copy CLI command"
           copiedLabel="Copied"
