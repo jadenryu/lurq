@@ -220,6 +220,16 @@ export function RepoPolicyPanel({
   const header = (
     <PanelHeader
       title={title}
+      info={
+        <div className="space-y-2">
+          {intro && <p>{intro}</p>}
+          {MODES.map((option) => (
+            <p key={option.id}>
+              <span className="text-ink">{option.label}</span> — {option.blurb}
+            </p>
+          ))}
+        </div>
+      }
       trailing={
         <span className="flex items-center gap-2">
           {/* Saved state, not the state of the controls — see `saved` above. */}
@@ -239,8 +249,6 @@ export function RepoPolicyPanel({
 
   const content = (
     <div className="space-y-4">
-      {intro && <p className="text-[12.5px] leading-relaxed text-ink-2">{intro}</p>}
-
       <div>
         {/* Real radios, visually hidden and driven through `peer-*`. A group of
             buttons wearing `role="radio"` looks identical and is not the same
@@ -275,11 +283,6 @@ export function RepoPolicyPanel({
             </label>
           ))}
         </fieldset>
-        {/* One line, for the option in hand — not three paragraphs for three
-            options the reader has already chosen between. */}
-        <p className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
-          {MODES.find((m) => m.id === mode)?.blurb}
-        </p>
       </div>
 
       <div>

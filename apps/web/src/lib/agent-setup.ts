@@ -104,9 +104,14 @@ export function agentSetupPrompt({
   if (needsAgentCredential) {
     lines.push(
       "",
-      `5. This repo is set to pr mode, which runs an agent in CI and needs an Anthropic credential. Ask me which I want and set it the same way as step 2:`,
-      `   · CLAUDE_CODE_OAUTH_TOKEN — I run \`claude setup-token\` locally and paste what it prints. Works with a Claude Pro or Max plan. IT EXPIRES ONE YEAR AFTER CREATION, with no warning, and this is a scheduled job: tell me that when you set it.`,
-      `   · ANTHROPIC_API_KEY — from the Anthropic console. Does not expire, bills per token, and is the right one if more than one person maintains this repo.`,
+      `5. This repo is set to pr mode, which runs an agent in CI and needs an Anthropic credential. Do NOT stop to ask me which one unless a command fails — mint it yourself:`,
+      "",
+      `   claude setup-token`,
+      `   gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repoFullName}`,
+      "",
+      `   \`claude setup-token\` prints a token once and stores it nowhere; pipe it or paste it straight into the \`gh\` command's stdin prompt, never into a file, never into your reply to me. It works on a Claude Pro or Max plan, which is what I am most likely to already have.`,
+      "",
+      `   Two cases where you stop and tell me instead: \`claude\` is not installed or not signed in here, or more than one person maintains this repo. Then I want ANTHROPIC_API_KEY from the Anthropic console: it does not expire, it bills per token, and it does not belong to one person. The OAuth token above EXPIRES ONE YEAR AFTER CREATION with no warning — on a weekly job that means it works for a year and then silently stops.`,
       "",
       `   Without one of those the job analyses correctly and then fails at the credential check, which looks like a lurq bug and is not.`,
     );
