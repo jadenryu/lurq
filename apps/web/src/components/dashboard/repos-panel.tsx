@@ -268,11 +268,14 @@ function lastRunTitle(repo: DashboardRepo): string {
  */
 function BulkPolicy({
   ids,
+  names,
   seed,
   demo,
   onClear,
 }: {
   ids: number[];
+  /** Selected repos that have never reported a run: the ones arming leaves unfinished. */
+  names: string[];
   seed: RepoPolicy | undefined;
   demo: boolean;
   onClear: () => void;
@@ -290,7 +293,12 @@ function BulkPolicy({
       // Applying an unedited policy to a selection is still a change to every
       // repo in it that did not already have that policy.
       alwaysSavable
-      onSaved={onClear}
+      // Arming keeps the selection so the setup step below the switch stays on
+      // screen; clearing it would hide the one step that makes the save matter.
+      onSaved={(saved) => {
+        if (repoMode(saved) === "comment") onClear();
+      }}
+      setupRepos={names}
       extra={
         <Button variant="ghost" size="sm" onClick={onClear}>
           clear selection
@@ -408,6 +416,7 @@ export function ReposPanel({
       {selected.size > 0 && (
         <BulkPolicy
           ids={[...selected]}
+          names={repos.filter((r) => selected.has(r.id) && !r.upkeep).map((r) => r.fullName)}
           seed={repos.find((r) => selected.has(r.id))?.policy}
           demo={demo}
           onClear={() => setSelected(new Set())}

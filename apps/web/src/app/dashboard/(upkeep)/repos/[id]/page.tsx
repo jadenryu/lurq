@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { SITE_ORIGIN } from "@/lib/site";
 import { repoMode } from "@/lib/lurq-issuer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,7 +8,6 @@ import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { RepoSetup } from "@/components/dashboard/repo-setup";
-import { RepoNextStep } from "@/components/dashboard/repo-next-step";
 import { RunNow } from "@/components/dashboard/run-now";
 import { ScanProgress } from "@/components/dashboard/scan-progress";
 import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
@@ -58,17 +56,6 @@ export default async function RepoDetailPage({
   const uncovered = drift ? drift.depsDeclared - drift.depsTracked : 0;
   const scanning = !demo && isScanPending(repo);
 
-  // Built once: the setup card and the workflow panel hand out the same brief,
-  // and two spellings of it is how the key in one drifts from the file in the other.
-  const agentSetup = {
-    repoFullName: repo.fullName,
-    workflowPath: repo.workflowPath,
-    workflow: repo.workflow,
-    mode: repoMode(repo.policy),
-    // Absolute, via SITE_ORIGIN: an agent cannot follow a relative path, and
-    // the origin is normalised there rather than spelled here.
-    keysUrl: `${SITE_ORIGIN}/dashboard/keys`,
-  };
 
   return (
     <div>
@@ -111,21 +98,20 @@ export default async function RepoDetailPage({
 
         {repo.lastScanError && <InlineError>{repo.lastScanError}</InlineError>}
 
-        {/* Reading order is the priority order. What makes lurq act on this
-            repository — the one unfinished step, then the switch, then the file
-            that runs it — comes before the diagnostics that describe it. Those
-            were nine panels down, under five tiles and four analyses, on a page
-            whose whole purpose is to get a pull request opened. */}
-        <RepoNextStep repo={repo} setup={agentSetup} setupUrl={repo.setupUrl} />
-
-        <RepoPolicyPanel endpoint={`/api/repos/${repo.id}`} policy={repo.policy} demo={demo} />
+        {/* The switch first, and the step that makes it do anything renders
+            inside it once armed: people read the switch as the whole job. */}
+        <RepoPolicyPanel
+          endpoint={`/api/repos/${repo.id}`}
+          policy={repo.policy}
+          demo={demo}
+          setupRepos={repo.upkeep ? undefined : [repo.fullName]}
+        />
 
         <RepoSetup
           workflow={repo.workflow}
           workflowPath={repo.workflowPath}
           setupUrl={repo.setupUrl}
           mode={repoMode(repo.policy)}
-          setup={agentSetup}
         />
 
         {drift && (

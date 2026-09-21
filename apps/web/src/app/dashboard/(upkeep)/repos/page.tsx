@@ -8,6 +8,7 @@ import { StatRow, StatTile } from "@/components/dashboard/stat-tile";
 import { Button } from "@/components/ui/button";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { CopyButton } from "@/components/dashboard/copy-button";
+import { AutopilotSetup } from "@/components/dashboard/autopilot-setup";
 import {
   loadAlerts,
   loadConformance,
@@ -16,9 +17,7 @@ import {
   loadRepoPolicyDefault,
   loadSelectionPolicy,
 } from "@/lib/dashboard-data";
-import Link from "next/link";
 import { repoMode } from "@/lib/lurq-issuer";
-import { buttonVariants } from "@/components/ui/button";
 import { workspaceBrief } from "@/lib/llm-export";
 import { installUrl } from "@/lib/github-connect";
 
@@ -186,28 +185,14 @@ export default async function ReposPage({
               <EmptyState
                 title={`${stalled.length === 1 ? "One repository is" : `${stalled.length} repositories are`} armed, but nothing is running`}
                 action={
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* One command for every stalled repo: secret, workflow and
-                        first run, committed with the user's own gh auth. */}
-                    <CopyButton
-                      label={`Copy setup command${stalled.length > 1 ? ` (${stalled.length} repos)` : ""}`}
-                      copiedLabel="Copied"
-                      text={`npx lurqrun autopilot init --repo ${stalled.map((r) => r.fullName).join(" ")}`}
-                    />
-                    <Link
-                      href={`/dashboard/repos/${stalled[0]!.id}`}
-                      className={buttonVariants({ variant: "ghost", size: "sm" })}
-                    >
-                      Set up {stalled[0]!.fullName} by hand
-                    </Link>
-                  </div>
+                  <AutopilotSetup
+                    repos={stalled.map((r) => r.fullName)}
+                    mode={stalled.some((r) => repoMode(r.policy) === "pr") ? "pr" : "fix"}
+                  />
                 }
               >
-                Turning autopilot on saves the policy — the workflow that acts on it still has to be
-                in each repository. Run the copied command in a terminal signed in to{" "}
-                <code className="font-mono text-xs">gh</code>: it adds the secret, commits the
-                workflow and starts the first run in every one of them, opening a pull request
-                instead wherever the default branch is protected.
+                Turning autopilot on saves the policy — nothing runs until the workflow is in each
+                repository. One paste does all of them.
               </EmptyState>
             )}
 
