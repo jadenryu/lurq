@@ -108,6 +108,7 @@ export default async function ReposPage({
         title="repositories"
         subtitle="How far behind each project is, and what upgrading will break."
         demo={demo}
+        info="lurq reads every manifest in each connected repository, resolves what the newer versions actually export, and checks that against the symbols your code references. Behind is a fact about versions; breaking is a fact about your code, and only the second one is worth waking up for."
         action={
           <div className="flex items-center gap-2">
             {/* The whole workspace as a brief. The last mile of this product is

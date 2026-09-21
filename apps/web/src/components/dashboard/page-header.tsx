@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Chip } from "@/components/dashboard/panel";
+import { InfoButton } from "@/components/dashboard/info";
 
 /**
  * Page header, console-sized.
@@ -19,6 +20,7 @@ export function PageHeader({
   subtitle,
   action,
   meta,
+  info,
   demo = false,
 }: {
   title: string;
@@ -26,6 +28,14 @@ export function PageHeader({
   action?: ReactNode;
   /** Page-level status, rendered right of the title at label scale. */
   meta?: ReactNode;
+  /**
+   * What this page is for, behind an `i` beside the title.
+   *
+   * Every page opened with a sentence explaining itself, which is a sentence
+   * read once and then skipped past daily. The heading and the tab say where
+   * you are; the rest is available when it is actually wanted.
+   */
+  info?: ReactNode;
   demo?: boolean;
 }) {
   return (
@@ -37,6 +47,7 @@ export function PageHeader({
           </h1>
           {demo && <Chip tone="warn">demo data</Chip>}
           {meta}
+          {info && <InfoButton label={title}>{info}</InfoButton>}
         </div>
         {subtitle && <p className="mt-1 text-[13px] text-ink-2">{subtitle}</p>}
       </div>

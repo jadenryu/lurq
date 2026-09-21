@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { acknowledgePublicChange, setPin } from "@/app/dashboard/mcp/public/actions";
+import { acknowledgePublicChange, setPin } from "@/app/dashboard/(upkeep)/mcp/public/actions";
 import { Button } from "@/components/ui/button";
 
 /**

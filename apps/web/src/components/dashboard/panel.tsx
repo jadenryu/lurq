@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { InfoButton } from "@/components/dashboard/info";
 
 /**
  * The dashboard's one surface treatment.
@@ -76,10 +77,19 @@ export function Panel({
 export function PanelHeader({
   title,
   trailing,
+  info,
   className,
 }: {
   title: string;
   trailing?: ReactNode;
+  /**
+   * Background, behind an `i` at the panel's top right.
+   *
+   * Panels used to open with a paragraph of it, so every page cost a read
+   * before it showed a number. Context the reader may want once belongs on
+   * demand; anything they must act on stays on the page.
+   */
+  info?: ReactNode;
   className?: string;
 }) {
   return (
@@ -94,7 +104,12 @@ export function PanelHeader({
       )}
     >
       <p className="text-[13px] font-medium tracking-[-0.01em] text-ink">{title}</p>
-      {trailing}
+      {(trailing || info) && (
+        <span className="flex min-w-0 items-center gap-2">
+          {trailing}
+          {info && <InfoButton label={title}>{info}</InfoButton>}
+        </span>
+      )}
     </div>
   );
 }
