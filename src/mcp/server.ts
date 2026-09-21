@@ -477,7 +477,7 @@ export function buildMcpServer(
       {
         title: 'What needs fixing in this project',
         description:
-          'The upkeep plan for the project you are editing, read from its own files. Returns findings across domains: environment variables the code reads that no .env file declares, and — when you pass `upgrade` — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Each finding carries either exact edits (a rename the package proves, byte ranges you can apply) or a brief with the facts you cannot look up: the exports the target version actually ships, with their kinds and arities. A domain that could not run says so; a skipped domain is never the same as a clean one. Needs no API key. Use it before editing a project you have just opened, or after an upgrade to see what it broke.',
+          'The upkeep plan for the project you are editing, read from its own files. Returns findings across domains: environment variables the code reads that no .env file declares, model identifiers the provider has retired or put an end date on, and — when you pass `upgrade` — the call sites an upgrade breaks, the replacement the package itself proves, and the manifest ranges left stale. Each finding carries either exact edits (a rename the package proves, byte ranges you can apply) or a brief with the facts you cannot look up: the exports the target version actually ships, with their kinds and arities. A domain that could not run says so; a skipped domain is never the same as a clean one. Needs no API key. Use it before editing a project you have just opened, or after an upgrade to see what it broke.',
         annotations: READ_LIVE,
         inputSchema: {
           dir: z
@@ -501,8 +501,8 @@ export function buildMcpServer(
               'Upgrades to assess. Without this the package domain is skipped, because working out what moved needs the index and this tool runs without a key.',
             ),
           domains: z
-            .array(z.enum(['package', 'mcp-config', 'env', 'api']))
-            .max(4)
+            .array(z.enum(['package', 'mcp-config', 'env', 'api', 'model']))
+            .max(5)
             .optional()
             .describe('Limit to these domains. Default: every domain with a detector.'),
         },

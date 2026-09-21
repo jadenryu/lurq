@@ -9,7 +9,7 @@
  * the stdio server alone: on the hosted path the files are not there, and a
  * tool that silently answers about nothing is worse than a tool that is absent.
  *
- * Built to grow. `FixDomain` already names four domains and three of them have
+ * Built to grow. `FixDomain` names five domains and four of them have
  * detectors; the dispatch table below is the seam, so adding `api` later is one
  * entry rather than a second tool. A domain that cannot run says why, and a
  * skipped domain is reported rather than quietly producing no findings —
@@ -73,6 +73,19 @@ const DOMAINS: Record<string, (root: string, input: UpkeepInput) => Promise<Doma
   },
 
   /**
+   * Model identifiers the provider has retired or put an end date on.
+   *
+   * Reads source only — no network, no key, no arguments. That is why it runs
+   * by default: the check costs nothing the scan is not already paying, and
+   * the failure it catches is one nothing else in the toolchain can see.
+   */
+  model: async (root) => {
+    const { modelFindings } = await import('../fix/model');
+    const plan = modelFindings(root, { limit: SCAN_LIMIT });
+    return { findings: plan.findings, truncated: plan.truncated };
+  },
+
+  /**
    * Renames the package itself proves, the manifest ranges an upgrade leaves
    * stale, and a brief for everything that needs judgement.
    *
@@ -105,7 +118,7 @@ const DOMAINS: Record<string, (root: string, input: UpkeepInput) => Promise<Doma
 };
 
 /** Domains with a detector today. `api` is declared in FixDomain and has none. */
-const AVAILABLE: FixDomain[] = ['env', 'package'];
+const AVAILABLE: FixDomain[] = ['env', 'model', 'package'];
 
 export async function handleUpkeep(input: UpkeepInput = {}): Promise<UpkeepReport> {
   const root = input.dir?.trim() || process.cwd();
