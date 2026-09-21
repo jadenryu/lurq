@@ -195,21 +195,36 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
     };
     // Silence here would be a lie when every upgrade was skipped: "nothing to
     // fix" and "nothing I am willing to fix" are different sentences.
-    const nothing = skipped.length
+    //
+    // Both branches account for the source scan, because it runs either way
+    // now. "Nothing to check" was true when this command only knew about the
+    // upgrades it was handed; it reads as "I did not look" the moment
+    // something else was looked at.
+    const lines = skipped.length
       ? [
           `Nothing attempted in ${dir}. ${skipped.length} upgrade(s) deliberately not tried:`,
           ...skippedLines(skipped),
-        ].join('\n')
-      : // Both branches name the source scan, because it runs either way now.
-        // "Nothing to check" was true when this command only knew about the
-        // upgrades it was handed; it reads as "I did not look" the moment
-        // something else was looked at.
-        `Nothing to fix in ${dir}: ${
-          asked
-            ? 'no upgrade named here needs a change'
-            : 'every dependency is current or held by the repo policy'
-        }, and ${source.ran.join(' and ')} found nothing in the source.`;
-    console.log(opts.json ? JSON.stringify(empty, null, 2) : nothing);
+        ]
+      : [
+          `Nothing to fix in ${dir}: ${
+            asked
+              ? 'no upgrade named here needs a change'
+              : 'every dependency is current or held by the repo policy'
+          }, ${
+            // Never "the source is clean" when no detector survived to look.
+            // `ran` is empty only when every source domain threw, and that is
+            // the one case where the reassuring sentence would be false.
+            source.ran.length
+              ? 'and nothing in the source needs changing'
+              : 'and the source could not be scanned'
+          }.`,
+        ];
+
+    // This path returns before `formatFix`, so it prints these itself. Without
+    // it a detector that died is invisible in the default output and surfaces
+    // only under --json — which is the failure `unchecked` exists to prevent.
+    lines.push(...uncheckedLines(unchecked));
+    console.log(opts.json ? JSON.stringify(empty, null, 2) : lines.join('\n'));
     return;
   }
 
@@ -312,6 +327,23 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   if (opts.exitCode && result.remaining.length > 0) process.exitCode = 1;
 }
 
+/**
+ * The domains that could not run, shared by the empty case and the full report.
+ *
+ * Empty in, empty out, so a caller can splice it unconditionally. Both callers
+ * do, which is the point: this block was written once inside `formatFix`, and
+ * the empty case returns before ever reaching it — so the one output where a
+ * dead detector most looks like a clean project was the one that never said.
+ */
+export function uncheckedLines(unchecked: { domain: string; reason: string }[]): string[] {
+  if (unchecked.length === 0) return [];
+  return [
+    '',
+    `${unchecked.length} domain(s) could not be checked:`,
+    ...unchecked.map((u) => `  ${u.domain}: ${u.reason}`),
+  ];
+}
+
 /** One line per skip, shared by the empty case and the full report. */
 function skippedLines(skipped: { package: string; reason: string }[]): string[] {
   return skipped.map((s) => `  ${s.package}: ${s.reason}`);
@@ -359,12 +391,9 @@ export function formatFix(result: FixResult, diff: string, applied: boolean): st
     out.push(...skippedLines(result.skipped));
   }
 
-  // Last, and never omitted. This is the line that stops a detector which threw
-  // from being read as a domain that found nothing.
-  if (result.unchecked.length > 0) {
-    out.push('', `${result.unchecked.length} domain(s) could not be checked:`);
-    for (const u of result.unchecked) out.push(`  ${u.domain}: ${u.reason}`);
-  }
+  // Last, and never omitted. This is what stops a detector which threw from
+  // being read as a domain that found nothing.
+  out.push(...uncheckedLines(result.unchecked));
 
   if (result.refused.length > 0) {
     out.push('', 'Proven renames left alone:');

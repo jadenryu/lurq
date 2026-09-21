@@ -16,7 +16,7 @@ import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runFix } from '../src/cli/fix';
+import { runFix, uncheckedLines } from '../src/cli/fix';
 import { SOURCE_DOMAINS, AVAILABLE } from '../src/fix/domains';
 
 let dir: string;
@@ -69,20 +69,38 @@ describe('runFix over the source domains', () => {
     expect(readFileSync(file, 'utf8')).toBe('export const k = process.env.STRIPE_KEY;\n');
   });
 
-  it('still says nothing is wrong when nothing is, and names what it checked', async () => {
+  it('still says nothing is wrong when nothing is, in English', async () => {
     writeFileSync(join(dir, 'src/ask.ts'), "const m = 'claude-opus-5';\n");
     await run();
     const text = out.join('\n');
     expect(text).toContain('Nothing to fix');
-    // "Nothing found" must not read like "never looked": the message names the
-    // domains that ran, so a silent detector cannot pass for a clean project.
-    for (const domain of SOURCE_DOMAINS) expect(text).toContain(domain);
+    expect(text).toContain('nothing in the source needs changing');
+    // The domain ids are the dispatch table's keys, not words. An earlier
+    // version joined `ran` into the sentence, which printed "env and model
+    // found nothing" at a user and broke the moment a third domain existed.
+    for (const domain of SOURCE_DOMAINS) expect(text).not.toContain(`${domain} `);
   });
 
-  it('reports a domain that could not run instead of counting it clean', async () => {
+  it('carries the unchecked list on the result', async () => {
     writeFileSync(join(dir, 'src/ask.ts'), "const m = 'claude-opus-5';\n");
     await run({ json: true });
     expect(JSON.parse(out.join('\n'))).toMatchObject({ unchecked: [] });
+  });
+});
+
+describe('uncheckedLines', () => {
+  // The empty case returns before formatFix, so this block has two callers and
+  // the one most likely to hide a dead detector is the one that used to lack it.
+  it('is empty when every domain ran, so a caller can splice it blind', () => {
+    expect(uncheckedLines([])).toEqual([]);
+  });
+
+  it('names the domain and why, so "it died" cannot read as "it found nothing"', () => {
+    expect(uncheckedLines([{ domain: 'model', reason: 'ENOENT' }])).toEqual([
+      '',
+      '1 domain(s) could not be checked:',
+      '  model: ENOENT',
+    ]);
   });
 });
 
