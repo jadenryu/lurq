@@ -371,6 +371,39 @@ stores for your agents can read policy but never change it, so an agent cannot
 loosen its own rules. How far back `policy log` reaches depends on the plan (see
 [Plans & limits](/plans-and-troubleshooting)).
 
+## Arming a repository
+
+One command does the whole repository setup: the secret, the workflow file, and
+the Anthropic credential when the mode needs one.
+
+```bash
+# in a checkout, with `gh` signed in
+lurq autopilot init
+
+# spell out the repository and how far it may go
+lurq autopilot init --repo owner/name --mode pr
+
+# fix mode needs no model and still opens pull requests — it is the default
+lurq autopilot init --mode fix
+```
+
+It **never commits and never pushes.** Committing
+`.github/workflows/lurq-upgrade.yml` is what grants write access to the
+repository, so it writes the file and stops; you read the diff and commit it.
+Secrets go to `gh` on stdin, never in arguments, so they stay out of `ps` and
+your shell history.
+
+In `pr` mode it runs `claude setup-token` and sets
+`CLAUDE_CODE_OAUTH_TOKEN` for you. That token **expires one year after
+creation, with no warning** — on a weekly job that means it works for a year
+and then stops. If anyone else maintains the repository, use an
+`ANTHROPIC_API_KEY` from the Anthropic console instead: it does not expire and
+does not belong to one person. If `claude` is not installed, the command tells
+you that and sets nothing.
+
+Run it again any time: an existing workflow file is left alone unless you pass
+`--force`.
+
 ## Setup and credentials
 
 ```bash

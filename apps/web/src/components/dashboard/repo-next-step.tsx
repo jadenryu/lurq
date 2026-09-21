@@ -57,10 +57,12 @@ export function RepoNextStep({
             step, including the secret, without anything passing through a
             clipboard the user has to reason about. */}
         <CopyAgentSetup setup={setup} />
+        {/* The same job as the brief, for someone who would rather type it than
+            hand it to an agent. It writes the file and stops; it never commits. */}
         <CopyButton
           label="Copy CLI command"
           copiedLabel="Copied"
-          text={`npx lurqrun setup && gh secret set LURQ_API_KEY --repo ${repo.fullName}`}
+          text={`npx lurqrun autopilot init --repo ${repo.fullName} --mode ${repoMode(repo.policy)}`}
         />
         <a href={setupUrl} target="_blank" rel="noreferrer">
           <Button variant="ghost">Create the file on GitHub</Button>
