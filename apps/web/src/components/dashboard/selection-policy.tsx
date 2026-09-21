@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Chip, Panel, PanelHeader } from "@/components/dashboard/panel";
+import { Disclosure } from "@/components/dashboard/disclosure";
 import { Button } from "@/components/ui/button";
 import type { SelectionPolicy } from "@/lib/lurq-issuer";
 import { cn } from "@/lib/utils";
@@ -10,9 +11,11 @@ import { cn } from "@/lib/utils";
 /**
  * The rules an agent is held to when it reaches for a new package.
  *
- * Every control here states its blast radius next to itself, the same standard
- * the autopilot panel is held to: a rule whose consequence you have to infer is
- * not a decision you made. The difference is what "off" means. Autopilot off is
+ * Every control here states its blast radius, on the caret beside it, the same
+ * standard the autopilot panel is held to: a rule whose consequence you have to
+ * infer is not a decision you made, and nine of those consequences printed in
+ * full is a page where none of them get read. The difference is what "off"
+ * means. Autopilot off is
  * safe: lurq does nothing. Selection policy off means every recommendation goes
  * through unfiltered, so this panel says "not enforcing" rather than "off", and
  * never renders an empty rule list as a settled state.
@@ -79,11 +82,10 @@ function NumberRule({
 }) {
   return (
     <div className="border-t border-edge pt-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 max-w-lg">
-          <p className="text-sm font-medium text-ink">{label}</p>
-          <p className="mt-1 text-sm leading-relaxed text-ink-2">{description}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <Disclosure label={label} className="max-w-lg flex-1">
+          {description}
+        </Disclosure>
         <Toggle
           on={value !== null}
           disabled={disabled}
@@ -150,12 +152,14 @@ function Row({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-t border-edge pt-5 first:border-0 first:pt-0">
-      <div className="min-w-0 max-w-lg">
-        <p className="text-sm font-medium text-ink">{label}</p>
-        <p className="mt-1 text-sm leading-relaxed text-ink-2">{description}</p>
-      </div>
-      {children && <div className="shrink-0">{children}</div>}
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-edge pt-5 first:border-0 first:pt-0">
+      <Disclosure label={label} className="max-w-lg flex-1">
+        {description}
+      </Disclosure>
+      {/* `max-w-full` matters: `shrink-0` alone sizes this to the control's
+          max-content, which runs a chip row off the panel at phone width
+          instead of wrapping it. */}
+      {children && <div className="max-w-full shrink-0">{children}</div>}
     </div>
   );
 }
