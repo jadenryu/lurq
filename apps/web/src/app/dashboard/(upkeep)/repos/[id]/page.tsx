@@ -9,6 +9,7 @@ import { InlineError, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { RepoSetup } from "@/components/dashboard/repo-setup";
+import { RepoNextStep } from "@/components/dashboard/repo-next-step";
 import { ScanProgress } from "@/components/dashboard/scan-progress";
 import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
 import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
@@ -56,6 +57,18 @@ export default async function RepoDetailPage({
   const uncovered = drift ? drift.depsDeclared - drift.depsTracked : 0;
   const scanning = !demo && isScanPending(repo);
 
+  // Built once: the setup card and the workflow panel hand out the same brief,
+  // and two spellings of it is how the key in one drifts from the file in the other.
+  const agentSetup = {
+    repoFullName: repo.fullName,
+    workflowPath: repo.workflowPath,
+    workflow: repo.workflow,
+    mode: repoMode(repo.policy),
+    // Absolute, via SITE_ORIGIN: an agent cannot follow a relative path, and
+    // the origin is normalised there rather than spelled here.
+    keysUrl: `${SITE_ORIGIN}/dashboard/keys`,
+  };
+
   return (
     <div>
       <PageHeader
@@ -92,6 +105,23 @@ export default async function RepoDetailPage({
         <ScanProgress pending={scanning ? 1 : 0} />
 
         {repo.lastScanError && <InlineError>{repo.lastScanError}</InlineError>}
+
+        {/* Reading order is the priority order. What makes lurq act on this
+            repository — the one unfinished step, then the switch, then the file
+            that runs it — comes before the diagnostics that describe it. Those
+            were nine panels down, under five tiles and four analyses, on a page
+            whose whole purpose is to get a pull request opened. */}
+        <RepoNextStep repo={repo} setup={agentSetup} setupUrl={repo.setupUrl} />
+
+        <RepoPolicyPanel endpoint={`/api/repos/${repo.id}`} policy={repo.policy} demo={demo} />
+
+        <RepoSetup
+          workflow={repo.workflow}
+          workflowPath={repo.workflowPath}
+          setupUrl={repo.setupUrl}
+          mode={repoMode(repo.policy)}
+          setup={agentSetup}
+        />
 
         {drift && (
           <StatRow>
@@ -156,24 +186,6 @@ export default async function RepoDetailPage({
         />
 
         <UpgradeRuns runs={repo.runs} />
-
-        <RepoPolicyPanel endpoint={`/api/repos/${repo.id}`} policy={repo.policy} demo={demo} />
-
-        <RepoSetup
-          workflow={repo.workflow}
-          workflowPath={repo.workflowPath}
-          setupUrl={repo.setupUrl}
-          mode={repoMode(repo.policy)}
-          setup={{
-            repoFullName: repo.fullName,
-            workflowPath: repo.workflowPath,
-            workflow: repo.workflow,
-            mode: repoMode(repo.policy),
-            // Absolute, via SITE_ORIGIN: an agent cannot follow a relative path,
-            // and the origin is normalised there rather than spelled here.
-            keysUrl: `${SITE_ORIGIN}/dashboard/keys`,
-          }}
-        />
 
         {/* useSearchParams (RepoDeps reads ?show= and ?q=) client-renders the
             tree up to the nearest Suspense boundary on a prerendered route.

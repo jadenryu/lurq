@@ -39,8 +39,15 @@ export default async function McpServersPage() {
     <div>
       <PageHeader
         title="mcp servers"
-        subtitle="What every server your agents connect to really exposes, and what changed since you last looked."
+        subtitle="What your agents connect to, and what changed."
         demo={demo}
+        info={
+          <>
+            Every server your scans have read, of any kind — remote, npm, PyPI, Docker, private.
+            Read with your own configuration by your CLI or CI, so this is the contract your agents
+            actually receive, not what a registry advertises.
+          </>
+        }
         action={<CopyButton label="Copy scan command" copiedLabel="Copied" text={SCAN} />}
       />
 

@@ -26,9 +26,10 @@ export default async function DashboardRunsPage() {
   return (
     <div>
       <PageHeader
-        title="autopilot log"
-        subtitle="Every upgrade the autopilot has considered, what it concluded, what it did, and why it ran."
+        title="runs"
+        subtitle="What the autopilot did, and why it ran."
         demo={demo}
+        info="Every upgrade the autopilot considered, across every repository, with what it concluded and what triggered the run. Silence here has two explanations that look identical from the repository page — nothing needed doing, or the workflow was never committed — and this is where they come apart."
       />
 
       <PageBody>

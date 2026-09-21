@@ -6,6 +6,7 @@ import { Chip, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel"
 import { Button } from "@/components/ui/button";
 import { CopyAgentSetup } from "@/components/dashboard/copy-agent-setup";
 import type { AgentSetupInput } from "@/lib/agent-setup";
+import { MODE_LABEL, MODE_SUMMARY, type RepoMode } from "@/lib/lurq-issuer";
 
 /**
  * The setup step, shown as the file itself rather than a button that does
@@ -16,10 +17,11 @@ import type { AgentSetupInput } from "@/lib/agent-setup";
  * pre-filled. That means the thing granting write access is a commit they made,
  * reviewed, and can revert, not a permission they clicked past.
  */
-const MODE_CHIP: Record<"comment" | "fix" | "pr", { label: string; tone: "accent" | "neutral" }> = {
-  comment: { label: "analyse only", tone: "neutral" },
-  fix: { label: "fix mode", tone: "accent" },
-  pr: { label: "pr mode", tone: "accent" },
+/** Tone only. The words come from MODE_LABEL, so this chip and the control that sets it agree. */
+const MODE_TONE: Record<RepoMode, "accent" | "neutral"> = {
+  comment: "neutral",
+  fix: "accent",
+  pr: "accent",
 };
 
 export function RepoSetup({
@@ -38,7 +40,7 @@ export function RepoSetup({
    * is the mode that needs no API key, i.e. exactly the distinction this panel
    * exists to explain.
    */
-  mode: "comment" | "fix" | "pr";
+  mode: RepoMode;
   /**
    * Everything the agent brief needs EXCEPT the key, which is minted when the
    * button is pressed. The prompt cannot be built on the server any more: its
@@ -53,18 +55,22 @@ export function RepoSetup({
     <Panel>
       <PanelHeader
         title="workflow"
-        trailing={<Chip tone={MODE_CHIP[mode].tone}>{MODE_CHIP[mode].label}</Chip>}
+        trailing={<Chip tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</Chip>}
       />
 
+      {/* This panel used to re-teach the whole mode set in its own vocabulary,
+          beside a control that had just named the same three states differently.
+          One panel decides the mode; this one commits the file that runs it, and
+          says which mode the file it is handing you will run in. */}
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Add <code className="font-mono text-xs">{workflowPath}</code> to run the autopilot in your
-        own GitHub Actions. Three modes, and the middle one is the one most repos want:{" "}
-        <code className="font-mono text-xs">comment</code> plans the upgrades and checks them
-        against your code, writing the brief to the run summary without changing a line;{" "}
-        <code className="font-mono text-xs">fix</code> opens a pull request containing only what
-        the package itself proves — renamed call sites, and the range bump in every manifest —
-        which needs no API key; <code className="font-mono text-xs">pr</code> adds an agent that
-        migrates what a rule cannot and runs your tests.
+        own GitHub Actions. This file runs in{" "}
+        <span className="text-foreground">{MODE_LABEL[mode]}</span>: {MODE_SUMMARY[mode]}{" "}
+        <a href="#autopilot" className="text-foreground underline underline-offset-2">
+          Change that above
+        </a>{" "}
+        and copy the file again — a workflow already committed pins the mode it was generated
+        with.
       </p>
 
       <div className="mt-4 rounded-[var(--radius-control)] border border-border bg-muted/20 px-4 py-3">
@@ -119,12 +125,15 @@ export function RepoSetup({
         </p>
         <p className="text-sm leading-relaxed text-muted-foreground">
           <code className="font-mono text-xs text-foreground">ANTHROPIC_API_KEY</code> or{" "}
-          <code className="font-mono text-xs text-foreground">CLAUDE_CODE_OAUTH_TOKEN</code>: only
-          for <code className="font-mono text-xs">pr</code> mode.{" "}
-          <code className="font-mono text-xs">comment</code> and{" "}
-          <code className="font-mono text-xs">fix</code> need neither — and{" "}
-          <code className="font-mono text-xs">fix</code> still opens pull requests.
+          <code className="font-mono text-xs text-foreground">CLAUDE_CODE_OAUTH_TOKEN</code>:{" "}
+          {mode === "pr"
+            ? "required, because this repository is set to let the agent migrate what a rule cannot."
+            : "not needed at this setting. Only the agent uses one."}
         </p>
+        {/* Only at the setting that needs the credential. These two bullets are
+            the longest text on the page and they were being read by every repo,
+            including the ones the panel had just told needed no key at all. */}
+        {mode === "pr" && (
         <ul className="ml-4 list-disc space-y-1.5 text-sm leading-relaxed text-muted-foreground">
           <li>
             Already on Claude Pro or Max? Run{" "}
@@ -142,6 +151,7 @@ export function RepoSetup({
             secret shared across repositories, since an OAuth token belongs to whoever created it.
           </li>
         </ul>
+        )}
       </div>
     </Panel>
   );

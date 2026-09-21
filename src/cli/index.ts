@@ -89,6 +89,25 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── Autopilot ─────────────────────────────────────────────────────────────
+  const autopilot = program
+    .command('autopilot')
+    .description('set up and inspect the upgrade autopilot for a repository');
+
+  autopilot
+    .command('init')
+    .description('set the repository secret and write the upgrade workflow (never commits)')
+    .option('--repo <owner/name>', 'defaults to the origin remote of this checkout')
+    .option('--mode <mode>', 'comment, fix, or pr (default: fix — opens PRs, needs no model)')
+    .option('--api-key <key>', 'lurq API key (defaults to the stored one, then $LURQ_API_KEY)')
+    .option('--no-credential', 'skip the Anthropic credential step in pr mode')
+    .option('--force', 'overwrite an existing workflow file')
+    .option('--json', 'machine-readable summary')
+    .action(async (opts: Record<string, unknown>) => {
+      const { runAutopilotInit } = await import('./autopilotInit');
+      await runAutopilotInit(opts as never);
+    });
+
   program
     .command('logout')
     .description('remove the stored API key from this machine')

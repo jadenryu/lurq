@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { acknowledgeChange } from "@/app/dashboard/mcp/actions";
+import { acknowledgeChange } from "@/app/dashboard/(upkeep)/mcp/actions";
 import { Button } from "@/components/ui/button";
 
 /** Marks a change as seen. A flap back to it re-opens it on the API side. */

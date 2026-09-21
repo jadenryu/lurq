@@ -49,15 +49,12 @@ const WORKSPACE: NavItem[] = [
   // "autopilot" is what the page has always been for — the per-repo section is
   // already anchored `#autopilot` — and it names the outcome instead of the
   // noun.
+  // One row for the whole upkeep layer. The log of what the autopilot did and
+  // the MCP contracts it watches used to be rail rows of their own, which made
+  // three faces of one job look like three products — and put the answer to
+  // "did it run" a rail-trip away from the switch that arms it. They are tabs
+  // inside the hub now; the routes did not move.
   { href: "/dashboard/repos", label: "autopilot" },
-  // What the autopilot has actually DONE, as opposed to what it is permitted to
-  // do. Beside the page that arms it, because "is it on" and "what has it done"
-  // are the same question asked twice — and the second had no page at all, so a
-  // user who armed a repo and saw no pull requests had nowhere to look.
-  { href: "/dashboard/runs", label: "autopilot log" },
-  // Every MCP server the account has scanned, with what changed. Beside
-  // autopilot because both are "what my agents depend on, kept honest".
-  { href: "/dashboard/mcp", label: "mcp servers" },
   { href: "/dashboard/policy", label: "policy" },
   { href: "/dashboard/audit", label: "audit log" },
   { href: "/dashboard/contributions", label: "contributions" },
@@ -88,8 +85,21 @@ const ACCOUNT: NavItem[] = [
 const ALL: NavItem[] = [...WORKSPACE, ...ACCOUNT];
 
 /** `/dashboard` is only active on an exact match, every other route is a prefix. */
+/**
+ * The routes the one "autopilot" row stands for.
+ *
+ * Its href is /dashboard/repos, so prefix matching alone would leave the rail
+ * with nothing lit while the reader is on the runs or mcp tab of the same hub —
+ * a rail that claims you are nowhere.
+ */
+const UPKEEP = ["/dashboard/repos", "/dashboard/runs", "/dashboard/mcp"];
+
 function isActive(pathname: string, href: string): boolean {
-  return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+  if (href === "/dashboard") return pathname === href;
+  if (href === "/dashboard/repos") {
+    return UPKEEP.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+  }
+  return pathname.startsWith(href);
 }
 
 /**
