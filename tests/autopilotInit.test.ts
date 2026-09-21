@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { needsAgentCredential, parseRepoFromRemote } from '../src/cli/autopilotInit';
+import {
+  missingWorkflowScope,
+  needsAgentCredential,
+  parseRepoFromRemote,
+} from '../src/cli/autopilotInit';
 
 describe('parseRepoFromRemote', () => {
   it('reads the three remote shapes a real checkout has', () => {
@@ -37,5 +41,21 @@ describe('needsAgentCredential', () => {
     expect(needsAgentCredential('pr')).toBe(true);
     expect(needsAgentCredential('fix')).toBe(false);
     expect(needsAgentCredential('comment')).toBe(false);
+  });
+});
+
+describe('missingWorkflowScope', () => {
+  it('flags a classic token without the workflow scope', () => {
+    // Plain `gh auth login` grants exactly this, and GitHub answers a workflow
+    // write without the scope with a 404 — the error every first run would hit.
+    expect(missingWorkflowScope("  - Token scopes: 'gist', 'read:org', 'repo'")).toBe(true);
+    expect(missingWorkflowScope("  - Token scopes: 'gist', 'repo', 'workflow'")).toBe(false);
+  });
+
+  it('does not guess when the status lists no scopes', () => {
+    // Fine-grained tokens and GH_TOKEN print no scope line; the write itself will say.
+    expect(missingWorkflowScope('✓ Logged in to github.com account someone (GH_TOKEN)')).toBe(
+      false,
+    );
   });
 });

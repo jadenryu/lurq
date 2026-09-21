@@ -96,12 +96,16 @@ export function buildProgram(): Command {
 
   autopilot
     .command('init')
-    .description('set the repository secret and write the upgrade workflow (never commits)')
-    .option('--repo <owner/name>', 'defaults to the origin remote of this checkout')
+    .description('turn the autopilot on for one or many repositories: secret, workflow, first run')
+    .option('--repo <owner/name...>', "one or more repositories (default: this checkout's origin)")
     .option('--mode <mode>', 'comment, fix, or pr (default: fix — opens PRs, needs no model)')
     .option('--api-key <key>', 'lurq API key (defaults to the stored one, then $LURQ_API_KEY)')
     .option('--no-credential', 'skip the Anthropic credential step in pr mode')
-    .option('--force', 'overwrite an existing workflow file')
+    .option('--force', 'replace a workflow that is already committed')
+    .option(
+      '--pr',
+      'open a pull request in each repository instead of committing to the default branch',
+    )
     .option('--json', 'machine-readable summary')
     .action(async (opts: Record<string, unknown>) => {
       const { runAutopilotInit } = await import('./autopilotInit');
