@@ -256,6 +256,30 @@ export function repoMode(policy: RepoPolicy): "comment" | "fix" | "pr" {
   return policy.mode ?? "pr";
 }
 
+export type RepoMode = ReturnType<typeof repoMode>;
+
+/**
+ * What each mode is called on screen, in one place.
+ *
+ * `comment`/`fix`/`pr` are the server's words and they leak: the workflow panel
+ * badged an armed repo "pr mode" while the control that set it said "provable
+ * fixes", so one page named the same state two ways and neither name said what
+ * it does. These are the names; the raw ids stay in the YAML, where they are
+ * addressed to a machine.
+ */
+export const MODE_LABEL: Record<RepoMode, string> = {
+  comment: "off",
+  fix: "provable fixes",
+  pr: "fixes + agent",
+};
+
+/** What the run can do, for a panel that has to state it without re-teaching the set. */
+export const MODE_SUMMARY: Record<RepoMode, string> = {
+  comment: "Reads this repository and reports drift. It opens nothing.",
+  fix: "Opens a pull request with what the package itself proves: renamed call sites and the range bump in every manifest. No API key.",
+  pr: "Opens the provable changes, then an agent migrates what a rule cannot and runs your tests. Needs an Anthropic credential in this repository's secrets.",
+};
+
 export interface DashboardRepo {
   id: number;
   fullName: string;

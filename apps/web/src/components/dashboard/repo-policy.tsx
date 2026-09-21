@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronRight } from "lucide-react";
 import { Chip, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
-import { repoMode, type RepoPolicy } from "@/lib/lurq-issuer";
+import { MODE_LABEL, repoMode, type RepoPolicy } from "@/lib/lurq-issuer";
 
 /**
  * What autopilot is set to, as one question instead of two.
@@ -41,13 +41,6 @@ const MODES: { id: "comment" | "fix" | "pr"; label: string; note: string; blurb:
       "Everything in provable fixes, then an agent migrates what a rule cannot. Needs ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in the repository's secrets, or the run fails.",
   },
 ];
-
-/** The one place the three states are named, so header, chip and options agree. */
-const STATE: Record<"comment" | "fix" | "pr", string> = {
-  comment: "off",
-  fix: "provable fixes",
-  pr: "fixes + agent",
-};
 
 const SCOPES: { id: RepoPolicy["scope"]; label: string; blurb: string }[] = [
   {
@@ -231,7 +224,7 @@ export function RepoPolicyPanel({
         <span className="flex items-center gap-2">
           {/* Saved state, not the state of the controls — see `saved` above. */}
           <Chip tone={saved.enabled ? "accent" : "neutral"} dot>
-            {STATE[savedMode]}
+            {MODE_LABEL[savedMode]}
           </Chip>
           {collapsible && (
             <ChevronRight
@@ -352,6 +345,14 @@ export function RepoPolicyPanel({
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-edge pt-4">
         {extra && <div className="mr-auto">{extra}</div>}
+        {/* A panel of dead controls with no reason given reads as a bug, and was
+            reported as one. The header already carries a "demo data" chip, but
+            it is at the top of the page and says nothing about what is editable. */}
+        {demo && (
+          <span className="mr-auto text-[12.5px] text-ink-3">
+            Demo account — these settings are read-only.
+          </span>
+        )}
         {error && <span className="font-mono text-xs text-bad">{error}</span>}
         {/* The receipt. A save that refreshes the page and says nothing is
             indistinguishable from a click that missed. */}
