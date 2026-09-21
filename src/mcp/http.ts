@@ -70,6 +70,7 @@ import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
+import { dispatchUpgradeWorkflow } from '../github/dispatch';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
 import { applyScope, permits, repoMode } from '../github/scope';
 import { parseDepsInput, parseRepoFullName, parseUpgradeRuns } from '../github/runs';
@@ -1603,6 +1604,45 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       } catch (err) {
         logger.error('repo scan failed:', err instanceof Error ? err.message : String(err));
         res.status(500).json({ error: 'Could not scan repo.' });
+      }
+    },
+  );
+
+  /**
+   * Start this repo's upgrade workflow now.
+   *
+   * `dispatchUpgradeWorkflow` already existed and was reachable from exactly one
+   * place: ingestion, when a dependency shipped a new major. So a user who armed
+   * a repository and committed the workflow still waited for the cron — Mondays
+   * at 06:00 UTC on the default scope, up to seven days of nothing happening,
+   * which is indistinguishable from a product that does not work.
+   *
+   * Every outcome is a 200 with a name. They are all ordinary states of a
+   * correctly-working system — not armed, no workflow committed, the App
+   * lacking `actions: write` — and the dashboard has something specific to say
+   * about each, which it cannot do if they all arrive as a 500.
+   */
+  app.post(
+    '/repos/:id/dispatch',
+    requireIssuerSecret,
+    requireGithubApp,
+    async (req: Request, res: Response) => {
+      const ownerId = ownerFrom(req);
+      const id = Number(req.params.id);
+      if (!ownerId || !Number.isInteger(id)) {
+        res.status(400).json({ error: 'ownerId and a numeric id are required.' });
+        return;
+      }
+      try {
+        const row = await getRepo(db, ownerId, id);
+        if (!row) {
+          res.status(404).json({ error: 'Repo not found.' });
+          return;
+        }
+        res.status(200).json({ outcome: await dispatchUpgradeWorkflow(row) });
+      } catch (err) {
+        logger.error('repo dispatch failed:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Could not start a run.' });
       }
     },
   );

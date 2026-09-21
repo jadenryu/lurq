@@ -529,6 +529,28 @@ export async function scanRepo(ownerId: string, id: number): Promise<void> {
   assertRepoOk(res, "Could not scan the repo.");
 }
 
+/**
+ * Every state the dispatch can land in, named. The dashboard says something
+ * different for each, so they must not collapse into "it failed".
+ */
+export type DispatchOutcome =
+  | "dispatched"
+  | "not-armed"
+  | "permission-denied"
+  | "no-workflow"
+  | "failed";
+
+export async function dispatchRepoRun(ownerId: string, id: number): Promise<DispatchOutcome> {
+  const res = await issuerFetch(`/repos/${id}/dispatch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ownerId }),
+  });
+  assertRepoOk(res, "Could not start a run.");
+  const data = (await res.json()) as { outcome?: DispatchOutcome };
+  return data.outcome ?? "failed";
+}
+
 export async function updateRepoPolicy(
   ownerId: string,
   id: number,

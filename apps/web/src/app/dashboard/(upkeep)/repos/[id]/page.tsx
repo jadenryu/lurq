@@ -10,6 +10,7 @@ import { RepoDeps } from "@/components/dashboard/repo-deps";
 import { RepoPolicyPanel } from "@/components/dashboard/repo-policy";
 import { RepoSetup } from "@/components/dashboard/repo-setup";
 import { RepoNextStep } from "@/components/dashboard/repo-next-step";
+import { RunNow } from "@/components/dashboard/run-now";
 import { ScanProgress } from "@/components/dashboard/scan-progress";
 import { StackConflictsPanel } from "@/components/dashboard/stack-conflicts";
 import { TransitiveRiskPanel } from "@/components/dashboard/transitive-risk";
@@ -90,6 +91,10 @@ export default async function RepoDetailPage({
                 has a "copy setup for agent" button, and two controls reading the
                 same words while doing unrelated jobs is the ambiguity this
                 page is meant to remove. */}
+            {/* Armed repos only: a run button on a repo set to off would be a
+                control that does nothing, which is what the policy panel is
+                written to avoid. */}
+            {repoMode(repo.policy) !== "comment" && <RunNow repoId={repo.id} demo={demo} />}
             <CopyButton label="Copy findings" copiedLabel="Copied" text={repoBrief(repo)} />
             <Link href="/dashboard/repos" className={buttonVariants({ variant: "outline" })}>
               All repositories
