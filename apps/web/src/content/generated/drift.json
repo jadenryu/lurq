@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-20T12:34:37.821Z",
+  "generatedAt": "2026-09-21T14:26:58.158Z",
   "source": "lurq index: package_versions joined to packages",
   "reproduce": "npx tsx scripts/gen-drift.ts",
   "cutoffs": [
@@ -13,8 +13,8 @@
   "buckets": {
     "2026-05-01": {
       "totals": {
-        "drifted": 2859,
-        "tracked": 39959
+        "drifted": 2876,
+        "tracked": 40127
       },
       "rows": [
         {
@@ -38,16 +38,6 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.3",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 365699168
-        },
-        {
           "name": "chalk",
           "major_then": 5,
           "version_then": "5.6.2",
@@ -55,7 +45,17 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 359439475
+          "weekly_downloads": 384633239
+        },
+        {
+          "name": "commander",
+          "major_then": 14,
+          "version_then": "14.0.3",
+          "major_now": 15,
+          "version_now": "15.0.0",
+          "bumped_at": "2026-05-29",
+          "majors_since": 1,
+          "weekly_downloads": 371055956
         },
         {
           "name": "@types/node",
@@ -101,8 +101,8 @@
     },
     "2026-02-16": {
       "totals": {
-        "drifted": 3611,
-        "tracked": 37366
+        "drifted": 3643,
+        "tracked": 37530
       },
       "rows": [
         {
@@ -126,14 +126,14 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "wrap-ansi",
-          "major_then": 9,
-          "version_then": "9.0.2",
-          "major_now": 10,
-          "version_now": "10.0.1",
-          "bumped_at": "2026-02-20",
+          "name": "chalk",
+          "major_then": 5,
+          "version_then": "5.6.2",
+          "major_now": 6,
+          "version_now": "6.0.0",
+          "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 438138852
+          "weekly_downloads": 384633239
         },
         {
           "name": "commander",
@@ -143,17 +143,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 1,
-          "weekly_downloads": 365699168
-        },
-        {
-          "name": "chalk",
-          "major_then": 5,
-          "version_then": "5.6.2",
-          "major_now": 6,
-          "version_now": "6.0.0",
-          "bumped_at": "2026-07-26",
-          "majors_since": 1,
-          "weekly_downloads": 359439475
+          "weekly_downloads": 371055956
         },
         {
           "name": "@types/node",
@@ -164,6 +154,16 @@
           "bumped_at": "2026-06-19",
           "majors_since": 1,
           "weekly_downloads": 316521424
+        },
+        {
+          "name": "wrap-ansi",
+          "major_then": 9,
+          "version_then": "9.0.2",
+          "major_now": 10,
+          "version_now": "10.0.2",
+          "bumped_at": "2026-02-20",
+          "majors_since": 1,
+          "weekly_downloads": 313151998
         },
         {
           "name": "js-yaml",
@@ -189,8 +189,8 @@
     },
     "2026-01-01": {
       "totals": {
-        "drifted": 3946,
-        "tracked": 36016
+        "drifted": 3986,
+        "tracked": 36174
       },
       "rows": [
         {
@@ -214,16 +214,6 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "wrap-ansi",
-          "major_then": 9,
-          "version_then": "9.0.2",
-          "major_now": 10,
-          "version_now": "10.0.1",
-          "bumped_at": "2026-02-20",
-          "majors_since": 1,
-          "weekly_downloads": 438138852
-        },
-        {
           "name": "brace-expansion",
           "major_then": 4,
           "version_then": "4.0.1",
@@ -234,16 +224,6 @@
           "weekly_downloads": 438003037
         },
         {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.2",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 365699168
-        },
-        {
           "name": "chalk",
           "major_then": 5,
           "version_then": "5.6.2",
@@ -251,7 +231,17 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 359439475
+          "weekly_downloads": 384633239
+        },
+        {
+          "name": "commander",
+          "major_then": 14,
+          "version_then": "14.0.2",
+          "major_now": 15,
+          "version_now": "15.0.0",
+          "bumped_at": "2026-05-29",
+          "majors_since": 1,
+          "weekly_downloads": 371055956
         },
         {
           "name": "@types/node",
@@ -262,6 +252,16 @@
           "bumped_at": "2026-06-19",
           "majors_since": 1,
           "weekly_downloads": 316521424
+        },
+        {
+          "name": "wrap-ansi",
+          "major_then": 9,
+          "version_then": "9.0.2",
+          "major_now": 10,
+          "version_now": "10.0.2",
+          "bumped_at": "2026-02-20",
+          "majors_since": 1,
+          "weekly_downloads": 313151998
         },
         {
           "name": "js-yaml",
@@ -277,8 +277,8 @@
     },
     "2025-12-01": {
       "totals": {
-        "drifted": 4051,
-        "tracked": 35216
+        "drifted": 4078,
+        "tracked": 35359
       },
       "rows": [
         {
@@ -302,16 +302,6 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "wrap-ansi",
-          "major_then": 9,
-          "version_then": "9.0.2",
-          "major_now": 10,
-          "version_now": "10.0.1",
-          "bumped_at": "2026-02-20",
-          "majors_since": 1,
-          "weekly_downloads": 438138852
-        },
-        {
           "name": "brace-expansion",
           "major_then": 4,
           "version_then": "4.0.1",
@@ -322,16 +312,6 @@
           "weekly_downloads": 438003037
         },
         {
-          "name": "commander",
-          "major_then": 14,
-          "version_then": "14.0.2",
-          "major_now": 15,
-          "version_now": "15.0.0",
-          "bumped_at": "2026-05-29",
-          "majors_since": 1,
-          "weekly_downloads": 365699168
-        },
-        {
           "name": "chalk",
           "major_then": 5,
           "version_then": "5.6.2",
@@ -339,7 +319,17 @@
           "version_now": "6.0.0",
           "bumped_at": "2026-07-26",
           "majors_since": 1,
-          "weekly_downloads": 359439475
+          "weekly_downloads": 384633239
+        },
+        {
+          "name": "commander",
+          "major_then": 14,
+          "version_then": "14.0.2",
+          "major_now": 15,
+          "version_now": "15.0.0",
+          "bumped_at": "2026-05-29",
+          "majors_since": 1,
+          "weekly_downloads": 371055956
         },
         {
           "name": "@types/node",
@@ -350,6 +340,16 @@
           "bumped_at": "2026-06-19",
           "majors_since": 2,
           "weekly_downloads": 316521424
+        },
+        {
+          "name": "wrap-ansi",
+          "major_then": 9,
+          "version_then": "9.0.2",
+          "major_now": 10,
+          "version_now": "10.0.2",
+          "bumped_at": "2026-02-20",
+          "majors_since": 1,
+          "weekly_downloads": 313151998
         },
         {
           "name": "js-yaml",
@@ -365,8 +365,8 @@
     },
     "2025-08-01": {
       "totals": {
-        "drifted": 4518,
-        "tracked": 32955
+        "drifted": 4546,
+        "tracked": 33082
       },
       "rows": [
         {
@@ -398,16 +398,6 @@
           "bumped_at": "2026-07-26",
           "majors_since": 1,
           "weekly_downloads": 501448901
-        },
-        {
-          "name": "wrap-ansi",
-          "major_then": 9,
-          "version_then": "9.0.0",
-          "major_now": 10,
-          "version_now": "10.0.1",
-          "bumped_at": "2026-02-20",
-          "majors_since": 1,
-          "weekly_downloads": 438138852
         },
         {
           "name": "brace-expansion",
@@ -440,6 +430,16 @@
           "weekly_downloads": 385587178
         },
         {
+          "name": "chalk",
+          "major_then": 5,
+          "version_then": "5.4.1",
+          "major_now": 6,
+          "version_now": "6.0.0",
+          "bumped_at": "2026-07-26",
+          "majors_since": 1,
+          "weekly_downloads": 384633239
+        },
+        {
           "name": "commander",
           "major_then": 14,
           "version_then": "14.0.0",
@@ -447,14 +447,14 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 1,
-          "weekly_downloads": 365699168
+          "weekly_downloads": 371055956
         }
       ]
     },
     "2025-01-01": {
       "totals": {
-        "drifted": 5201,
-        "tracked": 30545
+        "drifted": 5214,
+        "tracked": 30651
       },
       "rows": [
         {
@@ -488,16 +488,6 @@
           "weekly_downloads": 501448901
         },
         {
-          "name": "wrap-ansi",
-          "major_then": 9,
-          "version_then": "9.0.0",
-          "major_now": 10,
-          "version_now": "10.0.1",
-          "bumped_at": "2026-02-20",
-          "majors_since": 1,
-          "weekly_downloads": 438138852
-        },
-        {
           "name": "brace-expansion",
           "major_then": 4,
           "version_then": "4.0.0",
@@ -528,6 +518,16 @@
           "weekly_downloads": 385587178
         },
         {
+          "name": "chalk",
+          "major_then": 5,
+          "version_then": "5.4.1",
+          "major_now": 6,
+          "version_now": "6.0.0",
+          "bumped_at": "2026-07-26",
+          "majors_since": 1,
+          "weekly_downloads": 384633239
+        },
+        {
           "name": "commander",
           "major_then": 13,
           "version_then": "13.0.0",
@@ -535,7 +535,7 @@
           "version_now": "15.0.0",
           "bumped_at": "2026-05-29",
           "majors_since": 2,
-          "weekly_downloads": 365699168
+          "weekly_downloads": 371055956
         }
       ]
     }
