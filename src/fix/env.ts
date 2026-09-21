@@ -113,13 +113,19 @@ const isAmbient = (name: string): boolean =>
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
- * Files whose env reads are supplied by the thing running them.
+ * Files that exercise code rather than running it in anger.
  *
  * Measured, not assumed: scanning this repo reported FIXTURE_ECHO and
  * LURQ_TEST_DATABASE_URL as undeclared. Both are set by the harness that
  * spawns the code reading them, so every one of those findings was false.
+ *
+ * Exported because it is a general rule about where a finding is worth
+ * raising, not a fact about environment variables: `model.ts` reaches the same
+ * conclusion from the same evidence — a retired identifier that a test asserts
+ * ON is a fixture, and rewriting it breaks the test that proves the detector
+ * works. Two detectors, one definition, so they cannot drift apart.
  */
-const HARNESS_FILE = /(^|\/)(tests?|__tests__|e2e|fixtures?)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
+export const HARNESS_FILE = /(^|\/)(tests?|__tests__|e2e|fixtures?)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
 
 export interface EnvRead {
   name: string;
