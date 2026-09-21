@@ -9,136 +9,14 @@
  * the stdio server alone: on the hosted path the files are not there, and a
  * tool that silently answers about nothing is worse than a tool that is absent.
  *
- * Built to grow. `FixDomain` already names four domains and three of them have
- * detectors; the dispatch table below is the seam, so adding `api` later is one
- * entry rather than a second tool. A domain that cannot run says why, and a
- * skipped domain is reported rather than quietly producing no findings —
- * "nothing found" and "never looked" must not read the same to a model.
+ * The detection itself is `src/fix/domains.ts`, which `lurq fix` runs too. This
+ * file is the MCP face of it and nothing more — when the two were the same
+ * file, the command line could not reach the dispatch table and quietly grew a
+ * second, smaller pipeline of its own.
  */
-import type { FixDomain, Finding } from '../fix/types';
-
-/** Source files read before a scan stops. A project past this says so. */
-const SCAN_LIMIT = 20_000;
-
-export interface UpkeepTarget {
-  package: string;
-  fromVersion: string;
-  toVersion: string;
-}
-
-export interface UpkeepInput {
-  /** Project root. Defaults to the process's working directory. */
-  dir?: string;
-  /**
-   * Upgrades to assess. Optional, and its absence is why the package domain
-   * may be skipped: working out what moved needs the index, and this tool is
-   * deliberately usable with no API key.
-   */
-  upgrade?: UpkeepTarget[];
-  /** Limit to these domains. Default: everything that can run. */
-  domains?: FixDomain[];
-}
-
-export interface UpkeepReport {
-  root: string;
-  /** Domains that actually ran. */
-  ran: FixDomain[];
-  /** Domains that did not, and why — never silently empty. */
-  skipped: { domain: FixDomain; reason: string }[];
-  findings: Finding[];
-  /**
-   * A source file past the scan limit was never opened, so this is not a
-   * complete answer. Reported rather than folded into a clean result.
-   */
-  truncated: boolean;
-}
-
-interface DomainResult {
-  findings: Finding[];
-  truncated?: boolean;
-  /** Set when the domain could not run at all. */
-  skipped?: string;
-}
-
-/**
- * One entry per domain. The whole point of the table: a new domain is a new
- * entry, not a new tool and not another branch in a handler.
- */
-const DOMAINS: Record<string, (root: string, input: UpkeepInput) => Promise<DomainResult>> = {
-  /** Variables the code reads that no .env file declares. No key, no network. */
-  env: async (root) => {
-    const { envFindings } = await import('../fix/env');
-    const plan = envFindings(root, { limit: SCAN_LIMIT });
-    return { findings: plan.findings, truncated: plan.truncated };
-  },
-
-  /**
-   * Renames the package itself proves, the manifest ranges an upgrade leaves
-   * stale, and a brief for everything that needs judgement.
-   *
-   * Reads the two published versions from npm, so it needs the network but no
-   * API key — the same contract `check-upgrade` advertises.
-   */
-  package: async (root, input) => {
-    const targets = input.upgrade ?? [];
-    if (targets.length === 0) {
-      return {
-        findings: [],
-        skipped:
-          'no upgrades given. Pass `upgrade` with the versions to assess, or run `lurq fix` in the project to have them worked out from the index.',
-      };
-    }
-    const { scanReferences } = await import('../surface/references');
-    const { checkUpgrade } = await import('../surface/upgrade');
-    const { renamePlan } = await import('../fix/rename');
-    const { manifestFindings } = await import('../fix/manifest');
-
-    const stats = { files: 0, truncated: false };
-    const refs = scanReferences(root, { limit: SCAN_LIMIT, stats });
-    const report = await checkUpgrade(targets, refs, { rootDir: root });
-
-    return {
-      findings: [...renamePlan(report).findings, ...manifestFindings(root, targets).findings],
-      truncated: stats.truncated,
-    };
-  },
-};
-
-/** Domains with a detector today. `api` is declared in FixDomain and has none. */
-const AVAILABLE: FixDomain[] = ['env', 'package'];
-
-export async function handleUpkeep(input: UpkeepInput = {}): Promise<UpkeepReport> {
-  const root = input.dir?.trim() || process.cwd();
-  const wanted = input.domains?.length ? input.domains : AVAILABLE;
-
-  const findings: Finding[] = [];
-  const ran: FixDomain[] = [];
-  const skipped: UpkeepReport['skipped'] = [];
-  let truncated = false;
-
-  for (const domain of wanted) {
-    const run = DOMAINS[domain];
-    if (!run) {
-      // Asked for by name but not built yet — said plainly, because a model
-      // reading an empty result would otherwise conclude the project is clean.
-      skipped.push({ domain, reason: `lurq has no detector for the ${domain} domain yet` });
-      continue;
-    }
-    try {
-      const result = await run(root, input);
-      if (result.skipped) {
-        skipped.push({ domain, reason: result.skipped });
-        continue;
-      }
-      findings.push(...result.findings);
-      if (result.truncated) truncated = true;
-      ran.push(domain);
-    } catch (err) {
-      // One domain failing must not take the others with it, and the failure
-      // is reported as a skip rather than as a clean domain.
-      skipped.push({ domain, reason: err instanceof Error ? err.message : String(err) });
-    }
-  }
-
-  return { root, ran, skipped, findings, truncated };
-}
+export {
+  runDomains as handleUpkeep,
+  type DomainInput as UpkeepInput,
+  type DomainReport as UpkeepReport,
+  type DomainTarget as UpkeepTarget,
+} from '../fix/domains';

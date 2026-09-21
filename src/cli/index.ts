@@ -366,7 +366,7 @@ export function buildProgram(): Command {
     .command('fix')
     .argument('[dir]', 'project directory to scan (default: current)', '.')
     .description(
-      'write the upgrade changes that need no judgement, and brief the agent on the rest',
+      'write the changes that need no judgement — a rename an upgrade proves, a model id the provider retired — and brief the agent on the rest',
     )
     // With neither --plan nor --upgrade it works out what moved by itself, which
     // is the only part that asks our API anything. Naming the versions keeps the
