@@ -37,6 +37,39 @@ const upgrade = (over: Partial<UpgradePlanResult['upgrades'][number]> = {}) =>
     ...over,
   }) as UpgradePlanResult['upgrades'][number];
 
+const dead = (code = 'model-retired:claude-2.0') =>
+  ({ domain: 'model', code, severity: 'blocking', detail: 'retired' }) as const;
+
+describe('planHeadline, with what the source says', () => {
+  it('speaks at all on a repo whose dependencies are all current', () => {
+    // The whole point of merging the source domains into this line: a project
+    // with nothing to upgrade used to get silence, and silence over a call that
+    // already fails is the worst answer available.
+    expect(planHeadline(plan())).toBeNull();
+    expect(planHeadline(plan(), [dead()])).toBe(
+      '1 model id(s) the provider has retired — every call using them fails.',
+    );
+  });
+
+  it('leads with the call that already fails, not the dependency that might', () => {
+    const line = planHeadline(plan({ upgrades: [upgrade({ advisories: 1 })] }), [dead()]);
+    expect(line!.indexOf('retired')).toBeLessThan(line!.indexOf('dependencies behind'));
+    expect(line).toContain('1 of 60 dependencies behind');
+  });
+
+  it('ignores a source finding that is not yet failing', () => {
+    // A deprecated id still serves. Counting it here would make the strongest
+    // sentence lurq prints mean something weaker than it says.
+    const warn = {
+      domain: 'model',
+      code: 'model-deprecated:x',
+      severity: 'warning',
+      detail: 'dated',
+    } as const;
+    expect(planHeadline(plan(), [warn])).toBeNull();
+  });
+});
+
 describe('planHeadline', () => {
   it('says nothing about a project that is current', () => {
     expect(planHeadline(plan())).toBeNull();

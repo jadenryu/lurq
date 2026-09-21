@@ -6,6 +6,7 @@
  * Nothing about the source is sent: the request body is the dependency block
  * that is already public in any published package.json.
  */
+import type { Finding } from '../fix/types';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parseManifest } from '../github/manifests';
@@ -218,21 +219,73 @@ export function formatUpgradePlan(plan: UpgradePlanResult): string {
  * a congratulation, for the same reason: this line has to mean something every
  * time it appears.
  */
-export function planHeadline(plan: UpgradePlanResult): string | null {
+export function planHeadline(plan: UpgradePlanResult, source: Finding[] = []): string | null {
   // `upgrades` is capped at the brief cap and the rest land in `omitted`; they
   // are drifted too, and a headline that counted only the briefed ones would
   // understate the repo on exactly the largest repos.
   const behind = plan.upgrades.length + plan.omitted;
-  if (behind === 0) return null;
 
-  const advisories = plan.upgrades.filter((u) => u.advisories > 0).length;
-  const removes = plan.upgrades.filter((u) => u.verdict === 'removes-exports').length;
-  const parts = [`${behind} of ${plan.deps} dependencies behind`];
-  if (advisories) parts.push(`${advisories} with a security advisory`);
-  if (removes) parts.push(`${removes} removing public exports`);
+  // Leads, and on its own is enough to print the line. A dependency being
+  // behind is a risk; a retired model id is a call that already fails, and the
+  // stronger fact does not belong in a trailing clause under a weaker one.
+  // This is also the only reason the headline can appear on a repository whose
+  // dependencies are all current — which is exactly the repository that most
+  // needs telling, because nothing else was ever going to tell it.
+  const dead = source.filter((f) => f.severity === 'blocking');
+  const parts: string[] = [];
+  if (dead.length) {
+    parts.push(`${dead.length} model id(s) the provider has retired — every call using them fails`);
+  }
+  if (behind === 0 && parts.length === 0) return null;
+
+  if (behind > 0) {
+    const advisories = plan.upgrades.filter((u) => u.advisories > 0).length;
+    const removes = plan.upgrades.filter((u) => u.verdict === 'removes-exports').length;
+    parts.push(`${behind} of ${plan.deps} dependencies behind`);
+    if (advisories) parts.push(`${advisories} with a security advisory`);
+    if (removes) parts.push(`${removes} removing public exports`);
+  }
 
   // Never let a partial scan read as a complete one — the same rule the full
   // report follows, in the space of one clause.
   const unassessed = plan.omitted + plan.pending + plan.untracked;
   return `${parts.join(', ')}.` + (unassessed ? ` ${unassessed} not assessed for breakage.` : '');
+}
+
+/**
+ * Source files read for the headline scan.
+ *
+ * Far below `DOMAIN_SCAN_LIMIT`, because the two scans are interrupting
+ * different people. `lurq fix` was asked to look and can take its time; this
+ * runs while someone waits for a shell prompt or an agent session to open, and
+ * a bounded partial answer there beats a complete one that arrives after the
+ * moment has passed. The cap is on files parsed, so the worst case is a
+ * property of the number rather than of the repository.
+ */
+export const HEADLINE_SCAN_LIMIT = 1_500;
+
+/**
+ * What the source says, for the first-contact line.
+ *
+ * Only the model domain, deliberately. `runDomains` would also return
+ * undeclared environment variables, and those are a real finding in a report
+ * someone opened — but this line appears unasked, so it has to mean something
+ * every single time. A variable with no declaration might be set in the shell;
+ * a retired model id is a call that fails. Only the second one earns the
+ * interruption.
+ *
+ * Never throws. Every caller of this is a courtesy line on a path whose real
+ * job is something else, and a scan that cannot run must not turn a working
+ * install or a starting session into an error.
+ */
+export async function scanSourceDrift(
+  dir: string,
+  limit = HEADLINE_SCAN_LIMIT,
+): Promise<Finding[]> {
+  try {
+    const { modelFindings } = await import('../fix/model');
+    return modelFindings(dir, { limit }).findings;
+  } catch {
+    return [];
+  }
 }

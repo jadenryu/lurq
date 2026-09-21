@@ -87,6 +87,14 @@ interface FixResult {
    * a skipped multi-major upgrade under a heading about proven renames.
    */
   skipped: { package: string; reason: string }[];
+  /**
+   * Domains that could not run, and why.
+   *
+   * Separate from `skipped`, which is about upgrades. A detector that threw
+   * produces no findings, and no findings is exactly what a clean project
+   * produces — so without this line a broken scan reads as a healthy repo.
+   */
+  unchecked: { domain: string; reason: string }[];
 }
 
 /**
@@ -166,7 +174,16 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
   const targets = [...split.targets, ...split.named];
   const skipped = split.skipped;
 
-  if (targets.length === 0) {
+  // Everything that needs only the source tree: an undeclared variable, a model
+  // id the provider turned off. These do not depend on an upgrade, which is why
+  // they run before the check for one — a repository whose every dependency is
+  // current used to be told "nothing to fix" over a retired model id sitting in
+  // its source, because this command could only ever see packages.
+  const { runDomains, SOURCE_DOMAINS } = await import('../fix/domains');
+  const source = await runDomains({ dir, domains: SOURCE_DOMAINS });
+  const unchecked = source.skipped.map((d) => ({ domain: d.domain, reason: d.reason }));
+
+  if (targets.length === 0 && source.findings.length === 0) {
     const empty: FixResult = {
       root: dir,
       files: [],
@@ -174,6 +191,7 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
       remaining: [],
       refused: [],
       skipped,
+      unchecked,
     };
     // Silence here would be a lie when every upgrade was skipped: "nothing to
     // fix" and "nothing I am willing to fix" are different sentences.
@@ -182,33 +200,52 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
           `Nothing attempted in ${dir}. ${skipped.length} upgrade(s) deliberately not tried:`,
           ...skippedLines(skipped),
         ].join('\n')
-      : asked
-        ? 'Nothing to check.'
-        : 'Nothing to fix: every dependency is current, or the repo policy holds the rest.';
+      : // Both branches name the source scan, because it runs either way now.
+        // "Nothing to check" was true when this command only knew about the
+        // upgrades it was handed; it reads as "I did not look" the moment
+        // something else was looked at.
+        `Nothing to fix in ${dir}: ${
+          asked
+            ? 'no upgrade named here needs a change'
+            : 'every dependency is current or held by the repo policy'
+        }, and ${source.ran.join(' and ')} found nothing in the source.`;
     console.log(opts.json ? JSON.stringify(empty, null, 2) : nothing);
     return;
   }
 
-  // No type check: a rename is a fact about the runtime surface, and the type
-  // check is the slowest part of `check-upgrade`. `lurq check-upgrade` is still
-  // the gate; this is the writer.
-  const refs = scanReferences(dir, { limit: SCAN_LIMIT });
-  const report = await checkUpgrade(targets, refs, { rootDir: dir });
-  const renames = renamePlan(report);
+  // Only when there is an upgrade to assess. On a repository reached here by a
+  // source finding alone, this would be two npm round trips to learn what
+  // `targets` already said.
+  let findings: Finding[] = [];
+  const refused: { symbol: string; file?: string; reason: string }[] = [];
+  if (targets.length > 0) {
+    // No type check: a rename is a fact about the runtime surface, and the type
+    // check is the slowest part of `check-upgrade`. `lurq check-upgrade` is
+    // still the gate; this is the writer.
+    const refs = scanReferences(dir, { limit: SCAN_LIMIT });
+    const report = await checkUpgrade(targets, refs, { rootDir: dir });
+    const renames = renamePlan(report);
 
-  // The manifest is part of performing the upgrade, not a tidy-up after it:
-  // rewritten imports plus a range that still pins the old major is a tree that
-  // does not build, and the next install puts the old version back.
-  const { findManifests } = await import('./upgradePlan');
-  const manifests = manifestFindings(dir, targets, {
-    files: findManifests(dir).map((abs) => relative(dir, abs) || 'package.json'),
-  });
+    // The manifest is part of performing the upgrade, not a tidy-up after it:
+    // rewritten imports plus a range that still pins the old major is a tree
+    // that does not build, and the next install puts the old version back.
+    const { findManifests } = await import('./upgradePlan');
+    const manifests = manifestFindings(dir, targets, {
+      files: findManifests(dir).map((abs) => relative(dir, abs) || 'package.json'),
+    });
 
-  const findings = [...renames.findings, ...manifests.findings];
-  const refused = [
-    ...renames.refused,
-    ...manifests.refused.map((r) => ({ symbol: r.package, file: r.file, reason: r.reason })),
-  ];
+    findings = [...renames.findings, ...manifests.findings];
+    refused.push(
+      ...renames.refused,
+      ...manifests.refused.map((r) => ({ symbol: r.package, file: r.file, reason: r.reason })),
+    );
+  }
+
+  // One list, one shape. `Finding` exists so every domain hands back the same
+  // thing and one engine applies it — staging, the diff, SARIF and the
+  // deterministic/brief split below all work on a model or env finding without
+  // knowing those domains exist.
+  findings = [...findings, ...source.findings];
 
   const result: FixResult = {
     root: dir,
@@ -217,6 +254,7 @@ export async function runFix(dir: string, opts: FixOpts): Promise<void> {
     remaining: [],
     refused: refused.map((r) => ({ symbol: r.symbol, file: r.file, reason: r.reason })),
     skipped,
+    unchecked,
   };
 
   // Stage every file before writing any of it. A stale offset in the fourth
@@ -282,9 +320,15 @@ function skippedLines(skipped: { package: string; reason: string }[]): string[] 
 export function formatFix(result: FixResult, diff: string, applied: boolean): string {
   const out: string[] = [];
   if (result.applied.length === 0 && result.remaining.length === 0) {
-    // Both halves, because both were checked: a stale message that names only
-    // renames reads as "the manifest was not looked at".
-    return `Nothing to fix in ${result.root}: no upgrade in this plan renames a symbol this code references, and every declared range already admits its target.`;
+    // Every half, because every half was checked: a message that names only
+    // renames reads as "the manifest was not looked at", and now that the
+    // source domains run here too, one that names only the upgrade reads as
+    // "the source was not looked at".
+    return [
+      `Nothing to fix in ${result.root}: no upgrade in this plan renames a symbol this code references,`,
+      'every declared range already admits its target, and nothing in the source names a retired model',
+      'or reads an undeclared variable.',
+    ].join(' ');
   }
 
   if (result.applied.length > 0) {
@@ -313,6 +357,13 @@ export function formatFix(result: FixResult, diff: string, applied: boolean): st
   if (result.skipped.length > 0) {
     out.push('', `${result.skipped.length} upgrade(s) deliberately not attempted:`);
     out.push(...skippedLines(result.skipped));
+  }
+
+  // Last, and never omitted. This is the line that stops a detector which threw
+  // from being read as a domain that found nothing.
+  if (result.unchecked.length > 0) {
+    out.push('', `${result.unchecked.length} domain(s) could not be checked:`);
+    for (const u of result.unchecked) out.push(`  ${u.domain}: ${u.reason}`);
   }
 
   if (result.refused.length > 0) {

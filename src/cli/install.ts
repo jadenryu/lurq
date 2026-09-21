@@ -526,13 +526,18 @@ const FIRST_SCAN_TIMEOUT_MS = 15_000;
 
 async function printFirstScan(remote: { url: string; apiKey: string }): Promise<void> {
   try {
-    const { buildUpgradePlan, planHeadline } = await import('./upgradePlan');
-    const plan = await buildUpgradePlan(process.cwd(), {
-      url: remote.url,
-      apiKey: remote.apiKey,
-      timeoutMs: FIRST_SCAN_TIMEOUT_MS,
-    });
-    const headline = planHeadline(plan);
+    const { buildUpgradePlan, planHeadline, scanSourceDrift } = await import('./upgradePlan');
+    // The manifest read needs the network and the source read does not, so the
+    // one that can be slow is not made to wait on the one that cannot.
+    const [plan, source] = await Promise.all([
+      buildUpgradePlan(process.cwd(), {
+        url: remote.url,
+        apiKey: remote.apiKey,
+        timeoutMs: FIRST_SCAN_TIMEOUT_MS,
+      }),
+      scanSourceDrift(process.cwd()),
+    ]);
+    const headline = planHeadline(plan, source);
     if (!headline) return;
     const { command } = lurqInvocation();
     console.log(`\n${yellow('!')} ${bold('In this project right now:')} ${headline}`);

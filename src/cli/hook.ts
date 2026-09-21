@@ -482,9 +482,13 @@ async function sessionDrift(input: Record<string, any>): Promise<string | null> 
   if (typeof cwd !== 'string' || !isJsProject(cwd)) return null;
   if (unseen(input.session_id, [`scan:${cwd}`]).length === 0) return null;
   try {
-    const { buildUpgradePlan, planHeadline } = await import('./upgradePlan');
-    const headline = planHeadline(await buildUpgradePlan(cwd, { timeoutMs: SCAN_TIMEOUT_MS }));
-    return headline && `lurq scanned this project's manifests: ${headline}`;
+    const { buildUpgradePlan, planHeadline, scanSourceDrift } = await import('./upgradePlan');
+    const [plan, source] = await Promise.all([
+      buildUpgradePlan(cwd, { timeoutMs: SCAN_TIMEOUT_MS }),
+      scanSourceDrift(cwd),
+    ]);
+    const headline = planHeadline(plan, source);
+    return headline && `lurq scanned this project: ${headline}`;
   } catch {
     return null; // Offline, unkeyed, no manifest: the session starts as if this were not here.
   }
