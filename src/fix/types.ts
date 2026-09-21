@@ -1,8 +1,9 @@
 /**
  * One shape for "something is wrong, and here is the change that fixes it".
  *
- * lurq already detects across four domains — packages, MCP servers and their
- * configs, declared environment, API specs — and each one grew its own report
+ * lurq already detects across five domains — packages, MCP servers and their
+ * configs, declared environment, API specs, model identifiers — and each one
+ * grew its own report
  * shape. That is fine for printing and useless for acting: an auto-fix loop
  * needs every domain to hand back the same thing, so one engine can apply it,
  * verify it, open the pull request and record what happened.
@@ -21,7 +22,7 @@
  * honest report.
  */
 
-export type FixDomain = 'package' | 'mcp-config' | 'env' | 'api';
+export type FixDomain = 'package' | 'mcp-config' | 'env' | 'api' | 'model';
 
 export type FixSeverity = 'blocking' | 'warning' | 'info';
 

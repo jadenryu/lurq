@@ -4,6 +4,7 @@ import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronRight } from "lucide-react";
 import { Chip, Panel, PanelHeader } from "@/components/dashboard/panel";
+import { Disclosure } from "@/components/dashboard/disclosure";
 import { Button } from "@/components/ui/button";
 import { MODE_LABEL, repoMode, type RepoPolicy } from "@/lib/lurq-issuer";
 
@@ -69,10 +70,8 @@ const SCOPES: { id: RepoPolicy["scope"]; label: string; blurb: string }[] = [
  * the right information and the wrong altitude — five of them stacked is a page
  * nobody reads, so the consequence nobody reads is the one that matters.
  *
- * Native `<details>`, not a state hook: it is a disclosure widget, the platform
- * ships one, and this way it works before hydration and prints open. The control
- * stays outside `<summary>` so clicking it changes the setting instead of
- * toggling the text.
+ * The control stays outside the disclosure, so clicking it changes the setting
+ * instead of toggling the text.
  */
 function Setting({
   label,
@@ -85,18 +84,9 @@ function Setting({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-edge py-3 first:border-0">
-      <details className="group min-w-0 flex-1">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] text-ink [&::-webkit-details-marker]:hidden">
-          {label}
-          <ChevronRight
-            aria-hidden
-            className="size-3.5 shrink-0 text-ink-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
-          />
-        </summary>
-        <p className="mt-1.5 max-w-prose pr-4 text-[12.5px] leading-relaxed text-ink-2">
-          {description}
-        </p>
-      </details>
+      <Disclosure label={label} className="flex-1">
+        {description}
+      </Disclosure>
       {/* `max-w-full` matters: `shrink-0` alone sizes this to the control's
           max-content, so the scope chips ran off the panel at phone width
           instead of wrapping onto a second line. */}

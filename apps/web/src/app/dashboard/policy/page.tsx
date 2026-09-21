@@ -4,6 +4,7 @@ import { PageBody, PageHeader } from "@/components/dashboard/page-header";
 import { ConformancePanel } from "@/components/dashboard/conformance-panel";
 import { PolicyActivityPanel } from "@/components/dashboard/policy-activity-panel";
 import { SelectionPolicyPanel } from "@/components/dashboard/selection-policy";
+import { Disclosure } from "@/components/dashboard/disclosure";
 import {
   loadConformance,
   loadPolicyActivity,
@@ -31,8 +32,14 @@ export default async function PolicyPage() {
     <div>
       <PageHeader
         title="selection policy"
-        subtitle="What your agents may install, as opposed to what they may upgrade."
         demo={demo}
+        info={
+          <>
+            What your agents may install, as opposed to what they may upgrade. The rules
+            apply to every agent authenticating with your API key, including on code that is
+            in no connected repository at all.
+          </>
+        }
       />
 
       <PageBody>
@@ -56,27 +63,35 @@ export default async function PolicyPage() {
             Warn mode is only useful with this beside it. */}
         <PolicyActivityPanel {...activity} />
 
+        {/* Three paragraphs of reference, read once and skipped past daily.
+            The terms still have to be findable — a reader who does not know
+            which call `evaluate` is cannot judge the rules above — so they stay
+            on the page as three lines that open, rather than leaving. */}
         <Panel padding="tight">
           <p className={eyebrow}>where these rules apply</p>
-          <div className="mt-3 space-y-2.5 text-sm leading-relaxed text-ink-2">
-            <p>
-              <span className="font-mono text-xs text-ink">recommend</span>: blocked packages
-              are dropped from the results, and the agent is told which ones and why. They are
-              never silently removed: an agent handed three options when five were found will
-              re-derive the blocked one from its own training and install it directly.
-            </p>
-            <p>
-              <span className="font-mono text-xs text-ink">evaluate</span>: the call an agent
-              makes about a package it found on its own, from training or a blog post or a
-              colleague. This is the last point before an install where a rule can still
-              apply, so the verdict is attached to the answer.
-            </p>
-            <p className="text-ink-3">
-              Rules are enforced for every agent authenticating with your API key. They do not
-              rewrite a manifest or touch code that already depends on a blocked package, that
-              is autopilot&apos;s job, set per repository. What the rules do report on is the
-              code you already have, above.
-            </p>
+          <div className="mt-3 space-y-2">
+            <Disclosure
+              tone="quiet"
+              label={<span className="font-mono text-xs text-ink">recommend</span>}
+            >
+              Blocked packages are dropped from the results, and the agent is told which ones
+              and why. They are never silently removed: an agent handed three options when
+              five were found will re-derive the blocked one from its own training and
+              install it directly.
+            </Disclosure>
+            <Disclosure
+              tone="quiet"
+              label={<span className="font-mono text-xs text-ink">evaluate</span>}
+            >
+              The call an agent makes about a package it found on its own, from training or a
+              blog post or a colleague. This is the last point before an install where a rule
+              can still apply, so the verdict is attached to the answer.
+            </Disclosure>
+            <Disclosure tone="quiet" label="what these rules do not do">
+              They do not rewrite a manifest or touch code that already depends on a blocked
+              package &mdash; that is autopilot&apos;s job, set per repository. What they do
+              report on is the code you already have, above.
+            </Disclosure>
           </div>
         </Panel>
       </PageBody>

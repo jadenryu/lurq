@@ -289,7 +289,7 @@ const REPO_STEPS: { title: string; body: string }[] = [
   },
   {
     title: "Choose how far it goes",
-    body: "The job starts in analyse-only and reports. fix mode opens a pull request with only what the package itself proves \u2014 renamed call sites, and the range bump in every manifest declaring the dependency \u2014 and needs no API key. pr mode adds an agent that migrates what a rule cannot, runs your tests and drops anything that fails; that one uses your own Anthropic credential.",
+    body: "The job starts in analyse-only and reports. fix mode opens a pull request with only what lurq can prove \u2014 renamed call sites, the range bump in every manifest declaring the dependency, and any model id the provider has retired out from under you \u2014 and needs no API key. It also reports what it will not write for you, such as a variable your code reads that no .env file declares. pr mode adds an agent that migrates what a rule cannot, runs your tests and drops anything that fails; that one uses your own Anthropic credential.",
   },
 ];
 

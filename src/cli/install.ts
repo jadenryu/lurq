@@ -498,12 +498,56 @@ async function finish(
     console.log(
       '\nNo agents selected or detected. Re-run `lurq setup --agent <id>` once your assistant is installed.',
     );
-    return;
+  } else {
+    const mode: InstallMode = { kind: 'remote', ...remote };
+    const results = selected.map((s) => installAgent(s, mode));
+    const instructionsPath = installInstructionsFile();
+    console.log('');
+    printInstallReport(results, instructionsPath, mode);
   }
 
-  const mode: InstallMode = { kind: 'remote', ...remote };
-  const results = selected.map((s) => installAgent(s, mode));
-  const instructionsPath = installInstructionsFile();
-  console.log('');
-  printInstallReport(results, instructionsPath, mode);
+  await printFirstScan(remote);
+}
+
+/**
+ * Setup's last line: what is already wrong in the directory they ran it from.
+ *
+ * Everything above this point is a report about lurq — keys stored, agents
+ * wired. None of it is a reason to keep the tool. The reason is the first
+ * number about their own code, and setup is the one moment we are guaranteed
+ * their attention in a real checkout.
+ *
+ * Strictly additive: setup has already succeeded by the time this runs, so a
+ * scan that cannot (no manifest here, offline, a slow monorepo) prints nothing
+ * and says nothing. A failure line here would report a working install as a
+ * broken one.
+ */
+const FIRST_SCAN_TIMEOUT_MS = 15_000;
+
+async function printFirstScan(remote: { url: string; apiKey: string }): Promise<void> {
+  try {
+    const { buildUpgradePlan, planHeadline, scanSourceDrift } = await import('./upgradePlan');
+    // The manifest read needs the network and the source read does not, so the
+    // one that can be slow is not made to wait on the one that cannot.
+    const [plan, source] = await Promise.all([
+      buildUpgradePlan(process.cwd(), {
+        url: remote.url,
+        apiKey: remote.apiKey,
+        timeoutMs: FIRST_SCAN_TIMEOUT_MS,
+      }),
+      scanSourceDrift(process.cwd()),
+    ]);
+    const headline = planHeadline(plan, source);
+    if (!headline) return;
+    const { command } = lurqInvocation();
+    console.log(`\n${yellow('!')} ${bold('In this project right now:')} ${headline}`);
+    console.log(
+      dim(
+        `  \`${command} upgrade-plan\` for the list, \`${command} fix\` to write the changes that need no judgement.`,
+      ),
+    );
+  } catch {
+    // No package.json, no network, no index entry for anything here: all of
+    // them mean "nothing to show", never "setup failed".
+  }
 }
