@@ -550,6 +550,19 @@ function isReadable(symbols: SurfaceSymbol[]): boolean {
  * returns `undeclaredReason`, which the caller records as UNDECLARED, not as
  * absence (§4.2).
  */
+/**
+ * Bumped whenever extraction can produce a different answer for the same
+ * tarball. '2' covers the ESM-first entry fallback and namespace member
+ * resolution — both change what a package's surface is, neither changes a byte
+ * of the artifact, and isExtractionCached compares this so a stored surface
+ * from an older extractor is treated as stale.
+ *
+ * Lives beside the extractor rather than beside one of its callers: the CLI
+ * publishes surfaces it extracted itself, and a second copy of this number
+ * would drift from the thing it describes.
+ */
+export const EXTRACTOR_VERSION = '2';
+
 export function extractSurface(
   pkgDir: string,
   opts: { manifest?: PackageManifest | null; subpath?: string } = {},
