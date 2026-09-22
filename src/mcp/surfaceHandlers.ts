@@ -12,12 +12,13 @@
  * also why the miss path has to be honest rather than optimistic.
  */
 import { createHash } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { cached } from '../core/cache';
 import type { Database } from '../db/client';
 import { claims, entities, observations, symbols } from '../db/schema';
 import { UNBOUNDED_ARITY, type SymbolRow } from '../db/schema';
 import { enqueueSurface, mcpSurfaceRef, surfaceRef } from '../db/surface';
+import { PUBLIC_TENANT } from '../db/graph';
 import { needsFill, scheduleFill } from '../pipeline/fillSurface';
 import { canonicalKey, type EntityKind, type Verdict } from '../graph/types';
 import { diffSurfaces } from '../surface/diff';
@@ -94,6 +95,8 @@ export interface StoredSurface {
   class: SurfaceResponse['class'];
   tier: ExtractionTier | null;
   observedAt: string | null;
+  /** True when this came from the caller's own tenant rather than the public graph. */
+  private: boolean;
 }
 
 /**
@@ -109,30 +112,46 @@ export async function loadStored(
   db: Database,
   pkg: string,
   version: string | null,
-  tenantId = 0,
+  tenantId = PUBLIC_TENANT,
   kind: EntityKind = 'package_surface',
 ): Promise<StoredSurface | null> {
   // Surfaces are always STORED under a concrete resolved version, so a query
   // with no version can never match by canonical key. An agent asking "what does
   // zod export?" without pinning is the common call, so fall back to the most
   // recently observed version of that package.
+  //
+  // Visible set: the caller's own tenant plus the public graph, with the
+  // caller's own row winning. A team that publishes an internal fork of a public
+  // name is running the fork, so that is the surface their agent must be told
+  // about — but falling back to public is what keeps the rest of the index
+  // working for them at all.
+  //
+  // Both predicates belong in SQL. Filtering after LIMIT (what this used to do)
+  // reads one row and then discards it for the wrong tenant, which returns a
+  // false MISS rather than the row that was actually wanted.
+  const visible = inArray(entities.tenantId, [tenantId, PUBLIC_TENANT]);
   let entity;
   if (version === null) {
     const rows = await db
-      .select({ e: entities, at: observations.observedAt })
+      .select({ e: entities })
       .from(entities)
       .innerJoin(claims, eq(claims.subjectId, entities.id))
       .innerJoin(observations, eq(observations.claimId, claims.id))
-      .where(and(eq(entities.kind, kind), eq(entities.name, pkg)))
-      .orderBy(desc(observations.observedAt))
+      .where(and(eq(entities.kind, kind), eq(entities.name, pkg), visible))
+      .orderBy(desc(entities.tenantId), desc(observations.observedAt))
       .limit(1);
-    entity = rows.find((r) => r.e.tenantId === tenantId)?.e;
+    entity = rows[0]?.e;
   } else {
     const key = canonicalKey(
       kind === 'mcp_server' ? mcpSurfaceRef(pkg, version) : surfaceRef(pkg, version),
     );
-    const ents = await db.select().from(entities).where(eq(entities.canonicalKey, key)).limit(2);
-    entity = ents.find((e) => e.tenantId === tenantId);
+    const ents = await db
+      .select()
+      .from(entities)
+      .where(and(eq(entities.canonicalKey, key), visible))
+      .orderBy(desc(entities.tenantId))
+      .limit(1);
+    entity = ents[0];
   }
   if (!entity) return null;
 
@@ -153,6 +172,7 @@ export async function loadStored(
     class: latest?.class ?? null,
     tier: latest?.tier ?? null,
     observedAt: latest?.observedAt ? latest.observedAt.toISOString() : null,
+    private: entity.tenantId !== PUBLIC_TENANT,
   };
 }
 
@@ -178,11 +198,15 @@ function ckey(parts: unknown): string {
 export async function handleResolveSurface(
   db: Database,
   input: ResolveSurfaceInput,
+  tenantId = PUBLIC_TENANT,
 ): Promise<SurfaceResponse> {
   return cached(
     'resolve_surface',
-    ckey([input.package, input.version ?? null]),
-    () => resolveSurfaceUncached(db, input),
+    // The tenant is part of the key, not just the query. Redis is shared across
+    // every request this process serves, so a key that omits it would hand one
+    // account's private surface to the next caller asking for that name.
+    ckey([tenantId, input.package, input.version ?? null]),
+    () => resolveSurfaceUncached(db, input, tenantId),
     { skipCache: (v) => v.verdict === 'unknown' },
   );
 }
@@ -190,9 +214,10 @@ export async function handleResolveSurface(
 async function resolveSurfaceUncached(
   db: Database,
   input: ResolveSurfaceInput,
+  tenantId: number,
 ): Promise<SurfaceResponse> {
   const version = input.version ?? null;
-  let stored = await loadStored(db, input.package, version);
+  let stored = await loadStored(db, input.package, version, tenantId);
 
   // §8 said never extract inside a query. That rule is relaxed here
   // deliberately, not by accident.
@@ -211,7 +236,7 @@ async function resolveSurfaceUncached(
   if (!stored || (stored.verdict === 'unknown' && stored.rows.length === 0)) {
     const { firstTouchSurface } = await import('../pipeline/firstTouch');
     if (await firstTouchSurface(db, input.package, version)) {
-      stored = await loadStored(db, input.package, version);
+      stored = await loadStored(db, input.package, version, tenantId);
     }
   }
 
@@ -258,7 +283,10 @@ async function resolveSurfaceUncached(
       (excluded ? `; ${excluded} excluded as type-only or re-exported from another package` : '') +
       (stored.tier === 'shipped_js_ast'
         ? '. Runtime existence only, signatures require tier C.'
-        : ''),
+        : '') +
+      // Which graph answered is provenance, not decoration: an agent debugging a
+      // wrong answer has to be able to tell your fork from the public package.
+      (stored.private ? ' Answered from your own published surface, not the public index.' : ''),
     observedAt: stored.observedAt,
   };
 }
@@ -269,22 +297,33 @@ export interface DiffSurfaceInput {
   toVersion: string;
 }
 
-export async function handleDiffSurface(db: Database, input: DiffSurfaceInput) {
+export async function handleDiffSurface(
+  db: Database,
+  input: DiffSurfaceInput,
+  tenantId = PUBLIC_TENANT,
+) {
   // An answer computed while a side is being backfilled is about to go stale:
   // the fill can add renames it could not see. It is served, but not cached.
   let filling = false;
   return cached(
     'diff_surface',
-    ckey([input.package, input.fromVersion, input.toVersion]),
-    () => diffSurfaceUncached(db, input, () => (filling = true)),
+    // Tenant-keyed for the same reason as resolve_surface: a shared cache that
+    // ignores it serves one account's private diff to everyone else.
+    ckey([tenantId, input.package, input.fromVersion, input.toVersion]),
+    () => diffSurfaceUncached(db, input, () => (filling = true), tenantId),
     { skipCache: (v) => v.verdict === 'unknown' || filling },
   );
 }
 
-async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput, onFill: () => void) {
+async function diffSurfaceUncached(
+  db: Database,
+  input: DiffSurfaceInput,
+  onFill: () => void,
+  tenantId: number,
+) {
   let [a, b] = await Promise.all([
-    loadStored(db, input.package, input.fromVersion),
-    loadStored(db, input.package, input.toVersion),
+    loadStored(db, input.package, input.fromVersion, tenantId),
+    loadStored(db, input.package, input.toVersion, tenantId),
   ]);
 
   // Both halves are raced under ONE shared budget (see firstTouch.ts): a diff
@@ -294,8 +333,8 @@ async function diffSurfaceUncached(db: Database, input: DiffSurfaceInput, onFill
     const { firstTouchPair } = await import('../pipeline/firstTouch');
     if (await firstTouchPair(db, input.package, input.fromVersion, input.toVersion)) {
       [a, b] = await Promise.all([
-        loadStored(db, input.package, input.fromVersion),
-        loadStored(db, input.package, input.toVersion),
+        loadStored(db, input.package, input.fromVersion, tenantId),
+        loadStored(db, input.package, input.toVersion, tenantId),
       ]);
     }
   }

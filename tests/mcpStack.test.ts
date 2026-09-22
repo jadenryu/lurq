@@ -60,6 +60,7 @@ function stubSurfaces(byServer: Record<string, McpTool[] | null>) {
       class: 'declared' as const,
       tier: 'mcp_tools_list' as const,
       observedAt: null,
+      private: false,
     };
   });
 }
