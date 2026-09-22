@@ -110,6 +110,10 @@ export function buildProgram(): Command {
       'open a pull request in each repository instead of committing to the default branch',
     )
     .option('--no-watch', 'do not wait for the first run to report back')
+    .option(
+      '--allow-pr-creation',
+      'turn on "Allow GitHub Actions to create pull requests" where it is off — without it, runs commit a branch and stop',
+    )
     .option('--json', 'machine-readable summary')
     .action(async (opts: Record<string, unknown>) => {
       const { runAutopilotInit } = await import('./autopilotInit');

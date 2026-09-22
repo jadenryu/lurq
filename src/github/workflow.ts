@@ -370,6 +370,15 @@ ${envCheck}      # 3. Editing is opt-in. In 'comment' the job stops here having 
           claude_args: |
             --allowedTools "Read,Edit,Write,Bash(${install.split(' ')[0]}:*)"
 
+      # The repository's own git hooks belong to a person committing from a
+      # terminal. Here they run against a bot commit with nothing interactive
+      # available, and a husky or lint-staged hook — installed by the step
+      # above, not present in the checkout before it — fails the one commit
+      # this whole job exists to make.
+      - name: Ignore local git hooks for this commit
+        if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
+        run: git config core.hooksPath /dev/null
+
       # 4. The workflow does version control, never the model.
       - name: Open pull request
         id: pr

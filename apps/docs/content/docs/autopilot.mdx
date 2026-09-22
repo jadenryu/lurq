@@ -57,6 +57,19 @@ If a repo is set to `pr` and holds no Anthropic credential, the run does not
 fail: it drops to `fix`, opens the pull request with what lurq can prove, and
 warns in the run summary that the agent was skipped.
 
+## Two repository settings runs die on
+
+**Allow GitHub Actions to create pull requests** (Settings → Actions → General)
+is off by default. With it off a run does all the work, commits its branch, and
+fails at the last step with _GitHub Actions is not permitted to create or
+approve pull requests_. `lurq autopilot init` checks it and prints the remedy;
+`--allow-pr-creation` turns it on for you, which affects every workflow in that
+repository, not only this one.
+
+**Your own git hooks** are ignored for the workflow'''s commit
+(`core.hooksPath`), because a husky or lint-staged pre-commit hook rejects a
+bot commit in CI and takes the whole run with it.
+
 ## Repository secrets
 
 `LURQ_API_KEY` is required. It lets the workflow ask which upgrades are

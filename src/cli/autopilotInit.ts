@@ -33,6 +33,13 @@ export interface InitOptions {
   pr?: boolean;
   /** Poll the runs this command starts and report how they ended. Default on. */
   watch?: boolean;
+  /**
+   * Turn on "Allow GitHub Actions to create pull requests" where it is off.
+   *
+   * Opt-in: it governs every workflow in the repository, not just this one.
+   * Without it the check still runs and the remedy is printed.
+   */
+  allowPrCreation?: boolean;
   json?: boolean;
   cwd?: string;
 }
@@ -200,6 +207,41 @@ function existingSha(repo: string, branch: string): string | undefined {
 }
 
 /**
+ * Can this repository's Actions open a pull request at all?
+ *
+ * Off by default on every new repository, and with it off the job runs to the
+ * end, commits its branch, and dies at the last step with "GitHub Actions is
+ * not permitted to create or approve pull requests" — having done all the work
+ * and produced nothing anyone will see. Three of the first nine repositories
+ * set up with this command failed exactly there.
+ *
+ * Checked, not changed. The setting applies to every workflow in the
+ * repository rather than to this one, so turning it on is the user's call:
+ * `--allow-pr-creation` does it, and without that this returns the one-line
+ * remedy for the summary. A read that fails says nothing rather than guessing.
+ */
+function pullRequestPermission(repo: string, fix: boolean): string | null {
+  const path = `repos/${repo}/actions/permissions/workflow`;
+  try {
+    const current = ghApi<{
+      default_workflow_permissions: string;
+      can_approve_pull_request_reviews: boolean;
+    }>(path);
+    if (current.can_approve_pull_request_reviews) return null;
+    if (!fix) {
+      return `Actions may not open pull requests here, so runs will stop at their branch. Turn it on in Settings → Actions → General, or: gh api -X PUT ${path} -F can_approve_pull_request_reviews=true -f default_workflow_permissions=${current.default_workflow_permissions}`;
+    }
+    // Sent back with the repository's existing default_workflow_permissions
+    // rather than a value of ours: this call replaces both fields, and the
+    // other one is their choice about what every workflow's token may do.
+    ghApi(path, 'PUT', { ...current, can_approve_pull_request_reviews: true });
+    return 'allowed Actions to open pull requests';
+  } catch {
+    return null;
+  }
+}
+
+/**
  * One repository, end to end: secret, workflow, first run.
  *
  * Never throws — a failure on one repo is a row in the summary, not the end of
@@ -226,6 +268,8 @@ function initRepo(
       const err = setSecret(repo, name, value);
       if (err) return { repo, outcome: 'failed', detail: err };
     }
+
+    const permission = pullRequestPermission(repo, opts.allowPrCreation === true);
 
     const base = ghApi<{ default_branch: string }>(`repos/${repo}`).default_branch;
     const sha = existingSha(repo, base);
@@ -257,13 +301,22 @@ function initRepo(
           repo,
           outcome: 'committed',
           started: started.status === 0,
-          detail: started.status === 0 ? 'first run started' : 'first run starts on schedule',
+          detail: [
+            started.status === 0 ? 'first run started' : 'first run starts on schedule',
+            permission,
+          ]
+            .filter(Boolean)
+            .join('\n    '),
         };
       } catch {
         // Protected default branch or a ruleset: fall through to a pull request.
       }
     }
-    return { repo, outcome: 'pull-request', detail: openSetupPr(repo, base, content) };
+    return {
+      repo,
+      outcome: 'pull-request',
+      detail: [openSetupPr(repo, base, content), permission].filter(Boolean).join('\n    '),
+    };
   } catch (err) {
     return { repo, outcome: 'failed', detail: err instanceof Error ? err.message : String(err) };
   }

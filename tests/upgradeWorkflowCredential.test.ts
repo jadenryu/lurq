@@ -59,3 +59,21 @@ describe('running against the CLI this checkout builds', () => {
     expect(steps().some((s) => s.name === 'Build the CLI from this checkout')).toBe(false);
   });
 });
+
+describe('committing into a repository that has its own git hooks', () => {
+  it('ignores them for the bot commit, after the install that creates them', () => {
+    // A husky/lint-staged pre-commit hook failed the only commit the job
+    // exists to make, so the run did all the work and opened nothing.
+    const list = steps();
+    const hooks = list.findIndex((s) => s.run?.includes('core.hooksPath'));
+    const install = list.findIndex((s) => s.name === 'Install dependencies');
+    const pr = list.findIndex((s) => s.name === 'Open pull request');
+    expect(install).toBeLessThan(hooks);
+    expect(hooks).toBeLessThan(pr);
+  });
+
+  it('does not touch hooks in a run that commits nothing', () => {
+    const gate = steps().find((s) => s.run?.includes('core.hooksPath'))!.if!;
+    expect(gate).not.toContain('comment');
+  });
+});
