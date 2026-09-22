@@ -1,0 +1,222 @@
+# Managed by lurq, https://lurq.run
+#
+# Keeps this repository's dependencies current and rewrites the call sites an
+# upgrade breaks. lurq has read-only access to your code, and may start this
+# workflow when a dependency you declare ships a breaking release; every write
+# below is made by this workflow's own GITHUB_TOKEN, scoped by the permissions
+# block. Delete this file to turn the autopilot off.
+name: lurq upgrade
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        # No default, and deliberately a string rather than a choice. GitHub
+        # applies an input default on EVERY dispatch, including the ones lurq
+        # sends when a new major lands — which would fill LURQ_MODE before the
+        # "Resolve mode" step could read this repo's dashboard setting, and
+        # silently pin every triggered run to whatever was baked in at
+        # generation time. Left empty, a dispatch behaves like a scheduled run.
+        description: "leave empty to use your dashboard setting; or comment / fix / pr"
+        type: string
+        required: false
+
+# The blast radius. `contents: write` permits pushing a BRANCH; branch
+# protection on your default branch is what stops anything landing unreviewed.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: lurq-upgrade-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    env:
+      # Empty when nothing explicit set it, which the "Resolve mode" step below
+      # then fills from this repository's dashboard setting. Precedence is
+      # explicit first: a dispatch input, then a repository variable, then the
+      # dashboard, then the mode baked in when this file was generated.
+      LURQ_MODE: ${{ inputs.mode || vars.LURQ_MODE || '' }}
+      MAX_UPGRADES: "3"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 1. What is behind, and what does each upgrade remove from its API?
+      #    Sends only the dependency ranges already public in package.json.
+      - name: Plan
+        env:
+          LURQ_API_KEY: ${{ secrets.LURQ_API_KEY }}
+        run: npx -y lurqrun@0.1 upgrade-plan . --json > lurq-plan.json
+
+      # Without this the autopilot switch on the dashboard would only ever
+      # affect NEW installs: lurq is Contents:read-only and cannot rewrite this
+      # file or set a repository variable, so the mode is read at runtime from
+      # the plan above, which already carries this repository's policy.
+      #
+      # Skipped entirely when something explicit already set the mode, so a
+      # repository variable or a dispatch choice still wins. An older server or
+      # an unconnected repo sends no mode and the baked-in 'fix' stands.
+      #
+      # The value is checked against the three it may be before it reaches the
+      # environment — it arrives over the network, and GITHUB_ENV is not the
+      # place to trust a response.
+      - name: Resolve mode
+        if: env.LURQ_MODE == ''
+        run: |
+          MODE=$(jq -r '.mode // empty' lurq-plan.json)
+          case "$MODE" in
+            pr|fix|comment) ;;
+            *) MODE='fix' ;;
+          esac
+          echo "LURQ_MODE=$MODE" >> "${GITHUB_ENV}"
+          echo "Mode for this run: $MODE" >> "${GITHUB_STEP_SUMMARY}"
+
+      # 2. Narrow that to symbols THIS repo references. Runs entirely locally
+      #    against both versions' npm tarballs, no API key, no test suite.
+      #
+      #    `--report` is the only part that talks to us, and it is additive: it
+      #    posts what this check concluded so your dashboard can show it. A
+      #    missing key or an unreachable API prints a line and changes nothing
+      #    else, so the gate keeps working exactly as it does without it.
+      - name: Check against this codebase
+        env:
+          LURQ_API_KEY: ${{ secrets.LURQ_API_KEY }}
+        run: npx -y lurqrun@0.1 check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
+
+      # The same report twice: once into the run summary, once as the body of
+      # the pull request. Fenced, because the report is aligned plain text and
+      # markdown would otherwise collapse its indentation into one paragraph.
+      - name: Summarise
+        run: |
+          npx -y lurqrun@0.1 check-upgrade . --plan lurq-plan.json > lurq-report.txt
+          { echo '```'; cat lurq-report.txt; echo '```'; } > lurq-report.md
+          cat lurq-report.md >> "${GITHUB_STEP_SUMMARY}"
+
+      # 3. Editing is opt-in. In 'comment' the job stops here having changed
+      #    nothing, with the brief in the run summary above. 'fix' and 'pr' both
+      #    continue; only 'pr' needs an Anthropic credential, which is why the
+      #    check below is gated on it alone and not on editing in general.
+      - name: Check agent credentials
+        if: env.LURQ_MODE == 'pr'
+        env:
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$API_KEY" ] && [ -z "$OAUTH_TOKEN" ]; then
+            echo "::error::pr mode needs one of ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. A Claude Pro/Max subscription token works for the latter. Set LURQ_MODE=fix to still open pull requests using only the changes lurq can prove (no key needed), or LURQ_MODE=comment to run analysis only."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
+        run: npm ci
+
+      # Everything the package itself proves, made WITHOUT a model: renamed call
+      # sites, and the range bump in every manifest declaring the dependency.
+      #
+      # After the install, not before: bumping package.json first fails `npm ci`
+      # outright with a lock-out-of-sync error, and the agent's own install below
+      # reconciles the lockfile afterwards. It takes the same cap the agent is
+      # given, so the two cannot disagree about blast radius, and it refuses
+      # multi-major upgrades and unplannable sequences — the same rules the
+      # prompt states below, applied by a rule instead of a model.
+      - name: Apply what needs no judgement
+        if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
+        run: npx -y lurqrun@0.1 fix . --plan lurq-plan.json --apply --max ${{ env.MAX_UPGRADES }}
+
+      - name: Apply upgrades
+        if: env.LURQ_MODE == 'pr'
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Either credential works; set whichever you have. An API key bills
+          # per token, an OAuth token uses an existing Claude Pro/Max plan.
+          # Unset secrets resolve to empty and are ignored by the action.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+
+            lurq-brief.json lists dependency upgrades this repository is behind
+            on. For each entry under "breaking", the "symbolsRemoved" array names
+            exports that DISAPPEAR at the target version, and each carries the
+            exact file and line where this repository uses it.
+
+            lurq-plan.json carries two more things per upgrade:
+              · "declaredIn", EVERY package.json declaring that dependency.
+                Bump all of them. Bumping only the root leaves a workspace
+                pinned to the old major, which typechecks and breaks on install.
+              · "hops", the migration sequence when the upgrade crosses two or
+                more majors, with what each step removes. Work the steps in
+                order; do not jump straight to the target version. When
+                "sequenceNote" is present, the sequence could not be planned,
+                treat that dependency as a migration and skip it.
+
+            A step before you has ALREADY APPLIED every change lurq could
+            prove: renamed call sites where the package itself proves the
+            replacement, and the range bump in every manifest for those
+            upgrades. Read the files before assuming any of it is undone — you
+            cannot run git, so the working tree is the only record. Your job is
+            what remains, and re-doing applied work risks reverting it.
+
+            Take at most ${{ env.MAX_UPGRADES }} entries, hardest first:
+
+            1. Bump the dependency's range in every manifest listed in
+               "declaredIn", where that has not been done already.
+            2. Run `npm install` so node_modules holds the
+               TARGET version. Until you do, the package on disk is the old one
+               and anything you read from it describes the API you are leaving.
+            3. Rewrite every listed call site. A removed symbol carrying
+               "renamedTo" has a replacement the package itself proves: at the
+               old version both names were exported from the same function, so
+               rename the call. Under "arityChanged", "callsBroken" names each
+               call whose argument count the new version no longer accepts, and
+               "unmeasured" names uses to read by hand. "typeErrors" lists the
+               compiler errors the new version introduces, at file and line;
+               after installing, `tsc` should report none of them.
+               "entriesRemoved" names deep imports the new version no longer
+               offers, and "moduleFormat" names require() uses that break
+               because the package is now an ES module. "requirements" names a
+               Node or peer version the new release needs and this repository
+               lacks: do not bump past it. For removed symbols
+               without "renamedTo", "newExports" on each entry names
+               the exports the target version ADDED, extracted from its shipped
+               JavaScript: that is where the replacement for a removed symbol
+               comes from. Confirm each one against the freshly installed package
+               under node_modules before you call it. You have NO network access
+               and no documentation: an API in neither the brief nor node_modules
+               is one you cannot verify, and writing it anyway is the failure
+               this whole job exists to prevent. Revert that dependency instead.
+            4. Run the repository's test script. If it fails and you cannot fix
+               it from the upgrade itself, revert that dependency and move on,
+               a reverted upgrade is a fine outcome, a broken build is not.
+            5. Leave the working tree with only the upgrades that pass.
+
+            Do not touch unrelated files. Do not change CI configuration. Do not
+            run git commands: the workflow handles version control.
+          claude_args: |
+            --allowedTools "Read,Edit,Write,Bash(npm:*)"
+
+      # 4. The workflow does version control, never the model.
+      - name: Open pull request
+        id: pr
+        if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: lurq/upgrades
+          title: "chore(deps): lurq dependency upgrades"
+          commit-message: "chore(deps): upgrade dependencies and migrate call sites"
+          # The rendered report, not the raw JSON. A reviewer opening this PR
+          # reads what was removed and where it is used; the JSON is the agent's
+          # input, and pasting it here made the case for the change unreadable.
+          body-path: lurq-report.md
+          labels: dependencies
+          delete-branch: true
