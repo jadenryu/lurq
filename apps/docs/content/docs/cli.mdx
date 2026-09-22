@@ -396,7 +396,10 @@ API, and starts the first run. A protected default branch gets a pull request
 instead. Every write is made by **your** `gh` login, never by lurq's GitHub App,
 which stays read-only. The token needs the `workflow` scope
 (`gh auth refresh -s workflow`); the command checks before touching anything. An
-already-committed workflow is left alone unless you pass `--force`. Secrets go to
+already-committed workflow is left alone unless you pass `--force`. It then
+follows the runs it started and reports how they ended (`--no-watch` skips
+that), because a setup command that reports success for a run that fails a
+minute later is worse than one that reports nothing. Secrets go to
 `gh` on stdin, never in arguments, so they stay out of `ps` and your shell
 history.
 

@@ -49,6 +49,14 @@ Change the mode on the repository page. Each run reads the setting when it
 starts, so it governs repos that already installed the workflow; only a file
 committed before that behaviour existed keeps its own baked-in mode.
 
+`lurq autopilot init --mode <mode>` pins the mode as a repository variable,
+which wins over the dashboard — delete the variable to hand the repo back to it.
+Omit `--mode` and the dashboard governs every run.
+
+If a repo is set to `pr` and holds no Anthropic credential, the run does not
+fail: it drops to `fix`, opens the pull request with what lurq can prove, and
+warns in the run summary that the agent was skipped.
+
 ## Repository secrets
 
 `LURQ_API_KEY` is required. It lets the workflow ask which upgrades are

@@ -31,6 +31,8 @@ export interface InitOptions {
   credential?: boolean;
   force?: boolean;
   pr?: boolean;
+  /** Poll the runs this command starts and report how they ended. Default on. */
+  watch?: boolean;
   json?: boolean;
   cwd?: string;
 }
@@ -40,12 +42,18 @@ export interface RepoResult {
   repo: string;
   outcome: 'committed' | 'pull-request' | 'exists' | 'failed';
   detail?: string;
+  /** Set when a run was dispatched, so the watch step knows what to follow. */
+  started?: boolean;
 }
 
 const LOCKFILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'bun.lock'];
 /** The branch the PR fallback pushes to. One name, so a re-run updates it instead of piling up. */
 const SETUP_BRANCH = 'lurq/autopilot-setup';
 const COMMIT_MESSAGE = 'ci: lurq upgrade autopilot';
+/** The file name GitHub addresses the workflow by. */
+const WORKFLOW_FILE = WORKFLOW_PATH.split('/').pop()!;
+/** How long to follow the runs before saying they are still going. */
+const WATCH_BUDGET_MS = 180_000;
 
 /**
  * `owner/name` out of whatever `git remote get-url origin` prints.
@@ -204,6 +212,16 @@ function initRepo(
   opts: InitOptions,
 ): RepoResult {
   try {
+    // A mode asked for on the command line has to actually govern. The file's
+    // baked mode is only a fallback — the workflow resolves the dashboard's
+    // setting at run time — so without this, `--mode fix` on a repo the
+    // dashboard has set to `pr` silently runs as `pr`. The repository variable
+    // is the documented way to be explicit, it is visible in repo settings, and
+    // deleting it hands the repo back to the dashboard.
+    if (opts.mode) {
+      const res = run('gh', ['variable', 'set', 'LURQ_MODE', '--body', mode, '--repo', repo]);
+      if (res.status !== 0) return { repo, outcome: 'failed', detail: errorText(res) };
+    }
     for (const [name, value] of Object.entries(secrets)) {
       const err = setSecret(repo, name, value);
       if (err) return { repo, outcome: 'failed', detail: err };
@@ -234,16 +252,11 @@ function initRepo(
         // Starts the first run now rather than up to a week from now. A just-
         // committed workflow can take a moment to register, so a failure here
         // is a note, not a failed repo: the schedule still picks it up.
-        const started = run('gh', [
-          'workflow',
-          'run',
-          WORKFLOW_PATH.split('/').pop()!,
-          '--repo',
-          repo,
-        ]);
+        const started = run('gh', ['workflow', 'run', WORKFLOW_FILE, '--repo', repo]);
         return {
           repo,
           outcome: 'committed',
+          started: started.status === 0,
           detail: started.status === 0 ? 'first run started' : 'first run starts on schedule',
         };
       } catch {
@@ -254,6 +267,80 @@ function initRepo(
   } catch (err) {
     return { repo, outcome: 'failed', detail: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/**
+ * Follow the runs this command started, and say how they ended.
+ *
+ * Setup that reports success for a run that fails a minute later is worse than
+ * setup that reports nothing: the first nine repositories this was used on all
+ * printed a tick and then failed at the same step, and nothing on the terminal
+ * said so. The command that set them up is the right place to find out.
+ *
+ * Bounded and best-effort — a run still going when the budget runs out is
+ * reported as still going, not as a failure.
+ */
+async function watchRuns(repos: string[]): Promise<void> {
+  const deadline = Date.now() + WATCH_BUDGET_MS;
+  const pending = new Set(repos);
+  logger.info(`\n${dim(`watching the first run on ${pending.size}…`)}`);
+
+  while (pending.size > 0 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    for (const repo of [...pending]) {
+      const res = run('gh', [
+        'run',
+        'list',
+        '--repo',
+        repo,
+        '--workflow',
+        WORKFLOW_FILE,
+        '-L',
+        '1',
+        '--json',
+        'status,conclusion,databaseId,url',
+      ]);
+      if (res.status !== 0) {
+        pending.delete(repo);
+        continue;
+      }
+      const [run0] = JSON.parse(res.stdout || '[]') as {
+        status: string;
+        conclusion: string | null;
+        databaseId: number;
+        url: string;
+      }[];
+      if (!run0 || run0.status !== 'completed') continue;
+      pending.delete(repo);
+      if (run0.conclusion === 'success') {
+        logger.info(`${green('✓')} ${repo}${dim('  run passed')}`);
+      } else {
+        logger.info(
+          `${red('✗')} ${repo}  run ${run0.conclusion}${failedStep(repo, run0.databaseId)}`,
+        );
+        logger.info(`  ${dim(run0.url)}`);
+        process.exitCode = 1;
+      }
+    }
+  }
+  for (const repo of pending) logger.info(`${dim('·')} ${repo}${dim('  run still going')}`);
+}
+
+/** The name of the step that failed, which is the whole diagnosis most of the time. */
+function failedStep(repo: string, id: number): string {
+  const res = run('gh', [
+    'run',
+    'view',
+    String(id),
+    '--repo',
+    repo,
+    '--json',
+    'jobs',
+    '--jq',
+    '[.jobs[].steps[] | select(.conclusion == "failure") | .name] | first // ""',
+  ]);
+  const name = res.status === 0 ? res.stdout.trim() : '';
+  return name ? ` at "${name}"` : '';
 }
 
 export async function runAutopilotInit(opts: InitOptions): Promise<void> {
@@ -340,6 +427,12 @@ export async function runAutopilotInit(opts: InitOptions): Promise<void> {
   }
 
   if (results.some((r) => r.outcome === 'failed')) process.exitCode = 1;
+
+  // The runs, not just the commits. Skipped for --json, which is read by
+  // callers that want the setup result rather than a live progress feed.
+  const watching = results.filter((r) => r.started).map((r) => r.repo);
+  if (!opts.json && opts.watch !== false && watching.length > 0) await watchRuns(watching);
+
   if (opts.json) {
     logger.info(JSON.stringify({ mode, results }, null, 2));
     return;

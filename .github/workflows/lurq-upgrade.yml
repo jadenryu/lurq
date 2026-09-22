@@ -50,12 +50,20 @@ jobs:
         with:
           node-version: 22
 
+      # This repository is lurq itself, so the run uses the CLI it builds
+      # rather than the published one: npx lurqrun here would resolve to
+      # this unbuilt checkout and exit 127.
+      - name: Build the CLI from this checkout
+        run: |
+          npm ci
+          npm run build
+
       # 1. What is behind, and what does each upgrade remove from its API?
       #    Sends only the dependency ranges already public in package.json.
       - name: Plan
         env:
           LURQ_API_KEY: ${{ secrets.LURQ_API_KEY }}
-        run: npx -y lurqrun@0.1 upgrade-plan . --json > lurq-plan.json
+        run: node dist/bin/lurq.js upgrade-plan . --json > lurq-plan.json
 
       # Without this the autopilot switch on the dashboard would only ever
       # affect NEW installs: lurq is Contents:read-only and cannot rewrite this
@@ -90,14 +98,14 @@ jobs:
       - name: Check against this codebase
         env:
           LURQ_API_KEY: ${{ secrets.LURQ_API_KEY }}
-        run: npx -y lurqrun@0.1 check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
+        run: node dist/bin/lurq.js check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
 
       # The same report twice: once into the run summary, once as the body of
       # the pull request. Fenced, because the report is aligned plain text and
       # markdown would otherwise collapse its indentation into one paragraph.
       - name: Summarise
         run: |
-          npx -y lurqrun@0.1 check-upgrade . --plan lurq-plan.json > lurq-report.txt
+          node dist/bin/lurq.js check-upgrade . --plan lurq-plan.json > lurq-report.txt
           { echo '```'; cat lurq-report.txt; echo '```'; } > lurq-report.md
           cat lurq-report.md >> "${GITHUB_STEP_SUMMARY}"
 
@@ -112,8 +120,9 @@ jobs:
           OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           if [ -z "$API_KEY" ] && [ -z "$OAUTH_TOKEN" ]; then
-            echo "::error::pr mode needs one of ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. A Claude Pro/Max subscription token works for the latter. Set LURQ_MODE=fix to still open pull requests using only the changes lurq can prove (no key needed), or LURQ_MODE=comment to run analysis only."
-            exit 1
+            echo "::warning::No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. Running the part that needs no model: the pull request will carry what lurq can prove — renamed call sites and range bumps — and the agent step is skipped. Add either secret to get the full pr mode."
+            echo "LURQ_MODE=fix" >> "${GITHUB_ENV}"
+            echo "Mode for this run: fix (pr was requested; no Anthropic credential in this repository)" >> "${GITHUB_STEP_SUMMARY}"
           fi
 
       - name: Install dependencies
@@ -131,7 +140,7 @@ jobs:
       # prompt states below, applied by a rule instead of a model.
       - name: Apply what needs no judgement
         if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
-        run: npx -y lurqrun@0.1 fix . --plan lurq-plan.json --apply --max ${{ env.MAX_UPGRADES }}
+        run: node dist/bin/lurq.js fix . --plan lurq-plan.json --apply --max ${{ env.MAX_UPGRADES }}
 
       - name: Apply upgrades
         if: env.LURQ_MODE == 'pr'

@@ -98,7 +98,10 @@ export function buildProgram(): Command {
     .command('init')
     .description('turn the autopilot on for one or many repositories: secret, workflow, first run')
     .option('--repo <owner/name...>', "one or more repositories (default: this checkout's origin)")
-    .option('--mode <mode>', 'comment, fix, or pr (default: fix — opens PRs, needs no model)')
+    .option(
+      '--mode <mode>',
+      'comment, fix or pr; pins it as a repository variable. Omit and the dashboard governs each run',
+    )
     .option('--api-key <key>', 'lurq API key (defaults to the stored one, then $LURQ_API_KEY)')
     .option('--no-credential', 'skip the Anthropic credential step in pr mode')
     .option('--force', 'replace a workflow that is already committed')
@@ -106,6 +109,7 @@ export function buildProgram(): Command {
       '--pr',
       'open a pull request in each repository instead of committing to the default branch',
     )
+    .option('--no-watch', 'do not wait for the first run to report back')
     .option('--json', 'machine-readable summary')
     .action(async (opts: Record<string, unknown>) => {
       const { runAutopilotInit } = await import('./autopilotInit');

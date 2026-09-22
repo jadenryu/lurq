@@ -57,6 +57,16 @@ export interface WorkflowOptions {
    */
   checkEnv?: boolean;
   /**
+   * Run the CLI built from the checkout instead of the published package.
+   *
+   * For lurq's own repository, and any other whose package.json IS the CLI:
+   * `npx -y lurqrun@0.1` there resolves to the LOCAL package, whose bin has not
+   * been built, and the step dies with `lurq: not found` before doing anything.
+   * Building the checkout is also the better dogfood — the run exercises the
+   * code under review rather than the last release.
+   */
+  local?: boolean;
+  /**
    * Emit the auto-merge step, per `RepoPolicy.autoMerge`. Off unless the repo
    * has explicitly opted in — this is the only setting that lets lurq's loop
    * change a default branch, so it is never a default.
@@ -121,7 +131,20 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const max = opts.maxUpgrades ?? 3;
   const mode = opts.mode ?? (opts.armed ? 'pr' : 'comment');
   const autoMerge = opts.autoMerge ?? false;
-  const cli = cliSpec();
+  // Every invocation goes through this one string: the published package, or
+  // the binary this checkout builds when it IS the package.
+  const cli = opts.local ? 'node dist/bin/lurq.js' : `npx -y ${cliSpec()}`;
+  const buildStep = opts.local
+    ? `      # This repository is lurq itself, so the run uses the CLI it builds
+      # rather than the published one: npx lurqrun here would resolve to
+      # this unbuilt checkout and exit 127.
+      - name: Build the CLI from this checkout
+        run: |
+          npm ci
+          npm run build
+
+`
+    : '';
   /**
    * Deliberately NOT gated on LURQ_MODE. It writes nothing, needs no API key
    * and no network to us, so it runs in analyse-only mode too — analysis is not
@@ -133,7 +156,7 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
     opts.checkEnv === true
       ? `      - name: Check environment
         run: |
-          npx -y ${cli} check-env . > lurq-env.txt
+          ${cli} check-env . > lurq-env.txt
           { echo '\`\`\`'; cat lurq-env.txt; echo '\`\`\`'; } >> "$\{GITHUB_STEP_SUMMARY}"
 
 `
@@ -191,12 +214,12 @@ jobs:
         with:
           node-version: 22
 
-      # 1. What is behind, and what does each upgrade remove from its API?
+${buildStep}      # 1. What is behind, and what does each upgrade remove from its API?
       #    Sends only the dependency ranges already public in package.json.
       - name: Plan
         env:
           LURQ_API_KEY: \${{ secrets.LURQ_API_KEY }}
-        run: npx -y ${cli} upgrade-plan . --json > lurq-plan.json
+        run: ${cli} upgrade-plan . --json > lurq-plan.json
 
       # Without this the autopilot switch on the dashboard would only ever
       # affect NEW installs: lurq is Contents:read-only and cannot rewrite this
@@ -231,14 +254,14 @@ jobs:
       - name: Check against this codebase
         env:
           LURQ_API_KEY: \${{ secrets.LURQ_API_KEY }}
-        run: npx -y ${cli} check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
+        run: ${cli} check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
 
       # The same report twice: once into the run summary, once as the body of
       # the pull request. Fenced, because the report is aligned plain text and
       # markdown would otherwise collapse its indentation into one paragraph.
       - name: Summarise
         run: |
-          npx -y ${cli} check-upgrade . --plan lurq-plan.json > lurq-report.txt
+          ${cli} check-upgrade . --plan lurq-plan.json > lurq-report.txt
           { echo '\`\`\`'; cat lurq-report.txt; echo '\`\`\`'; } > lurq-report.md
           cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
@@ -253,8 +276,9 @@ ${envCheck}      # 3. Editing is opt-in. In 'comment' the job stops here having 
           OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           if [ -z "$API_KEY" ] && [ -z "$OAUTH_TOKEN" ]; then
-            echo "::error::pr mode needs one of ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. A Claude Pro/Max subscription token works for the latter. Set LURQ_MODE=fix to still open pull requests using only the changes lurq can prove (no key needed), or LURQ_MODE=comment to run analysis only."
-            exit 1
+            echo "::warning::No ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in this repository's secrets. Running the part that needs no model: the pull request will carry what lurq can prove — renamed call sites and range bumps — and the agent step is skipped. Add either secret to get the full pr mode."
+            echo "LURQ_MODE=fix" >> "$\{GITHUB_ENV}"
+            echo "Mode for this run: fix (pr was requested; no Anthropic credential in this repository)" >> "$\{GITHUB_STEP_SUMMARY}"
           fi
 
       - name: Install dependencies
@@ -272,7 +296,7 @@ ${envCheck}      # 3. Editing is opt-in. In 'comment' the job stops here having 
       # prompt states below, applied by a rule instead of a model.
       - name: Apply what needs no judgement
         if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
-        run: npx -y ${cli} fix . --plan lurq-plan.json --apply --max \${{ env.MAX_UPGRADES }}
+        run: ${cli} fix . --plan lurq-plan.json --apply --max \${{ env.MAX_UPGRADES }}
 
       - name: Apply upgrades
         if: env.LURQ_MODE == 'pr'

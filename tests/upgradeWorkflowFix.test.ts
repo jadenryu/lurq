@@ -24,7 +24,9 @@ const steps = (): Step[] =>
 
 const indexOfStep = (list: Step[], match: (s: Step) => boolean) => list.findIndex(match);
 
-const fixStep = (list: Step[]) => list.find((s) => s.run?.includes(' fix '));
+/** By the command it runs, not by a loose ' fix ' match: the credential step
+    now mentions fix mode in its warning text, and matched first. */
+const fixStep = (list: Step[]) => list.find((s) => s.run?.includes('fix . --plan'));
 
 describe('the deterministic step', () => {
   it('runs lurq fix against the plan the earlier step wrote', () => {
@@ -63,14 +65,14 @@ describe('where it sits', () => {
     // lock-out-of-sync error; the agent's own install step reconciles it after.
     const list = steps();
     const install = indexOfStep(list, (s) => s.name === 'Install dependencies');
-    const fix = indexOfStep(list, (s) => Boolean(s.run?.includes(' fix ')));
+    const fix = indexOfStep(list, (s) => Boolean(s.run?.includes('fix . --plan')));
     expect(install).toBeGreaterThanOrEqual(0);
     expect(fix).toBeGreaterThan(install);
   });
 
   it('runs before the model, which is the entire point', () => {
     const list = steps();
-    const fix = indexOfStep(list, (s) => Boolean(s.run?.includes(' fix ')));
+    const fix = indexOfStep(list, (s) => Boolean(s.run?.includes('fix . --plan')));
     const agent = indexOfStep(list, (s) =>
       Boolean(s.uses?.startsWith('anthropics/claude-code-action')),
     );
