@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useCopy } from "@/lib/use-copy";
 import { Chip, Panel, PanelHeader, eyebrow } from "@/components/dashboard/panel";
 import { Button } from "@/components/ui/button";
-import { CopyAgentSetup } from "@/components/dashboard/copy-agent-setup";
-import type { AgentSetupInput } from "@/lib/agent-setup";
 import { MODE_LABEL, MODE_SUMMARY, type RepoMode } from "@/lib/lurq-issuer";
 
 /**
@@ -29,7 +27,6 @@ export function RepoSetup({
   workflowPath,
   setupUrl,
   mode,
-  setup,
 }: {
   workflow: string;
   workflowPath: string;
@@ -41,12 +38,6 @@ export function RepoSetup({
    * exists to explain.
    */
   mode: RepoMode;
-  /**
-   * Everything the agent brief needs EXCEPT the key, which is minted when the
-   * button is pressed. The prompt cannot be built on the server any more: its
-   * payload does not exist until the click that creates the credential.
-   */
-  setup: Omit<AgentSetupInput, "apiKey">;
 }) {
   const [open, setOpen] = useState(false);
   const { copied, copy } = useCopy();
@@ -54,7 +45,7 @@ export function RepoSetup({
   return (
     <Panel>
       <PanelHeader
-        title="workflow"
+        title="or add the workflow by hand"
         trailing={<Chip tone={MODE_TONE[mode]}>{MODE_LABEL[mode]}</Chip>}
       />
 
@@ -82,16 +73,6 @@ export function RepoSetup({
         </p>
       </div>
 
-      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        <span className="text-foreground">Hand it to your agent instead.</span> One copy gives it
-        the whole job — a fresh API key, the workflow file, the secrets, and the order to do them
-        in. It stops before pushing, because committing this file is what grants write access to
-        your repository. The copied text contains a live key, so treat the paste like a credential.
-      </p>
-
-      <div className="mt-4">
-        <CopyAgentSetup setup={setup} />
-      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <a href={setupUrl} target="_blank" rel="noreferrer">

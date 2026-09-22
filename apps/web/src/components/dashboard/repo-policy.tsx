@@ -6,6 +6,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { Chip, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { Disclosure } from "@/components/dashboard/disclosure";
 import { Button } from "@/components/ui/button";
+import { AutopilotSetup } from "@/components/dashboard/autopilot-setup";
 import { MODE_LABEL, repoMode, type RepoPolicy } from "@/lib/lurq-issuer";
 
 /**
@@ -120,6 +121,7 @@ export function RepoPolicyPanel({
   alwaysSavable = false,
   collapsible = false,
   onSaved,
+  setupRepos,
   policy: initial,
   demo,
 }: {
@@ -152,8 +154,16 @@ export function RepoPolicyPanel({
    * because the header carries the saved state either way.
    */
   collapsible?: boolean;
-  /** Called after a save succeeds, for a caller that owns surrounding state. */
-  onSaved?: () => void;
+  /** Called after a save succeeds, with what was saved, for a caller that owns surrounding state. */
+  onSaved?: (saved: RepoPolicy) => void;
+  /**
+   * The repositories this panel governs that have not run the workflow yet.
+   *
+   * Arming alone starts nothing, and people read the switch as the whole job.
+   * So whenever the saved state is armed and these still need the workflow, the
+   * setup step renders right under the switch, the moment it is saved.
+   */
+  setupRepos?: string[];
   policy: RepoPolicy;
   demo: boolean;
 }) {
@@ -197,7 +207,7 @@ export function RepoPolicyPanel({
     }
     setSaved(policy);
     setJustSaved(true);
-    onSaved?.();
+    onSaved?.(policy);
     startTransition(() => router.refresh());
   }
 
@@ -371,6 +381,18 @@ export function RepoPolicyPanel({
           {saving ? "saving…" : (saveLabel ?? "save")}
         </Button>
       </div>
+
+      {setupRepos && setupRepos.length > 0 && savedMode !== "comment" && !demo && (
+        <div className="rounded-[var(--radius-control)] border border-signal/40 bg-surface-2 p-4">
+          <p className="text-sm font-medium tracking-tight text-ink">
+            One more step: autopilot is saved, but nothing runs until the workflow is in{" "}
+            {setupRepos.length === 1 ? "the repository" : `all ${setupRepos.length} repositories`}.
+          </p>
+          <div className="mt-3">
+            <AutopilotSetup repos={setupRepos} mode={savedMode} />
+          </div>
+        </div>
+      )}
     </div>
   );
 

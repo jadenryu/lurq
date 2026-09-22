@@ -22,8 +22,12 @@ npx lurqrun autopilot init --repo owner/api owner/web owner/worker
 That sets the `LURQ_API_KEY` secret, commits the workflow and starts the first
 run in every repository you name, with no clone and no merge per repo. A
 protected default branch gets a pull request instead; `--pr` asks for one
-everywhere. The dashboard's **Copy setup command** fills in every armed repository
-that has not run yet.
+everywhere.
+
+Or skip the typing: turn autopilot on in the dashboard and the setup step appears
+right under the switch. **Copy setup prompt** hands your agent (Claude Code,
+Cursor, anything with a terminal) the whole job for every armed repository that
+has not run yet, with a fresh key in it.
 
 Every one of those writes is made by your own `gh` login. lurq's GitHub app cannot
 write a byte to your repository, so what grants write access is a commit you
