@@ -196,6 +196,17 @@ export interface RepoDriftSummary {
   depsDeclared: number;
   depsTracked: number;
   majorDrift: number;
+  /**
+   * Upgrades whose API surface diff says something actually breaks.
+   *
+   * This is what the autopilot acts on under `security + breaking`, so it is
+   * what the dashboard leads with. `majorDrift` is version distance and answers
+   * a different question. `null` = scanned before verdicts were recorded; it
+   * must never render as "nothing breaks".
+   */
+  breaking: number | null;
+  /** Briefed upgrades whose surfaces are not extracted yet. Not "clean". */
+  unassessed: number | null;
   anyDrift: number;
   deprecated: number;
   advisories: number;
@@ -335,6 +346,14 @@ export interface DashboardDep {
   majorsBehind: number;
   deprecated: boolean;
   advisories: number;
+  /**
+   * What the API surface diff concluded, recorded at scan time.
+   *
+   * Absent for deps outside the brief's cap and for scans taken before this
+   * shipped — and absent is not `clean`. The row says "not checked" rather
+   * than implying an unexamined package is safe.
+   */
+  verdict?: UpgradeVerdict;
 }
 
 /**

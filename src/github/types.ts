@@ -27,6 +27,19 @@ export interface DepDeclaration {
 }
 
 /** Per-dependency drift, computed against the lurq index. */
+/**
+ * How an upgrade's API surface compares, independent of semver.
+ *
+ *   `removes-exports` — runtime exports disappear.
+ *   `arity-changed`   — nothing removed, but a signature took a different count.
+ *   `clean`           — surfaces compared, nothing removed or re-shaped.
+ *   `unknown`         — one or both surfaces are not extracted yet.
+ *
+ * Defined here rather than in brief.ts because `DepDrift` carries it now, and
+ * brief.ts imports this file — the other direction would be a cycle.
+ */
+export type UpgradeVerdict = 'removes-exports' | 'arity-changed' | 'clean' | 'unknown';
+
 export interface DepDrift {
   name: string;
   /** Lowest range declared anywhere — the one that governs the repo's drift. */
@@ -57,6 +70,15 @@ export interface DepDrift {
    * version this repo uses.
    */
   advisoriesAt: 'resolved' | 'package';
+  /**
+   * What the API surface diff concluded for `resolved` → `latest`.
+   *
+   * Absent on deps outside the brief's cap, and on scans taken before this
+   * shipped. Absent is NOT `clean`: it means nobody looked, and a dashboard
+   * that renders the two the same would be reporting an unexamined dependency
+   * as safe.
+   */
+  verdict?: UpgradeVerdict;
 }
 
 /** A resolved transitive dependency carrying a risk signal worth reporting. */
@@ -142,6 +164,18 @@ export interface RepoDrift {
   depsTracked: number;
   /** Tracked deps at least one major behind. */
   majorDrift: number;
+  /**
+   * Dependencies whose upgrade actually breaks an API, per the surface diff —
+   * not per semver.
+   *
+   * This is the number the autopilot acts on under `security + blocking`, which
+   * is why the dashboard leads with it: `majorDrift` counts version distance,
+   * and a repo four majors behind on packages that removed nothing is not four
+   * upgrades' worth of risk. Optional for scans taken before this shipped.
+   */
+  breaking?: number;
+  /** Briefed upgrades whose surfaces are not extracted yet — "not looked at", never "clean". */
+  unassessed?: number;
   /** Tracked deps behind at all (any semver level). */
   anyDrift: number;
   /** Tracked deps flagged deprecated upstream. */

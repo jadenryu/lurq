@@ -456,6 +456,11 @@ export function demoRepos(): DashboardRepo[] {
         depsTracked,
         anyDrift,
         majorDrift,
+        // Fewer than the majors behind, on purpose: the demo has to show the
+        // distinction the product is built on — most version distance does not
+        // actually break an API.
+        breaking: Math.max(0, majorDrift - 1),
+        unassessed: 0,
         deprecated,
         advisories,
         conflicts: [2, 0, 1, 3, 0][i] ?? 0,

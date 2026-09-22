@@ -16,8 +16,9 @@
 import type { Database } from '../db/client';
 import { handleDiffSurface } from '../mcp/surfaceHandlers';
 import { loadVersions } from './drift';
+import { breaksSomething } from './scope';
 import { hopPairs, planHops, tooFarToSequence } from './hops';
-import type { DepDeclaration, DepDrift, RepoDrift } from './types';
+import type { DepDeclaration, DepDrift, RepoDrift, UpgradeVerdict } from './types';
 
 /**
  * What the diff established about an upgrade.
@@ -28,7 +29,7 @@ import type { DepDeclaration, DepDrift, RepoDrift } from './types';
  *   `unknown`         — one or both surfaces are not extracted yet. Queued by the
  *                       diff call itself. NEVER folded into `clean`.
  */
-export type UpgradeVerdict = 'removes-exports' | 'arity-changed' | 'clean' | 'unknown';
+export type { UpgradeVerdict } from './types';
 
 /** One step of a multi-major migration. */
 export interface UpgradeHop {
@@ -249,4 +250,33 @@ export async function briefRepo(
     omitted: candidates.length - selected.length,
     pending: upgrades.filter((u) => u.verdict === 'unknown').length,
   };
+}
+
+/**
+ * Record what the surface diff concluded onto the drift summary itself.
+ *
+ * The verdicts already existed — the brief computed them on every request and
+ * threw them away. Everything a person looks at (the hub tiles, the repo list,
+ * the dependency table) read `majorDrift` instead, so the product showed semver
+ * distance while the autopilot acted on API breakage. Those are different
+ * numbers, and a repo four majors behind on packages that removed nothing is
+ * not four upgrades' worth of risk.
+ *
+ * Runs at scan time, which is where it belongs: surfaces are immutable once
+ * extracted, so after the first pass this is cache hits, and a scan is a
+ * background job with nobody waiting on it. Bounded by `BRIEF_CAP` — deps
+ * beyond it keep an absent verdict, which reads as "not looked at", never
+ * "clean".
+ *
+ * Mutates `drift` in place, immediately before it is stored.
+ */
+export async function annotateVerdicts(db: Database, drift: RepoDrift): Promise<void> {
+  const brief = await briefRepo(db, drift);
+  const byName = new Map(brief.upgrades.map((u) => [u.package, u]));
+  for (const dep of drift.deps) {
+    const upgrade = byName.get(dep.name);
+    if (upgrade) dep.verdict = upgrade.verdict;
+  }
+  drift.breaking = brief.upgrades.filter(breaksSomething).length;
+  drift.unassessed = brief.pending;
 }
