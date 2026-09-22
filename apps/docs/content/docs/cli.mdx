@@ -245,6 +245,27 @@ version (or `--against`), and `--exit-code` exits 1 when the version bump
 understates the change — a removal shipped as a minor, say. Use it in
 `prepublishOnly` or CI. It needs no key and no network to lurq.
 
+### Your own packages, readable by your agents
+
+An internal package is the one your agent is _worst_ at: no model has ever seen
+it, and a web search returns nothing at any price. `--publish` files the surface
+`check-release` already extracted under your account, so `resolve_surface` and
+`diff_surface` answer for it exactly as they do for a public package.
+
+```bash
+lurq check-release --publish                 # after the build, before or after npm publish
+```
+
+It works even when the check itself is inconclusive — a package that was never
+published to a registry has nothing to diff against, and that is precisely the
+package worth filing.
+
+What leaves the machine is the export surface and nothing else: symbol names,
+kinds, arity and deprecation flags. Source never leaves, and **file paths are
+hashed before the request is built**, so a declaration site still proves a
+rename without your directory layout going anywhere. The surface is readable
+only by your own account.
+
 `check-api` compares an OpenAPI document with the same file at a git revision
 (`--against`, default `HEAD`), and exits 1 on a breaking change with
 `--exit-code`. With no argument it uses the first OpenAPI document it finds;

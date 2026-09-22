@@ -15,6 +15,7 @@ import { getConfig } from '../core/config';
 import { SERVER_NAME, VERSION } from '../core/constants';
 import { searchCapabilities } from '../core/capabilities';
 import { createDb } from '../db/client';
+import { tenantIdFor } from '../db/graph';
 import { logger } from '../core/logger';
 import { handleDiffSurface, handleResolveSurface } from './surfaceHandlers';
 import { handleMcpDrift, handleMcpSurface } from './mcpHandlers';
@@ -144,6 +145,14 @@ export function buildMcpServer(
   // when ctx.ownerId is null (stdio/local or operator keys with no account).
   // The PostHog event carries the tool name, outcome and calling agent only, never arguments,
   // and no-ops under the same null-owner rule (src/core/analytics.ts).
+  // The caller's tenant, resolved on FIRST use rather than per request: most
+  // calls never read a surface, and the hot path should not pay a lookup for a
+  // tenant it is not going to use. Memoized, so two surface calls on one
+  // connection share the one resolution. A null owner (stdio, operator keys)
+  // resolves to the public graph.
+  let tenantPromise: Promise<number> | null = null;
+  const tenant = (): Promise<number> => (tenantPromise ??= tenantIdFor(db, ctx.ownerId ?? null));
+
   const run = <T>(tool: string, fn: () => Promise<T>): Promise<T> =>
     (async () => {
       let ok = false;
@@ -303,7 +312,10 @@ export function buildMcpServer(
         version: z.string().optional().describe('Exact version; omit for the latest extracted'),
       },
     },
-    async (args) => reply(await run('resolve_surface', () => handleResolveSurface(db, args))),
+    async (args) =>
+      reply(
+        await run('resolve_surface', async () => handleResolveSurface(db, args, await tenant())),
+      ),
   );
 
   server.registerTool(
@@ -322,7 +334,7 @@ export function buildMcpServer(
     async (args) =>
       reply(
         await run('diff_surface', async () => {
-          const diff = await handleDiffSurface(db, args);
+          const diff = await handleDiffSurface(db, args, await tenant());
           if (diff.verdict === 'unknown') return diff;
           // The public page for this major jump, when it has one. Never fails the tool.
           const { upgradeGuideFor } = await import('./publicUpgrades');
