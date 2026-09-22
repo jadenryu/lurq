@@ -371,6 +371,48 @@ stores for your agents can read policy but never change it, so an agent cannot
 loosen its own rules. How far back `policy log` reaches depends on the plan (see
 [Plans & limits](/plans-and-troubleshooting)).
 
+## What your agent is wrong about
+
+A coding agent writes against the API it learned. Packages move. `lurq stale`
+diffs the surface that was current at a model's knowledge cutoff against the
+one you actually have installed — the symbols in between are what the agent
+will reach for and not find.
+
+```bash
+# for a model with a published cutoff
+lurq stale --model claude-sonnet-5
+
+# for any other model, state its cutoff yourself
+lurq stale --since 2025-03
+
+lurq stale --json
+```
+
+```
+5 APIs your agent believes in are gone
+measured against claude-sonnet-5's reliable knowledge cutoff (2026-01)
+
+react-router-dom 6.4.0 → 6.30.1  4 removed
+  useHistory  → useNavigate
+  Switch
+  Redirect
+```
+
+It reads **installed** versions from `node_modules`, not declared ranges —
+`^6.0.0` is not a fact about what the agent will hit, and `6.30.1` is. No
+source code is read and nothing runs in CI: both surfaces are already
+extracted, so this is a query, not an analysis.
+
+Two things it will not do. It has cutoffs only for models whose vendor
+publishes one, and for anything else it asks for `--since` rather than
+inventing a date. And a package whose surfaces are not both extracted is
+reported as not-diffed rather than counted as clean.
+
+The dates are Anthropic's **reliable knowledge cutoff** — the date through
+which a model's knowledge is most reliable — not the broader training-data
+cutoff. The two differ (Haiku 4.5: Feb 2025 vs Jul 2025), and the first is the
+one that answers "what does it still believe".
+
 ## Arming a repository
 
 One command does the whole repository setup: the secret, the workflow file, and

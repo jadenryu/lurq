@@ -70,6 +70,10 @@ import { createDb } from '../db/client';
 import { githubAppCredentials, GithubAppError } from '../github/app';
 import { briefRepo } from '../github/brief';
 import { computeDrift } from '../github/drift';
+import { staleBeliefs } from '../surface/staleness';
+
+/** Per-request dependency cap on /stale: each dependency can cost a surface diff. */
+const STALE_DEP_CAP = 300;
 import { dispatchUpgradeWorkflow } from '../github/dispatch';
 import { addAskSpend, getAskSpendToday } from '../db/askSpend';
 import { applyScope, permits, repoMode } from '../github/scope';
@@ -2018,6 +2022,45 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // Note there is no repo id in either path. The workflow sends the manifest it
   // already has on disk, so `upgrade-plan` works in any checkout — connecting a
   // repo to the dashboard adds visibility, it is not a precondition for the loop.
+
+  /**
+   * What a model trained to `since` believes about these dependencies that is
+   * no longer true.
+   *
+   * Takes resolved versions rather than ranges: the caller has a lockfile or a
+   * node_modules, and the question is about what they actually have, not what
+   * their range would admit.
+   */
+  app.post('/stale', ipLimiter, auth, keyLimiter, quota, async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { installed?: unknown; since?: unknown };
+    const since = typeof body.since === 'string' ? body.since : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(since)) {
+      res.status(400).json({ error: 'since is required: YYYY-MM-DD.' });
+      return;
+    }
+    const installed = Array.isArray(body.installed)
+      ? body.installed
+          .filter(
+            (d): d is { name: string; version: string } =>
+              !!d &&
+              typeof (d as { name?: unknown }).name === 'string' &&
+              typeof (d as { version?: unknown }).version === 'string',
+          )
+          .slice(0, STALE_DEP_CAP)
+      : [];
+    if (installed.length === 0) {
+      res.status(400).json({ error: 'installed is required: [{ name, version }, …]' });
+      return;
+    }
+    try {
+      const report = await staleBeliefs(db, installed, since);
+      void recordUsage(db, (req as AuthedRequest).lurqKey?.ownerId ?? null, 'stale');
+      res.status(200).json(report);
+    } catch (err) {
+      logger.error('stale failed:', err instanceof Error ? err.message : String(err));
+      res.status(500).json({ error: 'Could not compute staleness.' });
+    }
+  });
 
   app.post(
     '/upgrade-plan',
