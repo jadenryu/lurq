@@ -14,3 +14,7 @@ vault/
 # than printWidth 100, so `prettier --write` on any file there rewrites the
 # whole file. Ignored until someone formats the tree in one deliberate commit.
 apps/web/
+
+# Rendered by renderWorkflow(), not written by hand. Prettier would rewrite its
+# quoting, and the next regeneration would undo that and fail CI again.
+.github/workflows/lurq-upgrade.yml
