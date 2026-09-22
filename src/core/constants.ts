@@ -5,6 +5,13 @@ export const SERVER_NAME = 'lurq';
 /** Published npm package name (the CLI command and MCP nickname stay `lurq`).
  *  Keep in sync with package.json "name". */
 export const PACKAGE_NAME = 'lurqrun';
+
+/**
+ * The executable's name, which is NOT the package name — npm had `lurq` taken.
+ * Anything invoking the CLI by name (npx, generated workflows, docs) needs this
+ * one, and reaching for PACKAGE_NAME there produces a command that does not exist.
+ */
+export const BIN_NAME = 'lurq';
 /**
  * Read from package.json rather than restated, so a release bump cannot leave
  * it behind. This used to be a literal under a "keep in sync" comment, and it

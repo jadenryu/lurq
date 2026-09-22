@@ -55,7 +55,7 @@ jobs:
       - name: Plan
         env:
           LURQ_API_KEY: ${{ secrets.LURQ_API_KEY }}
-        run: npx -y lurqrun@0.1 upgrade-plan . --json > lurq-plan.json
+        run: npx -y --package lurqrun@0.1 lurq upgrade-plan . --json > lurq-plan.json
 
       # Without this the autopilot switch on the dashboard would only ever
       # affect NEW installs: lurq is Contents:read-only and cannot rewrite this
@@ -90,14 +90,14 @@ jobs:
       - name: Check against this codebase
         env:
           LURQ_API_KEY: ${{ secrets.LURQ_API_KEY }}
-        run: npx -y lurqrun@0.1 check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
+        run: npx -y --package lurqrun@0.1 lurq check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
 
       # The same report twice: once into the run summary, once as the body of
       # the pull request. Fenced, because the report is aligned plain text and
       # markdown would otherwise collapse its indentation into one paragraph.
       - name: Summarise
         run: |
-          npx -y lurqrun@0.1 check-upgrade . --plan lurq-plan.json > lurq-report.txt
+          npx -y --package lurqrun@0.1 lurq check-upgrade . --plan lurq-plan.json > lurq-report.txt
           { echo '```'; cat lurq-report.txt; echo '```'; } > lurq-report.md
           cat lurq-report.md >> "${GITHUB_STEP_SUMMARY}"
 
@@ -131,7 +131,7 @@ jobs:
       # prompt states below, applied by a rule instead of a model.
       - name: Apply what needs no judgement
         if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
-        run: npx -y lurqrun@0.1 fix . --plan lurq-plan.json --apply --max ${{ env.MAX_UPGRADES }}
+        run: npx -y --package lurqrun@0.1 lurq fix . --plan lurq-plan.json --apply --max ${{ env.MAX_UPGRADES }}
 
       - name: Apply upgrades
         if: env.LURQ_MODE == 'pr'
