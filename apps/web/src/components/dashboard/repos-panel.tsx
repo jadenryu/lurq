@@ -56,13 +56,22 @@ function DriftCell({ repo }: { repo: DashboardRepo }) {
   }
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      {drift.majorDrift > 0 && (
+      {/* Breaking first, and it takes the alarming tone away from "majors
+          behind" when the surface diff says nothing actually breaks. Behind is
+          a fact about versions; breaking is a fact about APIs, and only the
+          second one is worth interrupting someone for. */}
+      {drift.breaking !== null && drift.breaking > 0 && (
         <Chip tone="bad">
+          {drift.breaking} breaking
+        </Chip>
+      )}
+      {drift.majorDrift > 0 && (
+        <Chip tone={drift.breaking === 0 ? "neutral" : "warn"}>
           {drift.majorDrift} major{drift.majorDrift === 1 ? "" : "s"} behind
         </Chip>
       )}
       {drift.anyDrift > drift.majorDrift && (
-        <Chip tone="warn">{drift.anyDrift - drift.majorDrift} minor</Chip>
+        <Chip tone="neutral">{drift.anyDrift - drift.majorDrift} minor</Chip>
       )}
     </span>
   );

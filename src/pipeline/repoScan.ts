@@ -15,6 +15,7 @@ import type { Database } from '../db/client';
 import { listAllRepos, saveScan, saveScanError } from '../db/repos';
 import type { RepoRow } from '../db/schema';
 import { GithubAppError } from '../github/app';
+import { annotateVerdicts } from '../github/brief';
 import { computeDrift } from '../github/drift';
 import { fetchManifests, type InstallationRepo } from '../github/manifests';
 import { fetchResolvedTree } from '../github/sbom';
@@ -25,6 +26,8 @@ export interface ScanResult {
   ok: boolean;
   depsTracked: number;
   majorDrift: number;
+  /** Upgrades whose surface diff says something actually breaks. */
+  breaking: number;
   partial: boolean;
   /** False when the repo has no dependency graph, so transitives were not read. */
   transitivesRead: boolean;
@@ -50,12 +53,16 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
     // ownerId is passed so any dependency this scan ingests for the first time
     // is attributed to the user whose repo surfaced it.
     const drift = await computeDrift(db, manifests, resolvedTree, repo.ownerId);
+    // What actually breaks, as opposed to what is merely behind. Stored with
+    // the scan so every view can lead with it without re-diffing per request.
+    await annotateVerdicts(db, drift);
     await saveScan(db, repo.id, { manifests, drift, installCommand });
     return {
       ...base,
       ok: true,
       depsTracked: drift.depsTracked,
       majorDrift: drift.majorDrift,
+      breaking: drift.breaking ?? 0,
       partial,
       transitivesRead: resolvedTree !== null,
       empty,
@@ -78,6 +85,7 @@ export async function scanRepo(db: Database, repo: RepoRow): Promise<ScanResult>
       ok: false,
       depsTracked: 0,
       majorDrift: 0,
+      breaking: 0,
       partial: false,
       transitivesRead: false,
       empty: false,

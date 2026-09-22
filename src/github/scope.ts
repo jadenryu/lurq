@@ -21,7 +21,7 @@
  * that makes someone widen their scope later.
  */
 import type { UpgradeBrief } from './brief';
-import type { RepoCheck, RepoPolicy } from './types';
+import type { RepoCheck, RepoPolicy, UpgradeVerdict } from './types';
 
 /** Why an upgrade is not eligible for the agent, in words a user can act on. */
 export type ScopeReason =
@@ -78,7 +78,12 @@ function isUnassessed(u: UpgradeBrief): boolean {
   return u.verdict === 'unknown';
 }
 
-function breaksSomething(u: UpgradeBrief): boolean {
+/**
+ * Exported so the scan that counts breaking upgrades and the scope that acts on
+ * them cannot drift apart. A dashboard number that disagrees with what the
+ * autopilot does is worse than no number.
+ */
+export function breaksSomething(u: { verdict: UpgradeVerdict }): boolean {
   return u.verdict === 'removes-exports' || u.verdict === 'arity-changed';
 }
 

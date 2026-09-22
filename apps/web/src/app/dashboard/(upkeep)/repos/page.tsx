@@ -106,11 +106,16 @@ export default async function ReposPage({
         declared: acc.declared + drift.depsDeclared,
         deps: acc.deps + drift.depsTracked,
         major: acc.major + drift.majorDrift,
+        // Null-safe on purpose: a repo scanned before verdicts were recorded
+        // contributes nothing rather than a zero, and `assessed` says how many
+        // repos the total can actually speak for.
+        breaking: acc.breaking + (drift.breaking ?? 0),
+        assessed: acc.assessed + (drift.breaking === null ? 0 : 1),
         advisories: acc.advisories + drift.advisories,
         deprecated: acc.deprecated + drift.deprecated,
       };
     },
-    { declared: 0, deps: 0, major: 0, advisories: 0, deprecated: 0 },
+    { declared: 0, deps: 0, major: 0, advisories: 0, deprecated: 0, breaking: 0, assessed: 0 },
   );
 
   return (
@@ -240,10 +245,20 @@ export default async function ReposPage({
                       : "every declared dependency"
                   }
                 />
+                {/* Leads with what breaks, not with version distance. These are
+                    different numbers and only this one governs what the
+                    autopilot does under "security + breaking" — a repo four
+                    majors behind on packages that removed nothing has no
+                    breaking upgrades, and showing the 4 as the headline taught
+                    the reader to treat the number as noise. */}
                 <StatTile
-                  label="majors behind"
-                  value={totals.major}
-                  hint="the upgrade backlog"
+                  label="breaking upgrades"
+                  value={totals.assessed === 0 ? "—" : totals.breaking}
+                  hint={
+                    totals.assessed === 0
+                      ? "not diffed yet — rescan to check"
+                      : `of ${totals.major} majors behind; the rest change no API`
+                  }
                 />
                 <DriftMeter
                   behind={totals.major}

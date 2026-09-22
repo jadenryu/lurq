@@ -189,10 +189,18 @@ function statusChips(dep: DashboardDep) {
       )}
       {dep.deprecated && <Chip tone="warn">deprecated</Chip>}
       {dep.majorsBehind > 0 && (
-        <Chip tone="bad">
+        <Chip tone={dep.verdict === "clean" ? "neutral" : "bad"}>
           {dep.majorsBehind} major{dep.majorsBehind === 1 ? "" : "s"}
         </Chip>
       )}
+      {/* The verdict, not the version distance. Four majors behind on a package
+          that removed nothing is not four upgrades' worth of risk, and until now
+          the row could not say so — the diff was computed and thrown away on
+          every brief request. `undefined` renders nothing: not looked at is not
+          "clean", and a row that stays quiet is honest about that. */}
+      {dep.verdict === "removes-exports" && <Chip tone="bad">breaks api</Chip>}
+      {dep.verdict === "arity-changed" && <Chip tone="warn">signature changed</Chip>}
+      {dep.verdict === "clean" && dep.majorsBehind > 0 && <Chip tone="good">api unchanged</Chip>}
       {clean &&
         (dep.resolved === dep.latest ? (
           <Chip tone="good">current</Chip>
@@ -261,10 +269,35 @@ function DepDetail({ dep }: { dep: DashboardDep }) {
         )}
       </DetailRow>
 
+      {/* What the surface diff already concluded, before telling anyone to go
+          and run something. The command still follows, because only a run with
+          the source in hand can name YOUR call sites — but "which of my
+          dependencies break" is a question lurq answered at scan time. */}
+      <DetailRow label="api">
+        {dep.verdict === "removes-exports" ? (
+          <span className="text-ink">
+            exports disappear between {dep.resolved ?? "this version"} and{" "}
+            {dep.latest ?? "latest"} — the migration brief lists which
+          </span>
+        ) : dep.verdict === "arity-changed" ? (
+          <span className="text-ink">
+            nothing removed, but a signature takes a different number of arguments
+          </span>
+        ) : dep.verdict === "clean" ? (
+          <span className="text-ink-2">
+            surfaces compared: nothing removed or re-shaped, whatever semver says
+          </span>
+        ) : (
+          <span className="text-ink-3">
+            not diffed yet — absent is not clean, it means the surface has not been extracted
+          </span>
+        )}
+      </DetailRow>
+
       <DetailRow label="check">
         <code className="font-mono text-xs text-ink">lurq check-upgrade {dep.name}</code>
         <span className="text-ink-3">
-          {" "}— runs in your CI and reports which call sites break
+          {" "}— runs in your CI and reports which of your call sites break
         </span>
       </DetailRow>
     </div>

@@ -1169,6 +1169,12 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
           depsDeclared: row.drift.depsDeclared,
           depsTracked: row.drift.depsTracked,
           majorDrift: row.drift.majorDrift,
+          /** Upgrades the surface diff says actually break something — the
+           *  number the autopilot acts on. `null` (not 0) for scans taken
+           *  before verdicts were recorded, so "never checked" cannot render
+           *  as "nothing breaks". */
+          breaking: row.drift.breaking ?? null,
+          unassessed: row.drift.unassessed ?? null,
           anyDrift: row.drift.anyDrift,
           deprecated: row.drift.deprecated,
           advisories: row.drift.advisories,
