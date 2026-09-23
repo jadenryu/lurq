@@ -694,6 +694,18 @@ export const repoAlerts = pgTable(
      * move on its own.
      */
     inRange: boolean('in_range').notNull(),
+    /**
+     * What the publish actually removed, when lurq measured it rather than
+     * inferred it.
+     *
+     * A public alert reasons from a version number: a new major landed, so
+     * something probably broke. A private one reasons from the surface the
+     * author just published against the one they published before it, so it can
+     * name the exports that disappeared. Null means the former — and null is
+     * also why a private package removing an export in a PATCH release is
+     * alertable at all, where the version-number path would see nothing.
+     */
+    detail: text('detail'),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (table) => [

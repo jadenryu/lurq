@@ -45,9 +45,15 @@ function alertItem(a: RepoAlertRow, webUrl: string): UrgentItem {
   return {
     key: `alert:${a.id}`,
     kind: 'breaking_release',
-    title: `${a.packageName} ${a.toVersion} will install on its own in ${a.repoFullName}`,
-    detail:
-      a.repoId === null
+    title: a.detail
+      ? `${a.packageName} ${a.toVersion} breaks ${a.repoFullName}`
+      : `${a.packageName} ${a.toVersion} will install on its own in ${a.repoFullName}`,
+    // A measured break says what it removed, so it never falls back to the
+    // version-number wording below — "a new major landed" is the weaker claim
+    // and it would be strange to make it while holding the stronger one.
+    detail: a.detail
+      ? `${a.detail} ${a.repoFullName} declares ${a.range}.`
+      : a.repoId === null
         ? `${a.toVersion} is a new major; ${a.repoFullName} was last upgraded to ${a.range} with lurq check-upgrade. Connect the repo to see which exports it removes.`
         : a.inRange
           ? `The range ${a.range} already admits ${a.toVersion}, a new major${a.fromVersion ? ` (it resolves ${a.fromVersion} today)` : ''}. The next clean install takes it unless the range is tightened.`
@@ -345,7 +351,9 @@ export async function buildDigest(
     mcpChangeTotal: (eventTotal[0]?.n ?? 0) + publicChanges.length,
     alerts: alerts.map((a) => ({
       ...alertItem(a, webUrl),
-      title: `${a.packageName} ${a.toVersion} in ${a.repoFullName}`,
+      title: a.detail
+        ? `${a.packageName} ${a.toVersion} breaks ${a.repoFullName}`
+        : `${a.packageName} ${a.toVersion} in ${a.repoFullName}`,
     })),
     alertTotal: alertTotal[0]?.n ?? 0,
     unreadable: deployments

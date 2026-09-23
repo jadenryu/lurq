@@ -19,9 +19,12 @@ function fromAlert(a: RepoAlertRow, webUrl: string): ChannelItem {
     key: `alert:${a.id}`,
     severity: a.inRange ? 'high' : 'moderate',
     source: 'release',
-    title: `${a.packageName} ${a.toVersion} in ${a.repoFullName}`,
-    detail:
-      a.repoId === null
+    title: a.detail
+      ? `${a.packageName} ${a.toVersion} breaks ${a.repoFullName}`
+      : `${a.packageName} ${a.toVersion} in ${a.repoFullName}`,
+    detail: a.detail
+      ? `${a.detail} ${a.repoFullName} declares ${a.range}.`
+      : a.repoId === null
         ? `${a.toVersion} is a new major; ${a.repoFullName} was last upgraded to ${a.range} with lurq check-upgrade.`
         : a.inRange
           ? `The range ${a.range} already admits ${a.toVersion}, a new major; the next clean install takes it.`

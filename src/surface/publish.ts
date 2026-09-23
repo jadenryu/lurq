@@ -17,7 +17,7 @@
  *     verdict has to carry how it was established, not merely what it says.
  */
 import { z } from 'zod';
-import { and, countDistinct, eq } from 'drizzle-orm';
+import { and, countDistinct, desc, eq, lt } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { entities } from '../db/schema';
 import { storeSurface } from '../db/surface';
@@ -130,6 +130,50 @@ export async function publishedAlready(
     )
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * The version this tenant published immediately before `version`, or null.
+ *
+ * Ordered by when lurq first saw each row, not by semver — a backport
+ * publishing 3.9.2 after 4.0.0 means the predecessor by number is not the
+ * predecessor in time, and the question a diff answers is "what changed when
+ * this was released". Same reasoning as `previousVersion` in db/surface.ts.
+ */
+export async function previousPublishedVersion(
+  db: Database,
+  pkg: string,
+  version: string,
+  tenantId: number,
+): Promise<string | null> {
+  const [current] = await db
+    .select({ firstSeen: entities.firstSeen })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.tenantId, tenantId),
+        eq(entities.kind, 'package_surface'),
+        eq(entities.name, pkg),
+        eq(entities.version, version),
+      ),
+    )
+    .limit(1);
+  if (!current) return null;
+
+  const [prev] = await db
+    .select({ version: entities.version })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.tenantId, tenantId),
+        eq(entities.kind, 'package_surface'),
+        eq(entities.name, pkg),
+        lt(entities.firstSeen, current.firstSeen),
+      ),
+    )
+    .orderBy(desc(entities.firstSeen))
+    .limit(1);
+  return prev?.version ?? null;
 }
 
 /**

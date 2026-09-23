@@ -100,6 +100,34 @@ export async function reposDeclaring(db: Database, name: string): Promise<RepoRo
 }
 
 /**
+ * The same question, asked by an HTTP route: which of THIS owner's repos
+ * declare `name`.
+ *
+ * `reposDeclaring` above is unscoped by design and says so — its caller is the
+ * registry watcher, which has no user context. A request handler does have one,
+ * and must not reach across accounts, so the owner predicate is not optional
+ * here. Private surface publishes come in over a route and use this one.
+ */
+export async function reposDeclaringForOwner(
+  db: Database,
+  ownerId: string,
+  name: string,
+): Promise<RepoRow[]> {
+  return db
+    .select()
+    .from(repos)
+    .where(
+      and(
+        eq(repos.ownerId, ownerId),
+        sql`exists (
+        select 1 from jsonb_array_elements(${repos.manifests}) as m
+        where jsonb_exists(m -> 'deps', ${name})
+      )`,
+      ),
+    );
+}
+
+/**
  * The lurq user an installation belongs to, or null when nothing links them.
  *
  * The third deliberately unscoped read, and the one that makes webhooks work:
