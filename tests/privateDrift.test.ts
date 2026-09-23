@@ -105,7 +105,6 @@ describe.skipIf(!TEST_DB)('emitPrivateSurfaceAlerts against Postgres', () => {
   const pkg = `@acme/billing-${run}`;
   let db: import('../src/db/client').Database;
   let close: () => Promise<void>;
-  let tenantId: number;
   let emit: typeof import('../src/github/alerts').emitPrivateSurfaceAlerts;
   let listAlerts: typeof import('../src/db/alerts').listAlerts;
   let diffSurfaces: typeof import('../src/surface/diff').diffSurfaces;
@@ -123,9 +122,6 @@ describe.skipIf(!TEST_DB)('emitPrivateSurfaceAlerts against Postgres', () => {
     ({ emitPrivateSurfaceAlerts: emit } = await import('../src/github/alerts'));
     ({ listAlerts } = await import('../src/db/alerts'));
     ({ diffSurfaces } = await import('../src/surface/diff'));
-    const { tenantIdFor } = await import('../src/db/graph');
-    tenantId = await tenantIdFor(db, owner);
-
     const { repos } = await import('../src/db/schema');
     const { DEFAULT_REPO_POLICY } = await import('../src/github/types');
     await db.insert(repos).values({
