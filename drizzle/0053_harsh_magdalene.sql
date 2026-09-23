@@ -1,0 +1,1 @@
+ALTER TABLE "repo_alerts" ADD COLUMN "detail" text;

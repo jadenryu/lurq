@@ -27,9 +27,10 @@ import semver from 'semver';
 import { logger } from '../core/logger';
 import { cliUpgradeWatchers, insertAlerts, type CliWatcher } from '../db/alerts';
 import type { Database } from '../db/client';
-import { reposDeclaring } from '../db/repos';
+import { reposDeclaring, reposDeclaringForOwner } from '../db/repos';
 import type { NewRepoAlertRow, RepoRow } from '../db/schema';
 import { declaredDeps } from './drift';
+import type { SurfaceDiff } from '../surface/diff';
 import { dispatchForAlerts } from './dispatch';
 
 /** The subset of a package row that decides whether a publish is alertable. */
@@ -195,6 +196,133 @@ export async function emitPublishAlerts(
     return inserted.length;
   } catch (err) {
     logger.warn(`alerts: could not fan out ${name}@${toVersion}: ${(err as Error).message}`);
+    return 0;
+  }
+}
+
+/**
+ * How many removed exports a private alert names before it summarises. Enough
+ * to act on, short enough to survive a Slack line and an email row.
+ */
+const NAMED_REMOVALS = 5;
+
+/**
+ * One sentence saying what this publish took away.
+ *
+ * Renames come first and are worth the space: a proven rename is not "your
+ * code is broken", it is "your code is broken and here is the replacement",
+ * and it is the only line in the feed an agent can act on without reading
+ * anything else.
+ */
+/**
+ * Ranges that resolve to a local checkout rather than to the registry.
+ *
+ * These are the normal way a monorepo declares an internal dependency, and
+ * `semver.validRange` rejects every one of them — which `draftAlert` correctly
+ * reads as "could not establish that this range admits the new version".
+ *
+ * For a PRIVATE publish that reading is backwards. `workspace:*` does not mean
+ * "we might pick this up"; it means the consumer is already building against
+ * the very package that just changed. It is the strongest in-range case there
+ * is, not the weakest, and left at false the alert is filtered out of email, out
+ * of the agent notice, and out of any channel at its default `high` threshold —
+ * silently, for exactly the repos this feature exists to serve.
+ *
+ * Deliberately NOT applied to public publishes: there, `workspace:*` means the
+ * repo is consuming its own local copy and a registry release does not reach it
+ * at all. Same string, opposite meaning, so the override lives here and not in
+ * `draftAlert`.
+ */
+const LOCAL_PROTOCOL = /^(workspace|link|file|portal):/i;
+
+export function describeSurfaceBreak(diff: SurfaceDiff): string | null {
+  // A refused diff has empty arrays by contract; never read them as "nothing
+  // changed" (§6.4.2 — an empty surface is a measurement gap, not a removal).
+  if (diff.inconclusive) return null;
+
+  // A rename IS a removal — the old name is gone — so naming it twice would
+  // report the same break as two. The rename wins, because it carries the fix.
+  const renamedPaths = new Set(diff.renamed.map((r) => r.path));
+  const renamed = diff.renamed.map((r) => `${r.path} → ${r.to.join(' or ')}`);
+  const removed = diff.removed.map((s) => s.path).filter((p) => !renamedPaths.has(p));
+  const parts: string[] = [];
+
+  if (renamed.length) parts.push(`renamed ${cap(renamed)}`);
+  if (removed.length) parts.push(`removed ${cap(removed)}`);
+  if (diff.arityChanged.length)
+    parts.push(`changed the parameters of ${cap(diff.arityChanged.map((a) => a.path))}`);
+  // Type-only removals break `tsc` and not `node`, so they are named as such
+  // rather than folded into the removal count (§8.1).
+  if (diff.typeOnlyRemoved.length)
+    parts.push(`removed the type(s) ${cap(diff.typeOnlyRemoved.map((s) => s.path))}`);
+
+  if (parts.length === 0) return null;
+  return `${diff.toVersion ?? 'the new version'} ${parts.join('; ')}.`;
+}
+
+const cap = (names: string[]): string => {
+  const shown = names.slice(0, NAMED_REMOVALS);
+  const more = names.length - shown.length;
+  return shown.join(', ') + (more > 0 ? ` and ${more} more` : '');
+};
+
+/**
+ * Fan a PRIVATE publish out to the publisher's own repos that declare it.
+ *
+ * The public path infers breakage from a version number — a new major landed,
+ * so something probably broke. This one measures it: the author just published
+ * a surface, lurq already holds the one before it, and the diff between them
+ * says exactly what disappeared. Two consequences follow.
+ *
+ * First, a removal shipped as a PATCH is alertable here, and is invisible to
+ * the version-number path. Internal packages do that constantly, because there
+ * is no public contract making anyone careful.
+ *
+ * Second, the trigger is evidence rather than a heuristic, so a major that
+ * removed nothing correctly produces no alert at all.
+ *
+ * Owner-scoped throughout: unlike the watcher, this runs on a request and must
+ * never reach across accounts. Best-effort by contract — the surface is already
+ * stored, and failing to notify must not fail the publish that earned it.
+ */
+export async function emitPrivateSurfaceAlerts(
+  db: Database,
+  ownerId: string,
+  name: string,
+  toVersion: string,
+  diff: SurfaceDiff,
+): Promise<number> {
+  const detail = describeSurfaceBreak(diff);
+  if (!detail) return 0;
+
+  try {
+    const affected = await reposDeclaringForOwner(db, ownerId, name);
+    const rows = affected
+      .map((repo) => draftAlert(repo, name, toVersion))
+      .filter((row): row is NewRepoAlertRow => row !== null)
+      .map((row) => ({
+        ...row,
+        detail,
+        inRange: row.inRange || LOCAL_PROTOCOL.test(row.range),
+      }));
+    if (rows.length === 0) return 0;
+
+    const inserted = await insertAlerts(db, rows);
+    if (inserted.length > 0) {
+      logger.info(
+        `alerts: private ${name}@${toVersion} broke its surface, notified ${inserted.length} repo(s)`,
+      );
+      const byId = new Map(affected.map((repo) => [repo.id, repo]));
+      const fresh = inserted
+        .map((row) => (row.repoId === null ? undefined : byId.get(row.repoId)))
+        .filter((repo): repo is RepoRow => repo !== undefined);
+      if (fresh.length > 0) await dispatchForAlerts(fresh);
+    }
+    return inserted.length;
+  } catch (err) {
+    logger.warn(
+      `alerts: could not fan out private ${name}@${toVersion}: ${(err as Error).message}`,
+    );
     return 0;
   }
 }

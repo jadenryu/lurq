@@ -15,8 +15,12 @@ import { formatError } from '../core/errors';
 import { logger } from '../core/logger';
 import type { Database } from '../db/client';
 import { tenantIdFor } from '../db/graph';
+import { emitPrivateSurfaceAlerts } from '../github/alerts';
+import { diffSurfaces } from '../surface/diff';
+import { loadStored, rowsToSurface } from './surfaceHandlers';
 import {
   countPrivatePackages,
+  previousPublishedVersion,
   MAX_PRIVATE_PACKAGES_PER_OWNER,
   publishedAlready,
   publishSurface,
@@ -82,15 +86,60 @@ export function registerSurfaceRoutes(app: Express, d: SurfaceRouteDeps): void {
         }
 
         const result = await publishSurface(d.db, parsed.data, tenantId);
+
+        // Alerting is best-effort and deliberately inline: the surface is
+        // already stored, so a failure here must not fail the publish, and
+        // there is no queue to put this on that would not be a queue built for
+        // one caller. Two indexed reads and one bulk insert — see notifyBreak.
+        //
+        // ponytail: move behind the worker if publish latency ever shows up.
+        const alerted = await notifyBreak(d.db, ownerId, tenantId, parsed.data);
+
         capture(ownerId, 'surface_published', {
           symbols: result.symbolsWritten,
           verdict: result.verdict,
+          alerted,
         });
-        res.json(result);
+        res.json({ ...result, alerted });
       } catch (err) {
         logger.error('surface publish failed:', formatError(err));
         res.status(500).json({ error: 'Could not publish the surface.' });
       }
     },
   );
+}
+
+/**
+ * Diff what was just published against what this tenant published before it,
+ * and tell the repos that declare it.
+ *
+ * Returns how many repos were newly alerted. Never throws: the publish it
+ * follows has already succeeded.
+ */
+async function notifyBreak(
+  db: Database,
+  ownerId: string,
+  tenantId: number,
+  input: { package: string; version: string },
+): Promise<number> {
+  try {
+    const previous = await previousPublishedVersion(db, input.package, input.version, tenantId);
+    // Nothing published before this: a first surface cannot have broken anyone.
+    if (!previous) return 0;
+
+    const [before, after] = await Promise.all([
+      loadStored(db, input.package, previous, tenantId),
+      loadStored(db, input.package, input.version, tenantId),
+    ]);
+    if (!before || !after) return 0;
+
+    const diff = diffSurfaces(
+      rowsToSurface(input.package, previous, before.rows, before.tier ?? 'shipped_js_ast'),
+      rowsToSurface(input.package, input.version, after.rows, after.tier ?? 'shipped_js_ast'),
+    );
+    return await emitPrivateSurfaceAlerts(db, ownerId, input.package, input.version, diff);
+  } catch (err) {
+    logger.warn(`surface publish: could not alert for ${input.package}: ${formatError(err)}`);
+    return 0;
+  }
 }
