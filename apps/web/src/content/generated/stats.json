@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-23T12:55:01.446Z",
+  "generatedAt": "2026-09-24T12:51:38.001Z",
   "source": "live",
   "dataAsOf": "2026-09-22T06:00:58.813Z",
   "packages": 50000,
   "packagesScored": 50000,
   "categories": 23,
   "versionsTracked": 4411601,
-  "apiSurfaces": 40352,
+  "apiSurfaces": 40655,
   "coOccurrencePairs": 27121288,
   "stacksResolved": 15,
   "stacksHeld": 15,
@@ -20,11 +20,11 @@
     "weeksLive": 13
   },
   "lastSync": {
-    "startedAt": "2026-09-23T06:04:31.587Z",
-    "finishedAt": "2026-09-23T07:33:24.484Z",
+    "startedAt": "2026-09-24T06:03:47.614Z",
+    "finishedAt": "2026-09-24T07:21:49.451Z",
     "packagesSeen": 0,
     "packagesUpdated": 0,
     "status": "failed"
   },
-  "syncDays": 69
+  "syncDays": 70
 }
