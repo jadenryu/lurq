@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24T12:51:38.001Z",
+  "generatedAt": "2026-09-25T12:53:50.671Z",
   "source": "live",
   "sources": [
     {
@@ -68,11 +68,11 @@
   "coOccurrencePairs": 27121288,
   "stacksResolved": 15,
   "stacksHeld": 15,
-  "apiSurfaces": 40655,
-  "syncDays": 70,
+  "apiSurfaces": 40715,
+  "syncDays": 71,
   "firstSyncAt": "2026-07-15T06:01:10.236Z",
   "lastSync": {
-    "finishedAt": "2026-09-24T07:21:49.451Z",
+    "finishedAt": "2026-09-25T07:08:30.430Z",
     "packagesSeen": 0,
     "status": "failed"
   }
