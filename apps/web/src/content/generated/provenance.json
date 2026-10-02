@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-01T14:41:51.837Z",
+  "generatedAt": "2026-10-02T14:02:14.255Z",
   "source": "live",
   "sources": [
     {
@@ -69,10 +69,10 @@
   "stacksResolved": 15,
   "stacksHeld": 15,
   "apiSurfaces": 41183,
-  "syncDays": 77,
+  "syncDays": 78,
   "firstSyncAt": "2026-07-15T06:01:10.236Z",
   "lastSync": {
-    "finishedAt": "2026-10-01T07:06:55.309Z",
+    "finishedAt": "2026-10-02T07:01:08.834Z",
     "packagesSeen": 0,
     "status": "failed"
   }
