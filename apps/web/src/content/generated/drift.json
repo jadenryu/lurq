@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T14:22:23.736Z",
+  "generatedAt": "2026-10-07T14:40:22.639Z",
   "source": "lurq index: package_versions joined to packages",
   "reproduce": "npx tsx scripts/gen-drift.ts",
   "cutoffs": [
