@@ -277,6 +277,18 @@ export function fetchUpgradePlan(
   return post<RemotePlan>('/upgrade-plan', body, opts);
 }
 
+/**
+ * What a model trained to `since` believes about these installed versions that
+ * is no longer true. Resolved versions, not ranges — see `runStale`.
+ */
+export function fetchStale<T>(
+  installed: { name: string; version: string }[],
+  since: string,
+  opts: RemoteOptions = {},
+): Promise<T> {
+  return post<T>('/stale', { installed, since }, opts);
+}
+
 export interface ReportedRun {
   repoFullName: string;
   packageName: string;

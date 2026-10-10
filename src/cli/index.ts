@@ -89,6 +89,20 @@ export function buildProgram(): Command {
       },
     );
 
+  program
+    .command('stale')
+    .argument('[dir]', 'project directory (default: cwd)', '.')
+    .description('what your coding agent believes about your dependencies that is no longer true')
+    .option('--model <id>', 'resolve the cutoff from a model with a published one')
+    .option('--since <date>', 'the knowledge cutoff to measure against (YYYY-MM)')
+    .option('--url <url>', 'hosted endpoint URL (defaults to the lurq service)')
+    .option('--api-key <key>', 'hosted API key (defaults to $LURQ_API_KEY)')
+    .option('--json', 'machine-readable output')
+    .action(async (dir: string, opts: Record<string, unknown>) => {
+      const { runStale } = await import('./stale');
+      await runStale(dir, opts as never);
+    });
+
   // ── Autopilot ─────────────────────────────────────────────────────────────
   const autopilot = program
     .command('autopilot')

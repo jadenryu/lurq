@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { cliSpec, renderWorkflow } from '../src/github/workflow';
+import { cliSpec, renderWorkflow, npxLurq } from '../src/github/workflow';
 
 interface Step {
   name?: string;
@@ -57,7 +57,7 @@ describe('with the permission', () => {
   });
 
   it('is pinned like every other CLI invocation in this file', () => {
-    expect(envStep(list())!.run).toContain(`npx -y ${cliSpec()} `);
+    expect(envStep(list())!.run).toContain(`${npxLurq()} `);
   });
 
   it('runs before the arming boundary, not after it', () => {

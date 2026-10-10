@@ -31,7 +31,7 @@
  * agent, for the changes a rule cannot make.
  */
 
-import { PACKAGE_NAME, VERSION } from '../core/constants';
+import { BIN_NAME, PACKAGE_NAME, VERSION } from '../core/constants';
 
 export interface WorkflowOptions {
   /** Cron schedule. Default: Mondays 06:00 UTC. */
@@ -85,6 +85,33 @@ export function cliSpec(version: string = VERSION): string {
   return major === '0' ? `${PACKAGE_NAME}@${major}.${minor}` : `${PACKAGE_NAME}@${major}`;
 }
 
+/**
+ * The command every step in the generated workflow runs lurq with.
+ *
+ * OBSERVED: `npx -y lurqrun@0.1 upgrade-plan .` fails on GitHub's ubuntu
+ * runners with `sh: 1: lurq: not found` and exit 127, killing every armed
+ * repository at its first step. Three consecutive runs on this repo's own
+ * workflow, and nothing in lurq saw it — the failure is in the user's Actions,
+ * and a workflow that never reports looks exactly like a repository with
+ * nothing to upgrade.
+ *
+ * NOT REPRODUCED locally: on macOS with npm 10 the same command resolves fine,
+ * because npx falls back to a package's only bin when no bin matches the
+ * package name. So the precise trigger on the runner — npm version, a cold
+ * cache, bin linking — is unconfirmed, and this comment does not pretend
+ * otherwise.
+ *
+ * What is certain is that the fallback is what the broken form depends on, and
+ * that it is avoidable: `--package` names what to install and the word after it
+ * names what to execute. This package publishes as `lurqrun` (npm has `lurq`
+ * taken) with its bin called `lurq`, so those two names differ and every
+ * invocation has to say both. One definition, because six call sites spelled it
+ * the way that relied on the fallback.
+ */
+export function npxLurq(version: string = VERSION): string {
+  return `npx -y --package ${cliSpec(version)} ${BIN_NAME}`;
+}
+
 const DEFAULT_CRON = '0 6 * * 1';
 /** Daily, for a repo whose policy is advisories-only. */
 const SECURITY_CRON = '0 6 * * *';
@@ -121,7 +148,7 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
   const max = opts.maxUpgrades ?? 3;
   const mode = opts.mode ?? (opts.armed ? 'pr' : 'comment');
   const autoMerge = opts.autoMerge ?? false;
-  const cli = cliSpec();
+  const cli = npxLurq();
   /**
    * Deliberately NOT gated on LURQ_MODE. It writes nothing, needs no API key
    * and no network to us, so it runs in analyse-only mode too — analysis is not
@@ -133,7 +160,7 @@ export function renderWorkflow(opts: WorkflowOptions = {}): string {
     opts.checkEnv === true
       ? `      - name: Check environment
         run: |
-          npx -y ${cli} check-env . > lurq-env.txt
+          ${cli} check-env . > lurq-env.txt
           { echo '\`\`\`'; cat lurq-env.txt; echo '\`\`\`'; } >> "$\{GITHUB_STEP_SUMMARY}"
 
 `
@@ -196,7 +223,7 @@ jobs:
       - name: Plan
         env:
           LURQ_API_KEY: \${{ secrets.LURQ_API_KEY }}
-        run: npx -y ${cli} upgrade-plan . --json > lurq-plan.json
+        run: ${cli} upgrade-plan . --json > lurq-plan.json
 
       # Without this the autopilot switch on the dashboard would only ever
       # affect NEW installs: lurq is Contents:read-only and cannot rewrite this
@@ -231,14 +258,14 @@ jobs:
       - name: Check against this codebase
         env:
           LURQ_API_KEY: \${{ secrets.LURQ_API_KEY }}
-        run: npx -y ${cli} check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
+        run: ${cli} check-upgrade . --plan lurq-plan.json --report --json > lurq-brief.json
 
       # The same report twice: once into the run summary, once as the body of
       # the pull request. Fenced, because the report is aligned plain text and
       # markdown would otherwise collapse its indentation into one paragraph.
       - name: Summarise
         run: |
-          npx -y ${cli} check-upgrade . --plan lurq-plan.json > lurq-report.txt
+          ${cli} check-upgrade . --plan lurq-plan.json > lurq-report.txt
           { echo '\`\`\`'; cat lurq-report.txt; echo '\`\`\`'; } > lurq-report.md
           cat lurq-report.md >> "$\{GITHUB_STEP_SUMMARY}"
 
@@ -272,7 +299,7 @@ ${envCheck}      # 3. Editing is opt-in. In 'comment' the job stops here having 
       # prompt states below, applied by a rule instead of a model.
       - name: Apply what needs no judgement
         if: env.LURQ_MODE == 'pr' || env.LURQ_MODE == 'fix'
-        run: npx -y ${cli} fix . --plan lurq-plan.json --apply --max \${{ env.MAX_UPGRADES }}
+        run: ${cli} fix . --plan lurq-plan.json --apply --max \${{ env.MAX_UPGRADES }}
 
       - name: Apply upgrades
         if: env.LURQ_MODE == 'pr'

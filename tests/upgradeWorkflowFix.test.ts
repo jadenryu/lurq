@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { cliSpec, renderWorkflow } from '../src/github/workflow';
+import { cliSpec, renderWorkflow, npxLurq } from '../src/github/workflow';
 
 interface Step {
   name?: string;
@@ -53,7 +53,7 @@ describe('the deterministic step', () => {
   });
 
   it('is pinned like every other CLI invocation in this file', () => {
-    expect(fixStep(steps())!.run).toContain(`npx -y ${cliSpec()} `);
+    expect(fixStep(steps())!.run).toContain(`${npxLurq()} `);
   });
 });
 

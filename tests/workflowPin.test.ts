@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cliSpec, renderWorkflow } from '../src/github/workflow';
+import { cliSpec, renderWorkflow, npxLurq } from '../src/github/workflow';
 import { PACKAGE_NAME, VERSION } from '../src/core/constants';
 
 /**
@@ -34,14 +34,16 @@ describe('renderWorkflow', () => {
     // The actual defect being guarded: `npx -y lurqrun <cmd>` resolves to
     // whatever is newest at run time, in a file that pins everything else.
     expect(yaml).not.toMatch(new RegExp(`npx -y ${PACKAGE_NAME}\\s`));
-    expect(yaml).toContain(`npx -y ${cliSpec()} `);
+    expect(yaml).toContain(`${npxLurq()} `);
   });
 
   it('pins every npx invocation, not just the first', () => {
-    const invocations = yaml.match(/npx -y \S+/g) ?? [];
+    // Matches through the binary name, because the invocation is now
+    // `npx -y --package <spec> lurq` — the pin sits in the middle of it.
+    const invocations = yaml.match(/npx -y \S+ \S+ \S+/g) ?? [];
     expect(invocations.length).toBeGreaterThan(0);
     for (const call of invocations) {
-      expect(call).toBe(`npx -y ${cliSpec()}`);
+      expect(call).toBe(npxLurq());
     }
   });
 
