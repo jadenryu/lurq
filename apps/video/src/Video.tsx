@@ -1,0 +1,86 @@
+import { springTiming, TransitionSeries, type TransitionPresentation, type TransitionTiming } from "@remotion/transitions";
+import { fade } from "@remotion/transitions/fade";
+import { flip } from "@remotion/transitions/flip";
+import { Fragment } from "react";
+import { AbsoluteFill, interpolate } from "remotion";
+import { color, MONO, WORDMARK } from "./brand";
+import { BASE_FPS, LogoMark, SceneTiming, useFrame, useUnit } from "./components";
+import { CloseUp, End, Everywhere, Flyover, Keep, Meet, Memory, Skyline, SurfaceShot, Teams, UpgradeShot } from "./scenes";
+
+/**
+ * The output frame rate. 60 is the most YouTube, X and LinkedIn play back; 120 renders fine too,
+ * since all timing below is authored at BASE_FPS and converted here.
+ */
+export const FPS = 60;
+
+/** A duration authored in 30fps frames, in output frames. */
+const out = (frames: number) => Math.round((frames * FPS) / BASE_FPS);
+
+type Join = { presentation: TransitionPresentation<Record<string, unknown>>; timing: TransitionTiming; frames: number };
+
+const dissolve = (frames: number): Join => ({ presentation: fade() as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: out(frames) }), frames });
+/** A 3D card flip, between two product shots on the same stage. */
+const turn = (): Join => ({ presentation: flip({ direction: "from-right", perspective: 2400 }) as never, timing: springTiming({ config: { damping: 200 }, durationInFrames: out(34) }), frames: 34 });
+
+/** Each scene's length in 30fps frames, and how it hands over to the next one. */
+const SCENES = [
+  { id: "skyline", Component: Skyline, frames: 150 },
+  { id: "teams", Component: Teams, frames: 130, join: dissolve(30) },
+  { id: "closeup", Component: CloseUp, frames: 110, join: dissolve(24) },
+  { id: "memory", Component: Memory, frames: 220, join: dissolve(24) },
+  { id: "meet", Component: Meet, frames: 170, join: dissolve(24) },
+  { id: "surface", Component: SurfaceShot, frames: 230, join: dissolve(30) },
+  { id: "flyover", Component: Flyover, frames: 110, join: dissolve(30) },
+  { id: "upgrade", Component: UpgradeShot, frames: 220, join: turn() },
+  { id: "keep", Component: Keep, frames: 110, join: dissolve(30) },
+  { id: "everywhere", Component: Everywhere, frames: 170, join: dissolve(30) },
+  { id: "end", Component: End, frames: 220, join: dissolve(24) },
+];
+
+const cutBefore = (i: number) => SCENES[i].join?.frames ?? 0;
+/** Where each scene starts, in 30fps frames. */
+const starts = SCENES.map((_, i) => SCENES.slice(0, i).reduce((sum, s) => sum + s.frames, 0) - SCENES.slice(1, i + 1).reduce((sum, s) => sum + (s.join?.frames ?? 0), 0));
+export const DURATION = SCENES.reduce((sum, s) => sum + out(s.frames) - (s.join ? out(s.join.frames) : 0), 0);
+
+const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
+
+/** A small lurq mark in the corner, like a broadcast bug; it steps aside where the brand is the subject. */
+function Bug() {
+  const frame = useFrame();
+  const u = useUnit();
+  const i = SCENES.findIndex((s) => s.id === "meet");
+  const meet = starts[i];
+  const meetEnd = starts[i + 1] + cutBefore(i + 1);
+  const end = starts[SCENES.length - 1];
+  const opacity = Math.min(
+    interpolate(frame, [50, 80], [0, 0.85], clamp),
+    interpolate(frame, [meet - 10, meet + 10, meetEnd, meetEnd + 20], [0.85, 0, 0, 0.85], clamp),
+    interpolate(frame, [end - 10, end + 10], [0.85, 0], clamp),
+  );
+  return (
+    <div style={{ position: "absolute", top: 58 * u, right: 70 * u, display: "flex", alignItems: "center", gap: 12 * u, opacity }}>
+      <LogoMark size={30} />
+      <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 26 * u, color: color.ink }}>{WORDMARK}</span>
+    </div>
+  );
+}
+
+export function LurqVideo() {
+  return (
+    <AbsoluteFill style={{ backgroundColor: color.ground }}>
+      <TransitionSeries>
+        {SCENES.map(({ id, Component, frames, join }, i) => (
+          <Fragment key={id}>
+            {join && <TransitionSeries.Transition presentation={join.presentation} timing={join.timing} />}
+            <TransitionSeries.Sequence durationInFrames={out(frames)}>
+              <SceneTiming.Provider value={{ frames, cut: cutBefore(i + 1 < SCENES.length ? i + 1 : i), last: i === SCENES.length - 1 }}>
+                <Component />
+              </SceneTiming.Provider>
+            </TransitionSeries.Sequence>
+          </Fragment>
+        ))}
+      </TransitionSeries>
+      <Bug />
+    </AbsoluteFill>
+  );
+}

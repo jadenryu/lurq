@@ -1,0 +1,33 @@
+{
+  "name": "@lurq/video",
+  "version": "1.0.0",
+  "description": "lurq marketing video, rendered with Remotion from the site copy and brand tokens",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/cli": "4.0.524",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.524",
+    "@remotion/fonts": "4.0.524",
+    "@remotion/transitions": "4.0.524"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.524",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "predev": "node fetch-clips.mjs",
+    "prerender": "node fetch-clips.mjs",
+    "render:wide": "remotion render LurqWide out/lurq-16x9.mp4",
+    "render:square": "remotion render LurqSquare out/lurq-1x1.mp4",
+    "render": "npm run render:wide && npm run render:square",
+    "lint": "eslint src && tsc"
+  }
+}
