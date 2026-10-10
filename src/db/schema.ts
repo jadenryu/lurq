@@ -783,6 +783,26 @@ export const surfaceQueue = pgTable(
   (table) => [index('surface_queue_requested_idx').on(table.kind, table.requestedAt)],
 );
 
+/**
+ * Account id → the numeric `tenantId` every graph row carries.
+ *
+ * The graph keys tenancy by a bigint because it sits in two unique indexes and
+ * every private read's WHERE clause; an account is a Clerk-shaped string. One
+ * row here maps the two rather than widening the graph to text.
+ *
+ * Keyed by OWNER, not by key: one account holds several API keys, and a
+ * per-key tenant would file a surface published from CI where a surface
+ * published from a laptop could never find it.
+ *
+ * `serial` starts at 1, so the `0` public sentinel can never be issued to a
+ * real account.
+ */
+export const tenants = pgTable('tenants', {
+  id: serial('id').primaryKey(),
+  ownerId: text('owner_id').notNull().unique(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
 /** A node in the graph. Anything an agent depends on that an oracle can check. */
 export const entities = pgTable(
   'entities',
@@ -946,6 +966,7 @@ export const observations = pgTable(
 
 export type PackageRow = typeof packages.$inferSelect;
 export type NewPackageRow = typeof packages.$inferInsert;
+export type TenantRow = typeof tenants.$inferSelect;
 export type EntityRow = typeof entities.$inferSelect;
 export type NewEntityRow = typeof entities.$inferInsert;
 export type EnvironmentRow = typeof environments.$inferSelect;

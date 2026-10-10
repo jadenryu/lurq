@@ -414,6 +414,13 @@ export function buildProgram(): Command {
   // The same diff, pointed at the author instead of the consumer: does the
   // version about to be published match what this release actually did to the
   // API? Needs no key and no network to us — just the registry tarball.
+  //
+  // `--publish` is the one exception to that, and it is opt-in for exactly this
+  // reason: it files the extracted surface under the caller's account so their
+  // agents can read an internal package the way they read a public one. It does
+  // NOT depend on the check succeeding — a package that was never published to
+  // a registry has nothing to diff against, and that is precisely the package
+  // this flag exists for.
   program
     .command('check-release')
     .argument('[dir]', 'package directory (default: current)', '.')
@@ -421,12 +428,25 @@ export function buildProgram(): Command {
     .option('--against <version>', 'compare with this published version (default: latest)')
     .option('--json', 'output the check as JSON')
     .option('--exit-code', 'exit 1 when the bump is understated (for CI / prepublish)')
-    .action(async (dir: string, opts: { against?: string; json?: boolean; exitCode?: boolean }) => {
-      const { checkRelease, formatReleaseCheck } = await import('../surface/release');
-      const check = await checkRelease(dir, { against: opts.against });
-      console.log(opts.json ? JSON.stringify(check, null, 2) : formatReleaseCheck(check));
-      if (opts.exitCode && check.verdict !== 'ok') process.exitCode = 1;
-    });
+    .option(
+      '--publish',
+      'also file this surface under your account, so your agents can resolve this package (names, arity and hashed declaration sites only — never source)',
+    )
+    .action(
+      async (
+        dir: string,
+        opts: { against?: string; json?: boolean; exitCode?: boolean; publish?: boolean },
+      ) => {
+        const { checkRelease, formatReleaseCheck } = await import('../surface/release');
+        const check = await checkRelease(dir, { against: opts.against });
+        console.log(opts.json ? JSON.stringify(check, null, 2) : formatReleaseCheck(check));
+        if (opts.exitCode && check.verdict !== 'ok') process.exitCode = 1;
+        if (opts.publish) {
+          const { runPublishSurface } = await import('./publishSurface');
+          await runPublishSurface(dir, { json: opts.json });
+        }
+      },
+    );
 
   // The "works on my machine" gap. Reads the project's own source and its
   // `.env*` files; no API key, no network, and never a value.

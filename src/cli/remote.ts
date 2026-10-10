@@ -6,9 +6,11 @@
  * is right for the operator and wrong here — a GitHub Actions runner has an API
  * key and no database. This module is the whole client: two calls, no SDK.
  */
+import { createHash } from 'node:crypto';
 import { DEFAULT_ENDPOINT } from '../core/constants';
 import { resolveApiKey, resolveEndpoint } from '../core/userConfig';
 import type { SelectionPolicy } from '../policy/types';
+import type { ExtractedSurface, SurfaceSymbol } from '../surface/types';
 
 export class RemoteError extends Error {
   constructor(
@@ -448,4 +450,57 @@ export async function acknowledgePublicMcpChange(
   return (
     await post<{ acknowledged: boolean }>(`/mcp-public-changes/${changeId}/acknowledge`, {}, opts)
   ).acknowledged;
+}
+
+/** What `POST /surfaces` answers with. */
+export interface PublishedSurface {
+  package: string;
+  version: string;
+  symbolsWritten: number;
+  verdict: string;
+}
+
+/**
+ * File a surface extracted on this machine under the key's account.
+ *
+ * `hashSourcePaths` runs HERE, before the request is built, and that placement
+ * is the guarantee: a file path is not source, but it is structure, and a
+ * private repo's directory layout has no business on a server. Hashing on the
+ * receiving end would mean the paths had already left.
+ *
+ * What survives the hash is exactly what the index needs. A proven rename is
+ * two exported names sharing one declaration — same file, same offset — and
+ * equal digests answer "same file" as well as equal paths do.
+ */
+export function publishSurface(
+  surface: ExtractedSurface & { version: string },
+  extractorVersion: string,
+  opts: RemoteOptions = {},
+): Promise<PublishedSurface> {
+  const body = {
+    package: surface.package,
+    version: surface.version,
+    tier: surface.tier,
+    entry: surface.entry,
+    symbols: hashSourcePaths(surface.symbols),
+    filesWalked: surface.filesWalked,
+    externalReExports: surface.externalReExports,
+    extractorVersion,
+  };
+  return post<PublishedSurface>('/surfaces', body, { timeoutMs: 120_000, ...opts });
+}
+
+/** Replace every source path with a stable digest of it. Offsets are untouched. */
+function hashSourcePaths(symbols: SurfaceSymbol[]): SurfaceSymbol[] {
+  return symbols.map((s) =>
+    s.sourceRef
+      ? {
+          ...s,
+          sourceRef: {
+            ...s.sourceRef,
+            file: createHash('sha256').update(s.sourceRef.file).digest('hex').slice(0, 16),
+          },
+        }
+      : s,
+  );
 }

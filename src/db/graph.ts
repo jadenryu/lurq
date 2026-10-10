@@ -10,7 +10,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import type { Database } from './client';
-import { claims, entities, environments, observations } from './schema';
+import { claims, entities, environments, observations, tenants } from './schema';
 import type { ClaimRow, EntityRow, EnvironmentRow } from './schema';
 import {
   canonicalKey,
@@ -39,6 +39,26 @@ export async function upsertEnvironment(db: Database, env: Environment): Promise
     })
     .returning();
   return row!;
+}
+
+/**
+ * The numeric tenant for an account, minted on first use.
+ *
+ * `PUBLIC_TENANT` is never returned for a real owner: `tenants.id` is a serial
+ * starting at 1. A null/absent owner is the public graph, which is the right
+ * answer for an unauthenticated call — it sees public surfaces and nothing else.
+ */
+export const PUBLIC_TENANT = 0;
+
+export async function tenantIdFor(db: Database, ownerId: string | null): Promise<number> {
+  if (!ownerId) return PUBLIC_TENANT;
+  const [row] = await db
+    .insert(tenants)
+    .values({ ownerId })
+    // No-op update so the RETURNING clause yields the existing row.
+    .onConflictDoUpdate({ target: tenants.ownerId, set: { ownerId } })
+    .returning();
+  return row!.id;
 }
 
 export async function upsertEntity(db: Database, ref: EntityRef, tenantId = 0): Promise<EntityRow> {

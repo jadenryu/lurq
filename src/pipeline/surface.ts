@@ -26,6 +26,7 @@ import {
 import { getPackageVersions } from '../db/packages';
 import { getPackagesWithSurface } from '../db/apiSurfaces';
 import { fetchAndExtract } from '../surface/fetch';
+import { EXTRACTOR_VERSION } from '../surface/extract';
 
 /**
  * How far back to read the version timeline when locating a version's immediate
@@ -34,14 +35,6 @@ import { fetchAndExtract } from '../surface/fetch';
  */
 const VERSION_LOOKBACK = 50;
 
-/**
- * Bumped whenever extraction can produce a different answer for the same
- * tarball. '2' covers the ESM-first entry fallback and namespace member
- * resolution — both change what a package's surface is, neither changes a byte
- * of the artifact, and isExtractionCached now compares this so a stored surface
- * from an older extractor is treated as stale.
- */
-const EXTRACTOR_VERSION = '2';
 const MAX_ATTEMPTS = 3;
 
 export interface SurfaceDrainSummary {

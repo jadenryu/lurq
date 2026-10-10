@@ -99,6 +99,8 @@ import type { ApiKeyRow, RepoRow } from '../db/schema';
 import { buildMcpServer } from './server';
 import { callDashboardTool, DASHBOARD_TOOLS, listDashboardTools } from './dashboardTools';
 import { MCP_SCAN_BODY_LIMIT, MCP_SCAN_UPLOAD_PATH, registerMcpScanRoutes } from './mcpScanRoutes';
+import { registerSurfaceRoutes } from './surfaceRoutes';
+import { PUBLISH_BODY_LIMIT } from '../surface/publish';
 import { registerPublicMcpRoutes } from './publicMcpRoutes';
 import { registerPublicMcpServerRoutes } from './publicMcpServers';
 import { registerNotificationRoutes } from './notificationRoutes';
@@ -1981,6 +1983,17 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     bigJson: express.json({ limit: MCP_SCAN_BODY_LIMIT }),
     requireIssuerSecret,
     ownerFrom,
+    keyOwner,
+  });
+
+  // ── Private surfaces: an author files their own package's exports (API key) ─
+  registerSurfaceRoutes(app, {
+    db,
+    ipLimiter,
+    auth: auth as unknown as RequestHandler,
+    keyLimiter,
+    quota,
+    bigJson: express.json({ limit: PUBLISH_BODY_LIMIT }),
     keyOwner,
   });
 
