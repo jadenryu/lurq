@@ -210,14 +210,18 @@ describe('renderWorkflow', () => {
     expect(beforeAgent).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
   });
 
-  it('fails pr mode with a readable error when neither credential is set', () => {
+  it('drops pr mode to fix when neither credential is set, rather than failing', () => {
+    // Reversed deliberately, and pinned rather than deleted: this used to
+    // `exit 1`, which cost the whole run — including the half that needs no
+    // model — over a secret the user may never have been asked for.
+    // tests/upgradeWorkflowCredential.test.ts holds the rest of the contract.
     const yaml = renderWorkflow();
     const at = yaml.indexOf('Check agent credentials');
     expect(at).toBeGreaterThan(-1);
     const step = yaml.slice(at, yaml.indexOf('Install dependencies'));
     expect(step).toContain("env.LURQ_MODE == 'pr'");
-    expect(step).toContain('::error::');
-    expect(step).toContain('exit 1');
+    expect(step).toContain('LURQ_MODE=fix');
+    expect(step).not.toContain('exit 1');
   });
 
   it('writes to a lurq branch, never the default one', () => {

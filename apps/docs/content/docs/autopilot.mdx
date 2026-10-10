@@ -49,6 +49,27 @@ Change the mode on the repository page. Each run reads the setting when it
 starts, so it governs repos that already installed the workflow; only a file
 committed before that behaviour existed keeps its own baked-in mode.
 
+`lurq autopilot init --mode <mode>` pins the mode as a repository variable,
+which wins over the dashboard — delete the variable to hand the repo back to it.
+Omit `--mode` and the dashboard governs every run.
+
+If a repo is set to `pr` and holds no Anthropic credential, the run does not
+fail: it drops to `fix`, opens the pull request with what lurq can prove, and
+warns in the run summary that the agent was skipped.
+
+## Two repository settings runs die on
+
+**Allow GitHub Actions to create pull requests** (Settings → Actions → General)
+is off by default. With it off a run does all the work, commits its branch, and
+fails at the last step with _GitHub Actions is not permitted to create or
+approve pull requests_. `lurq autopilot init` checks it and prints the remedy;
+`--allow-pr-creation` turns it on for you, which affects every workflow in that
+repository, not only this one.
+
+**Your own git hooks** are ignored for the workflow'''s commit
+(`core.hooksPath`), because a husky or lint-staged pre-commit hook rejects a
+bot commit in CI and takes the whole run with it.
+
 ## Repository secrets
 
 `LURQ_API_KEY` is required. It lets the workflow ask which upgrades are
