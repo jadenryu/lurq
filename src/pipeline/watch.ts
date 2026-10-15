@@ -107,6 +107,10 @@ export interface WatchOptions {
   since?: string;
   /** Injected for tests. Defaults to global fetch. */
   fetchImpl?: typeof fetch;
+  /** Catch up to the head, then return instead of idling. Run from cron so the
+   *  database can scale to zero between runs; an error also returns, and the
+   *  next run resumes from the stored cursor. */
+  once?: boolean;
 }
 
 async function getJson(url: string, fetchImpl: typeof fetch, signal?: AbortSignal) {
@@ -142,7 +146,7 @@ async function loadSeenSets(db: Database): Promise<[Set<string>, Set<string>, Se
 }
 
 export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Promise<void> {
-  const { signal, fetchImpl = fetch } = opts;
+  const { signal, fetchImpl = fetch, once = false } = opts;
   let backoff = 1000;
 
   let [tracked, queued, mcpServers] = await loadSeenSets(db);
@@ -258,9 +262,16 @@ export async function watchNpmChanges(db: Database, opts: WatchOptions = {}): Pr
       }
 
       // A page that did not fill means we are at the head — stop hammering.
-      if (changes.length < PAGE_SIZE) await sleep(IDLE_POLL_MS, signal);
+      if (changes.length < PAGE_SIZE) {
+        if (once) break;
+        await sleep(IDLE_POLL_MS, signal);
+      }
     } catch (err) {
       if (signal?.aborted) break;
+      if (once) {
+        logger.warn(`watch: ${String(err)}, resuming next run from seq=${cursor}`);
+        break;
+      }
       logger.warn(`watch: ${String(err)}, retrying in ${backoff}ms`);
       await sleep(backoff, signal);
       backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);

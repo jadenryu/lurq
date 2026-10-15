@@ -618,16 +618,18 @@ export async function runVersions(
 }
 
 /** Long-running: follow the npm changes feed until interrupted (Ctrl-C). */
-export async function runWatch(): Promise<void> {
+export async function runWatch(opts: { once?: boolean } = {}): Promise<void> {
   const { watchNpmChanges } = await import('../pipeline/watch');
   await withDb(async (db) => {
     const controller = new AbortController();
     const stop = () => controller.abort();
     process.once('SIGINT', stop);
     process.once('SIGTERM', stop);
-    console.log(dim('watching npm for releases of tracked packages — Ctrl-C to stop'));
+    if (!opts.once) {
+      console.log(dim('watching npm for releases of tracked packages — Ctrl-C to stop'));
+    }
     try {
-      await watchNpmChanges(db, { signal: controller.signal });
+      await watchNpmChanges(db, { signal: controller.signal, once: opts.once });
     } finally {
       process.off('SIGINT', stop);
       process.off('SIGTERM', stop);
