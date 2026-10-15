@@ -782,9 +782,10 @@ export function registerOperatorCommands(program: Command): void {
   program
     .command('watch')
     .description('follow the npm changes feed, re-syncing tracked packages on new releases')
-    .action(async () => {
+    .option('--once', 'catch up to the head and exit (for cron; lets the DB scale to zero)')
+    .action(async (opts: { once?: boolean }) => {
       const { runWatch } = await import('./commands');
-      await runWatch();
+      await runWatch(opts);
     });
 
   program
