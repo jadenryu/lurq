@@ -44,4 +44,22 @@ describe('watchNpmChanges', () => {
 
     expect(syncOnePackage).toHaveBeenCalledWith({}, 'left-pad', { fresh: true });
   });
+
+  it('once: returns at the head instead of idling', async () => {
+    vi.mocked(single.syncOnePackage).mockResolvedValue({} as never);
+    const page = { results: [{ seq: 102, id: 'left-pad', deleted: false }], last_seq: 102 };
+    const fetchImpl = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => page,
+    })) as unknown as typeof fetch;
+
+    // No abort signal: without `once` this would sleep 30s and poll forever.
+    await watchNpmChanges({} as never, { fetchImpl, once: true });
+  });
+
+  it('once: returns on a feed error so cron can retry', async () => {
+    const fetchImpl = (async () => ({ ok: false, status: 503 })) as unknown as typeof fetch;
+    await watchNpmChanges({} as never, { fetchImpl, once: true });
+  });
 });
