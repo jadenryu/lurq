@@ -324,6 +324,10 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
   // in-memory store is per-process — fine for one box, but N instances would
   // each enforce the full quota (N× the real limit). Each limiter gets its own
   // prefix so their counters don't collide in one Redis keyspace.
+  //
+  // Every limiter using this store sets `passOnStoreError`: a Redis outage
+  // (Upstash's monthly request cap, 2026-10) otherwise turned every request into
+  // a 500. Failing open drops rate limiting for the outage, never the API.
   let makeStore: ((prefix: string) => Store) | null = null;
   if (process.env.REDIS_URL) {
     const [{ default: Redis }, { default: RedisStore }] = await Promise.all([
@@ -332,12 +336,20 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     ]);
     const rlRedis = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 1, family: 0 });
     rlRedis.on('error', (err: Error) => logger.warn(`rate-limit redis: ${err.message}`));
-    makeStore = (prefix: string) =>
-      new RedisStore({
+    makeStore = (prefix: string) => {
+      const store = new RedisStore({
         prefix,
         sendCommand: (...args: string[]) =>
           rlRedis.call(args[0]!, ...args.slice(1)) as Promise<never>,
       });
+      // The constructor fires SCRIPT LOAD and keeps the promises. If Redis
+      // rejects it, nothing awaits them yet, and the unhandled rejection kills
+      // the process at boot: every deploy failed its healthcheck 2026-10-16..19.
+      // Later awaits still see the rejection, which passOnStoreError absorbs.
+      store.incrementScriptSha.catch(() => {});
+      store.getScriptSha.catch(() => {});
+      return store;
+    };
   }
 
   const app = express();
@@ -412,7 +424,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     limit: config.LURQ_IP_RATE_LIMIT_MAX,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    ...(makeStore ? { store: makeStore('rl:ip:') } : {}),
+    ...(makeStore ? { store: makeStore('rl:ip:'), passOnStoreError: true } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 
@@ -468,7 +480,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? '0.0.0.0'),
-    ...(makeStore ? { store: makeStore('rl:scan:') } : {}),
+    ...(makeStore ? { store: makeStore('rl:scan:'), passOnStoreError: true } : {}),
     message: { error: "That's a lot of scans. Give it a minute." },
   });
 
@@ -641,7 +653,7 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
       const id = (req as AuthedRequest).lurqKey?.id;
       return id != null ? `key:${id}` : ipKeyGenerator(req.ip ?? '0.0.0.0');
     },
-    ...(makeStore ? { store: makeStore('rl:key:') } : {}),
+    ...(makeStore ? { store: makeStore('rl:key:'), passOnStoreError: true } : {}),
     message: rpcError(-32029, 'Rate limit exceeded.'),
   });
 

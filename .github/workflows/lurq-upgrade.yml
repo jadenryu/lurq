@@ -9,7 +9,7 @@ name: lurq upgrade
 
 on:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: '0 6 * * 1'
   workflow_dispatch:
     inputs:
       mode:
@@ -19,7 +19,7 @@ on:
         # "Resolve mode" step could read this repo's dashboard setting, and
         # silently pin every triggered run to whatever was baked in at
         # generation time. Left empty, a dispatch behaves like a scheduled run.
-        description: "leave empty to use your dashboard setting; or comment / fix / pr"
+        description: 'leave empty to use your dashboard setting; or comment / fix / pr'
         type: string
         required: false
 
@@ -42,7 +42,7 @@ jobs:
       # explicit first: a dispatch input, then a repository variable, then the
       # dashboard, then the mode baked in when this file was generated.
       LURQ_MODE: ${{ inputs.mode || vars.LURQ_MODE || '' }}
-      MAX_UPGRADES: "3"
+      MAX_UPGRADES: '3'
     steps:
       - uses: actions/checkout@v6
 
@@ -212,8 +212,8 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           branch: lurq/upgrades
-          title: "chore(deps): lurq dependency upgrades"
-          commit-message: "chore(deps): upgrade dependencies and migrate call sites"
+          title: 'chore(deps): lurq dependency upgrades'
+          commit-message: 'chore(deps): upgrade dependencies and migrate call sites'
           # The rendered report, not the raw JSON. A reviewer opening this PR
           # reads what was removed and where it is used; the JSON is the agent's
           # input, and pasting it here made the case for the change unreadable.
