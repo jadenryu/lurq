@@ -336,12 +336,20 @@ export async function startHttpServer(opts: { port?: number } = {}): Promise<voi
     ]);
     const rlRedis = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 1, family: 0 });
     rlRedis.on('error', (err: Error) => logger.warn(`rate-limit redis: ${err.message}`));
-    makeStore = (prefix: string) =>
-      new RedisStore({
+    makeStore = (prefix: string) => {
+      const store = new RedisStore({
         prefix,
         sendCommand: (...args: string[]) =>
           rlRedis.call(args[0]!, ...args.slice(1)) as Promise<never>,
       });
+      // The constructor fires SCRIPT LOAD and keeps the promises. If Redis
+      // rejects it, nothing awaits them yet, and the unhandled rejection kills
+      // the process at boot: every deploy failed its healthcheck 2026-10-16..19.
+      // Later awaits still see the rejection, which passOnStoreError absorbs.
+      store.incrementScriptSha.catch(() => {});
+      store.getScriptSha.catch(() => {});
+      return store;
+    };
   }
 
   const app = express();
