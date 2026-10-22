@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-21T13:05:17.365Z",
+  "generatedAt": "2026-10-22T13:07:19.066Z",
   "source": "live",
   "dataAsOf": "2026-09-22T06:00:58.813Z",
   "packages": 50000,
@@ -20,11 +20,11 @@
     "weeksLive": 17
   },
   "lastSync": {
-    "startedAt": "2026-10-21T06:05:01.467Z",
-    "finishedAt": "2026-10-21T07:17:00.414Z",
+    "startedAt": "2026-10-22T06:04:16.262Z",
+    "finishedAt": "2026-10-22T07:23:52.684Z",
     "packagesSeen": 0,
     "packagesUpdated": 0,
     "status": "failed"
   },
-  "syncDays": 97
+  "syncDays": 98
 }
