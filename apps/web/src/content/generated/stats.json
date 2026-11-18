@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-17T17:01:35.464Z",
+  "generatedAt": "2026-11-18T16:41:09.192Z",
   "source": "live",
   "dataAsOf": "2026-09-22T06:00:58.813Z",
   "packages": 50000,
@@ -16,15 +16,15 @@
     "latestVersion": "0.1.9",
     "publishedVersions": 19,
     "firstPublishedAt": "2026-06-23T19:08:53.750Z",
-    "downloadsSincePublish": 3976,
-    "weeksLive": 20
+    "downloadsSincePublish": 3978,
+    "weeksLive": 21
   },
   "lastSync": {
-    "startedAt": "2026-11-17T06:02:13.525Z",
-    "finishedAt": "2026-11-17T07:08:12.753Z",
+    "startedAt": "2026-11-18T06:01:45.144Z",
+    "finishedAt": "2026-11-18T07:07:39.674Z",
     "packagesSeen": 0,
     "packagesUpdated": 0,
     "status": "failed"
   },
-  "syncDays": 124
+  "syncDays": 125
 }
